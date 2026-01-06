@@ -80,8 +80,8 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
 
     try {
       // Import services dynamically
-      const { EmbeddingService } = await import('@/app/services/embedding.service');
-      const { DocumentService } = await import('@/app/services/document.service');
+      const { EmbeddingService } = await import('@/app/services/rag/embedding.service');
+      const { DocumentService } = await import('@/app/services/rag/document.service');
 
       // Initialize services
       const embeddingService = new EmbeddingService(githubToken);
@@ -160,8 +160,8 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     }
 
     try {
-      const { DocumentService } = await import('@/app/services/document.service');
-      const { EmbeddingService } = await import('@/app/services/embedding.service');
+      const { DocumentService } = await import('@/app/services/rag/document.service');
+      const { EmbeddingService } = await import('@/app/services/rag/embedding.service');
       
       const embeddingService = new EmbeddingService(githubToken);
       const documentService = new DocumentService(supabase, embeddingService);

@@ -6,40 +6,51 @@ export class ChatSupabaseService {
   constructor(private supabase: SupabaseClient) {}
 
   /**
-   * Load system message from database
+   * Load system message from database (per user)
    */
-  async loadSystemMessage() {
+  async loadSystemMessage(userId: string) {
+    console.log('[loadSystemMessage] Starting with userId:', userId);
+    
     const { data, error } = await this.supabase
-      .from('chat_settings')
-      .select('setting_value')
-      .eq('setting_key', 'system_message')
+      .from('user_settings')
+      .select('system_message')
+      .eq('user_id', userId)
       .single();
 
     if (error) {
-      console.error('Error loading system message:', error);
+      console.error('[loadSystemMessage] Error loading system message:', error);
+      console.error('[loadSystemMessage] Error details:', JSON.stringify(error, null, 2));
       return '';
     }
 
-    return data?.setting_value || '';
+    console.log('[loadSystemMessage] Loaded data:', data);
+    return data?.system_message || '';
   }
 
   /**
-   * Save system message to database
+   * Save system message to database (per user)
    */
   async saveSystemMessage(userId: string, systemMessage: string) {
+    console.log('[saveSystemMessage] Starting with userId:', userId);
+    console.log('[saveSystemMessage] System message:', systemMessage);
+    
     const { error } = await this.supabase
-      .from('chat_settings')
-      .update({
-        setting_value: systemMessage,
+      .from('user_settings')
+      .upsert({
+        user_id: userId,
+        system_message: systemMessage,
         updated_at: new Date().toISOString(),
-      })
-      .eq('setting_key', 'system_message');
+      }, {
+        onConflict: 'user_id'
+      });
 
     if (error) {
-      console.error('Error saving system message:', error);
+      console.error('[saveSystemMessage] Error saving system message:', error);
+      console.error('[saveSystemMessage] Error details:', JSON.stringify(error, null, 2));
       return { success: false, error };
     }
 
+    console.log('[saveSystemMessage] Successfully saved');
     return { success: true };
   }
 

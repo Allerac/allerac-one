@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   github_token TEXT,
   tavily_api_key TEXT,
+  system_message TEXT DEFAULT 'You are a helpful AI assistant.',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id)

@@ -1,7 +1,7 @@
 // LLM Service with automatic metrics tracking
 // Supports GitHub Models and Ollama providers
-import { getMetricsClient } from './metrics-client';
-import { MetricsService } from './metrics.service';
+import { getMetricsClient } from '../infrastructure/metrics-client';
+import { MetricsService } from '../infrastructure/metrics.service';
 
 export interface LLMRequest {
   model: string;

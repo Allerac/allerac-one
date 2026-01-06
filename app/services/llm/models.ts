@@ -1,5 +1,5 @@
 // AI Model configurations
-import { Model } from '../types';
+import { Model } from '../../types';
 
 export const MODELS: Model[] = [
   { 

@@ -1,8 +1,8 @@
 // Web search tool using Tavily API with caching and metrics tracking
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { normalizeQueryForCache, hashString } from '../services/cache.service';
-import { MetricsService } from '../services/metrics.service';
+import { normalizeQueryForCache, hashString } from '../services/infrastructure/cache.service';
+import { MetricsService } from '../services/infrastructure/metrics.service';
 import { SearchWebResult } from '../types';
 
 export class SearchWebTool {
