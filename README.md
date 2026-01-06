@@ -1,28 +1,31 @@
 # Allerac-One
 
-An AI-powered chat application with advanced features including document upload, vector search, conversation memory, and web search capabilities.
+An AI-powered chat application with authentication, multi-provider LLM support, document processing, vector search, conversation memory, and web search capabilities.
 
 ## Features
 
-- 🤖 **AI Chat with Streaming** - Real-time streaming responses from OpenAI and Anthropic models
+- 🔐 **Authentication** - Supabase Auth with email/password login
+- 🤖 **Multi-Provider LLM** - Support for GitHub Models and Ollama (local models)
+- ⚙️ **Configuration-Driven** - Easy model management via UI, auto-detects provider
 - 📄 **Document Upload** - Upload and process PDF documents with vector embeddings
-- 🔍 **Vector Search** - Semantic search across uploaded documents
-- 💾 **Conversation Memory** - Persistent chat history with Supabase
-- 🌐 **Web Search** - Integrated Tavily web search tool for up-to-date information
-- 📊 **Metrics & Monitoring** - Track AI usage and performance
-- 🎨 **Modern UI** - Built with Next.js 14+, TypeScript, and Tailwind CSS
+- 🔍 **Vector Search** - Semantic search across uploaded documents using pgvector
+- 💾 **Conversation Memory** - Automatic context retention with Supabase
+- 🌐 **Web Search** - Integrated Tavily web search tool with caching
+- 📊 **Metrics & Monitoring** - Track LLM usage and performance
+- 🎨 **Modern UI** - Built with Next.js 16, TypeScript, and Tailwind CSS v4
 
 ## Tech Stack
 
-- **Framework**: Next.js 14+ (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **AI Providers**: 
-  - GitHub Models (GPT-4o, GPT-4o-mini, o1-preview, o1-mini)
-  - Ollama (Local LLMs - llama3.2, mistral, etc.)
-- **Database**: Supabase (PostgreSQL)
-- **Vector Storage**: Supabase pgvector
-- **PDF Processing**: pdf-parse
+- **Framework**: Next.js 16.1.1 (App Router, Turbopack)
+- **Language**: TypeScript 5.x
+- **Styling**: Tailwind CSS v4
+- **Authentication**: Supabase Auth
+- **Database**: Supabase (PostgreSQL + pgvector)
+- **LLM Providers**: 
+  - GitHub Models API (gpt-4o, gpt-4o-mini)
+  - Ollama (deepseek-r1:8b, llama, mistral, etc.)
+- **Document Processing**: pdf-parse, pdfjs-dist
+- **Markdown Rendering**: react-markdown with remark-gfm
 
 ## Getting Started
 
@@ -31,15 +34,15 @@ An AI-powered chat application with advanced features including document upload,
 - Node.js 18+ 
 - npm or yarn
 - Supabase account
-- **For GitHub Models**: GitHub Personal Access Token with Models access
+- **For GitHub Models**: GitHub Personal Access Token (configured via UI)
 - **For Ollama**: Ollama installed locally ([Download](https://ollama.ai))
-- Tavily API key (optional, for web search)
+- Tavily API key (optional, for web search - configured via UI)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/your-username/allerac-one.git
    cd allerac-one
    ```
 
@@ -50,42 +53,29 @@ An AI-powered chat application with advanced features including document upload,
 
 3. **Set up environment variables**
    
-   Copy `.env.example` to `.env.local` and fill in your values:
+   Create a `.env.local` file in the root directory:
+   
    ```bash
-   cp .env.example .env.local
+   # Required - Supabase
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   
+   # Optional - Ollama (if using local models)
+   OLLAMA_BASE_URL=http://localhost:11434
+   
+   # Optional - Tavily (if using web search, can also be set in UI)
+   TAVILY_API_KEY=your_tavily_api_key
    ```
-   
-   **Required variables:**
-   - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
-   - `LLM_PROVIDER` - Choose "github" or "ollama"
-   
-   **For GitHub Models provider:**
-   - `GITHUB_TOKEN` - Your GitHub Personal Access Token
-   - `GITHUB_MODEL` - Model to use (e.g., "gpt-4o", "gpt-4o-mini")
-   
-   **For Ollama provider:**
-   - `OLLAMA_BASE_URL` - Ollama API URL (default: http://localhost:11434)
-   - `OLLAMA_MODEL` - Model to use (e.g., "llama3.2", "mistral")
-   
-   **Optional:**
-   - `TAVILY_API_KEY` - Your Tavily API key for web search
 
-4. **Set up Ollama (if using local LLMs)**
+4. **Set up Supabase authentication**
    
-   Install Ollama from [ollama.ai](https://ollama.ai), then pull a model:
-   ```bash
-   ollama pull llama3.2
-   # or
-   ollama pull mistral
-   ```
+   Follow the instructions in [AUTHENTICATION.md](AUTHENTICATION.md) to configure email/password authentication.
 
 5. **Set up Supabase database**
    
-   Run the SQL migration files in the `database/` folder in order:
+   Run the SQL migration files in the `database/` folder in your Supabase SQL editor, in order:
    
    ```sql
-   -- In your Supabase SQL editor, run these in order:
    01_create_chat_tables.sql
    02_create_documents_tables.sql
    03_create_memory_tables.sql
@@ -94,7 +84,16 @@ An AI-powered chat application with advanced features including document upload,
    06_setup_metrics_supabase.sql
    ```
 
-5. **Run the development server**
+6. **Set up Ollama (optional, for local models)**
+   
+   Install Ollama from [ollama.ai](https://ollama.ai), then pull a model:
+   ```bash
+   ollama pull deepseek-r1:8b
+   # or
+   ollama pull llama3.2
+   ```
+
+7. **Run the development server**
    ```bash
    npm run dev
    ```
@@ -106,97 +105,122 @@ An AI-powered chat application with advanced features including document upload,
 ```
 allerac-one/
 ├── app/
-│   └── chat/                    # Main chat application
-│       ├── components/          # Chat UI components
-│       │   └── DocumentUpload.tsx
-│       ├── services/            # Business logic services
-│       │   ├── llm.service.ts          # OpenAI/Anthropic integration
-│       │   ├── supabase.service.ts     # Database operations
-│       │   ├── cache.service.ts        # Caching layer
-│       │   ├── metrics.service.ts      # Usage metrics
-│       │   └── user-settings.service.ts
-│       ├── tools/               # AI tools
-│       │   ├── event.tools.ts
-│       │   ├── guest.tools.ts
-│       │   └── search-web.tool.ts
-│       ├── constants.ts         # App constants
-│       ├── types.ts             # TypeScript types
-│       └── page.tsx             # Chat interface
-├── lib/
-│   ├── services/                # Shared services
+│   ├── page.tsx                 # Main chat interface (root /)
+│   ├── types.ts                 # TypeScript interfaces
+│   ├── clients/
+│   │   └── supabase.ts          # Supabase client initialization
+│   ├── services/                # Core services
+│   │   ├── models.ts            # LLM model configurations
+│   │   ├── llm.service.ts       # Unified LLM client (GitHub + Ollama)
+│   │   ├── supabase.service.ts  # Database operations
 │   │   ├── conversation-memory.service.ts
 │   │   ├── document.service.ts
 │   │   ├── embedding.service.ts
-│   │   └── vector-search.service.ts
-│   └── supabase.ts              # Supabase client
-├── database/                    # SQL migration files
-└── .env.example                 # Environment template
+│   │   ├── vector-search.service.ts
+│   │   ├── cache.service.ts     # Query caching
+│   │   ├── metrics.service.ts   # LLM usage tracking
+│   │   └── user-settings.service.ts
+│   ├── tools/                   # Function calling tools
+│   │   ├── tools.ts             # Tool definitions
+│   │   └── search-web.tool.ts   # Tavily web search
+│   └── components/
+│       └── DocumentUpload.tsx
+├── database/                    # Supabase SQL migrations
+├── .github/
+│   └── copilot-instructions.md  # AI assistant instructions
+└── .env.local                   # Environment variables
 ```
 
 ## Usage
 
+### First Time Setup
+
+1. **Create an account** - Use email/password to sign up
+2. **Configure tokens** (Settings → API Keys):
+   - Add your GitHub token for GitHub Models
+   - Add Tavily API key for web search (optional)
+3. **Select a model** from the dropdown (GitHub Models or Ollama)
+
 ### Chat Interface
 
-Navigate to `/chat` to access the AI chat interface. You can:
+The chat interface at `/` (root) allows you to:
 
-- Have conversations with AI models (OpenAI or Anthropic)
+- Have conversations with AI models
 - Upload PDF documents for context-aware responses
-- Use web search to get up-to-date information
+- Use web search for up-to-date information
 - View conversation history
+- Switch between different LLM models
+- Toggle dark/light mode
 
-### Document Upload
+### Adding New Models
 
-1. Click the upload button in the chat interface
-2. Select a PDF file
-3. The document will be processed and stored with vector embeddings
-4. Ask questions about the document content
+To add a new LLM model, edit `app/services/models.ts`:
+
+```typescript
+export const MODELS: Model[] = [
+  {
+    id: 'model-name',
+    name: 'Display Name',
+    provider: 'github' | 'ollama',
+    baseUrl: 'https://api.url',
+    requiresToken: true | false
+  },
+  // ... existing models
+];
+```
+
+The LLMService automatically detects the provider - no code changes needed!
 
 ## Configuration
 
-### AI Providers
+### Model Selection
 
-The application supports two LLM providers:
+The application supports multiple LLM providers through a unified configuration system:
 
-#### 1. GitHub Models (Cloud)
-- Free during preview with rate limits
-- Models: GPT-4o, GPT-4o-mini, o1-preview, o1-mini
-- Set `LLM_PROVIDER=github` in `.env.local`
-- Requires `GITHUB_TOKEN` with Models access
+**Available Models:**
+- **gpt-4o** - GitHub Models (latest GPT-4 Omni)
+- **gpt-4o-mini** - GitHub Models (faster, cost-effective)
+- **deepseek-r1:8b** - Ollama (local reasoning model)
+- *Add more models in `app/services/models.ts`*
 
-#### 2. Ollama (Local)
-- Run LLMs locally on your machine
-- Models: llama3.2, mistral, phi, and many more
-- Set `LLM_PROVIDER=ollama` in `.env.local`
-- Requires Ollama running locally
+**Switching Models:**
+- Select from the model dropdown in the UI
+- Provider is auto-detected based on model configuration
+- Tokens are stored in localStorage (configured via UI)
 
-### Switching Providers
+### API Keys Configuration
 
-To switch between providers, simply update your `.env.local`:
+API keys can be configured in two ways:
 
-```bash
-# Use GitHub Models
-LLM_PROVIDER=github
-GITHUB_TOKEN=your_token
-GITHUB_MODEL=gpt-4o
+1. **Via UI** (Recommended):
+   - Click Settings → API Keys
+   - Enter your tokens (stored in localStorage)
 
-# Or use Ollama
-LLM_PROVIDER=ollama
-OLLAMA_MODEL=llama3.2
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
-Restart your dev server after changing providers.
+2. **Via Environment**:
+   - Add to `.env.local` as fallback
+   - UI configuration takes precedence
 
 ### Database Tables
 
 The application uses the following Supabase tables:
 - `chat_messages` - Conversation history
 - `documents` - Uploaded document metadata
-- `document_embeddings` - Vector embeddings for semantic search
+- `document_embeddings` - Vector embeddings for semantic search (pgvector)
 - `conversation_memory` - Long-term conversation context
 - `tavily_cache` - Cached web search results
-- `user_settings` - User preferences
-- `metrics` - Usage tracking
+- `user_settings` - User preferences and API keys
+- `llm_metrics` - LLM usage tracking and monitoring
+
+## Environment Variables Reference
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Your Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Your Supabase anonymous key |
+| `OLLAMA_BASE_URL` | No | Ollama API URL (default: http://localhost:11434) |
+| `TAVILY_API_KEY` | No | Tavily API key for web search (can also be set in UI) |
+
+**Note**: GitHub tokens are configured via UI and stored in localStorage, not environment variables.
 
 ## Development
 
@@ -213,31 +237,46 @@ npm start
 npm run lint
 ```
 
-## Environment Variables Reference
+## Documentation
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Your Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Your Supabase anonymous key |
-| `LLM_PROVIDER` | Yes | LLM provider: "github" or "ollama" |
-| `GITHUB_TOKEN` | If using GitHub | GitHub Personal Access Token with Models access |
-| `GITHUB_MODEL` | If using GitHub | Model name (e.g., gpt-4o, gpt-4o-mini) |
-| `OLLAMA_BASE_URL` | If using Ollama | Ollama API URL (default: http://localhost:11434) |
-| `OLLAMA_MODEL` | If using Ollama | Model name (e.g., llama3.2, mistral) |
-| `TAVILY_API_KEY` | No | Tavily API key for web search |
-| `NEXT_PUBLIC_APP_URL` | No | Application URL (default: http://localhost:3000) |
+- [AUTHENTICATION.md](AUTHENTICATION.md) - Supabase authentication setup
+- [LLM_SETUP.md](LLM_SETUP.md) - LLM provider configuration guide
+- [.github/copilot-instructions.md](.github/copilot-instructions.md) - Project guidelines for AI assistants
+
+## Architecture
+
+**Configuration-Driven Design:**
+- Models defined in `app/services/models.ts`
+- Provider auto-detection (no hardcoded conditionals)
+- UI-first token management with localStorage
+- Fallback to environment variables
+
+**Key Services:**
+- `LLMService` - Unified interface for GitHub Models + Ollama
+- `SupabaseService` - Database operations with RLS
+- `ConversationMemoryService` - Automatic context retention
+- `VectorSearchService` - Semantic search via pgvector
+- `MetricsService` - LLM usage tracking
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Supabase Documentation](https://supabase.com/docs)
+- [GitHub Models](https://github.com/marketplace/models)
+- [Ollama Documentation](https://ollama.ai/docs)
+- [Tavily API](https://tavily.com)
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The easiest way to deploy is using the [Vercel Platform](https://vercel.com/new):
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Push your code to GitHub
+2. Import your repository in Vercel
+3. Add environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `OLLAMA_BASE_URL` (if using Ollama)
+   - `TAVILY_API_KEY` (optional)
+4. Deploy!
+
+Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
