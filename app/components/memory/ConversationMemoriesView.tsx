@@ -126,6 +126,11 @@ export default function ConversationMemoriesView({
                     <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                       {memory.message_count} messages
                     </span>
+                    {memory.emotion && (
+                      <span className={`text-xs px-2 py-0.5 ${isDarkMode ? 'bg-pink-900/30 text-pink-300' : 'bg-pink-100 text-pink-700'} rounded`}>
+                        Emotion: {memory.emotion}
+                      </span>
+                    )}
                   </div>
                   <p className={`text-sm ${isDarkMode ? 'text-gray-100' : 'text-gray-900'} mb-2`}>{memory.summary}</p>
                   {memory.key_topics && memory.key_topics.length > 0 && (

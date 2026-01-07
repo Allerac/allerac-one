@@ -22,6 +22,7 @@ export interface ConversationSummary {
   importance_score: number;
   message_count: number;
   created_at: string;
+  emotion?: string | null;
 }
 
 export interface Message {
@@ -73,6 +74,7 @@ export class ConversationMemoryService {
         .join('\n\n');
 
       // Step 3: Use AI to generate summary
+
       const summaryPrompt = `You are analyzing a conversation to create a concise memory summary. Extract the most important information that should be remembered in future conversations.
 
 Focus on:
@@ -81,12 +83,14 @@ Focus on:
 - Specific details about events, people, or dates
 - Action items or follow-ups needed
 - Any specific requirements or constraints mentioned
+- The overall emotion or sentiment of the conversation (e.g., happy, sad, frustrated, excited, neutral)
 
 Provide your response in this JSON format:
 {
   "summary": "A concise 2-3 sentence summary of the key points",
   "key_topics": ["topic1", "topic2", "topic3"],
-  "importance_score": 1-10 (how important is this conversation to remember)
+  "importance_score": 1-10, // how important is this conversation to remember
+  "emotion": "emotion or sentiment (optional, e.g., happy, sad, neutral)"
 }
 
 CONVERSATION TO SUMMARIZE:
@@ -137,7 +141,8 @@ ${conversationText}`;
         };
       }
 
-      // Step 5: Save summary to database
+
+      // Step 5: Save summary to database (now includes emotion)
       const { data: savedSummary, error: saveError } = await this.supabase
         .from('conversation_summaries')
         .insert({
@@ -147,6 +152,7 @@ ${conversationText}`;
           key_topics: summaryData.key_topics || [],
           importance_score: summaryData.importance_score || 5,
           message_count: messages.length,
+          emotion: summaryData.emotion || null,
         })
         .select()
         .single();

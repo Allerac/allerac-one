@@ -24,6 +24,32 @@ import UserSettingsModal from './components/auth/UserSettingsModal';
 import LoginModal from './components/auth/LoginModal';
 
 export default function AdminChat() {
+  // Modal/event listeners for sidebar configuration actions
+  useEffect(() => {
+    const openTokenModal = () => setIsTokenModalOpen(true);
+    const openMemorySettingsModal = () => setIsEditingSettings(true);
+    const openUserSettingsModal = () => setIsUserSettingsOpen(true);
+    const openDocumentsModal = () => setIsDocumentModalOpen(true);
+    const openMemoriesModal = () => setIsMemoryModalOpen(true);
+    const handleLogout = () => {
+      // Clear session and reload
+      supabase.auth.signOut().then(() => window.location.reload());
+    };
+    window.addEventListener('openTokenModal', openTokenModal);
+    window.addEventListener('openMemorySettingsModal', openMemorySettingsModal);
+    window.addEventListener('openUserSettingsModal', openUserSettingsModal);
+    window.addEventListener('openDocumentsModal', openDocumentsModal);
+    window.addEventListener('openMemoriesModal', openMemoriesModal);
+    window.addEventListener('logout', handleLogout);
+    return () => {
+      window.removeEventListener('openTokenModal', openTokenModal);
+      window.removeEventListener('openMemorySettingsModal', openMemorySettingsModal);
+      window.removeEventListener('openUserSettingsModal', openUserSettingsModal);
+      window.removeEventListener('openDocumentsModal', openDocumentsModal);
+      window.removeEventListener('openMemoriesModal', openMemoriesModal);
+      window.removeEventListener('logout', handleLogout);
+    };
+  }, []);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -41,7 +67,7 @@ export default function AdminChat() {
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [selectedModel, setSelectedModel] = useState('deepseek-r1:8b');
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
   const [isEditingSettings, setIsEditingSettings] = useState(false);

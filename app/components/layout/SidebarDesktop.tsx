@@ -109,6 +109,7 @@ export default function SidebarDesktop({
         setIsModelDropdownOpen={setIsModelDropdownOpen}
         isConfigurationExpanded={isConfigurationExpanded}
         setIsConfigurationExpanded={setIsConfigurationExpanded}
+        isSidebarCollapsed={isSidebarCollapsed}
       />
       {/* ...existing code for action buttons, modals, etc. ... */}
     </div>
