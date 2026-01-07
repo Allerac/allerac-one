@@ -17,6 +17,9 @@ interface ChatMessagesProps {
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
+import React, { useState } from 'react';
+// ...existing code...
+
 export default function ChatMessages({
   messages,
   isSending,
@@ -28,6 +31,9 @@ export default function ChatMessages({
   githubToken,
   messagesEndRef
 }: ChatMessagesProps) {
+  // Controla qual mensagem tem o CorrectAndMemorize aberto (índice)
+  const [openCorrectionIdx, setOpenCorrectionIdx] = useState<number | null>(null);
+
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       <div className="space-y-6">
@@ -81,6 +87,9 @@ export default function ChatMessages({
                     userId={userId}
                     githubToken={githubToken}
                     isDarkMode={isDarkMode}
+                    showInput={openCorrectionIdx === index}
+                    onOpen={() => setOpenCorrectionIdx(index)}
+                    onClose={() => setOpenCorrectionIdx(null)}
                   />
                 )}
               </div>

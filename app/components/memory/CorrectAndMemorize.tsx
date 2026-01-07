@@ -10,15 +10,23 @@ interface CorrectAndMemorizeProps {
   userId: string | null;
   githubToken: string;
   isDarkMode: boolean;
+  showInput?: boolean;
+  onOpen?: () => void;
+  onClose?: () => void;
 }
-export default function CorrectAndMemorize({ 
+
+export default function CorrectAndMemorize({
   llmResponse, 
   conversationId, 
   userId, 
   githubToken,
-  isDarkMode 
+  isDarkMode,
+  showInput: showInputProp,
+  onOpen,
+  onClose
 }: CorrectAndMemorizeProps) {
-  const [showInput, setShowInput] = useState(false);
+  const [internalShowInput, setInternalShowInput] = useState(false);
+  const showInput = showInputProp !== undefined ? showInputProp : internalShowInput;
   const [correction, setCorrection] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -79,7 +87,8 @@ export default function CorrectAndMemorize({
         message: '✓ Correction saved to memory! The AI will remember this in future conversations.'
       });
       setTimeout(() => {
-        setShowInput(false);
+        if (onClose) onClose();
+        else setInternalShowInput(false);
         setCorrection('');
         setResult(null);
       }, 3000);
@@ -100,7 +109,10 @@ export default function CorrectAndMemorize({
     <div className="mt-2">
       {!showInput ? (
         <button
-          onClick={() => setShowInput(true)}
+          onClick={() => {
+            if (onOpen) onOpen();
+            else setInternalShowInput(true);
+          }}
           className={`text-xs flex items-center gap-1 ${
             isDarkMode 
               ? 'text-purple-400 hover:text-purple-300' 
@@ -232,7 +244,8 @@ export default function CorrectAndMemorize({
               </button>
               <button
                 onClick={() => {
-                  setShowInput(false);
+                  if (onClose) onClose();
+                  else setInternalShowInput(false);
                   setCorrection('');
                   setResult(null);
                 }}
