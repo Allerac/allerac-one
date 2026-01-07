@@ -27,9 +27,10 @@ export default function ChatHeader({
     <div className={`border-b ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
       <div className="px-3 sm:px-6 py-4">
         <div className="flex items-center gap-3">
+          {/* Mobile hamburger button - only visible on small screens */}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className={`p-2 rounded-lg transition-colors ${
+            className={`lg:hidden p-2 rounded-lg transition-colors ${
               isDarkMode
                 ? 'hover:bg-gray-700 text-gray-300'
                 : 'hover:bg-gray-100 text-gray-700'
@@ -37,11 +38,7 @@ export default function ChatHeader({
             title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {isSidebarOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              )}
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
           <div className="flex items-center gap-3 flex-1">
@@ -77,7 +74,6 @@ export default function ChatHeader({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
               )}
-              Remember It
             </button>
           )}
         </div>

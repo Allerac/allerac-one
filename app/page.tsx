@@ -9,7 +9,8 @@ import { ChatSupabaseService } from './services/database/supabase.service';
 import { ChatMessageService } from './services/chat/chat-message.service';
 import { MemorySummaryService } from './services/memory/memory-summary.service';
 import CorrectAndMemorize from './components/memory/CorrectAndMemorize';
-import Sidebar from './components/layout/Sidebar';
+import SidebarMobile from './components/layout/SidebarMobile';
+import SidebarDesktop from './components/layout/SidebarDesktop';
 import ChatHeader from './components/chat/ChatHeader';
 import ChatMessages from './components/chat/ChatMessages';
 import ChatInput from './components/chat/ChatInput';
@@ -44,7 +45,8 @@ export default function AdminChat() {
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
   const [isEditingSettings, setIsEditingSettings] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
@@ -69,6 +71,9 @@ export default function AdminChat() {
     setMessages,
     MODELS,
     TOOLS,
+    onConversationCreated: () => {
+      if (userId) loadConversations(userId);
+    },
   });
 
   useEffect(() => {
@@ -398,31 +403,61 @@ export default function AdminChat() {
 
       {/* Sidebar + Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar
-          isSidebarOpen={isSidebarOpen}
-          isDarkMode={isDarkMode}
-          toggleTheme={toggleTheme}
-          clearChat={clearChat}
-          conversations={conversations}
-          currentConversationId={currentConversationId}
-          loadConversation={loadConversation}
-          deleteConversation={deleteConversation}
-          MODELS={MODELS}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          setIsTokenModalOpen={setIsTokenModalOpen}
-          setSystemMessageEdit={setSystemMessageEdit}
-          systemMessage={systemMessage}
-          setIsEditingSettings={setIsEditingSettings}
-          setIsDocumentModalOpen={setIsDocumentModalOpen}
-          setIsMemoryModalOpen={setIsMemoryModalOpen}
-          setIsUserSettingsOpen={setIsUserSettingsOpen}
-          handleLogout={handleLogout}
-        />
+        {/* Mobile Sidebar (< lg breakpoint) */}
+        <div className="lg:hidden">
+          <SidebarMobile
+            isSidebarOpen={isSidebarOpen}
+            isDarkMode={isDarkMode}
+            toggleTheme={toggleTheme}
+            clearChat={clearChat}
+            conversations={conversations}
+            currentConversationId={currentConversationId}
+            loadConversation={loadConversation}
+            deleteConversation={deleteConversation}
+            MODELS={MODELS}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            setIsTokenModalOpen={setIsTokenModalOpen}
+            setSystemMessageEdit={setSystemMessageEdit}
+            systemMessage={systemMessage}
+            setIsEditingSettings={setIsEditingSettings}
+            setIsDocumentModalOpen={setIsDocumentModalOpen}
+            setIsMemoryModalOpen={setIsMemoryModalOpen}
+            setIsUserSettingsOpen={setIsUserSettingsOpen}
+            handleLogout={handleLogout}
+          />
+        </div>
+
+        {/* Desktop Sidebar (>= lg breakpoint) */}
+        <div className="hidden lg:block">
+          <SidebarDesktop
+            isSidebarCollapsed={isSidebarCollapsed}
+            setIsSidebarCollapsed={setIsSidebarCollapsed}
+            isDarkMode={isDarkMode}
+            toggleTheme={toggleTheme}
+            clearChat={clearChat}
+            conversations={conversations}
+            currentConversationId={currentConversationId}
+            loadConversation={loadConversation}
+            deleteConversation={deleteConversation}
+            MODELS={MODELS}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            setIsTokenModalOpen={setIsTokenModalOpen}
+            setSystemMessageEdit={setSystemMessageEdit}
+            systemMessage={systemMessage}
+            setIsEditingSettings={setIsEditingSettings}
+            setIsDocumentModalOpen={setIsDocumentModalOpen}
+            setIsMemoryModalOpen={setIsMemoryModalOpen}
+            setIsUserSettingsOpen={setIsUserSettingsOpen}
+            handleLogout={handleLogout}
+          />
+        </div>
 
         {/* Main Chat Area */}
-        <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-0'}`}>
+        <div className={`flex-1 flex flex-col ${
+          isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+        }`}>
           {/* Header */}
           <ChatHeader
             isSidebarOpen={isSidebarOpen}

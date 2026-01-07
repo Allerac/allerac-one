@@ -16,6 +16,7 @@ interface ChatMessageServiceConfig {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   MODELS: Model[];
   TOOLS: any[];
+  onConversationCreated?: () => void;
 }
 
 export class ChatMessageService {
@@ -74,6 +75,12 @@ export class ChatMessageService {
     }
 
     this.config.setCurrentConversationId(data.id);
+    
+    // Notify that a new conversation was created
+    if (this.config.onConversationCreated) {
+      this.config.onConversationCreated();
+    }
+    
     return data.id;
   }
 
