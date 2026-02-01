@@ -1,7 +1,6 @@
 // LLM Service with automatic metrics tracking
 // Supports GitHub Models and Ollama providers
-import { getMetricsClient } from '../infrastructure/metrics-client';
-import { MetricsService } from '../infrastructure/metrics.service';
+import * as metricActions from '@/app/actions/metrics';
 
 export interface LLMRequest {
   model: string;
@@ -37,19 +36,15 @@ export interface LLMResponse {
 type LLMProvider = 'github' | 'ollama';
 
 export class LLMService {
-  private metricsService: MetricsService;
   private provider: LLMProvider;
   private baseUrl: string;
   private githubToken?: string;
 
   constructor(provider: LLMProvider, baseUrl: string, config?: { githubToken?: string }) {
-    const metricsClient = getMetricsClient();
-    this.metricsService = new MetricsService(metricsClient);
-    
     this.provider = provider;
     this.baseUrl = baseUrl;
     this.githubToken = config?.githubToken;
-    
+
     // Validate token if required
     if (provider === 'github' && !this.githubToken) {
       throw new Error('GitHub token is required for github provider');
@@ -98,7 +93,7 @@ export class LLMService {
         } catch {
           errorMessage = await response.text() || response.statusText;
         }
-        
+
         // Format rate limit errors with helpful information
         if (errorMessage && errorMessage.includes('Rate limit')) {
           const match = errorMessage.match(/wait (\d+) seconds/);
@@ -106,16 +101,16 @@ export class LLMService {
             const waitSeconds = parseInt(match[1]);
             const hours = Math.floor(waitSeconds / 3600);
             const minutes = Math.floor((waitSeconds % 3600) / 60);
-            const waitTime = hours > 0 
+            const waitTime = hours > 0
               ? `${hours} hour${hours > 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`
               : `${minutes} minute${minutes !== 1 ? 's' : ''}`;
-            
+
             errorMessage = `⏳ **Rate Limit Exceeded for ${request.model}**\n\nYou've reached the limit of requests for this model.\n\n⏱️ Wait ${waitTime} to use this model again.`;
           } else {
             errorMessage = `⏳ **Rate Limit Exceeded for ${request.model}**\n\n${errorMessage}`;
           }
         }
-        
+
         // Log error metrics
         await this.logMetrics({
           model: request.model,
@@ -131,7 +126,7 @@ export class LLMService {
       }
 
       const data: LLMResponse = await response.json();
-      
+
       // Log success metrics
       await this.logMetrics({
         model: request.model,
@@ -194,7 +189,7 @@ export class LLMService {
         success = false;
         const errorData = await response.json();
         errorMessage = errorData.error || response.statusText;
-        
+
         await this.logMetrics({
           model: request.model,
           provider: 'ollama',
@@ -209,7 +204,7 @@ export class LLMService {
       }
 
       const data = await response.json();
-      
+
       // Convert Ollama response to standard format
       const standardResponse: LLMResponse = {
         choices: [{
@@ -226,7 +221,7 @@ export class LLMService {
         },
         model: request.model,
       };
-      
+
       // Log success metrics
       await this.logMetrics({
         model: request.model,
@@ -258,7 +253,7 @@ export class LLMService {
   }
 
   /**
-   * Log metrics to database
+   * Log metrics to database using Server Action
    */
   private async logMetrics(data: {
     model: string;
@@ -278,7 +273,7 @@ export class LLMService {
   }) {
     try {
       // Log API call metrics
-      await this.metricsService.logApiCall({
+      await metricActions.logApiCall({
         api_name: data.provider === 'github' ? 'github-models' : 'ollama',
         endpoint: '/chat/completions',
         method: 'POST',
@@ -296,11 +291,11 @@ export class LLMService {
 
       // Log token usage if successful
       if (data.success && data.usage) {
-        const estimatedCost = data.provider === 'github' 
-          ? this.calculateCost(data.model, data.usage) 
+        const estimatedCost = data.provider === 'github'
+          ? this.calculateCost(data.model, data.usage)
           : 0; // Ollama is free
-        
-        await this.metricsService.logTokenUsage({
+
+        await metricActions.logTokenUsage({
           model: data.model,
           provider: data.provider === 'github' ? 'github-models' : 'ollama',
           prompt_tokens: data.usage.prompt_tokens,
@@ -336,10 +331,10 @@ export class LLMService {
     };
 
     const modelPricing = pricing[model] || pricing['gpt-4o']; // Default to gpt-4o pricing
-    
+
     const inputCost = (usage.prompt_tokens / 1_000_000) * modelPricing.input;
     const outputCost = (usage.completion_tokens / 1_000_000) * modelPricing.output;
-    
+
     return inputCost + outputCost;
   }
 
@@ -350,7 +345,7 @@ export class LLMService {
     if (message?.includes('Rate limit')) return 'RateLimitError';
     if (message?.includes('authentication')) return 'AuthenticationError';
     if (message?.includes('quota')) return 'QuotaError';
-    
+
     switch (statusCode) {
       case 400: return 'BadRequestError';
       case 401: return 'AuthenticationError';

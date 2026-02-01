@@ -1,17 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import * as memoryActions from '@/app/actions/memory';
 
 interface ConversationMemoriesViewProps {
-  supabase: any;
   githubToken: string;
   userId: string;
   isDarkMode: boolean;
 }
 
-export default function ConversationMemoriesView({ 
-  supabase, 
-  githubToken, 
+export default function ConversationMemoriesView({
+  githubToken,
   userId,
   isDarkMode
 }: ConversationMemoriesViewProps) {
@@ -29,14 +28,13 @@ export default function ConversationMemoriesView({
   const loadMemories = async () => {
     setIsLoading(true);
     try {
-      const { ConversationMemoryService } = await import('@/app/services/memory/conversation-memory.service');
-      const memoryService = new ConversationMemoryService(supabase, githubToken);
-      
+      if (!githubToken) return;
+
       const [summaries, statistics] = await Promise.all([
-        memoryService.getRecentSummaries(userId, 10, 1),
-        memoryService.getSummaryStats(userId),
+        memoryActions.getRecentSummaries(userId, githubToken, 10, 1),
+        memoryActions.getSummaryStats(userId, githubToken),
       ]);
-      
+
       setMemories(summaries);
       setStats(statistics);
     } catch (error) {
@@ -56,9 +54,7 @@ export default function ConversationMemoriesView({
 
     setIsDeleting(true);
     try {
-      const { ConversationMemoryService } = await import('@/app/services/memory/conversation-memory.service');
-      const memoryService = new ConversationMemoryService(supabase, githubToken);
-      await memoryService.deleteSummary(memoryToDelete.id);
+      await memoryActions.deleteSummary(memoryToDelete.id, githubToken);
       await loadMemories();
       setDeleteConfirmOpen(false);
       setMemoryToDelete(null);

@@ -1,6 +1,6 @@
 // Metrics service for tracking API calls, tokens usage, and performance
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import pool from '@/app/clients/db';
 
 export interface ApiLogEntry {
   api_name: string;
@@ -30,32 +30,30 @@ export interface TokenUsageEntry {
 }
 
 export class MetricsService {
-  constructor(private supabase: SupabaseClient) {}
-
   /**
    * Log an API call with timing and status information
    */
   async logApiCall(entry: ApiLogEntry): Promise<void> {
     try {
-      const { error } = await this.supabase
-        .from('api_logs')
-        .insert({
-          api_name: entry.api_name,
-          endpoint: entry.endpoint,
-          method: entry.method || 'POST',
-          user_id: entry.user_id,
-          session_id: entry.session_id,
-          response_time_ms: entry.response_time_ms,
-          status_code: entry.status_code,
-          success: entry.success,
-          error_message: entry.error_message,
-          error_type: entry.error_type,
-          metadata: entry.metadata || {},
-        });
-
-      if (error) {
-        console.error('Failed to log API call:', error);
-      }
+      await pool.query(
+        `INSERT INTO api_logs (
+          api_name, endpoint, method, user_id, session_id,
+          response_time_ms, status_code, success, error_message, error_type, metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          entry.api_name,
+          entry.endpoint,
+          entry.method || 'POST',
+          entry.user_id,
+          entry.session_id,
+          entry.response_time_ms,
+          entry.status_code,
+          entry.success,
+          entry.error_message,
+          entry.error_type,
+          entry.metadata || {}
+        ]
+      );
     } catch (err) {
       // Don't throw - metrics logging should not break the app
       console.error('Exception while logging API call:', err);
@@ -67,24 +65,24 @@ export class MetricsService {
    */
   async logTokenUsage(entry: TokenUsageEntry): Promise<void> {
     try {
-      const { error } = await this.supabase
-        .from('tokens_usage')
-        .insert({
-          model: entry.model,
-          provider: entry.provider,
-          prompt_tokens: entry.prompt_tokens,
-          completion_tokens: entry.completion_tokens,
-          total_tokens: entry.total_tokens,
-          estimated_cost_usd: entry.estimated_cost_usd,
-          user_id: entry.user_id,
-          session_id: entry.session_id,
-          conversation_id: entry.conversation_id,
-          metadata: entry.metadata || {},
-        });
-
-      if (error) {
-        console.error('Failed to log token usage:', error);
-      }
+      await pool.query(
+        `INSERT INTO tokens_usage (
+          model, provider, prompt_tokens, completion_tokens, total_tokens,
+          estimated_cost_usd, user_id, session_id, conversation_id, metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          entry.model,
+          entry.provider,
+          entry.prompt_tokens,
+          entry.completion_tokens,
+          entry.total_tokens,
+          entry.estimated_cost_usd,
+          entry.user_id,
+          entry.session_id,
+          entry.conversation_id,
+          entry.metadata || {}
+        ]
+      );
     } catch (err) {
       console.error('Exception while logging token usage:', err);
     }
@@ -151,24 +149,30 @@ export class MetricsService {
     cache_hit_rate?: number;
   }> {
     try {
-      const { data, error } = await this.supabase
-        .rpc('get_tavily_stats', { hours_ago: hours });
+      // For simplicity, just querying the view or raw table aggregation
+      // We will execute raw aggregation here for flexibility
 
-      if (error) {
-        console.error('Failed to get Tavily stats:', error);
-        return {
-          total_calls: 0,
-          successful_calls: 0,
-          failed_calls: 0,
-          avg_response_time_ms: 0,
-        };
+      let timeFilter = `timestamp >= NOW() - INTERVAL '${hours} hours'`;
+      if (useCurrentMonth) {
+        timeFilter = "timestamp >= date_trunc('month', NOW())";
       }
 
-      return data || {
-        total_calls: 0,
-        successful_calls: 0,
-        failed_calls: 0,
-        avg_response_time_ms: 0,
+      const res = await pool.query(
+        `SELECT
+          COUNT(*) as total_calls,
+          COUNT(*) FILTER (WHERE success = true) as successful_calls,
+          COUNT(*) FILTER (WHERE success = false) as failed_calls,
+          COALESCE(AVG(response_time_ms), 0) as avg_response_time_ms
+         FROM api_logs
+         WHERE api_name = 'tavily' AND ${timeFilter}`
+      );
+
+      const row = res.rows[0];
+      return {
+        total_calls: parseInt(row.total_calls),
+        successful_calls: parseInt(row.successful_calls),
+        failed_calls: parseInt(row.failed_calls),
+        avg_response_time_ms: parseFloat(row.avg_response_time_ms)
       };
     } catch (err) {
       console.error('Exception while getting Tavily stats:', err);
@@ -192,62 +196,30 @@ export class MetricsService {
     estimated_cost_usd: number;
   }> {
     try {
-      let startDate: string;
-      
+      let timeFilter = `timestamp >= NOW() - INTERVAL '${hours} hours'`;
       if (useCurrentMonth) {
-        const now = new Date();
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        startDate = firstDayOfMonth.toISOString();
-      } else {
-        startDate = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+        timeFilter = "timestamp >= date_trunc('month', NOW())";
       }
 
-      const { data, error } = await this.supabase
-        .from('tokens_usage')
-        .select('prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd')
-        .gte('timestamp', startDate);
+      const res = await pool.query(
+        `SELECT
+           COALESCE(SUM(total_tokens), 0) as total_tokens,
+           COALESCE(SUM(prompt_tokens), 0) as prompt_tokens,
+           COALESCE(SUM(completion_tokens), 0) as completion_tokens,
+           COUNT(*) as total_requests,
+           COALESCE(SUM(estimated_cost_usd), 0) as estimated_cost_usd
+         FROM tokens_usage
+         WHERE ${timeFilter}`
+      );
 
-      if (error) {
-        console.error('Failed to get token stats:', error);
-        return {
-          total_tokens: 0,
-          prompt_tokens: 0,
-          completion_tokens: 0,
-          total_requests: 0,
-          estimated_cost_usd: 0,
-        };
-      }
-
-      if (!data || data.length === 0) {
-        return {
-          total_tokens: 0,
-          prompt_tokens: 0,
-          completion_tokens: 0,
-          total_requests: 0,
-          estimated_cost_usd: 0,
-        };
-      }
-
-      let total_tokens = 0;
-      let prompt_tokens = 0;
-      let completion_tokens = 0;
-      let total_requests = 0;
-      let estimated_cost_usd = 0;
-
-      for (const row of data) {
-        total_tokens += row.total_tokens || 0;
-        prompt_tokens += row.prompt_tokens || 0;
-        completion_tokens += row.completion_tokens || 0;
-        total_requests += 1;
-        estimated_cost_usd += row.estimated_cost_usd || 0;
-      }
+      const row = res.rows[0];
 
       return {
-        total_tokens,
-        prompt_tokens,
-        completion_tokens,
-        total_requests,
-        estimated_cost_usd,
+        total_tokens: parseInt(row.total_tokens),
+        prompt_tokens: parseInt(row.prompt_tokens),
+        completion_tokens: parseInt(row.completion_tokens),
+        total_requests: parseInt(row.total_requests),
+        estimated_cost_usd: parseFloat(row.estimated_cost_usd),
       };
     } catch (err) {
       console.error('Exception while getting token stats:', err);

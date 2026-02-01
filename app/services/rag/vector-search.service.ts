@@ -6,7 +6,7 @@
  * for a given query, enabling Retrieval Augmented Generation (RAG).
  */
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import pool from '@/app/clients/db';
 import { EmbeddingService } from './embedding.service';
 
 export interface SearchResult {
@@ -24,11 +24,9 @@ export interface SearchOptions {
 }
 
 export class VectorSearchService {
-  private supabase: SupabaseClient;
   private embeddingService: EmbeddingService;
 
-  constructor(supabase: SupabaseClient, embeddingService: EmbeddingService) {
-    this.supabase = supabase;
+  constructor(embeddingService: EmbeddingService) {
     this.embeddingService = embeddingService;
   }
 
@@ -56,21 +54,22 @@ export class VectorSearchService {
       // Step 1: Generate embedding for the query
       const { embedding } = await this.embeddingService.generateEmbedding(query);
 
-      // Step 2: Perform vector similarity search using pgvector
-      // The <=> operator calculates cosine distance (1 - cosine similarity)
-      // We'll convert it back to similarity for clarity
-      const { data, error } = await this.supabase.rpc('search_document_chunks', {
-        query_embedding: embedding,
-        match_threshold: 1 - similarityThreshold, // Convert similarity to distance
-        match_count: limit,
-      });
+      // Format embedding for pgvector (string representation: "[0.1, 0.2, ...]")
+      const embeddingString = `[${embedding.join(',')}]`;
 
-      if (error) {
-        throw new Error(`Vector search failed: ${error.message}`);
-      }
+      // Step 2: Perform vector similarity search using pgvector
+      // We call the stored function search_document_chunks defined in init.sql
+      const res = await pool.query(
+        'SELECT * FROM search_document_chunks($1, $2, $3)',
+        [
+          embeddingString,
+          1 - similarityThreshold, // match_threshold (distance)
+          limit // match_count
+        ]
+      );
 
       // Step 3: Format and return results
-      return (data || []).map((row: any) => ({
+      return res.rows.map((row: any) => ({
         chunkId: row.chunk_id,
         documentId: row.document_id,
         content: row.content,
@@ -120,18 +119,13 @@ Please use the above context to answer the user's question. If the context doesn
    * Useful for showing/hiding search-related UI elements.
    */
   async hasDocuments(): Promise<boolean> {
-    const { data, error } = await this.supabase
-      .from('documents')
-      .select('id')
-      .eq('status', 'completed')
-      .limit(1);
-
-    if (error) {
+    try {
+      const res = await pool.query('SELECT id FROM documents WHERE status = $1 LIMIT 1', ['completed']);
+      return res.rows.length > 0;
+    } catch (error) {
       console.error('Error checking for documents:', error);
       return false;
     }
-
-    return (data?.length || 0) > 0;
   }
 
   /**
@@ -142,32 +136,26 @@ Please use the above context to answer the user's question. If the context doesn
     chunkCount: number;
     totalSize: number;
   }> {
-    // Get document count and total size
-    const { data: docData, error: docError } = await this.supabase
-      .from('documents')
-      .select('file_size')
-      .eq('status', 'completed');
+    try {
+      // Get document count and total size
+      const docRes = await pool.query('SELECT file_size FROM documents WHERE status = $1', ['completed']);
 
-    if (docError) {
-      throw new Error(`Failed to get document stats: ${docError.message}`);
+      const docData = docRes.rows;
+      const documentCount = docData.length;
+      const totalSize = docData.reduce((sum, doc) => sum + doc.file_size, 0);
+
+      // Get chunk count
+      const chunkRes = await pool.query('SELECT COUNT(*) FROM document_chunks');
+      const chunkCount = parseInt(chunkRes.rows[0].count, 10);
+
+      return {
+        documentCount,
+        chunkCount,
+        totalSize,
+      };
+    } catch (error: any) {
+      console.error('Error checking for stats:', error);
+      throw new Error(`Failed to get stats: ${error.message}`);
     }
-
-    const documentCount = docData?.length || 0;
-    const totalSize = docData?.reduce((sum, doc) => sum + doc.file_size, 0) || 0;
-
-    // Get chunk count
-    const { count: chunkCount, error: chunkError } = await this.supabase
-      .from('document_chunks')
-      .select('*', { count: 'exact', head: true });
-
-    if (chunkError) {
-      throw new Error(`Failed to get chunk count: ${chunkError.message}`);
-    }
-
-    return {
-      documentCount,
-      chunkCount: chunkCount || 0,
-      totalSize,
-    };
   }
 }

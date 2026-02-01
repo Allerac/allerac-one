@@ -2,17 +2,12 @@
  * DocumentUpload Component
  * 
  * Provides UI for uploading and managing documents in the knowledge base.
- * Features:
- * - Drag-and-drop file upload
- * - Document list with status indicators
- * - Delete functionality
- * - Progress feedback during processing
  */
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { supabase } from '@/app/clients/supabase';
+import * as docActions from '@/app/actions/documents';
 
 interface Document {
   id: string;
@@ -28,7 +23,7 @@ interface DocumentUploadProps {
   githubToken: string;
   userId: string;
   isDarkMode: boolean;
-  onDocumentsChange?: () => void; // Callback when documents are added/removed
+  onDocumentsChange?: () => void;
 }
 
 export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocumentsChange }: DocumentUploadProps) {
@@ -48,12 +43,8 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
    */
   const loadDocuments = async () => {
     try {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .order('uploaded_at', { ascending: false });
-
-      if (error) throw error;
+      if (!githubToken) return;
+      const data = await docActions.getAllDocuments(githubToken);
       setDocuments(data || []);
     } catch (error) {
       console.error('Error loading documents:', error);
@@ -69,7 +60,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     // Validate file type
     const fileName = file.name.toLowerCase();
     const isValidType = fileName.endsWith('.txt') || fileName.endsWith('.pdf');
-    
+
     if (!isValidType) {
       alert('Currently only .txt and .pdf files are supported');
       return;
@@ -79,23 +70,18 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     setUploadProgress('Uploading file...');
 
     try {
-      // Import services dynamically
-      const { EmbeddingService } = await import('@/app/services/rag/embedding.service');
-      const { DocumentService } = await import('@/app/services/rag/document.service');
-
-      // Initialize services
-      const embeddingService = new EmbeddingService(githubToken);
-      const documentService = new DocumentService(supabase, embeddingService);
-
-      // Process the document
       setUploadProgress('Processing document...');
-      await documentService.processDocument(file, userId);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      await docActions.processDocument(formData, userId, githubToken);
 
       setUploadProgress('Document processed successfully!');
-      
+
       // Reload documents list
       await loadDocuments();
-      
+
       // Notify parent component
       if (onDocumentsChange) {
         onDocumentsChange();
@@ -108,7 +94,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     } catch (error) {
       console.error('Error uploading document:', error);
       setUploadProgress('Error: ' + (error as Error).message);
-      
+
       setTimeout(() => {
         setUploadProgress('');
       }, 5000);
@@ -160,15 +146,9 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     }
 
     try {
-      const { DocumentService } = await import('@/app/services/rag/document.service');
-      const { EmbeddingService } = await import('@/app/services/rag/embedding.service');
-      
-      const embeddingService = new EmbeddingService(githubToken);
-      const documentService = new DocumentService(supabase, embeddingService);
-
-      await documentService.deleteDocument(documentId);
+      await docActions.deleteDocument(documentId, githubToken);
       await loadDocuments();
-      
+
       if (onDocumentsChange) {
         onDocumentsChange();
       }
@@ -209,7 +189,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
         onDrop={handleDrop}
         className={`
           border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer
-          ${isDragging 
+          ${isDragging
             ? (isDarkMode ? 'border-blue-400 bg-blue-900/20' : 'border-blue-500 bg-blue-50')
             : (isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-300 hover:border-gray-400')
           }
@@ -225,7 +205,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
           className="hidden"
           disabled={isUploading}
         />
-        
+
         <svg
           className={`mx-auto h-12 w-12 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}
           stroke="currentColor"
@@ -239,7 +219,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
             strokeLinejoin="round"
           />
         </svg>
-        
+
         <p className={`mt-2 text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
           {isUploading ? uploadProgress : 'Drag and drop a file here, or click to select'}
         </p>
@@ -266,15 +246,11 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
                     {formatFileSize(doc.file_size)} • {formatDate(doc.uploaded_at)}
                   </p>
                 </div>
-                
+
                 <div className="flex items-center gap-2 ml-4">
                   {/* Status Indicator */}
                   {doc.status === 'processing' && (
                     <span className="flex items-center text-xs text-blue-600">
-                      <svg className="animate-spin h-4 w-4 mr-1" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
                       Processing
                     </span>
                   )}
@@ -286,7 +262,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
                       ✗ Failed
                     </span>
                   )}
-                  
+
                   {/* Delete Button */}
                   <button
                     onClick={() => handleDeleteDocument(doc.id)}

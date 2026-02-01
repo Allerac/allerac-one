@@ -11,7 +11,7 @@
  * - Efficient retrieval of recent/important memories
  */
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import pool from '@/app/clients/db';
 
 export interface ConversationSummary {
   id: string;
@@ -31,11 +31,9 @@ export interface Message {
 }
 
 export class ConversationMemoryService {
-  private supabase: SupabaseClient;
   private githubToken: string;
 
-  constructor(supabase: SupabaseClient, githubToken: string) {
-    this.supabase = supabase;
+  constructor(githubToken: string) {
     this.githubToken = githubToken;
   }
 
@@ -53,15 +51,11 @@ export class ConversationMemoryService {
   ): Promise<ConversationSummary | null> {
     try {
       // Step 1: Load all messages from the conversation
-      const { data: messages, error: messagesError } = await this.supabase
-        .from('chat_messages')
-        .select('role, content')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-
-      if (messagesError) {
-        throw new Error(`Failed to load messages: ${messagesError.message}`);
-      }
+      const msgRes = await pool.query(
+        'SELECT role, content FROM chat_messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+        [conversationId]
+      );
+      const messages = msgRes.rows;
 
       if (!messages || messages.length < 2) {
         // Not enough messages to summarize
@@ -141,27 +135,24 @@ ${conversationText}`;
         };
       }
 
+      // Step 5: Save summary to database
+      const saveRes = await pool.query(
+        `INSERT INTO conversation_summaries 
+         (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [
+          conversationId,
+          userId,
+          summaryData.summary,
+          summaryData.key_topics || [],
+          summaryData.importance_score || 5,
+          messages.length,
+          summaryData.emotion || null
+        ]
+      );
 
-      // Step 5: Save summary to database (now includes emotion)
-      const { data: savedSummary, error: saveError } = await this.supabase
-        .from('conversation_summaries')
-        .insert({
-          conversation_id: conversationId,
-          user_id: userId,
-          summary: summaryData.summary,
-          key_topics: summaryData.key_topics || [],
-          importance_score: summaryData.importance_score || 5,
-          message_count: messages.length,
-          emotion: summaryData.emotion || null,
-        })
-        .select()
-        .single();
-
-      if (saveError) {
-        throw new Error(`Failed to save summary: ${saveError.message}`);
-      }
-
-      return savedSummary as ConversationSummary;
+      return saveRes.rows[0] as ConversationSummary;
     } catch (error) {
       console.error('Error generating conversation summary:', error);
       throw error;
@@ -183,19 +174,15 @@ ${conversationText}`;
     minImportance: number = 3
   ): Promise<ConversationSummary[]> {
     try {
-      const { data, error } = await this.supabase
-        .from('conversation_summaries')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('importance_score', minImportance)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      const res = await pool.query(
+        `SELECT * FROM conversation_summaries
+         WHERE user_id = $1 AND importance_score >= $2
+         ORDER BY created_at DESC
+         LIMIT $3`,
+        [userId, minImportance, limit]
+      );
 
-      if (error) {
-        throw new Error(`Failed to retrieve summaries: ${error.message}`);
-      }
-
-      return (data || []) as ConversationSummary[];
+      return (res.rows || []) as ConversationSummary[];
     } catch (error) {
       console.error('Error retrieving summaries:', error);
       return [];
@@ -219,10 +206,10 @@ ${conversationText}`;
         month: 'short',
         day: 'numeric',
       });
-      const topics = summary.key_topics.length > 0 
+      const topics = summary.key_topics.length > 0
         ? ` [Topics: ${summary.key_topics.join(', ')}]`
         : '';
-      
+
       return `${index + 1}. (${date}${topics}): ${summary.summary}`;
     });
 
@@ -244,29 +231,25 @@ ${memoryItems.join('\n\n')}
   async shouldSummarizeConversation(conversationId: string): Promise<boolean> {
     try {
       // Check if summary already exists
-      const { data: existingSummary } = await this.supabase
-        .from('conversation_summaries')
-        .select('id')
-        .eq('conversation_id', conversationId)
-        .single();
+      const existingRes = await pool.query(
+        'SELECT id FROM conversation_summaries WHERE conversation_id = $1',
+        [conversationId]
+      );
 
-      if (existingSummary) {
+      if (existingRes.rows.length > 0) {
         return false; // Already has a summary
       }
 
       // Check message count
-      const { count, error } = await this.supabase
-        .from('chat_messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('conversation_id', conversationId);
+      const countRes = await pool.query(
+        'SELECT COUNT(*) FROM chat_messages WHERE conversation_id = $1',
+        [conversationId]
+      );
 
-      if (error) {
-        console.error('Error checking message count:', error);
-        return false;
-      }
+      const count = parseInt(countRes.rows[0].count, 10);
 
       // Require at least 4 messages (2 user, 2 assistant minimum)
-      return (count || 0) >= 4;
+      return count >= 4;
     } catch (error) {
       console.error('Error checking if conversation should be summarized:', error);
       return false;
@@ -279,12 +262,9 @@ ${memoryItems.join('\n\n')}
    * @param summaryId - The summary ID to delete
    */
   async deleteSummary(summaryId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('conversation_summaries')
-      .delete()
-      .eq('id', summaryId);
-
-    if (error) {
+    try {
+      await pool.query('DELETE FROM conversation_summaries WHERE id = $1', [summaryId]);
+    } catch (error: any) {
       throw new Error(`Failed to delete summary: ${error.message}`);
     }
   }
@@ -297,25 +277,31 @@ ${memoryItems.join('\n\n')}
     totalMessages: number;
     averageImportance: number;
   }> {
-    const { data, error } = await this.supabase
-      .from('conversation_summaries')
-      .select('importance_score, message_count')
-      .eq('user_id', userId);
+    try {
+      const res = await pool.query(
+        'SELECT importance_score, message_count FROM conversation_summaries WHERE user_id = $1',
+        [userId]
+      );
 
-    if (error || !data) {
+      const data = res.rows;
+
+      if (!data || data.length === 0) {
+        return { totalSummaries: 0, totalMessages: 0, averageImportance: 0 };
+      }
+
+      const totalSummaries = data.length;
+      const totalMessages = data.reduce((sum, s) => sum + s.message_count, 0);
+      const averageImportance = totalSummaries > 0
+        ? data.reduce((sum, s) => sum + s.importance_score, 0) / totalSummaries
+        : 0;
+
+      return {
+        totalSummaries,
+        totalMessages,
+        averageImportance: Math.round(averageImportance * 10) / 10,
+      };
+    } catch (error) {
       return { totalSummaries: 0, totalMessages: 0, averageImportance: 0 };
     }
-
-    const totalSummaries = data.length;
-    const totalMessages = data.reduce((sum, s) => sum + s.message_count, 0);
-    const averageImportance = totalSummaries > 0
-      ? data.reduce((sum, s) => sum + s.importance_score, 0) / totalSummaries
-      : 0;
-
-    return {
-      totalSummaries,
-      totalMessages,
-      averageImportance: Math.round(averageImportance * 10) / 10,
-    };
   }
 }

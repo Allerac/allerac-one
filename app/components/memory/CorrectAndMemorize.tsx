@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/app/clients/supabase';
+import * as memoryActions from '@/app/actions/memory';
 
 interface CorrectAndMemorizeProps {
   llmResponse: string;
@@ -16,9 +15,9 @@ interface CorrectAndMemorizeProps {
 }
 
 export default function CorrectAndMemorize({
-  llmResponse, 
-  conversationId, 
-  userId, 
+  llmResponse,
+  conversationId,
+  userId,
   githubToken,
   isDarkMode,
   showInput: showInputProp,
@@ -30,10 +29,8 @@ export default function CorrectAndMemorize({
   const [correction, setCorrection] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [emotion, setEmotion] = useState(0); // Estado da emoção (0 = neutro)
-  // Estado da importância: 10 = Very Important, 5 = Important, 1 = Low Important
+  const [emotion, setEmotion] = useState(0);
   const [importance, setImportance] = useState(5);
-
 
   const handleSave = async () => {
     if (!correction.trim() || !userId || !conversationId) {
@@ -47,62 +44,41 @@ export default function CorrectAndMemorize({
       // Create memory with user correction and emotion
       const memoryContent = `User preference: When the AI said "${llmResponse.slice(0, 100)}...", the user corrected: "${correction}" (emotion: ${emotion}, importance: ${importance})`;
 
-      // First check if a summary already exists
-      const { data: existing } = await supabase
-        .from('conversation_summaries')
-        .select('id, summary')
-        .eq('conversation_id', conversationId)
-        .single();
+      const result = await memoryActions.saveCorrectionMemory(
+        conversationId,
+        userId,
+        memoryContent,
+        importance,
+        emotion
+      );
 
-      if (existing) {
-        // Append to existing summary
-        const updatedSummary = `${existing.summary}\n\n${memoryContent}`;
-        const { error } = await supabase
-          .from('conversation_summaries')
-          .update({
-            summary: updatedSummary,
-            key_topics: ['preference', 'correction'],
-            importance_score: importance,
-            emotion
-          })
-          .eq('id', existing.id);
-        if (error) throw error;
+      if (result.success) {
+        setResult({
+          success: true,
+          message: '✓ Correction saved to memory! The AI will remember this in future conversations.'
+        });
+        setTimeout(() => {
+          if (onClose) onClose();
+          else setInternalShowInput(false);
+          setCorrection('');
+          setResult(null);
+        }, 3000);
       } else {
-        // Create new summary
-        const { error } = await supabase
-          .from('conversation_summaries')
-          .insert({
-            user_id: userId,
-            conversation_id: conversationId,
-            summary: memoryContent,
-            key_topics: ['preference', 'correction'],
-            importance_score: importance,
-            message_count: 1,
-            emotion
-          });
-        if (error) throw error;
+        throw new Error(result.error);
       }
-      setResult({
-        success: true,
-        message: '✓ Correction saved to memory! The AI will remember this in future conversations.'
-      });
-      setTimeout(() => {
-        if (onClose) onClose();
-        else setInternalShowInput(false);
-        setCorrection('');
-        setResult(null);
-      }, 3000);
     } catch (error) {
       console.error('Error saving correction:', error);
       setResult({
         success: false,
         message: `Error saving correction: ${error instanceof Error ? error.message : JSON.stringify(error)}`
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   if (!conversationId || !userId || !githubToken) {
-    return null; // Don't show if required context is missing
+    return null;
   }
 
   return (
@@ -113,11 +89,10 @@ export default function CorrectAndMemorize({
             if (onOpen) onOpen();
             else setInternalShowInput(true);
           }}
-          className={`text-xs flex items-center gap-1 ${
-            isDarkMode 
-              ? 'text-purple-400 hover:text-purple-300' 
+          className={`text-xs flex items-center gap-1 ${isDarkMode
+              ? 'text-purple-400 hover:text-purple-300'
               : 'text-purple-600 hover:text-purple-800'
-          }`}
+            }`}
           title="Correct and save to memory"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,16 +102,14 @@ export default function CorrectAndMemorize({
         </button>
       ) : (
         <div
-          className={`flex flex-col gap-2 p-3 rounded-lg border max-w-full sm:max-w-md mx-auto ${
-            isDarkMode 
-              ? 'bg-purple-900/20 border-purple-800' 
+          className={`flex flex-col gap-2 p-3 rounded-lg border max-w-full sm:max-w-md mx-auto ${isDarkMode
+              ? 'bg-purple-900/20 border-purple-800'
               : 'bg-purple-50 border-purple-200'
-          }`}
+            }`}
           style={{ minWidth: 0 }}
         >
-          <label className={`text-xs font-medium ${
-            isDarkMode ? 'text-gray-300' : 'text-gray-700'
-          }`}>
+          <label className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+            }`}>
             How should it be? (The AI will memorize your preference)
           </label>
           <input
@@ -149,16 +122,14 @@ export default function CorrectAndMemorize({
               }
             }}
             placeholder="e.g., For me 18°C is warm..."
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 truncate ${
-              isDarkMode 
-                ? 'border-gray-600 bg-gray-800 text-gray-100' 
+            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 truncate ${isDarkMode
+                ? 'border-gray-600 bg-gray-800 text-gray-100'
                 : 'border-gray-300 bg-white text-gray-900'
-            }`}
+              }`}
             disabled={isSaving}
             autoFocus
             style={{ minWidth: 0 }}
           />
-          {/* Layout: horizontal (desktop), vertical (mobile) */}
           <div
             className="w-full flex flex-col gap-2 mt-2 sm:flex-row sm:gap-2 sm:justify-end sm:items-center"
           >
@@ -220,7 +191,6 @@ export default function CorrectAndMemorize({
                 <span className={emotion === 1 ? (isDarkMode ? 'text-green-300' : 'text-green-700') : 'text-gray-400'}>🥰</span>
               </div>
             </div>
-            {/* Save/cancel buttons: horizontal on desktop, alinhados à direita no mobile */}
             <div className="flex flex-row gap-1 mt-2 sm:mt-0 sm:flex-row sm:gap-1 sm:items-center justify-end">
               <button
                 onClick={handleSave}
@@ -250,11 +220,10 @@ export default function CorrectAndMemorize({
                   setResult(null);
                 }}
                 disabled={isSaving}
-                className={`px-2 py-2 text-sm rounded-lg transition-colors ${
-                  isDarkMode 
-                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' 
+                className={`px-2 py-2 text-sm rounded-lg transition-colors ${isDarkMode
+                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
                     : 'bg-gray-300 hover:bg-gray-400 text-gray-700'
-                }`}
+                  }`}
                 style={{ minWidth: 0 }}
               >
                 ✕
@@ -262,15 +231,14 @@ export default function CorrectAndMemorize({
             </div>
           </div>
           {result && (
-            <div className={`text-xs mt-1 p-2 rounded ${
-              result.success 
+            <div className={`text-xs mt-1 p-2 rounded ${result.success
                 ? isDarkMode
                   ? 'bg-green-900/30 text-green-300'
                   : 'bg-green-100 text-green-800'
                 : isDarkMode
                   ? 'bg-red-900/30 text-red-300'
                   : 'bg-red-100 text-red-800'
-            }`}>
+              }`}>
               {result.message}
             </div>
           )}
@@ -279,4 +247,3 @@ export default function CorrectAndMemorize({
     </div>
   );
 }
-

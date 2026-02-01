@@ -8,7 +8,6 @@ interface MemoriesModalProps {
   isDarkMode: boolean;
   userId: string | null;
   githubToken: string;
-  supabase: any;
 }
 
 export default function MemoriesModal({
@@ -17,7 +16,6 @@ export default function MemoriesModal({
   isDarkMode,
   userId,
   githubToken,
-  supabase
 }: MemoriesModalProps) {
   if (!isOpen || !userId || !githubToken) return null;
 
@@ -41,8 +39,7 @@ export default function MemoriesModal({
           </button>
         </div>
         <div className="p-6 flex-1 overflow-y-auto">
-          <ConversationMemoriesView 
-            supabase={supabase}
+          <ConversationMemoriesView
             githubToken={githubToken}
             userId={userId}
             isDarkMode={isDarkMode}

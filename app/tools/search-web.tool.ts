@@ -1,6 +1,6 @@
 // Web search tool using Tavily API with caching and metrics tracking
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import pool from '@/app/clients/db';
 import { normalizeQueryForCache, hashString } from '../services/infrastructure/cache.service';
 import { MetricsService } from '../services/infrastructure/metrics.service';
 import { SearchWebResult } from '../types';
@@ -9,10 +9,9 @@ export class SearchWebTool {
   private metricsService: MetricsService;
 
   constructor(
-    private supabase: SupabaseClient,
     private tavilyApiKey: string
   ) {
-    this.metricsService = new MetricsService(supabase);
+    this.metricsService = new MetricsService();
   }
 
   async execute(query: string): Promise<SearchWebResult> {
@@ -30,25 +29,24 @@ export class SearchWebTool {
       // Normalize query semantically for better cache hits
       const normalizedQuery = normalizeQueryForCache(query);
       const queryHash = await hashString(normalizedQuery);
-      
+
       console.log('🔍 Searching cache for query:', normalizedQuery);
       console.log('🔑 Cache hash:', queryHash);
-      
-      // Check cache first (use maybeSingle instead of single to avoid error when no results)
-      const { data: cached, error: cacheError } = await this.supabase
-        .from('tavily_cache')
-        .select('results, created_at, id, hit_count')
-        .eq('query_hash', queryHash)
-        .gt('expires_at', new Date().toISOString())
-        .maybeSingle();
-      
-      if (cacheError) {
-        console.error('❌ Cache lookup error:', cacheError);
-      }
-      
+
+      // Check cache first
+      const cacheRes = await pool.query(
+        `SELECT results, created_at, id, hit_count 
+         FROM tavily_cache 
+         WHERE query_hash = $1 AND expires_at > NOW()
+         LIMIT 1`,
+        [queryHash]
+      );
+
+      const cached = cacheRes.rows[0];
+
       if (cached) {
         console.log('✅ Cache HIT! Using cached result');
-        
+
         // Log metrics for cache hit
         const responseTime = Date.now() - startTime;
         await this.metricsService.logApiCall({
@@ -64,16 +62,13 @@ export class SearchWebTool {
             query_normalized: normalizedQuery,
           },
         });
-        
+
         // Update hit count and last accessed
-        await this.supabase
-          .from('tavily_cache')
-          .update({
-            hit_count: (cached.hit_count || 0) + 1,
-            last_accessed_at: new Date().toISOString(),
-          })
-          .eq('id', cached.id);
-        
+        await pool.query(
+          'UPDATE tavily_cache SET hit_count = hit_count + 1, last_accessed_at = NOW() WHERE id = $1',
+          [cached.id]
+        );
+
         return {
           ...cached.results,
           from_cache: true,
@@ -82,7 +77,7 @@ export class SearchWebTool {
       }
 
       console.log('❌ Cache MISS. Fetching from Tavily API...');
-      
+
       // No cache hit, fetch from Tavily API with metrics tracking
       const result = await this.metricsService.trackApiCall(
         'tavily',
@@ -127,24 +122,20 @@ export class SearchWebTool {
         })) || [],
         query: query,
       };
-      
+
       // Save to cache
       console.log('💾 Saving result to cache...');
-      const { error: insertError } = await this.supabase
-        .from('tavily_cache')
-        .insert({
-          query: normalizedQuery,
-          query_hash: queryHash,
-          results: searchResult,
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-        });
-      
-      if (insertError) {
-        console.error('❌ Failed to save to cache:', insertError);
-      } else {
+      try {
+        await pool.query(
+          `INSERT INTO tavily_cache (query, query_hash, results, expires_at)
+           VALUES ($1, $2, $3, NOW() + INTERVAL '7 days')`,
+          [normalizedQuery, queryHash, searchResult]
+        );
         console.log('✅ Saved to cache successfully');
+      } catch (insertError) {
+        console.error('❌ Failed to save to cache:', insertError);
       }
-      
+
       return searchResult;
     } catch (error: any) {
       // Log error metrics
@@ -159,7 +150,7 @@ export class SearchWebTool {
         error_message: error.message,
         error_type: error.name || 'Error',
       });
-      
+
       return {
         error: error.message,
         results: [],
