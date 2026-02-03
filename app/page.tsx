@@ -5,11 +5,11 @@ import { Message, Conversation, MemorySaveResult, Model } from './types';
 import { MODELS } from './services/llm/models';
 import { TOOLS } from './tools/tools';
 import { ChatMessageService } from './services/chat/chat-message.service';
-import { DEFAULT_USER_ID } from './constants';
 
 import * as chatActions from '@/app/actions/chat';
 import * as userActions from '@/app/actions/user';
 import * as memoryActions from '@/app/actions/memory';
+import * as authActions from '@/app/actions/auth';
 
 import SidebarMobile from './components/layout/SidebarMobile';
 import SidebarDesktop from './components/layout/SidebarDesktop';
@@ -22,6 +22,7 @@ import MemorySettingsModal from './components/memory/MemorySettingsModal';
 import DocumentsModal from './components/documents/DocumentsModal';
 import MemoriesModal from './components/memory/MemoriesModal';
 import UserSettingsModal from './components/auth/UserSettingsModal';
+import LoginModal from './components/auth/LoginModal';
 
 export default function AdminChat() {
   // Modal/event listeners for sidebar configuration actions
@@ -76,6 +77,7 @@ export default function AdminChat() {
   const [memorySaveLoading, setMemorySaveLoading] = useState(false);
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
   const [memorySaveResult, setMemorySaveResult] = useState<MemorySaveResult | null>(null);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize chatMessageService
@@ -122,19 +124,29 @@ export default function AdminChat() {
 
   const checkAuth = async () => {
     try {
-      // Single User Mode: Always authenticated as default user
-      const defaultId = DEFAULT_USER_ID;
+      // Check if user has valid session
+      const sessionResult = await authActions.checkSession();
+
+      if (!sessionResult.authenticated) {
+        // No valid session, show login modal
+        setIsAuthenticated(false);
+        setIsLoginModalOpen(true);
+        setIsLoading(false);
+        return;
+      }
+
+      // User is authenticated
+      const user = sessionResult.user;
       setIsAuthenticated(true);
-      setUserId(defaultId);
+      setUserId(user.id);
+      setUserName(user.name || 'User');
+      setUserEmail(user.email);
 
       // Load API keys from localStorage first, then fallback to environment
-      // We also check DB for settings if needed, but localStorage is primary for keys in this design
-      // Actually per original design, keys were in `user_settings`. Let's check DB.
-
       let savedToken = localStorage.getItem('github_token') || process.env.NEXT_PUBLIC_GITHUB_TOKEN || '';
       let savedTavilyKey = localStorage.getItem('tavily_api_key') || process.env.NEXT_PUBLIC_TAVILY_API_KEY || '';
 
-      const settings = await userActions.loadUserSettings(defaultId);
+      const settings = await userActions.loadUserSettings(user.id);
       if (settings) {
         if (!savedToken && settings.github_token) savedToken = settings.github_token;
         if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
@@ -149,9 +161,11 @@ export default function AdminChat() {
       }
 
       // Load conversations
-      await loadConversations(defaultId);
+      await loadConversations(user.id);
     } catch (error) {
       console.error('Auth check error:', error);
+      setIsAuthenticated(false);
+      setIsLoginModalOpen(true);
     } finally {
       setIsLoading(false);
     }
@@ -274,13 +288,52 @@ export default function AdminChat() {
   };
 
 
+  const handleAuthSuccess = async (user: { id: string; email: string; name: string | null }) => {
+    setIsAuthenticated(true);
+    setIsLoginModalOpen(false);
+    setUserId(user.id);
+    setUserName(user.name || 'User');
+    setUserEmail(user.email);
+
+    // Load user settings
+    let savedToken = localStorage.getItem('github_token') || process.env.NEXT_PUBLIC_GITHUB_TOKEN || '';
+    let savedTavilyKey = localStorage.getItem('tavily_api_key') || process.env.NEXT_PUBLIC_TAVILY_API_KEY || '';
+
+    const settings = await userActions.loadUserSettings(user.id);
+    if (settings) {
+      if (!savedToken && settings.github_token) savedToken = settings.github_token;
+      if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
+    }
+
+    setGithubToken(savedToken);
+    setTavilyApiKey(savedTavilyKey);
+
+    // Show token modal if no GitHub token is configured
+    if (!savedToken) {
+      setIsTokenModalOpen(true);
+    }
+
+    // Load conversations
+    await loadConversations(user.id);
+  };
+
   const handleLogout = async () => {
-    // In single user mode, logout just clears local keys maybe?
+    // Call logout action to clear session
+    await authActions.logout();
+
+    // Clear local state
     localStorage.removeItem('github_token');
     localStorage.removeItem('tavily_api_key');
     setGithubToken('');
     setTavilyApiKey('');
-    window.location.reload();
+    setIsAuthenticated(false);
+    setUserId(null);
+    setMessages([]);
+    setConversations([]);
+    setCurrentConversationId(null);
+
+    // Show login modal
+    setIsLoginModalOpen(true);
   };
 
   const handleSaveToken = async () => {
@@ -579,6 +632,14 @@ export default function AdminChat() {
         userName={userName}
         userEmail={userEmail}
         userId={userId}
+      />
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        isDarkMode={isDarkMode}
+        onAuthSuccess={handleAuthSuccess}
+        preventClose={!isAuthenticated}
       />
     </div>
   );

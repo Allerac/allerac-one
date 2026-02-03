@@ -1,11 +1,13 @@
 // User settings service for managing API keys
 
 import pool from '@/app/clients/db';
+import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 
 export class UserSettingsService {
 
   /**
    * Load user settings (API keys) from database
+   * Decrypts sensitive fields before returning
    */
   async loadUserSettings(userId: string) {
     try {
@@ -18,7 +20,13 @@ export class UserSettingsService {
         return null;
       }
 
-      return res.rows[0];
+      const row = res.rows[0];
+
+      // Decrypt tokens before returning
+      return {
+        github_token: row.github_token ? safeDecrypt(row.github_token) : null,
+        tavily_api_key: row.tavily_api_key ? safeDecrypt(row.tavily_api_key) : null,
+      };
     } catch (error) {
       console.error('Error loading user settings:', error);
       return null;
@@ -27,36 +35,33 @@ export class UserSettingsService {
 
   /**
    * Save or update user API keys
+   * Encrypts sensitive fields before storing
    */
   async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string) {
     try {
-      // Upsert settings
-      // We need to construct the update query dynamically or just use simple logic if we always want to set provided values.
-      // But ON CONFLICT UPDATE is easiest if we are setting all or nothing.
-      // However, parameters are optional.
-      // A better approach for optional updates in SQL is:
-      // INSERT ... ON CONFLICT (user_id) DO UPDATE SET github_token = COALESCE(EXCLUDED.github_token, user_settings.github_token) ... 
-      // But passing undefined means we shouldn't change it.
+      // Encrypt tokens before storing
+      const encryptedGithubToken = githubToken ? encrypt(githubToken) : undefined;
+      const encryptedTavilyKey = tavilyApiKey ? encrypt(tavilyApiKey) : undefined;
 
-      // Let's check existence first, similar to original logic, or use clever SQL.
+      // Check if settings already exist (query directly to avoid decrypt overhead)
+      const existingCheck = await pool.query(
+        'SELECT 1 FROM user_settings WHERE user_id = $1',
+        [userId]
+      );
 
-      const existing = await this.loadUserSettings(userId);
-
-      if (existing) {
+      if (existingCheck.rows.length > 0) {
         const updateFields: string[] = [];
         const values: any[] = [];
         let paramCount = 1;
 
-        if (githubToken !== undefined) {
+        if (encryptedGithubToken !== undefined) {
           updateFields.push(`github_token = $${paramCount++}`);
-          values.push(githubToken);
+          values.push(encryptedGithubToken);
         }
-        if (tavilyApiKey !== undefined) {
+        if (encryptedTavilyKey !== undefined) {
           updateFields.push(`tavily_api_key = $${paramCount++}`);
-          values.push(tavilyApiKey);
+          values.push(encryptedTavilyKey);
         }
-
-        // Always update updated_at? (Trigger handles it)
 
         if (updateFields.length > 0) {
           values.push(userId);
@@ -69,7 +74,7 @@ export class UserSettingsService {
         await pool.query(
           `INSERT INTO user_settings (user_id, github_token, tavily_api_key)
            VALUES ($1, $2, $3)`,
-          [userId, githubToken || '', tavilyApiKey || '']
+          [userId, encryptedGithubToken || '', encryptedTavilyKey || '']
         );
       }
 
