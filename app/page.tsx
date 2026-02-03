@@ -32,12 +32,14 @@ export default function AdminChat() {
     const openUserSettingsModal = () => setIsUserSettingsOpen(true);
     const openDocumentsModal = () => setIsDocumentModalOpen(true);
     const openMemoriesModal = () => setIsMemoryModalOpen(true);
+    const onLogout = () => handleLogoutRef.current();
 
     window.addEventListener('openTokenModal', openTokenModal);
     window.addEventListener('openMemorySettingsModal', openMemorySettingsModal);
     window.addEventListener('openUserSettingsModal', openUserSettingsModal);
     window.addEventListener('openDocumentsModal', openDocumentsModal);
     window.addEventListener('openMemoriesModal', openMemoriesModal);
+    window.addEventListener('logout', onLogout);
 
     return () => {
       window.removeEventListener('openTokenModal', openTokenModal);
@@ -45,6 +47,7 @@ export default function AdminChat() {
       window.removeEventListener('openUserSettingsModal', openUserSettingsModal);
       window.removeEventListener('openDocumentsModal', openDocumentsModal);
       window.removeEventListener('openMemoriesModal', openMemoriesModal);
+      window.removeEventListener('logout', onLogout);
     };
   }, []);
 
@@ -79,6 +82,7 @@ export default function AdminChat() {
   const [memorySaveResult, setMemorySaveResult] = useState<MemorySaveResult | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const handleLogoutRef = useRef<() => void>(() => {});
 
   // Initialize chatMessageService
   // Note: we re-create it when dependencies change, which is acceptable for this simple app
@@ -335,6 +339,9 @@ export default function AdminChat() {
     // Show login modal
     setIsLoginModalOpen(true);
   };
+
+  // Keep the ref updated with the latest handleLogout
+  handleLogoutRef.current = handleLogout;
 
   const handleSaveToken = async () => {
     if (!userId) return;
