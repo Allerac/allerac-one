@@ -9,7 +9,7 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - NEXT_PUBLIC_API_URL=http://localhost:3000
     ports:
-      - "3000:3000"
+      - "3005:3005"
     depends_on:
       - db
 
