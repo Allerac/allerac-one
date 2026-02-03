@@ -8,6 +8,7 @@ services:
       - TAVILY_API_KEY=${TAVILY_API_KEY}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - NEXT_PUBLIC_API_URL=http://localhost:3000
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
     ports:
       - "3005:3005"
     depends_on:
