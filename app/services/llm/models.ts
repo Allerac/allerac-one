@@ -21,24 +21,6 @@ export const MODELS: Model[] = [
     requiresToken: true
   },
   {
-    id: 'o1-preview',
-    name: 'O1 Preview',
-    icon: '🎯',
-    description: 'Advanced reasoning model',
-    provider: 'github',
-    baseUrl: 'https://models.inference.ai.azure.com',
-    requiresToken: true
-  },
-  {
-    id: 'o1-mini',
-    name: 'O1 Mini',
-    icon: '🎯',
-    description: 'Faster reasoning model',
-    provider: 'github',
-    baseUrl: 'https://models.inference.ai.azure.com',
-    requiresToken: true
-  },
-  {
     id: 'claude-3-5-sonnet',
     name: 'Claude 3.5 Sonnet',
     icon: '🎭',
