@@ -66,12 +66,12 @@ export const MODELS: Model[] = [
     requiresToken: true
   },
   {
-    id: 'deepseek-r1:8b',
-    name: 'DeepSeek R1 8B',
+    id: 'deepseek-r1:1.5b',
+    name: 'DeepSeek R1 1.5B',
     icon: '🧠',
-    description: 'Local reasoning model via Ollama',
+    description: 'Local reasoning model via Ollama (CPU-friendly)',
     provider: 'ollama',
-    baseUrl: process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || 'http://localhost:11434',
+    baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
     requiresToken: false
   },
   {

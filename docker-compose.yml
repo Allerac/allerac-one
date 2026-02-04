@@ -11,6 +11,8 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
     ports:
       - "3005:3005"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - db
 
