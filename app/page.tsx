@@ -492,6 +492,7 @@ export default function AdminChat() {
             setIsSidebarOpen={setIsSidebarOpen}
             isDarkMode={isDarkMode}
             selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
             MODELS={MODELS}
             currentConversationId={currentConversationId}
             currentConversationHasMemory={currentConversationHasMemory}
