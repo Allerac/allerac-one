@@ -71,7 +71,7 @@ export const MODELS: Model[] = [
     icon: '🧠',
     description: 'Local reasoning model via Ollama (CPU-friendly)',
     provider: 'ollama',
-    baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+    baseUrl: '/api/ollama',
     requiresToken: false
   },
   {
