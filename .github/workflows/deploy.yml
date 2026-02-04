@@ -1,0 +1,46 @@
+name: Deploy to Home Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target (all, or specific label)'
+        required: false
+        default: 'allerac-server'
+        type: string
+
+jobs:
+  deploy:
+    # Runs on ALL runners that have the 'allerac-server' label
+    runs-on: [self-hosted, allerac-server]
+
+    steps:
+      - name: Show server info
+        run: |
+          echo "Deploying on: $(hostname)"
+
+      - name: Pull latest code
+        working-directory: ~/allerac-one
+        run: |
+          git fetch origin
+          git reset --hard origin/main
+
+      - name: Rebuild and restart containers
+        working-directory: ~/allerac-one
+        run: |
+          docker compose down
+          docker compose up -d --build
+
+      - name: Clean up old Docker images
+        run: |
+          docker image prune -f
+
+      - name: Health check
+        run: |
+          echo "Waiting for app to start..."
+          sleep 10
+          curl -f http://localhost:3000 || echo "Warning: Health check failed on $(hostname)"
+          echo "Deployment completed on $(hostname)"
