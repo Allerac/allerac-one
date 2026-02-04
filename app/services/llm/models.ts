@@ -66,10 +66,19 @@ export const MODELS: Model[] = [
     requiresToken: true
   },
   {
+    id: 'qwen2.5:7b',
+    name: 'Qwen 2.5 7B',
+    icon: '🐼',
+    description: 'Best quality local model for 16GB RAM',
+    provider: 'ollama',
+    baseUrl: '/api/ollama',
+    requiresToken: false
+  },
+  {
     id: 'deepseek-r1:1.5b',
     name: 'DeepSeek R1 1.5B',
     icon: '🧠',
-    description: 'Local reasoning model via Ollama (CPU-friendly)',
+    description: 'Fast local model via Ollama (CPU-friendly)',
     provider: 'ollama',
     baseUrl: '/api/ollama',
     requiresToken: false
