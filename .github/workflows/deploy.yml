@@ -22,14 +22,10 @@ jobs:
         run: |
           echo "Deploying on: $(hostname)"
 
-      - name: Pull latest code
-        working-directory: ~/allerac-one
-        run: |
-          git fetch origin
-          git reset --hard origin/main
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Rebuild and restart containers
-        working-directory: ~/allerac-one
         run: |
           docker compose down
           docker compose up -d --build
