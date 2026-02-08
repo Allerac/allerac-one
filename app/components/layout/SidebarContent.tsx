@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Model, Conversation } from '../../types';
 
 interface SidebarContentProps {
@@ -27,8 +26,6 @@ export default function SidebarContent({
   setIsConfigurationExpanded,
   isSidebarCollapsed = false,
 }: SidebarContentProps & { isSidebarCollapsed?: boolean }) {
-    const [isModelDialogOpen, setIsModelDialogOpen] = useState(false);
-  const selectedModelObj = MODELS.find(m => m.id === selectedModel);
   return (
     <>
       {/* Conversations (hide when collapsed) */}
@@ -92,59 +89,8 @@ export default function SidebarContent({
         </button>
         {isConfigurationExpanded && (
           <div>
-            {/* Configuration Actions (old, with model option) */}
+            {/* Configuration Actions */}
             <div className="space-y-1 mt-4">
-              <button
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
-                onClick={() => setIsModelDialogOpen(true)}
-              >
-                <span>{MODELS.find(m => m.id === selectedModel)?.icon}</span>
-                {!isSidebarCollapsed && <span className="flex-1 text-left">Model</span>}
-              </button>
-              {isModelDialogOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                  <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsModelDialogOpen(false)} />
-                  <div className="relative z-10 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl max-w-md w-full p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-semibold text-gray-100">Select Model</h2>
-                      <button onClick={() => setIsModelDialogOpen(false)} className="text-gray-400 hover:text-gray-200">
-                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="space-y-2 max-h-80 overflow-y-auto">
-                      {MODELS.map((model) => (
-                        <button
-                          key={model.id}
-                          onClick={() => {
-                            setSelectedModel(model.id);
-                            setIsModelDialogOpen(false);
-                          }}
-                          className={`w-full flex items-start gap-3 px-3 py-2 text-sm transition-colors rounded-lg ${
-                            selectedModel === model.id
-                              ? 'bg-gray-700 text-white'
-                              : 'text-gray-300 hover:bg-gray-700'
-                          }`}
-                        >
-                          <span>{model.icon}</span>
-                          <div className="flex-1 text-left">
-                            <div className="font-medium">{model.name}</div>
-                            {model.description && (
-                              <div className="text-xs text-gray-400 mt-0.5">{model.description}</div>
-                            )}
-                          </div>
-                          {selectedModel === model.id && (
-                            <svg className="h-4 w-4 text-blue-400 mt-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
               <button
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
                 onClick={() => window.dispatchEvent(new CustomEvent('openTokenModal'))}

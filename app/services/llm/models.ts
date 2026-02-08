@@ -20,24 +20,24 @@ export const MODELS: Model[] = [
     baseUrl: 'https://models.inference.ai.azure.com',
     requiresToken: true
   },
-  {
-    id: 'claude-3-5-sonnet',
-    name: 'Claude 3.5 Sonnet',
-    icon: '🎭',
-    description: 'Anthropic\'s most capable model',
-    provider: 'github',
-    baseUrl: 'https://models.inference.ai.azure.com',
-    requiresToken: true
-  },
-  {
-    id: 'llama-3.3-70b-instruct',
-    name: 'Llama 3.3 70B',
-    icon: '🦙',
-    description: 'Meta\'s latest open model',
-    provider: 'github',
-    baseUrl: 'https://models.inference.ai.azure.com',
-    requiresToken: true
-  },
+  // {
+  //   id: 'claude-3-5-sonnet',
+  //   name: 'Claude 3.5 Sonnet',
+  //   icon: '🎭',
+  //   description: 'Anthropic\'s most capable model',
+  //   provider: 'github',
+  //   baseUrl: 'https://models.inference.ai.azure.com',
+  //   requiresToken: true
+  // },
+  // {
+  //   id: 'llama-3.3-70b-instruct',
+  //   name: 'Llama 3.3 70B',
+  //   icon: '🦙',
+  //   description: 'Meta\'s latest open model',
+  //   provider: 'github',
+  //   baseUrl: 'https://models.inference.ai.azure.com',
+  //   requiresToken: true
+  // },
   {
     id: 'mistral-large-2411',
     name: 'Mistral Large',
@@ -56,18 +56,18 @@ export const MODELS: Model[] = [
     baseUrl: 'https://models.inference.ai.azure.com',
     requiresToken: true
   },
-  {
-    id: 'phi-4',
-    name: 'Phi-4',
-    icon: '🔬',
-    description: 'Microsoft\'s efficient small model',
-    provider: 'github',
-    baseUrl: 'https://models.inference.ai.azure.com',
-    requiresToken: true
-  },
+  // {
+  //   id: 'phi-4',
+  //   name: 'Phi-4',
+  //   icon: '🔬',
+  //   description: 'Microsoft\'s efficient small model',
+  //   provider: 'github',
+  //   baseUrl: 'https://models.inference.ai.azure.com',
+  //   requiresToken: true
+  // },
   {
     id: 'qwen2.5:7b',
-    name: 'Qwen 2.5 7B',
+    name: 'Qwen 2.5 7B (Local)',
     icon: '🐼',
     description: 'Best quality local model for 16GB RAM',
     provider: 'ollama',
@@ -76,20 +76,20 @@ export const MODELS: Model[] = [
   },
   {
     id: 'deepseek-r1:1.5b',
-    name: 'DeepSeek R1 1.5B',
+    name: 'DeepSeek R1 1.5B (Local)',
     icon: '🧠',
     description: 'Fast local model via Ollama (CPU-friendly)',
     provider: 'ollama',
     baseUrl: '/api/ollama',
     requiresToken: false
   },
-  {
-    id: 'gemini-2-pro',
-    name: 'Gemini 2 Pro',
-    icon: '🔷',
-    description: 'Google\'s advanced multimodal model',
-    provider: 'github',
-    baseUrl: 'https://models.inference.ai.azure.com',
-    requiresToken: true
-  }
+  // {
+  //   id: 'gemini-2-pro',
+  //   name: 'Gemini 2 Pro',
+  //   icon: '🔷',
+  //   description: 'Google\'s advanced multimodal model',
+  //   provider: 'github',
+  //   baseUrl: 'https://models.inference.ai.azure.com',
+  //   requiresToken: true
+  // }
 ];

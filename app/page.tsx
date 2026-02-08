@@ -67,7 +67,7 @@ export default function AdminChat() {
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('deepseek-r1:8b');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
   const [isEditingSettings, setIsEditingSettings] = useState(false);
