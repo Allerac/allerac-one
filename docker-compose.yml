@@ -10,7 +10,7 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:3000
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
     ports:
-      - "3005:3005"
+      - "8080:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

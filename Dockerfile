@@ -48,9 +48,9 @@ RUN chown nextjs:nodejs .next
 
 USER nextjs
 
-EXPOSE 3005
+EXPOSE 8080
 
-ENV PORT 3005
+ENV PORT 8080
 # set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
