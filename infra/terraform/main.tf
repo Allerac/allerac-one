@@ -137,9 +137,9 @@ LANDING
     # Create homepage config
     cat > /home/${var.ssh_user}/config/services.yaml <<'SERVICES'
 - My Apps:
-    - Allerac One:
+    - Allerac Chat:
         icon: si-openai
-        href: https://app.${var.domain}
+        href: https://chat.${var.domain}
         description: AI Chat Application
     - Portainer:
         icon: si-portainer
@@ -147,7 +147,7 @@ LANDING
         description: Docker Management
     - Landing Page:
         icon: si-nginx
-        href: https://web.${var.domain}
+        href: https://landing.${var.domain}
         description: Marketing Site
 SERVICES
 
@@ -167,11 +167,12 @@ DOCKERYAML
     cat > /home/${var.ssh_user}/docker-compose.infra.yml <<'COMPOSE'
 version: '3.8'
 services:
-  # Cloudflare Tunnel
+  # Cloudflare Tunnel (network_mode: host to access localhost ports)
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel run
+    network_mode: host
     environment:
       - TUNNEL_TOKEN=${cloudflare_tunnel.allerac_tunnel.tunnel_token}
 
@@ -234,9 +235,9 @@ resource "cloudflare_tunnel_config" "allerac_config" {
   tunnel_id  = cloudflare_tunnel.allerac_tunnel.id
 
   config {
-    # Allerac One App
+    # Allerac One App (main application)
     ingress_rule {
-      hostname = "app.${var.domain}"
+      hostname = "chat.${var.domain}"
       service  = "http://localhost:8080"
     }
     # Homepage Dashboard
@@ -251,7 +252,7 @@ resource "cloudflare_tunnel_config" "allerac_config" {
     }
     # Landing Page
     ingress_rule {
-      hostname = "web.${var.domain}"
+      hostname = "landing.${var.domain}"
       service  = "http://localhost:80"
     }
     # Catch-all
@@ -262,34 +263,38 @@ resource "cloudflare_tunnel_config" "allerac_config" {
 }
 
 # --- DNS RECORDS ---
-resource "cloudflare_record" "dns_app" {
-  zone_id = var.cloudflare_zone_id
-  name    = "app"
-  value   = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
-  type    = "CNAME"
-  proxied = true
+resource "cloudflare_record" "dns_chat" {
+  zone_id         = var.cloudflare_zone_id
+  name            = "chat"
+  value           = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
+  type            = "CNAME"
+  proxied         = true
+  allow_overwrite = true
 }
 
 resource "cloudflare_record" "dns_home" {
-  zone_id = var.cloudflare_zone_id
-  name    = "home"
-  value   = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
-  type    = "CNAME"
-  proxied = true
+  zone_id         = var.cloudflare_zone_id
+  name            = "home"
+  value           = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
+  type            = "CNAME"
+  proxied         = true
+  allow_overwrite = true
 }
 
 resource "cloudflare_record" "dns_portainer" {
-  zone_id = var.cloudflare_zone_id
-  name    = "portainer"
-  value   = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
-  type    = "CNAME"
-  proxied = true
+  zone_id         = var.cloudflare_zone_id
+  name            = "portainer"
+  value           = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
+  type            = "CNAME"
+  proxied         = true
+  allow_overwrite = true
 }
 
-resource "cloudflare_record" "dns_web" {
-  zone_id = var.cloudflare_zone_id
-  name    = "web"
-  value   = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
-  type    = "CNAME"
-  proxied = true
+resource "cloudflare_record" "dns_landing" {
+  zone_id         = var.cloudflare_zone_id
+  name            = "landing"
+  value           = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
+  type            = "CNAME"
+  proxied         = true
+  allow_overwrite = true
 }

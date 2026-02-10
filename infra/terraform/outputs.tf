@@ -15,9 +15,9 @@ output "ssh_command" {
 }
 
 # --- Application URLs ---
-output "app_url" {
-  description = "Allerac One application URL"
-  value       = "https://app.${var.domain}"
+output "chat_url" {
+  description = "Allerac One chat application URL"
+  value       = "https://chat.${var.domain}"
 }
 
 output "home_url" {
@@ -30,9 +30,9 @@ output "portainer_url" {
   value       = "https://portainer.${var.domain}"
 }
 
-output "web_url" {
+output "landing_url" {
   description = "Landing page URL"
-  value       = "https://web.${var.domain}"
+  value       = "https://landing.${var.domain}"
 }
 
 # --- Cloudflare Outputs ---
