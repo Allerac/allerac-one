@@ -1,0 +1,29 @@
+# Infrastructure files
+infra/
+pipelines/
+
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+build/
+
+# Version control
+.git/
+.gitignore
+
+# Documentation
+*.md
+
+# IDE and OS files
+.DS_Store
+.vscode/
+.idea/
+
+# Environment files (will be passed via docker-compose)
+.env*
+
+# Claude config
+.claude/

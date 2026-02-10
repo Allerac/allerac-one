@@ -1,9 +1,17 @@
 # Copy this file to terraform.tfvars and fill in the values
 # cp terraform.tfvars.example terraform.tfvars
 
+# --- GCP Configuration ---
 project_id          = "allerac-one"
 region              = "southamerica-east1"
 zone                = "southamerica-east1-a"
 machine_type        = "e2-small"  # ~$13/month, use "e2-micro" for free tier (more limited)
 ssh_user            = "allerac"
 ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# --- Cloudflare Configuration ---
+# Get these from your Cloudflare dashboard
+cloudflare_api_token  = "your-cloudflare-api-token"
+cloudflare_account_id = "your-cloudflare-account-id"
+cloudflare_zone_id    = "your-cloudflare-zone-id"
+domain                = "allerac.ai"
