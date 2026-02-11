@@ -51,7 +51,7 @@ resource "google_compute_firewall" "allerac_firewall" {
 
   allow {
     protocol = "tcp"
-    ports    = ["22", "80", "443", "8080", "3000", "9000"]
+    ports    = ["22", "80", "443", "8080", "3000", "3001", "9000", "9090", "9100"]
   }
 
   source_ranges = ["0.0.0.0/0"]
@@ -333,6 +333,11 @@ resource "cloudflare_tunnel_config" "allerac_config" {
       hostname = "landing.${var.domain}"
       service  = "http://localhost:80"
     }
+    # Grafana
+    ingress_rule {
+      hostname = "grafana.${var.domain}"
+      service  = "http://localhost:3001"
+    }
     # Catch-all
     ingress_rule {
       service = "http_status:404"
@@ -371,6 +376,15 @@ resource "cloudflare_record" "dns_portainer" {
 resource "cloudflare_record" "dns_landing" {
   zone_id         = var.cloudflare_zone_id
   name            = "landing"
+  value           = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
+  type            = "CNAME"
+  proxied         = true
+  allow_overwrite = true
+}
+
+resource "cloudflare_record" "dns_grafana" {
+  zone_id         = var.cloudflare_zone_id
+  name            = "grafana"
   value           = "${cloudflare_tunnel.allerac_tunnel.id}.cfargotunnel.com"
   type            = "CNAME"
   proxied         = true

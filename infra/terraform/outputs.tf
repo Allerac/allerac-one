@@ -35,6 +35,11 @@ output "landing_url" {
   value       = "https://landing.${var.domain}"
 }
 
+output "grafana_url" {
+  description = "Grafana monitoring URL"
+  value       = "https://grafana.${var.domain}"
+}
+
 # --- Cloudflare Outputs ---
 output "tunnel_id" {
   description = "Cloudflare Tunnel ID"
