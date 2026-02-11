@@ -115,11 +115,18 @@ resource "google_compute_instance" "allerac_vm" {
     # Add user to docker group
     usermod -aG docker ${var.ssh_user}
 
-    # Clone the repository
+    # Clone the repository (using token for private repos)
     echo "=== Cloning repository ==="
     if [ ! -d "$APP_DIR" ]; then
-      git clone "https://github.com/$REPO_OWNER/$REPO_NAME.git" "$APP_DIR"
+      git clone "https://$GITHUB_TOKEN@github.com/$REPO_OWNER/$REPO_NAME.git" "$APP_DIR"
       chown -R ${var.ssh_user}:${var.ssh_user} "$APP_DIR"
+
+      # Configure git to use token for future operations
+      cd "$APP_DIR"
+      git config credential.helper store
+      echo "https://$GITHUB_TOKEN@github.com" > /home/${var.ssh_user}/.git-credentials
+      chown ${var.ssh_user}:${var.ssh_user} /home/${var.ssh_user}/.git-credentials
+      chmod 600 /home/${var.ssh_user}/.git-credentials
     fi
 
     # Install GitHub Actions Runner
