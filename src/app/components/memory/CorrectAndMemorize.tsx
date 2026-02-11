@@ -29,8 +29,8 @@ export default function CorrectAndMemorize({
   const [correction, setCorrection] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [emotion, setEmotion] = useState(0);
-  const [importance, setImportance] = useState(5);
+  const [emotion, setEmotion] = useState(0);      // -1 = negative, 0 = neutral, 1 = positive
+  const [importance, setImportance] = useState(5); // 1-10 scale: 3 = low, 5 = medium, 8 = high
 
   const handleSave = async () => {
     if (!correction.trim() || !userId || !conversationId) {
@@ -133,39 +133,33 @@ export default function CorrectAndMemorize({
           <div
             className="w-full flex flex-col gap-2 mt-2 sm:flex-row sm:gap-2 sm:justify-end sm:items-center"
           >
-            {/* Importance slider */}
+            {/* Importance slider (1-10 scale: 3=Low, 5=Med, 8=High) */}
             <div className="flex flex-col items-center px-1 flex-1 min-w-0 sm:items-center sm:justify-center">
               <input
                 type="range"
-                min={-1}
-                max={1}
+                min={1}
+                max={10}
                 step={1}
                 value={importance}
                 onChange={e => setImportance(Number(e.target.value))}
                 className="w-full max-w-[6rem] sm:w-24 accent-purple-500"
                 disabled={isSaving}
                 title="Importance"
-                list="importance-marks"
                 style={{ maxWidth: '100%' }}
               />
-              <datalist id="importance-marks">
-                <option value={-1} label="Low" />
-                <option value={0} label="Med" />
-                <option value={1} label="High" />
-              </datalist>
               <div className="flex justify-between w-full text-xs mt-1 select-none">
                 <span className={
-                  importance === -1
+                  importance <= 3
                     ? (isDarkMode ? 'text-pink-300' : 'text-pink-600')
                     : 'text-gray-400'
                 }>Low</span>
                 <span className={
-                  importance === 0
+                  importance > 3 && importance < 7
                     ? (isDarkMode ? 'text-yellow-200' : 'text-yellow-600')
                     : 'text-gray-400'
                 }>Med</span>
                 <span className={
-                  importance === 1
+                  importance >= 7
                     ? (isDarkMode ? 'text-green-300' : 'text-green-700')
                     : 'text-gray-400'
                 }>High</span>
