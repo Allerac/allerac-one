@@ -46,6 +46,12 @@ output "tunnel_id" {
   value       = cloudflare_tunnel.allerac_tunnel.id
 }
 
+output "tunnel_token" {
+  description = "Cloudflare Tunnel Token (for cloudflared)"
+  value       = cloudflare_tunnel.allerac_tunnel.tunnel_token
+  sensitive   = true
+}
+
 # --- GitHub Actions ---
 output "github_runner_name" {
   description = "GitHub Actions Runner name"

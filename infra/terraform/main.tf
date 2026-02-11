@@ -305,6 +305,14 @@ COMPOSE
   service_account {
     scopes = ["cloud-platform"]
   }
+
+  # Prevent VM recreation when startup script or metadata changes
+  lifecycle {
+    ignore_changes = [
+      metadata_startup_script,
+      metadata,
+    ]
+  }
 }
 
 # --- CLOUDFLARE TUNNEL ROUTING ---
