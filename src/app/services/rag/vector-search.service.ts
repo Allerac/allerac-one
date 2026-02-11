@@ -51,7 +51,8 @@ export class VectorSearchService {
   ): Promise<SearchResult[]> {
     // Set default options
     const limit = options.limit || 5;
-    const similarityThreshold = options.similarityThreshold || 0.5;
+    // Lower threshold = accepts more distant matches. 0.2 similarity → 0.8 distance threshold
+    const similarityThreshold = options.similarityThreshold || 0.2;
 
     console.log('[VectorSearch] searchSimilarChunks:', { query: query.substring(0, 30), userId, limit, similarityThreshold });
 
