@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { Message, Conversation, MemorySaveResult, Model } from './types';
 import { MODELS } from './services/llm/models';
 import { TOOLS } from './tools/tools';
@@ -25,6 +26,8 @@ import UserSettingsModal from './components/auth/UserSettingsModal';
 import LoginModal from './components/auth/LoginModal';
 
 export default function AdminChat() {
+  const t = useTranslations('home');
+
   // Modal/event listeners for sidebar configuration actions
   useEffect(() => {
     const openTokenModal = () => setIsTokenModalOpen(true);
@@ -511,7 +514,8 @@ export default function AdminChat() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                       </svg>
                     </div>
-                    <h3 className={`text-2xl font-semibold mb-8 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>How can I help you today?</h3>
+                    <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
+                    <h3 className={`text-xl font-medium mb-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
 
                     {/* Input Box in Empty State */}
                     <div className="mt-8">
@@ -524,7 +528,6 @@ export default function AdminChat() {
                         githubToken={githubToken}
                         isDarkMode={isDarkMode}
                         setIsDocumentModalOpen={setIsDocumentModalOpen}
-                        placeholder="Ask me anything..."
                       />
                     </div>
                   </div>

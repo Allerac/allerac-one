@@ -1,5 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
+
 interface DocumentsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -15,6 +18,8 @@ export default function DocumentsModal({
   userId,
   githubToken
 }: DocumentsModalProps) {
+  const t = useTranslations('documents');
+
   if (!isOpen || !userId) return null;
 
   return (
@@ -22,9 +27,9 @@ export default function DocumentsModal({
       <div className={`backdrop-blur-md rounded-lg shadow-xl max-w-3xl w-full max-h-[85vh] flex flex-col ${isDarkMode ? 'bg-gray-800/95 border border-gray-700' : 'bg-white/95 border border-gray-200'}`}>
         <div className={`p-6 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div>
-            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Knowledge Base Documents</h2>
+            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('title')}</h2>
             <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Upload documents to enhance the AI's knowledge. The AI will search these documents to answer questions.
+              {t('description')}
             </p>
           </div>
           <button
@@ -38,8 +43,8 @@ export default function DocumentsModal({
         </div>
         <div className="p-6 flex-1 overflow-y-auto">
           {githubToken && (
-            <DocumentUploadWrapper 
-              githubToken={githubToken} 
+            <DocumentUploadWrapper
+              githubToken={githubToken}
               userId={userId}
               isDarkMode={isDarkMode}
             />
@@ -51,9 +56,8 @@ export default function DocumentsModal({
 }
 
 // DocumentUploadWrapper component
-import { useState, useEffect } from 'react';
-
 function DocumentUploadWrapper({ githubToken, userId, isDarkMode }: { githubToken: string; userId: string; isDarkMode: boolean }) {
+  const t = useTranslations('documents');
   const [DocumentUpload, setDocumentUpload] = useState<any>(null);
 
   useEffect(() => {
@@ -63,7 +67,7 @@ function DocumentUploadWrapper({ githubToken, userId, isDarkMode }: { githubToke
   }, []);
 
   if (!DocumentUpload) {
-    return <div className={`text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</div>;
+    return <div className={`text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('loading')}</div>;
   }
 
   return <DocumentUpload githubToken={githubToken} userId={userId} isDarkMode={isDarkMode} />;

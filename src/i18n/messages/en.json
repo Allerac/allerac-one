@@ -1,0 +1,57 @@
+{
+  "sidebar": {
+    "conversations": "Conversations",
+    "noConversations": "No conversations yet",
+    "configuration": "Configuration",
+    "apiKeys": "API Keys",
+    "memorySettings": "Memory Settings",
+    "userSettings": "User Settings",
+    "documents": "Documents",
+    "memories": "Memories",
+    "logout": "Logout",
+    "deleteConversation": "Delete conversation"
+  },
+  "login": {
+    "welcomeBack": "Welcome Back",
+    "createAccount": "Create Account",
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "nameOptional": "Name (optional)",
+    "yourName": "Your name",
+    "loggingIn": "Logging in...",
+    "creatingAccount": "Creating account...",
+    "validEmail": "Please enter a valid email address",
+    "passwordLength": "Password must be at least 8 characters",
+    "passwordsNoMatch": "Passwords do not match",
+    "unexpectedError": "An unexpected error occurred. Please try again.",
+    "atLeast8Chars": "At least 8 characters",
+    "confirmYourPassword": "Confirm your password"
+  },
+  "chat": {
+    "typeMessage": "Type your message...",
+    "attachFile": "Attach file"
+  },
+  "home": {
+    "greeting": "Hello, {name}!",
+    "helpText": "How can I help you today?"
+  },
+  "documents": {
+    "title": "Knowledge Base Documents",
+    "description": "Upload documents to enhance the AI's knowledge. The AI will search these documents to answer questions.",
+    "loading": "Loading..."
+  },
+  "userSettings": {
+    "title": "User Settings",
+    "userId": "User ID",
+    "language": "Language",
+    "selectLanguage": "Select language"
+  },
+  "common": {
+    "close": "Close",
+    "save": "Save",
+    "cancel": "Cancel"
+  }
+}

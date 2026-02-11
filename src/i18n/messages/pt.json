@@ -1,0 +1,57 @@
+{
+  "sidebar": {
+    "conversations": "Conversas",
+    "noConversations": "Nenhuma conversa ainda",
+    "configuration": "Configuração",
+    "apiKeys": "Chaves de API",
+    "memorySettings": "Configurações de Memória",
+    "userSettings": "Configurações do Usuário",
+    "documents": "Documentos",
+    "memories": "Memórias",
+    "logout": "Sair",
+    "deleteConversation": "Excluir conversa"
+  },
+  "login": {
+    "welcomeBack": "Bem-vindo de Volta",
+    "createAccount": "Criar Conta",
+    "login": "Entrar",
+    "register": "Registrar",
+    "email": "Email",
+    "password": "Senha",
+    "confirmPassword": "Confirmar Senha",
+    "nameOptional": "Nome (opcional)",
+    "yourName": "Seu nome",
+    "loggingIn": "Entrando...",
+    "creatingAccount": "Criando conta...",
+    "validEmail": "Por favor, insira um email válido",
+    "passwordLength": "A senha deve ter pelo menos 8 caracteres",
+    "passwordsNoMatch": "As senhas não coincidem",
+    "unexpectedError": "Ocorreu um erro inesperado. Tente novamente.",
+    "atLeast8Chars": "Pelo menos 8 caracteres",
+    "confirmYourPassword": "Confirme sua senha"
+  },
+  "chat": {
+    "typeMessage": "Digite sua mensagem...",
+    "attachFile": "Anexar arquivo"
+  },
+  "home": {
+    "greeting": "Olá, {name}!",
+    "helpText": "Como posso ajudar você hoje?"
+  },
+  "documents": {
+    "title": "Documentos da Base de Conhecimento",
+    "description": "Envie documentos para melhorar o conhecimento da IA. A IA pesquisará estes documentos para responder perguntas.",
+    "loading": "Carregando..."
+  },
+  "userSettings": {
+    "title": "Configurações do Usuário",
+    "userId": "ID do Usuário",
+    "language": "Idioma",
+    "selectLanguage": "Selecionar idioma"
+  },
+  "common": {
+    "close": "Fechar",
+    "save": "Salvar",
+    "cancel": "Cancelar"
+  }
+}

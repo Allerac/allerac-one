@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
 import { Model, Conversation } from '../../types';
 
 interface SidebarContentProps {
@@ -26,15 +29,17 @@ export default function SidebarContent({
   setIsConfigurationExpanded,
   isSidebarCollapsed = false,
 }: SidebarContentProps & { isSidebarCollapsed?: boolean }) {
+  const t = useTranslations('sidebar');
+
   return (
     <>
       {/* Conversations (hide when collapsed) */}
       {!isSidebarCollapsed && (
         <div className="flex-1 overflow-y-auto p-4">
           <div className="space-y-2">
-            <p className="text-xs uppercase text-gray-400 px-2 mb-2">Conversations</p>
+            <p className="text-xs uppercase text-gray-400 px-2 mb-2">{t('conversations')}</p>
             {conversations.length === 0 ? (
-              <p className="text-xs text-gray-500 px-2">No conversations yet</p>
+              <p className="text-xs text-gray-500 px-2">{t('noConversations')}</p>
             ) : (
               conversations.map((conv) => (
                 <div key={conv.id} className="group relative">
@@ -57,7 +62,7 @@ export default function SidebarContent({
                       deleteConversation(conv.id);
                     }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 hover:bg-red-600 rounded transition-all"
-                    title="Delete conversation"
+                    title={t('deleteConversation')}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -75,12 +80,12 @@ export default function SidebarContent({
           onClick={() => setIsConfigurationExpanded(!isConfigurationExpanded)}
           className={`w-full flex items-center justify-between px-2 mb-2 ${isSidebarCollapsed ? 'justify-center' : ''}`}
         >
-          <p className={`text-xs uppercase text-gray-400 ${isSidebarCollapsed ? 'sr-only' : ''}`}>Configuration</p>
+          <p className={`text-xs uppercase text-gray-400 ${isSidebarCollapsed ? 'sr-only' : ''}`}>{t('configuration')}</p>
           <div className="p-1 rounded hover:bg-gray-800 transition-colors">
-            <svg 
+            <svg
               className={`h-4 w-4 text-gray-400 transition-transform ${!isConfigurationExpanded ? 'rotate-180' : ''}`}
-              fill="none" 
-              viewBox="0 0 24 24" 
+              fill="none"
+              viewBox="0 0 24 24"
               stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -96,42 +101,42 @@ export default function SidebarContent({
                 onClick={() => window.dispatchEvent(new CustomEvent('openTokenModal'))}
               >
                 <span>🔑</span>
-                {!isSidebarCollapsed && <span className="flex-1 text-left">API Keys</span>}
+                {!isSidebarCollapsed && <span className="flex-1 text-left">{t('apiKeys')}</span>}
               </button>
               <button
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
                 onClick={() => window.dispatchEvent(new CustomEvent('openMemorySettingsModal'))}
               >
                 <span>🧠</span>
-                {!isSidebarCollapsed && <span className="flex-1 text-left">Memory Settings</span>}
+                {!isSidebarCollapsed && <span className="flex-1 text-left">{t('memorySettings')}</span>}
               </button>
               <button
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
                 onClick={() => window.dispatchEvent(new CustomEvent('openUserSettingsModal'))}
               >
                 <span>👤</span>
-                {!isSidebarCollapsed && <span className="flex-1 text-left">User Settings</span>}
+                {!isSidebarCollapsed && <span className="flex-1 text-left">{t('userSettings')}</span>}
               </button>
               <button
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
                 onClick={() => window.dispatchEvent(new CustomEvent('openDocumentsModal'))}
               >
                 <span>📄</span>
-                {!isSidebarCollapsed && <span className="flex-1 text-left">Documents</span>}
+                {!isSidebarCollapsed && <span className="flex-1 text-left">{t('documents')}</span>}
               </button>
               <button
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
                 onClick={() => window.dispatchEvent(new CustomEvent('openMemoriesModal'))}
               >
                 <span>🗂️</span>
-                {!isSidebarCollapsed && <span className="flex-1 text-left">Memories</span>}
+                {!isSidebarCollapsed && <span className="flex-1 text-left">{t('memories')}</span>}
               </button>
               <button
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-600/20 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
                 onClick={() => window.dispatchEvent(new CustomEvent('logout'))}
               >
                 <span>🚪</span>
-                {!isSidebarCollapsed && <span className="flex-1 text-left">Logout</span>}
+                {!isSidebarCollapsed && <span className="flex-1 text-left">{t('logout')}</span>}
               </button>
             </div>
           </div>

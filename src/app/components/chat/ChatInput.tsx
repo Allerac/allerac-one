@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 interface ChatInputProps {
   inputMessage: string;
   setInputMessage: (message: string) => void;
@@ -9,7 +11,6 @@ interface ChatInputProps {
   githubToken: string;
   isDarkMode: boolean;
   setIsDocumentModalOpen: (open: boolean) => void;
-  placeholder?: string;
 }
 
 export default function ChatInput({
@@ -21,15 +22,16 @@ export default function ChatInput({
   githubToken,
   isDarkMode,
   setIsDocumentModalOpen,
-  placeholder = "Type your message..."
 }: ChatInputProps) {
+  const t = useTranslations('chat');
+
   return (
     <div className="relative">
       <textarea
         value={inputMessage}
         onChange={(e) => setInputMessage(e.target.value)}
         onKeyPress={handleKeyPress}
-        placeholder={placeholder}
+        placeholder={t('typeMessage')}
         className={`w-full px-4 py-3 pl-12 pr-14 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100 placeholder-gray-400' : 'border-gray-300 bg-white text-black placeholder-gray-400'}`}
         rows={1}
         disabled={isSending || !githubToken}
@@ -42,7 +44,7 @@ export default function ChatInput({
             ? 'hover:bg-gray-600 text-gray-400'
             : 'hover:bg-gray-200 text-gray-600'
         }`}
-        title="Attach file"
+        title={t('attachFile')}
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />

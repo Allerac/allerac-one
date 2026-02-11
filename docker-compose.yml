@@ -1,4 +1,18 @@
 services:
+  migrations:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=allerac
+    volumes:
+      - ./src/database:/database
+    command: ["/bin/sh", "/database/run-migrations.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+
   app:
     build:
       context: .
@@ -14,7 +28,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - db
+      migrations:
+        condition: service_completed_successfully
 
   db:
     image: pgvector/pgvector:pg16
@@ -27,6 +42,11 @@ services:
     volumes:
       - ./src/database/init.sql:/docker-entrypoint-initdb.d/init.sql
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d allerac"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   db_data:

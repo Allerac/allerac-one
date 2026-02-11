@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import * as authActions from '@/app/actions/auth';
 
 interface LoginModalProps {
@@ -20,6 +21,7 @@ export default function LoginModal({
   onAuthSuccess,
   preventClose = false,
 }: LoginModalProps) {
+  const t = useTranslations('login');
   const [activeTab, setActiveTab] = useState<Tab>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,15 +47,15 @@ export default function LoginModal({
 
   const validateForm = (): string | null => {
     if (!email || !email.includes('@')) {
-      return 'Please enter a valid email address';
+      return t('validEmail');
     }
 
     if (password.length < 8) {
-      return 'Password must be at least 8 characters';
+      return t('passwordLength');
     }
 
     if (activeTab === 'register' && password !== confirmPassword) {
-      return 'Passwords do not match';
+      return t('passwordsNoMatch');
     }
 
     return null;
@@ -86,7 +88,7 @@ export default function LoginModal({
         setError(result.error);
       }
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
+      setError(t('unexpectedError'));
       console.error('Auth error:', err);
     } finally {
       setIsLoading(false);
@@ -122,7 +124,7 @@ export default function LoginModal({
               isDarkMode ? 'text-gray-100' : 'text-gray-900'
             }`}
           >
-            {activeTab === 'login' ? 'Welcome Back' : 'Create Account'}
+            {activeTab === 'login' ? t('welcomeBack') : t('createAccount')}
           </h2>
           {!preventClose && onClose && (
             <button
@@ -164,7 +166,7 @@ export default function LoginModal({
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Login
+            {t('login')}
           </button>
           <button
             onClick={() => switchTab('register')}
@@ -178,7 +180,7 @@ export default function LoginModal({
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Register
+            {t('register')}
           </button>
         </div>
 
@@ -203,13 +205,13 @@ export default function LoginModal({
                   isDarkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}
               >
-                Name (optional)
+                {t('nameOptional')}
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
+                placeholder={t('yourName')}
                 className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isDarkMode
                     ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
@@ -225,7 +227,7 @@ export default function LoginModal({
                 isDarkMode ? 'text-gray-300' : 'text-gray-700'
               }`}
             >
-              Email
+              {t('email')}
             </label>
             <input
               type="email"
@@ -247,13 +249,13 @@ export default function LoginModal({
                 isDarkMode ? 'text-gray-300' : 'text-gray-700'
               }`}
             >
-              Password
+              {t('password')}
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 8 characters"
+              placeholder={t('atLeast8Chars')}
               required
               className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 isDarkMode
@@ -270,13 +272,13 @@ export default function LoginModal({
                   isDarkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}
               >
-                Confirm Password
+                {t('confirmPassword')}
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
+                placeholder={t('confirmYourPassword')}
                 required
                 className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isDarkMode
@@ -318,12 +320,12 @@ export default function LoginModal({
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                {activeTab === 'login' ? 'Logging in...' : 'Creating account...'}
+                {activeTab === 'login' ? t('loggingIn') : t('creatingAccount')}
               </span>
             ) : activeTab === 'login' ? (
-              'Login'
+              t('login')
             ) : (
-              'Create Account'
+              t('createAccount')
             )}
           </button>
         </form>
