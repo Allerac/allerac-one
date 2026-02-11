@@ -51,7 +51,7 @@ export class VectorSearchService {
   ): Promise<SearchResult[]> {
     // Set default options
     const limit = options.limit || 5;
-    const similarityThreshold = options.similarityThreshold || 0.5;
+    const similarityThreshold = options.similarityThreshold || 0.3; // Lower threshold for better recall
 
     try {
       // Step 1: Generate embedding for the query
