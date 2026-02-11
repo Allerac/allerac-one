@@ -15,3 +15,9 @@ cloudflare_api_token  = "your-cloudflare-api-token"
 cloudflare_account_id = "your-cloudflare-account-id"
 cloudflare_zone_id    = "your-cloudflare-zone-id"
 domain                = "allerac.ai"
+
+# --- GitHub Configuration ---
+# Token needs 'repo' scope: https://github.com/settings/tokens/new?scopes=repo
+github_token      = "ghp_your-github-token"
+github_repo_owner = "Allerac"
+github_repo_name  = "allerac-one"

@@ -80,18 +80,29 @@ resource "google_compute_instance" "allerac_vm" {
     }
   }
 
-  # Startup script - installs Docker and creates service configs
+  # Startup script - installs Docker, GitHub Runner, and deploys app
   metadata_startup_script = <<-EOF
     #!/bin/bash
     set -e
-    echo "Starting Allerac VM Setup..."
+    exec > >(tee /var/log/startup-script.log) 2>&1
+    echo "=== Starting Allerac VM Setup ==="
+    echo "Time: $(date)"
+
+    USER_HOME="/home/${var.ssh_user}"
+    RUNNER_DIR="$USER_HOME/actions-runner"
+    APP_DIR="$USER_HOME/allerac-one"
+    GITHUB_TOKEN="${var.github_token}"
+    REPO_OWNER="${var.github_repo_owner}"
+    REPO_NAME="${var.github_repo_name}"
 
     # Update system
+    echo "=== Updating system ==="
     apt-get update
     apt-get upgrade -y
 
     # Install Docker
-    apt-get install -y ca-certificates curl gnupg
+    echo "=== Installing Docker ==="
+    apt-get install -y ca-certificates curl gnupg git jq
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
@@ -103,6 +114,57 @@ resource "google_compute_instance" "allerac_vm" {
 
     # Add user to docker group
     usermod -aG docker ${var.ssh_user}
+
+    # Clone the repository
+    echo "=== Cloning repository ==="
+    if [ ! -d "$APP_DIR" ]; then
+      git clone "https://github.com/$REPO_OWNER/$REPO_NAME.git" "$APP_DIR"
+      chown -R ${var.ssh_user}:${var.ssh_user} "$APP_DIR"
+    fi
+
+    # Install GitHub Actions Runner
+    echo "=== Installing GitHub Actions Runner ==="
+    if [ ! -d "$RUNNER_DIR" ]; then
+      mkdir -p "$RUNNER_DIR"
+      cd "$RUNNER_DIR"
+
+      # Get latest runner version
+      LATEST_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
+      echo "Latest runner version: $LATEST_VERSION"
+
+      # Download runner
+      curl -L -o actions-runner.tar.gz "https://github.com/actions/runner/releases/download/v$LATEST_VERSION/actions-runner-linux-x64-$LATEST_VERSION.tar.gz"
+      tar xzf actions-runner.tar.gz
+      rm actions-runner.tar.gz
+
+      chown -R ${var.ssh_user}:${var.ssh_user} "$RUNNER_DIR"
+
+      # Get registration token
+      REG_TOKEN=$(curl -s -X POST \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners/registration-token" | jq -r '.token')
+
+      if [ -z "$REG_TOKEN" ] || [ "$REG_TOKEN" = "null" ]; then
+        echo "ERROR: Failed to get registration token"
+        exit 1
+      fi
+
+      # Configure runner as the user (not root)
+      RUNNER_NAME="gcp-$(hostname)"
+      sudo -u ${var.ssh_user} ./config.sh --url "https://github.com/$REPO_OWNER/$REPO_NAME" \
+        --token "$REG_TOKEN" \
+        --name "$RUNNER_NAME" \
+        --labels "self-hosted,Linux,X64,allerac-server,gcp" \
+        --unattended \
+        --replace
+
+      # Install and start as service
+      ./svc.sh install ${var.ssh_user}
+      ./svc.sh start
+
+      echo "GitHub Actions Runner installed: $RUNNER_NAME"
+    fi
 
     # Create directories
     mkdir -p /home/${var.ssh_user}/app
@@ -214,10 +276,20 @@ COMPOSE
     chown -R ${var.ssh_user}:${var.ssh_user} /home/${var.ssh_user}
 
     # Start infrastructure services
+    echo "=== Starting infrastructure services ==="
     cd /home/${var.ssh_user}
     docker compose -f docker-compose.infra.yml up -d
 
-    echo "Allerac VM Setup Complete!"
+    # Start the allerac-one app
+    echo "=== Starting allerac-one app ==="
+    cd $APP_DIR
+    docker compose up -d --build
+
+    echo ""
+    echo "=== Allerac VM Setup Complete! ==="
+    echo "Time: $(date)"
+    echo "GitHub Runner: gcp-$(hostname)"
+    echo "App: http://localhost:8080"
   EOF
 
   metadata = {

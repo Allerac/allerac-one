@@ -56,3 +56,22 @@ variable "domain" {
   type        = string
   default     = "allerac.ai"
 }
+
+# --- GitHub Variables ---
+variable "github_token" {
+  description = "GitHub Personal Access Token with 'repo' scope for Actions Runner"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_repo_owner" {
+  description = "GitHub repository owner"
+  type        = string
+  default     = "Allerac"
+}
+
+variable "github_repo_name" {
+  description = "GitHub repository name"
+  type        = string
+  default     = "allerac-one"
+}

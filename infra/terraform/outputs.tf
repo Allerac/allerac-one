@@ -40,3 +40,14 @@ output "tunnel_id" {
   description = "Cloudflare Tunnel ID"
   value       = cloudflare_tunnel.allerac_tunnel.id
 }
+
+# --- GitHub Actions ---
+output "github_runner_name" {
+  description = "GitHub Actions Runner name"
+  value       = "gcp-${google_compute_instance.allerac_vm.name}"
+}
+
+output "github_actions_url" {
+  description = "GitHub Actions URL"
+  value       = "https://github.com/${var.github_repo_owner}/${var.github_repo_name}/actions"
+}
