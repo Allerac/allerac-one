@@ -28,11 +28,14 @@ jobs:
 
       - name: Apply database migrations
         run: |
+          echo "Waiting for database to be ready..."
+          sleep 10
+
           echo "Applying SQL migrations..."
           for migration in src/database/migrations/*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying: $migration"
-              docker compose exec -T db psql -U postgres -d allerac -f /dev/stdin < "$migration" || true
+              docker compose exec -T db psql -U postgres -d allerac < "$migration" || echo "Migration may have already been applied"
             fi
           done
 
