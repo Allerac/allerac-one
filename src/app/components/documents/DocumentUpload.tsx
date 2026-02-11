@@ -1,12 +1,12 @@
 /**
  * DocumentUpload Component
- * 
+ *
  * Provides UI for uploading and managing documents in the knowledge base.
  */
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import * as docActions from '@/app/actions/documents';
 
 interface Document {
@@ -26,30 +26,73 @@ interface DocumentUploadProps {
   onDocumentsChange?: () => void;
 }
 
+const POLLING_INTERVAL = 3000; // 3 seconds
+
 export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocumentsChange }: DocumentUploadProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  /**
+   * Fetches all documents for the current user from the database
+   */
+  const loadDocuments = useCallback(async (): Promise<Document[]> => {
+    try {
+      if (!githubToken || !userId) return [];
+      const data = await docActions.getAllDocuments(userId, githubToken);
+      setDocuments(data || []);
+      return data || [];
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      return [];
+    }
+  }, [githubToken, userId]);
+
+  /**
+   * Starts polling for document status updates
+   */
+  const startPolling = useCallback(() => {
+    // Clear any existing polling
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+    }
+
+    pollingRef.current = setInterval(async () => {
+      const docs = await loadDocuments();
+      const hasProcessing = docs.some((doc: Document) => doc.status === 'processing');
+
+      // Stop polling if no documents are processing
+      if (!hasProcessing && pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+
+        // Notify parent component that processing is complete
+        if (onDocumentsChange) {
+          onDocumentsChange();
+        }
+      }
+    }, POLLING_INTERVAL);
+  }, [loadDocuments, onDocumentsChange]);
 
   // Load documents on component mount
   useEffect(() => {
-    loadDocuments();
-  }, []);
+    loadDocuments().then((docs) => {
+      // Start polling if there are processing documents
+      if (docs && docs.some((doc: Document) => doc.status === 'processing')) {
+        startPolling();
+      }
+    });
 
-  /**
-   * Fetches all documents from the database
-   */
-  const loadDocuments = async () => {
-    try {
-      if (!githubToken) return;
-      const data = await docActions.getAllDocuments(githubToken);
-      setDocuments(data || []);
-    } catch (error) {
-      console.error('Error loading documents:', error);
-    }
-  };
+    // Cleanup polling on unmount
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, [loadDocuments, startPolling]);
 
   /**
    * Handles file upload and processing
@@ -70,17 +113,19 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     setUploadProgress('Uploading file...');
 
     try {
-      setUploadProgress('Processing document...');
-
       const formData = new FormData();
       formData.append('file', file);
 
-      await docActions.processDocument(formData, userId, githubToken);
+      // Use async upload - returns immediately while processing continues in background
+      await docActions.uploadDocument(formData, userId, githubToken);
 
-      setUploadProgress('Document processed successfully!');
+      setUploadProgress('Document uploaded! Processing in background...');
 
-      // Reload documents list
+      // Reload documents list immediately to show the new document
       await loadDocuments();
+
+      // Start polling to track processing status
+      startPolling();
 
       // Notify parent component
       if (onDocumentsChange) {
@@ -94,6 +139,9 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     } catch (error) {
       console.error('Error uploading document:', error);
       setUploadProgress('Error: ' + (error as Error).message);
+
+      // Reload documents in case the record was created before the error
+      await loadDocuments();
 
       setTimeout(() => {
         setUploadProgress('');
@@ -146,7 +194,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     }
 
     try {
-      await docActions.deleteDocument(documentId, githubToken);
+      await docActions.deleteDocument(documentId, userId, githubToken);
       await loadDocuments();
 
       if (onDocumentsChange) {
@@ -250,7 +298,11 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
                 <div className="flex items-center gap-2 ml-4">
                   {/* Status Indicator */}
                   {doc.status === 'processing' && (
-                    <span className="flex items-center text-xs text-blue-600">
+                    <span className="flex items-center gap-1 text-xs text-blue-600">
+                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
                       Processing
                     </span>
                   )}

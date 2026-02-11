@@ -1,6 +1,6 @@
 /**
  * VectorSearchService
- * 
+ *
  * Performs semantic similarity search on document embeddings.
  * Uses cosine similarity to find the most relevant document chunks
  * for a given query, enabling Retrieval Augmented Generation (RAG).
@@ -32,18 +32,21 @@ export class VectorSearchService {
 
   /**
    * Searches for document chunks that are semantically similar to the query.
-   * 
+   * Results are filtered to only include documents owned by the specified user.
+   *
    * Process:
    * 1. Generate embedding for the search query
    * 2. Use pgvector's cosine similarity to find nearest neighbors
    * 3. Return ranked results with metadata
-   * 
+   *
    * @param query - The search query text
+   * @param userId - The user ID to filter documents by
    * @param options - Search configuration options
    * @returns Promise with array of ranked search results
    */
   async searchSimilarChunks(
     query: string,
+    userId: string,
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
     // Set default options
@@ -59,12 +62,14 @@ export class VectorSearchService {
 
       // Step 2: Perform vector similarity search using pgvector
       // We call the stored function search_document_chunks defined in init.sql
+      // Now includes user_id parameter for security filtering
       const res = await pool.query(
-        'SELECT * FROM search_document_chunks($1, $2, $3)',
+        'SELECT * FROM search_document_chunks($1, $2, $3, $4)',
         [
           embeddingString,
+          userId, // search_user_id
           1 - similarityThreshold, // match_threshold (distance)
-          limit // match_count
+          limit, // match_count
         ]
       );
 
@@ -86,16 +91,18 @@ export class VectorSearchService {
   /**
    * Searches for relevant context and formats it for inclusion in a prompt.
    * This is the main method to use for RAG.
-   * 
+   *
    * @param query - The user's query
+   * @param userId - The user ID to filter documents by
    * @param options - Search configuration
    * @returns Formatted context string to include in AI prompt
    */
   async getRelevantContext(
     query: string,
+    userId: string,
     options: SearchOptions = {}
   ): Promise<string> {
-    const results = await this.searchSimilarChunks(query, options);
+    const results = await this.searchSimilarChunks(query, userId, options);
 
     if (results.length === 0) {
       return 'No relevant documents found in the knowledge base.';
@@ -115,12 +122,15 @@ Please use the above context to answer the user's question. If the context doesn
   }
 
   /**
-   * Checks if there are any documents available for search.
+   * Checks if there are any documents available for search for a specific user.
    * Useful for showing/hiding search-related UI elements.
    */
-  async hasDocuments(): Promise<boolean> {
+  async hasDocuments(userId: string): Promise<boolean> {
     try {
-      const res = await pool.query('SELECT id FROM documents WHERE status = $1 LIMIT 1', ['completed']);
+      const res = await pool.query(
+        'SELECT id FROM documents WHERE status = $1 AND uploaded_by = $2 LIMIT 1',
+        ['completed', userId]
+      );
       return res.rows.length > 0;
     } catch (error) {
       console.error('Error checking for documents:', error);
@@ -129,23 +139,31 @@ Please use the above context to answer the user's question. If the context doesn
   }
 
   /**
-   * Gets statistics about the document collection.
+   * Gets statistics about the document collection for a specific user.
    */
-  async getCollectionStats(): Promise<{
+  async getCollectionStats(userId: string): Promise<{
     documentCount: number;
     chunkCount: number;
     totalSize: number;
   }> {
     try {
-      // Get document count and total size
-      const docRes = await pool.query('SELECT file_size FROM documents WHERE status = $1', ['completed']);
+      // Get document count and total size for this user
+      const docRes = await pool.query(
+        'SELECT id, file_size FROM documents WHERE status = $1 AND uploaded_by = $2',
+        ['completed', userId]
+      );
 
       const docData = docRes.rows;
       const documentCount = docData.length;
       const totalSize = docData.reduce((sum, doc) => sum + doc.file_size, 0);
 
-      // Get chunk count
-      const chunkRes = await pool.query('SELECT COUNT(*) FROM document_chunks');
+      // Get chunk count for this user's documents
+      const chunkRes = await pool.query(
+        `SELECT COUNT(*) FROM document_chunks dc
+         JOIN documents d ON dc.document_id = d.id
+         WHERE d.uploaded_by = $1`,
+        [userId]
+      );
       const chunkCount = parseInt(chunkRes.rows[0].count, 10);
 
       return {

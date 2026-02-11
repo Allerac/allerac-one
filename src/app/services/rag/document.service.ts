@@ -69,57 +69,32 @@ export class DocumentService {
 
   /**
    * Extracts text from a plain text file.
+   * Uses file.text() which works in both browser and Node.js environments.
    */
   private async extractTextFromPlainText(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        resolve(text);
-      };
-
-      reader.onerror = () => {
-        reject(new Error('Failed to read file'));
-      };
-
-      reader.readAsText(file);
-    });
+    try {
+      // file.text() is a Web API that works in Node.js 18+
+      return await file.text();
+    } catch (error) {
+      console.error('Error reading text file:', error);
+      throw new Error(`Failed to read text file: ${(error as Error).message}`);
+    }
   }
 
   /**
-   * Extracts text from a PDF file using pdf-parse library.
-   * This works in the browser by converting the file to an ArrayBuffer.
+   * Extracts text from a PDF file using pdf-parse library (Node.js compatible).
    */
   private async extractTextFromPDF(file: File): Promise<string> {
     try {
-      // Dynamically import pdfjs-dist (browser-compatible version)
-      const pdfjsLib = await import('pdfjs-dist');
-
-      // Use local worker from public folder
-      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-
-      // Read file as ArrayBuffer
+      // Get file content as Buffer (works in Server Actions)
       const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
-      // Load PDF document
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
+      // Use pdf-parse for server-side PDF extraction
+      const pdfParse = (await import('pdf-parse')).default;
+      const pdfData = await pdfParse(buffer);
 
-      // Extract text from all pages
-      const textPages: string[] = [];
-
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        textPages.push(pageText);
-      }
-
-      // Join all pages with double newline
-      return textPages.join('\n\n');
+      return pdfData.text;
     } catch (error) {
       console.error('Error extracting text from PDF:', error);
       throw new Error(`Failed to extract text from PDF: ${(error as Error).message}`);
@@ -176,9 +151,11 @@ export class DocumentService {
    * 5. Storing chunks with embeddings in the database
    */
   async processDocument(file: File, userId: string): Promise<string> {
+    let documentId: string | null = null;
+
     try {
       // Step 1: Create document record
-      const documentId = await this.createDocumentRecord(file, userId);
+      documentId = await this.createDocumentRecord(file, userId);
 
       // Step 2: Extract text from file
       const text = await this.extractTextFromFile(file);
@@ -195,22 +172,24 @@ export class DocumentService {
       return documentId;
     } catch (error) {
       console.error('Error processing document:', error);
-      try {
-        // We might not have the ID if step 1 failed, but if we do...
-        // Actually, if step 1 fails, we don't have ID.
-        // We can't update status if we don't have ID.
-        // If step 2-5 fails, we likely have ID in `documentId` if scope allows.
-        // Since `documentId` is local to try block, we can't access it here easily without moving variable out.
-        // For now, simplifed error handling.
-      } catch (inner) { }
+
+      // Update status to failed if we have a document ID
+      if (documentId) {
+        try {
+          await this.updateDocumentStatus(documentId, 'failed', (error as Error).message);
+        } catch (updateError) {
+          console.error('Failed to update document status:', updateError);
+        }
+      }
+
       throw error;
     }
   }
 
   /**
-   * Creates a document record in the database.
+   * Creates a document record in the database (public for async workflow).
    */
-  private async createDocumentRecord(file: File, userId: string): Promise<string> {
+  async createDocumentRecord(file: File, userId: string): Promise<string> {
     try {
       const res = await pool.query(
         `INSERT INTO documents (filename, file_type, file_size, uploaded_by, status)
@@ -221,6 +200,32 @@ export class DocumentService {
       return res.rows[0].id;
     } catch (error: any) {
       throw new Error(`Failed to create document record: ${error.message}`);
+    }
+  }
+
+  /**
+   * Processes a document's content after it has been created.
+   * This is meant to be called asynchronously (fire-and-forget).
+   */
+  async processDocumentContent(documentId: string, text: string): Promise<void> {
+    try {
+      // Split into chunks
+      const chunks = this.splitTextIntoChunks(text);
+
+      // Generate embeddings and store chunks
+      await this.processAndStoreChunks(documentId, chunks);
+
+      // Update document status to completed
+      await this.updateDocumentStatus(documentId, 'completed');
+    } catch (error) {
+      console.error('Error processing document content:', error);
+
+      // Update status to failed
+      try {
+        await this.updateDocumentStatus(documentId, 'failed', (error as Error).message);
+      } catch (updateError) {
+        console.error('Failed to update document status:', updateError);
+      }
     }
   }
 
@@ -281,11 +286,14 @@ export class DocumentService {
   }
 
   /**
-   * Retrieves all documents from the database.
+   * Retrieves all documents for a specific user from the database.
    */
-  async getAllDocuments(): Promise<any[]> {
+  async getAllDocuments(userId: string): Promise<any[]> {
     try {
-      const res = await pool.query('SELECT * FROM documents ORDER BY uploaded_at DESC');
+      const res = await pool.query(
+        'SELECT * FROM documents WHERE uploaded_by = $1 ORDER BY uploaded_at DESC',
+        [userId]
+      );
       return res.rows;
     } catch (error: any) {
       throw new Error(`Failed to fetch documents: ${error.message}`);
@@ -294,10 +302,17 @@ export class DocumentService {
 
   /**
    * Deletes a document and all its chunks from the database.
+   * Only allows deletion if the user owns the document.
    */
-  async deleteDocument(documentId: string): Promise<void> {
+  async deleteDocument(documentId: string, userId: string): Promise<void> {
     try {
-      await pool.query('DELETE FROM documents WHERE id = $1', [documentId]);
+      const result = await pool.query(
+        'DELETE FROM documents WHERE id = $1 AND uploaded_by = $2',
+        [documentId, userId]
+      );
+      if (result.rowCount === 0) {
+        throw new Error('Document not found or you do not have permission to delete it');
+      }
     } catch (error: any) {
       throw new Error(`Failed to delete document: ${error.message}`);
     }

@@ -119,14 +119,16 @@ export class ChatMessageService {
         }
       }
 
-      // Step 2: Search for relevant documents using RAG
+      // Step 2: Search for relevant documents using RAG (filtered by user)
       let relevantContext = '';
-      try {
-        // Get relevant context from documents
-        relevantContext = await ragActions.getRelevantContext(messageContent, this.config.githubToken);
-      } catch (error) {
-        console.log('No documents available or search failed:', error);
-        // Continue without document context
+      if (this.config.userId) {
+        try {
+          // Get relevant context from documents owned by this user
+          relevantContext = await ragActions.getRelevantContext(messageContent, this.config.userId, this.config.githubToken);
+        } catch (error) {
+          console.log('No documents available or search failed:', error);
+          // Continue without document context
+        }
       }
 
       // Step 3: Build conversation messages with all context

@@ -103,9 +103,10 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON document_chunks
   USING hnsw (embedding vector_cosine_ops);
 
 
--- Function for vector similarity search
+-- Function for vector similarity search (filtered by user)
 CREATE OR REPLACE FUNCTION search_document_chunks(
   query_embedding vector(1536),
+  search_user_id uuid,
   match_threshold float DEFAULT 0.5,
   match_count int DEFAULT 5
 )
@@ -131,6 +132,7 @@ BEGIN
   FROM document_chunks dc
   JOIN documents d ON dc.document_id = d.id
   WHERE d.status = 'completed'
+    AND d.uploaded_by = search_user_id
     AND (dc.embedding <=> query_embedding) < match_threshold
   ORDER BY dc.embedding <=> query_embedding
   LIMIT match_count;
