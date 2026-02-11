@@ -51,11 +51,14 @@ export class VectorSearchService {
   ): Promise<SearchResult[]> {
     // Set default options
     const limit = options.limit || 5;
-    const similarityThreshold = options.similarityThreshold || 0.3; // Lower threshold for better recall
+    const similarityThreshold = options.similarityThreshold || 0.5;
+
+    console.log('[VectorSearch] searchSimilarChunks:', { query: query.substring(0, 30), userId, limit, similarityThreshold });
 
     try {
       // Step 1: Generate embedding for the query
       const { embedding } = await this.embeddingService.generateEmbedding(query);
+      console.log('[VectorSearch] Embedding generated, length:', embedding.length);
 
       // Format embedding for pgvector (string representation: "[0.1, 0.2, ...]")
       const embeddingString = `[${embedding.join(',')}]`;
@@ -63,6 +66,8 @@ export class VectorSearchService {
       // Step 2: Perform vector similarity search using pgvector
       // We call the stored function search_document_chunks defined in init.sql
       // Now includes user_id parameter for security filtering
+      console.log('[VectorSearch] Querying DB with:', { userId, threshold: 1 - similarityThreshold, limit });
+
       const res = await pool.query(
         'SELECT * FROM search_document_chunks($1, $2, $3, $4)',
         [
@@ -72,6 +77,8 @@ export class VectorSearchService {
           limit, // match_count
         ]
       );
+
+      console.log('[VectorSearch] Results found:', res.rows.length, res.rows.map((r: any) => ({ filename: r.document_filename, distance: r.distance })));
 
       // Step 3: Format and return results
       return res.rows.map((row: any) => ({
