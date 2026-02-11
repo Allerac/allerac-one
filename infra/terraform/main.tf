@@ -44,6 +44,28 @@ resource "google_compute_address" "allerac_ip" {
   name = "allerac-ip"
 }
 
+# --- BACKUP STORAGE ---
+resource "google_storage_bucket" "backups" {
+  name          = "${var.project_id}-backups"
+  location      = var.region
+  storage_class = "NEARLINE"
+
+  # Auto-delete backups older than 30 days
+  lifecycle_rule {
+    condition {
+      age = 30
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  # Prevent accidental deletion
+  force_destroy = false
+
+  uniform_bucket_level_access = true
+}
+
 # --- FIREWALL ---
 resource "google_compute_firewall" "allerac_firewall" {
   name    = "allerac-firewall"

@@ -40,6 +40,12 @@ output "grafana_url" {
   value       = "https://grafana.${var.domain}"
 }
 
+# --- Backup Outputs ---
+output "backup_bucket" {
+  description = "GCS bucket for database backups"
+  value       = google_storage_bucket.backups.name
+}
+
 # --- Cloudflare Outputs ---
 output "tunnel_id" {
   description = "Cloudflare Tunnel ID"
