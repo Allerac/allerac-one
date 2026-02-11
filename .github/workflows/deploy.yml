@@ -52,6 +52,13 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure infrastructure services
+        run: |
+          if [ -f ~/docker-compose.infra.yml ]; then
+            echo "Starting infrastructure services..."
+            cd ~ && docker compose -f docker-compose.infra.yml up -d
+          fi
+
       - name: Deployment summary
         run: |
           echo ""
@@ -59,4 +66,4 @@ jobs:
           echo "Host: $(hostname)"
           echo "Commit: ${{ github.sha }}"
           echo "Containers:"
-          docker compose ps
+          docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
