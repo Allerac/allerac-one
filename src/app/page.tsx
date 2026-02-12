@@ -24,6 +24,7 @@ import DocumentsModal from './components/documents/DocumentsModal';
 import MemoriesModal from './components/memory/MemoriesModal';
 import UserSettingsModal from './components/auth/UserSettingsModal';
 import LoginModal from './components/auth/LoginModal';
+import SetupWizard from './components/setup/SetupWizard';
 
 export default function AdminChat() {
   const t = useTranslations('home');
@@ -84,6 +85,8 @@ export default function AdminChat() {
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
   const [memorySaveResult, setMemorySaveResult] = useState<MemorySaveResult | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isFirstRun, setIsFirstRun] = useState(false);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
 
@@ -131,6 +134,15 @@ export default function AdminChat() {
 
   const checkAuth = async () => {
     try {
+      // Check if this is first run (no users exist)
+      const firstRunResult = await authActions.checkFirstRun();
+      if (firstRunResult.isFirstRun) {
+        setIsFirstRun(true);
+        setShowSetupWizard(true);
+        setIsLoading(false);
+        return;
+      }
+
       // Check if user has valid session
       const sessionResult = await authActions.checkSession();
 
@@ -295,6 +307,12 @@ export default function AdminChat() {
   };
 
 
+  const handleSetupComplete = async (user: { id: string; email: string; name: string | null }) => {
+    setShowSetupWizard(false);
+    setIsFirstRun(false);
+    handleAuthSuccess(user);
+  };
+
   const handleAuthSuccess = async (user: { id: string; email: string; name: string | null }) => {
     setIsAuthenticated(true);
     setIsLoginModalOpen(false);
@@ -413,6 +431,11 @@ export default function AdminChat() {
 
     if (userId) await loadConversations(userId);
   };
+
+  // Show setup wizard for first run
+  if (showSetupWizard) {
+    return <SetupWizard onComplete={handleSetupComplete} />;
+  }
 
   if (isLoading) {
     return (

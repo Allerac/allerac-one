@@ -119,3 +119,20 @@ export async function getCurrentUser(): Promise<User | null> {
   const result = await checkSession();
   return result.authenticated ? result.user : null;
 }
+
+/**
+ * Check if this is the first run (no users exist)
+ * Used to show setup wizard on initial installation
+ */
+export async function checkFirstRun(): Promise<{ isFirstRun: boolean; userCount: number }> {
+  try {
+    const pool = (await import('@/app/clients/db')).default;
+    const result = await pool.query('SELECT COUNT(*) as count FROM users');
+    const userCount = parseInt(result.rows[0].count, 10);
+    return { isFirstRun: userCount === 0, userCount };
+  } catch (error) {
+    console.error('Error checking first run:', error);
+    // If we can't connect to DB, assume it's first run
+    return { isFirstRun: true, userCount: 0 };
+  }
+}
