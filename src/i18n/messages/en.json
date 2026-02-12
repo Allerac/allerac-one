@@ -9,7 +9,8 @@
     "documents": "Documents",
     "memories": "Memories",
     "logout": "Logout",
-    "deleteConversation": "Delete conversation"
+    "deleteConversation": "Delete conversation",
+    "systemDashboard": "System Dashboard"
   },
   "login": {
     "welcomeBack": "Welcome Back",
@@ -53,6 +54,25 @@
     "close": "Close",
     "save": "Save",
     "cancel": "Cancel"
+  },
+  "system": {
+    "title": "System Dashboard",
+    "lastUpdated": "Last updated",
+    "systemInfo": "System Info",
+    "hostname": "Hostname",
+    "platform": "Platform",
+    "uptime": "Uptime",
+    "memory": "Memory",
+    "used": "Used",
+    "free": "Free",
+    "cores": "Cores",
+    "loadAverage": "Load Avg",
+    "database": "Database",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "notConnected": "Not connected",
+    "version": "Version",
+    "models": "Models"
   },
   "setup": {
     "title": "Welcome to Allerac One",

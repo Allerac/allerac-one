@@ -9,7 +9,8 @@
     "documents": "Documentos",
     "memories": "Memórias",
     "logout": "Sair",
-    "deleteConversation": "Excluir conversa"
+    "deleteConversation": "Excluir conversa",
+    "systemDashboard": "Painel do Sistema"
   },
   "login": {
     "welcomeBack": "Bem-vindo de Volta",
@@ -53,6 +54,25 @@
     "close": "Fechar",
     "save": "Salvar",
     "cancel": "Cancelar"
+  },
+  "system": {
+    "title": "Painel do Sistema",
+    "lastUpdated": "Última atualização",
+    "systemInfo": "Info do Sistema",
+    "hostname": "Nome do host",
+    "platform": "Plataforma",
+    "uptime": "Tempo ativo",
+    "memory": "Memória",
+    "used": "Usado",
+    "free": "Livre",
+    "cores": "Núcleos",
+    "loadAverage": "Carga Méd",
+    "database": "Banco de Dados",
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "notConnected": "Não conectado",
+    "version": "Versão",
+    "models": "Modelos"
   },
   "setup": {
     "title": "Bem-vindo ao Allerac One",

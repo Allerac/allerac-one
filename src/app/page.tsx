@@ -25,6 +25,7 @@ import MemoriesModal from './components/memory/MemoriesModal';
 import UserSettingsModal from './components/auth/UserSettingsModal';
 import LoginModal from './components/auth/LoginModal';
 import SetupWizard from './components/setup/SetupWizard';
+import SystemDashboard from './components/system/SystemDashboard';
 
 export default function AdminChat() {
   const t = useTranslations('home');
@@ -36,6 +37,7 @@ export default function AdminChat() {
     const openUserSettingsModal = () => setIsUserSettingsOpen(true);
     const openDocumentsModal = () => setIsDocumentModalOpen(true);
     const openMemoriesModal = () => setIsMemoryModalOpen(true);
+    const openSystemDashboard = () => setIsSystemDashboardOpen(true);
     const onLogout = () => handleLogoutRef.current();
 
     window.addEventListener('openTokenModal', openTokenModal);
@@ -43,6 +45,7 @@ export default function AdminChat() {
     window.addEventListener('openUserSettingsModal', openUserSettingsModal);
     window.addEventListener('openDocumentsModal', openDocumentsModal);
     window.addEventListener('openMemoriesModal', openMemoriesModal);
+    window.addEventListener('openSystemDashboard', openSystemDashboard);
     window.addEventListener('logout', onLogout);
 
     return () => {
@@ -51,6 +54,7 @@ export default function AdminChat() {
       window.removeEventListener('openUserSettingsModal', openUserSettingsModal);
       window.removeEventListener('openDocumentsModal', openDocumentsModal);
       window.removeEventListener('openMemoriesModal', openMemoriesModal);
+      window.removeEventListener('openSystemDashboard', openSystemDashboard);
       window.removeEventListener('logout', onLogout);
     };
   }, []);
@@ -87,6 +91,7 @@ export default function AdminChat() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isFirstRun, setIsFirstRun] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
 
@@ -674,6 +679,13 @@ export default function AdminChat() {
         isDarkMode={isDarkMode}
         onAuthSuccess={handleAuthSuccess}
         preventClose={!isAuthenticated}
+      />
+
+      {/* System Dashboard */}
+      <SystemDashboard
+        isOpen={isSystemDashboardOpen}
+        onClose={() => setIsSystemDashboardOpen(false)}
+        isDarkMode={isDarkMode}
       />
     </div>
   );
