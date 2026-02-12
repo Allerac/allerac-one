@@ -1,0 +1,217 @@
+# Allerac One - Local Installation
+# For running your own private AI agent at home
+#
+# Usage:
+#   docker compose -f docker-compose.local.yml up -d
+#
+# With Ollama (recommended for full local AI):
+#   docker compose -f docker-compose.local.yml --profile ollama up -d
+#
+# With monitoring (optional):
+#   docker compose -f docker-compose.local.yml --profile monitoring up -d
+#
+# Full stack:
+#   docker compose -f docker-compose.local.yml --profile ollama --profile monitoring up -d
+
+services:
+  # ============================================
+  # CORE SERVICES
+  # ============================================
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: allerac-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-allerac}
+    volumes:
+      - ./src/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d allerac"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # Memory limits to prevent OOM on small devices
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  migrations:
+    image: postgres:16-alpine
+    container_name: allerac-migrations
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-allerac}
+    volumes:
+      - ./src/database:/database
+    command: ["/bin/sh", "/database/run-migrations.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: allerac-app
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # Optional external APIs (not required for local use)
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    # Memory limits for stability
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ============================================
+  # OLLAMA - Local LLM (Optional but recommended)
+  # ============================================
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: allerac-ollama
+    restart: unless-stopped
+    profiles:
+      - ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    # GPU support (uncomment for NVIDIA GPU)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Model downloader - runs once to download default model
+  ollama-setup:
+    image: ollama/ollama:latest
+    container_name: allerac-ollama-setup
+    profiles:
+      - ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Checking for models..."
+        if ! ollama list | grep -q "${DEFAULT_MODEL:-llama3.2}"; then
+          echo "Downloading ${DEFAULT_MODEL:-llama3.2}..."
+          ollama pull ${DEFAULT_MODEL:-llama3.2}
+        else
+          echo "Model ${DEFAULT_MODEL:-llama3.2} already exists"
+        fi
+        echo "Setup complete!"
+    restart: "no"
+
+  # ============================================
+  # MONITORING (Optional)
+  # ============================================
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: allerac-node-exporter
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: allerac-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    volumes:
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: allerac-grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  db_data:
+    name: allerac_db_data
+  ollama_data:
+    name: allerac_ollama_data
+  prometheus_data:
+    name: allerac_prometheus_data
+  grafana_data:
+    name: allerac_grafana_data
