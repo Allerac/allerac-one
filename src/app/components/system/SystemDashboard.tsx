@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import * as systemActions from '@/app/actions/system';
+import * as updateActions from '@/app/actions/updates';
 
 interface SystemDashboardProps {
   isOpen: boolean;
@@ -54,6 +55,20 @@ interface SystemDashboard {
   timestamp: string;
 }
 
+interface UpdateStatus {
+  currentVersion: string;
+  latestVersion: string | null;
+  latestRelease: {
+    tag_name: string;
+    name: string;
+    body: string;
+    published_at: string;
+    html_url: string;
+  } | null;
+  updateAvailable: boolean;
+  error?: string;
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -81,10 +96,15 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode }: Sy
   const [data, setData] = useState<SystemDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       loadDashboard();
+      checkUpdates();
       // Auto-refresh every 30 seconds
       const interval = setInterval(loadDashboard, 30000);
       return () => clearInterval(interval);
@@ -101,6 +121,38 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode }: Sy
       setError(err.message || 'Failed to load system status');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkUpdates = async () => {
+    setIsCheckingUpdates(true);
+    try {
+      const status = await updateActions.checkForUpdates();
+      setUpdateStatus(status);
+    } catch (err: any) {
+      console.error('Failed to check updates:', err);
+    } finally {
+      setIsCheckingUpdates(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!updateStatus?.latestVersion) return;
+
+    setIsUpdating(true);
+    setUpdateMessage(null);
+
+    try {
+      const result = await updateActions.applyUpdate(updateStatus.latestVersion);
+      setUpdateMessage(result.message);
+      if (result.success) {
+        // Refresh update status after successful preparation
+        await checkUpdates();
+      }
+    } catch (err: any) {
+      setUpdateMessage(err.message || 'Update failed');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -360,6 +412,111 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode }: Sy
                 {data.database.version && (
                   <p className={`text-xs mt-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                     {data.database.version}
+                  </p>
+                )}
+              </div>
+
+              {/* Updates */}
+              <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  {t('updates')}
+                  {updateStatus?.updateAvailable && (
+                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-400">
+                      {t('updateAvailable')}
+                    </span>
+                  )}
+                </h3>
+
+                {isCheckingUpdates ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('checkingUpdates')}</span>
+                  </div>
+                ) : updateStatus ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-4 text-sm">
+                      <div>
+                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('currentVersion')}: </span>
+                        <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                          v{updateStatus.currentVersion}
+                        </span>
+                      </div>
+                      {updateStatus.latestVersion && (
+                        <div>
+                          <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('latestVersion')}: </span>
+                          <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                            {updateStatus.latestVersion}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {updateStatus.updateAvailable && updateStatus.latestRelease && (
+                      <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                            {updateStatus.latestRelease.name || updateStatus.latestRelease.tag_name}
+                          </span>
+                          <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {new Date(updateStatus.latestRelease.published_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {updateStatus.latestRelease.body && (
+                          <p className={`text-xs whitespace-pre-wrap line-clamp-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {updateStatus.latestRelease.body}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {updateMessage && (
+                      <div className={`p-3 rounded-lg text-sm ${
+                        updateMessage.includes('created')
+                          ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
+                          : isDarkMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-50 text-yellow-700'
+                      }`}>
+                        {updateMessage}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={checkUpdates}
+                        disabled={isCheckingUpdates}
+                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                          isDarkMode
+                            ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
+                            : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                        }`}
+                      >
+                        {t('checkNow')}
+                      </button>
+                      {updateStatus.updateAvailable && (
+                        <button
+                          onClick={handleUpdate}
+                          disabled={isUpdating}
+                          className="px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center gap-2"
+                        >
+                          {isUpdating && (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                          )}
+                          {t('prepareUpdate')}
+                        </button>
+                      )}
+                    </div>
+
+                    {!updateStatus.latestVersion && (
+                      <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {t('noReleases')}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {t('updateCheckFailed')}
                   </p>
                 )}
               </div>

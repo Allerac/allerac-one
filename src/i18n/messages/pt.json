@@ -72,7 +72,16 @@
     "disconnected": "Desconectado",
     "notConnected": "Não conectado",
     "version": "Versão",
-    "models": "Modelos"
+    "models": "Modelos",
+    "updates": "Atualizações",
+    "updateAvailable": "Atualização Disponível",
+    "checkingUpdates": "Verificando atualizações...",
+    "currentVersion": "Atual",
+    "latestVersion": "Última",
+    "checkNow": "Verificar Agora",
+    "prepareUpdate": "Preparar Atualização",
+    "noReleases": "Nenhuma versão disponível ainda",
+    "updateCheckFailed": "Falha ao verificar atualizações"
   },
   "setup": {
     "title": "Bem-vindo ao Allerac One",
