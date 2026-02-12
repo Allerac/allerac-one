@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --help)
-            head -30 "$0" | tail -20
+            head -20 "$0" | tail -18
             exit 0
             ;;
         *)
