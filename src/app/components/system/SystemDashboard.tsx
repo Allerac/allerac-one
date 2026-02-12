@@ -10,6 +10,7 @@ interface SystemDashboardProps {
   isOpen: boolean;
   onClose: () => void;
   isDarkMode: boolean;
+  userId?: string;
 }
 
 interface SystemDashboard {
@@ -31,25 +32,38 @@ interface SystemDashboard {
     model: string;
     loadAvg: number[];
   };
-  ollama: {
-    connected: boolean;
-    version?: string;
-    models: Array<{
-      name: string;
-      size: number;
-      modified_at: string;
-    }>;
-    error?: string;
+  aiModels: {
+    github: {
+      configured: boolean;
+      connected: boolean;
+      models: Array<{
+        id: string;
+        name: string;
+        icon: string;
+        description: string;
+      }>;
+      error?: string;
+    };
+    ollama: {
+      connected: boolean;
+      version?: string;
+      models: Array<{
+        name: string;
+        size: number;
+        modified_at: string;
+      }>;
+      error?: string;
+    };
   };
   database: {
     connected: boolean;
     version?: string;
     tables: {
-      users: number;
       conversations: number;
       messages: number;
       memories: number;
       documents: number;
+      backups: number;
     };
     error?: string;
   };
@@ -101,7 +115,7 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`;
 }
 
-export default function SystemDashboardModal({ isOpen, onClose, isDarkMode }: SystemDashboardProps) {
+export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, userId }: SystemDashboardProps) {
   const t = useTranslations('system');
   const [data, setData] = useState<SystemDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -145,7 +159,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode }: Sy
   const loadDashboard = async () => {
     try {
       setIsLoading(true);
-      const dashboard = await systemActions.getSystemDashboard();
+      const dashboard = await systemActions.getSystemDashboard(userId);
       setData(dashboard);
       setError(null);
     } catch (err: any) {
@@ -408,140 +422,112 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode }: Sy
             </div>
           ) : data ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* System Info */}
-              <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              {/* Combined System Card */}
+              <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                <h3 className={`text-sm font-medium mb-4 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                   {t('systemInfo')}
                 </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('hostname')}</span>
-                    <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{data.system.hostname}</span>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  {/* Hostname & Platform */}
+                  <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                    <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('hostname')}</div>
+                    <div className={`font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.system.hostname}</div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('platform')}</span>
-                    <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{data.system.platform} ({data.system.arch})</span>
+                  <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                    <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('platform')}</div>
+                    <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.system.platform}</div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('uptime')}</span>
-                    <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{formatUptime(data.system.uptime)}</span>
+                  <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                    <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('uptime')}</div>
+                    <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{formatUptime(data.system.uptime)}</div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>Node.js</span>
-                    <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{data.system.nodeVersion}</span>
+                  <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                    <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>CPU</div>
+                    <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.cpu.cores} {t('cores')}</div>
                   </div>
                 </div>
-              </div>
 
-              {/* Memory */}
-              <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m9 5.197v-1a6 6 0 00-3-5.197" />
-                  </svg>
-                  {t('memory')}
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('used')}</span>
-                      <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>
-                        {formatBytes(data.memory.used)} / {formatBytes(data.memory.total)}
-                      </span>
-                    </div>
-                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
-                      <div
-                        className={`h-full rounded-full ${
-                          data.memory.usedPercent > 90 ? 'bg-red-500' :
-                          data.memory.usedPercent > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                        }`}
-                        style={{ width: `${data.memory.usedPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('free')}</span>
-                    <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{formatBytes(data.memory.free)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* CPU */}
-              <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                  </svg>
-                  CPU
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('cores')}</span>
-                    <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{data.cpu.cores}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('loadAverage')}</span>
+                {/* Memory bar */}
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('memory')}</span>
                     <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>
-                      {data.cpu.loadAvg.map(l => l.toFixed(2)).join(' | ')}
+                      {formatBytes(data.memory.used)} / {formatBytes(data.memory.total)} ({data.memory.usedPercent}%)
                     </span>
                   </div>
-                  <div className={`text-xs truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                    {data.cpu.model}
+                  <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
+                    <div
+                      className={`h-full rounded-full ${
+                        data.memory.usedPercent > 90 ? 'bg-red-500' :
+                        data.memory.usedPercent > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${data.memory.usedPercent}%` }}
+                    />
                   </div>
                 </div>
-              </div>
 
-              {/* Ollama */}
-              <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="text-lg">🦙</span>
-                  Ollama
-                  <span className={`ml-auto px-2 py-0.5 rounded-full text-xs ${
-                    data.ollama.connected
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-red-500/20 text-red-400'
-                  }`}>
-                    {data.ollama.connected ? t('connected') : t('disconnected')}
-                  </span>
-                </h3>
-                {data.ollama.connected ? (
-                  <div className="space-y-2 text-sm">
-                    {data.ollama.version && (
-                      <div className="flex justify-between">
-                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('version')}</span>
-                        <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{data.ollama.version}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('models')}</span>
-                      <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{data.ollama.models.length}</span>
+                {/* Version & Updates */}
+                <div className={`mt-4 pt-4 border-t ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
+                        {t('version')}: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                          v{updateStatus?.currentVersion || '0.0.0'}
+                        </span>
+                      </span>
+                      {updateStatus?.updateAvailable && (
+                        <span className="px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-400">
+                          {t('updateAvailable')}: {updateStatus.latestVersion}
+                        </span>
+                      )}
                     </div>
-                    {data.ollama.models.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {data.ollama.models.slice(0, 3).map((model) => (
-                          <div key={model.name} className={`text-xs p-2 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                            <div className="flex justify-between">
-                              <span className={isDarkMode ? 'text-gray-300' : 'text-gray-700'}>{model.name}</span>
-                              <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{formatBytes(model.size)}</span>
-                            </div>
-                          </div>
-                        ))}
-                        {data.ollama.models.length > 3 && (
-                          <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                            +{data.ollama.models.length - 3} more
-                          </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={checkUpdates}
+                        disabled={isCheckingUpdates}
+                        className={`px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1 ${
+                          isDarkMode
+                            ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
+                            : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                        }`}
+                      >
+                        {isCheckingUpdates ? (
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
                         )}
-                      </div>
-                    )}
+                        {t('checkNow')}
+                      </button>
+                      {updateStatus?.updateAvailable && (
+                        <button
+                          onClick={handleUpdate}
+                          disabled={isUpdating}
+                          className="px-3 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center gap-1"
+                        >
+                          {isUpdating && (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                          )}
+                          {t('prepareUpdate')}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <p className={`text-sm ${isDarkMode ? 'text-red-400' : 'text-red-500'}`}>
-                    {data.ollama.error || t('notConnected')}
-                  </p>
-                )}
+                  {updateMessage && (
+                    <div className={`mt-2 p-2 rounded text-xs ${
+                      updateMessage.includes('created')
+                        ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
+                        : isDarkMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-50 text-yellow-700'
+                    }`}>
+                      {updateMessage}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Database */}
@@ -580,111 +566,6 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode }: Sy
                 {data.database.version && (
                   <p className={`text-xs mt-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                     {data.database.version}
-                  </p>
-                )}
-              </div>
-
-              {/* Updates */}
-              <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  {t('updates')}
-                  {updateStatus?.updateAvailable && (
-                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-400">
-                      {t('updateAvailable')}
-                    </span>
-                  )}
-                </h3>
-
-                {isCheckingUpdates ? (
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('checkingUpdates')}</span>
-                  </div>
-                ) : updateStatus ? (
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-4 text-sm">
-                      <div>
-                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('currentVersion')}: </span>
-                        <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                          v{updateStatus.currentVersion}
-                        </span>
-                      </div>
-                      {updateStatus.latestVersion && (
-                        <div>
-                          <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('latestVersion')}: </span>
-                          <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                            {updateStatus.latestVersion}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {updateStatus.updateAvailable && updateStatus.latestRelease && (
-                      <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                            {updateStatus.latestRelease.name || updateStatus.latestRelease.tag_name}
-                          </span>
-                          <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {new Date(updateStatus.latestRelease.published_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        {updateStatus.latestRelease.body && (
-                          <p className={`text-xs whitespace-pre-wrap line-clamp-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {updateStatus.latestRelease.body}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {updateMessage && (
-                      <div className={`p-3 rounded-lg text-sm ${
-                        updateMessage.includes('created')
-                          ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
-                          : isDarkMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-50 text-yellow-700'
-                      }`}>
-                        {updateMessage}
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={checkUpdates}
-                        disabled={isCheckingUpdates}
-                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                          isDarkMode
-                            ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
-                            : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                        }`}
-                      >
-                        {t('checkNow')}
-                      </button>
-                      {updateStatus.updateAvailable && (
-                        <button
-                          onClick={handleUpdate}
-                          disabled={isUpdating}
-                          className="px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center gap-2"
-                        >
-                          {isUpdating && (
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                          )}
-                          {t('prepareUpdate')}
-                        </button>
-                      )}
-                    </div>
-
-                    {!updateStatus.latestVersion && (
-                      <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                        {t('noReleases')}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {t('updateCheckFailed')}
                   </p>
                 )}
               </div>

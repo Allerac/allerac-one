@@ -11,6 +11,7 @@ import * as chatActions from '@/app/actions/chat';
 import * as userActions from '@/app/actions/user';
 import * as memoryActions from '@/app/actions/memory';
 import * as authActions from '@/app/actions/auth';
+import * as systemActions from '@/app/actions/system';
 
 import SidebarMobile from './components/layout/SidebarMobile';
 import SidebarDesktop from './components/layout/SidebarDesktop';
@@ -92,6 +93,8 @@ export default function AdminChat() {
   const [isFirstRun, setIsFirstRun] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
+  const [ollamaConnected, setOllamaConnected] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<Array<{ name: string; size: number; modified_at: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
 
@@ -133,8 +136,43 @@ export default function AdminChat() {
     scrollToBottom();
   }, [messages]);
 
+  // Load Ollama status on mount and periodically
+  useEffect(() => {
+    const loadOllamaStatus = async () => {
+      try {
+        const ollamaInfo = await systemActions.getOllamaInfo();
+        setOllamaConnected(ollamaInfo.connected);
+        setOllamaModels(ollamaInfo.models || []);
+      } catch (err) {
+        console.error('Failed to load Ollama status:', err);
+        setOllamaConnected(false);
+        setOllamaModels([]);
+      }
+    };
+
+    loadOllamaStatus();
+    // Refresh Ollama status every 30 seconds
+    const interval = setInterval(loadOllamaStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Handler for downloading Ollama models
+  const handleDownloadModel = async (modelId: string) => {
+    try {
+      const result = await systemActions.pullOllamaModel(modelId);
+      if (result.success) {
+        // Refresh Ollama status to get updated model list
+        const ollamaInfo = await systemActions.getOllamaInfo();
+        setOllamaConnected(ollamaInfo.connected);
+        setOllamaModels(ollamaInfo.models || []);
+      }
+    } catch (err) {
+      console.error('Failed to download model:', err);
+    }
   };
 
   const checkAuth = async () => {
@@ -528,6 +566,10 @@ export default function AdminChat() {
             currentConversationId={currentConversationId}
             currentConversationHasMemory={currentConversationHasMemory}
             handleGenerateSummary={handleGenerateSummary}
+            githubConfigured={!!githubToken}
+            ollamaConnected={ollamaConnected}
+            ollamaModels={ollamaModels}
+            onDownloadModel={handleDownloadModel}
           />
 
           {/* Messages Container */}
@@ -686,6 +728,7 @@ export default function AdminChat() {
         isOpen={isSystemDashboardOpen}
         onClose={() => setIsSystemDashboardOpen(false)}
         isDarkMode={isDarkMode}
+        userId={userId || undefined}
       />
     </div>
   );
