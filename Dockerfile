@@ -31,9 +31,15 @@ ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
 
+# Install postgresql-client for backup/restore functionality
+RUN apk add --no-cache postgresql-client
+
 # Don't run as root
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+# Create backups directory
+RUN mkdir -p /app/backups && chown nextjs:nodejs /app/backups
 
 COPY --from=builder /app/src/public ./public
 
