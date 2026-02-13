@@ -257,8 +257,12 @@ start_services() {
     # Pull images first
     $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES pull
 
+    # Set build info (commit hash and date)
+    export COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
     # Build the app
-    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES build
+    $USE_SUDO COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE docker compose -f docker-compose.local.yml $PROFILES build
 
     # Start services
     $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES up -d

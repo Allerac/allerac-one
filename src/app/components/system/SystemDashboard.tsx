@@ -70,17 +70,22 @@ interface SystemDashboard {
   timestamp: string;
 }
 
+interface CommitInfo {
+  sha: string;
+  shortSha: string;
+  message: string;
+  date: string;
+  author: string;
+  url: string;
+}
+
 interface UpdateStatus {
-  currentVersion: string;
-  latestVersion: string | null;
-  latestRelease: {
-    tag_name: string;
-    name: string;
-    body: string;
-    published_at: string;
-    html_url: string;
-  } | null;
+  currentCommit: string;
+  currentDate: string;
+  latestCommit: string | null;
+  latestDate: string | null;
   updateAvailable: boolean;
+  newCommits: CommitInfo[];
   error?: string;
 }
 
@@ -122,7 +127,6 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
   const [error, setError] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
   // Backup state
@@ -182,23 +186,9 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
   };
 
   const handleUpdate = async () => {
-    if (!updateStatus?.latestVersion) return;
-
-    setIsUpdating(true);
-    setUpdateMessage(null);
-
-    try {
-      const result = await updateActions.applyUpdate(updateStatus.latestVersion);
-      setUpdateMessage(result.message);
-      if (result.success) {
-        // Refresh update status after successful preparation
-        await checkUpdates();
-      }
-    } catch (err: any) {
-      setUpdateMessage(err.message || 'Update failed');
-    } finally {
-      setIsUpdating(false);
-    }
+    // Updates are applied from the host machine, not from inside the container
+    // Show the user the command to run
+    setUpdateMessage('Run on your server: cd ~/allerac-one && git pull && COMMIT_HASH=$(git rev-parse --short HEAD) BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") docker compose -f docker-compose.local.yml build && docker compose -f docker-compose.local.yml up -d');
   };
 
   const loadBackups = async () => {
@@ -480,13 +470,18 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
                       <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
-                        {t('version')}: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                          v{updateStatus?.currentVersion || '0.0.0'}
+                        Build: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                          {updateStatus?.currentCommit || 'unknown'}
                         </span>
                       </span>
                       {updateStatus?.updateAvailable && (
                         <span className="px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-400">
-                          {t('updateAvailable')}: {updateStatus.latestVersion}
+                          {updateStatus.newCommits.length} {t('updateAvailable')}
+                        </span>
+                      )}
+                      {updateStatus?.error && (
+                        <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
+                          {updateStatus.error}
                         </span>
                       )}
                     </div>
@@ -512,22 +507,26 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                       {updateStatus?.updateAvailable && (
                         <button
                           onClick={handleUpdate}
-                          disabled={isUpdating}
-                          className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center justify-center gap-1"
+                          className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center gap-1"
                         >
-                          {isUpdating && (
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                          )}
                           {t('prepareUpdate')}
                         </button>
                       )}
                     </div>
                   </div>
+                  {updateStatus?.updateAvailable && updateStatus.newCommits.length > 0 && (
+                    <div className={`mt-2 space-y-1 max-h-32 overflow-y-auto`}>
+                      {updateStatus.newCommits.map((commit) => (
+                        <div key={commit.sha} className={`text-xs px-2 py-1 rounded flex items-start gap-2 ${isDarkMode ? 'bg-gray-600/50 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                          <span className={`font-mono flex-shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{commit.shortSha}</span>
+                          <span className="truncate">{commit.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {updateMessage && (
-                    <div className={`mt-2 p-2 rounded text-xs ${
-                      updateMessage.includes('created')
-                        ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
-                        : isDarkMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-50 text-yellow-700'
+                    <div className={`mt-2 p-2 rounded text-xs font-mono break-all ${
+                      isDarkMode ? 'bg-gray-900/50 text-green-300' : 'bg-gray-100 text-gray-700'
                     }`}>
                       {updateMessage}
                     </div>

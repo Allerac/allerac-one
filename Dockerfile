@@ -16,6 +16,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Build info (commit hash and date baked into the image)
+ARG COMMIT_HASH=unknown
+ARG BUILD_DATE=unknown
+RUN printf '{"commit":"%s","date":"%s"}' "$COMMIT_HASH" "$BUILD_DATE" > /app/build-info.json
+
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.
@@ -47,6 +52,7 @@ COPY --from=builder /app/src/public ./public
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/build-info.json ./build-info.json
 
 # Set the correct permission for prerender cache
 RUN mkdir -p .next

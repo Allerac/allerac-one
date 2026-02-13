@@ -1,239 +1,160 @@
 'use server';
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
-
-const execAsync = promisify(exec);
 
 const GITHUB_REPO = 'Allerac/allerac-one';
 const GITHUB_API = 'https://api.github.com';
 
-export interface ReleaseInfo {
-  tag_name: string;
-  name: string;
-  body: string;
-  published_at: string;
-  html_url: string;
+export interface BuildInfo {
+  commit: string;
+  date: string;
+}
+
+export interface CommitInfo {
+  sha: string;
+  shortSha: string;
+  message: string;
+  date: string;
+  author: string;
+  url: string;
 }
 
 export interface UpdateStatus {
-  currentVersion: string;
-  latestVersion: string | null;
-  latestRelease: ReleaseInfo | null;
+  currentCommit: string;
+  currentDate: string;
+  latestCommit: string | null;
+  latestDate: string | null;
   updateAvailable: boolean;
+  newCommits: CommitInfo[];
   error?: string;
 }
 
-export interface UpdateResult {
-  success: boolean;
-  message: string;
-  newVersion?: string;
-}
-
 /**
- * Get current version from package.json
+ * Read build info baked into the Docker image at build time
  */
-export async function getCurrentVersion(): Promise<string> {
+async function getBuildInfo(): Promise<BuildInfo> {
   try {
-    const packageJsonPath = path.join(process.cwd(), 'package.json');
-    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
-    return packageJson.version || '0.0.0';
-  } catch (error) {
-    console.error('Error reading package.json:', error);
-    return '0.0.0';
+    const buildInfoPath = path.join(process.cwd(), 'build-info.json');
+    const data = JSON.parse(await fs.readFile(buildInfoPath, 'utf-8'));
+    return {
+      commit: data.commit || 'unknown',
+      date: data.date || 'unknown',
+    };
+  } catch {
+    return { commit: 'unknown', date: 'unknown' };
   }
 }
 
 /**
- * Fetch latest release from GitHub
+ * Fetch latest commits from GitHub main branch
  */
-export async function getLatestRelease(): Promise<ReleaseInfo | null> {
+async function getLatestCommits(since?: string): Promise<CommitInfo[]> {
   try {
-    const response = await fetch(`${GITHUB_API}/repos/${GITHUB_REPO}/releases/latest`, {
+    let url = `${GITHUB_API}/repos/${GITHUB_REPO}/commits?sha=main&per_page=10`;
+    if (since && since !== 'unknown') {
+      url += `&since=${since}`;
+    }
+
+    const response = await fetch(url, {
       headers: {
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'Allerac-One-Updater',
       },
-      next: { revalidate: 300 }, // Cache for 5 minutes
+      cache: 'no-store',
     });
-
-    if (response.status === 404) {
-      // No releases yet
-      return null;
-    }
 
     if (!response.ok) {
       throw new Error(`GitHub API error: ${response.status}`);
     }
 
     const data = await response.json();
-    return {
-      tag_name: data.tag_name,
-      name: data.name,
-      body: data.body || '',
-      published_at: data.published_at,
-      html_url: data.html_url,
-    };
+    return data.map((item: any) => ({
+      sha: item.sha,
+      shortSha: item.sha.substring(0, 7),
+      message: item.commit.message.split('\n')[0],
+      date: item.commit.author.date,
+      author: item.commit.author.name,
+      url: item.html_url,
+    }));
   } catch (error: any) {
-    console.error('Error fetching latest release:', error);
-    return null;
+    console.error('Error fetching commits:', error);
+    return [];
   }
 }
 
 /**
- * Compare semantic versions
- * Returns: -1 if v1 < v2, 0 if equal, 1 if v1 > v2
- */
-function compareVersions(v1: string, v2: string): number {
-  // Remove 'v' prefix if present
-  const clean1 = v1.replace(/^v/, '');
-  const clean2 = v2.replace(/^v/, '');
-
-  const parts1 = clean1.split('.').map(Number);
-  const parts2 = clean2.split('.').map(Number);
-
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const p1 = parts1[i] || 0;
-    const p2 = parts2[i] || 0;
-    if (p1 < p2) return -1;
-    if (p1 > p2) return 1;
-  }
-  return 0;
-}
-
-/**
- * Check for updates
+ * Check for updates by comparing local build commit with remote HEAD
  */
 export async function checkForUpdates(): Promise<UpdateStatus> {
   try {
-    const [currentVersion, latestRelease] = await Promise.all([
-      getCurrentVersion(),
-      getLatestRelease(),
-    ]);
+    const buildInfo = await getBuildInfo();
+    const commits = await getLatestCommits();
 
-    if (!latestRelease) {
+    if (commits.length === 0) {
       return {
-        currentVersion,
-        latestVersion: null,
-        latestRelease: null,
+        currentCommit: buildInfo.commit,
+        currentDate: buildInfo.date,
+        latestCommit: null,
+        latestDate: null,
         updateAvailable: false,
+        newCommits: [],
       };
     }
 
-    const latestVersion = latestRelease.tag_name;
-    const updateAvailable = compareVersions(currentVersion, latestVersion) < 0;
+    const latestCommit = commits[0];
+
+    // If we don't know our commit, we can't compare
+    if (buildInfo.commit === 'unknown') {
+      return {
+        currentCommit: buildInfo.commit,
+        currentDate: buildInfo.date,
+        latestCommit: latestCommit.shortSha,
+        latestDate: latestCommit.date,
+        updateAvailable: false,
+        newCommits: [],
+        error: 'Build info not available. Rebuild with latest install script to enable updates.',
+      };
+    }
+
+    // Find new commits (those after our current commit)
+    const currentIndex = commits.findIndex(c => c.sha.startsWith(buildInfo.commit) || c.shortSha === buildInfo.commit);
+    const newCommits = currentIndex > 0 ? commits.slice(0, currentIndex) :
+                       currentIndex === -1 ? commits : [];
+
+    const updateAvailable = newCommits.length > 0;
 
     return {
-      currentVersion,
-      latestVersion,
-      latestRelease,
+      currentCommit: buildInfo.commit,
+      currentDate: buildInfo.date,
+      latestCommit: latestCommit.shortSha,
+      latestDate: latestCommit.date,
       updateAvailable,
+      newCommits,
     };
   } catch (error: any) {
+    const buildInfo = await getBuildInfo();
     return {
-      currentVersion: await getCurrentVersion(),
-      latestVersion: null,
-      latestRelease: null,
+      currentCommit: buildInfo.commit,
+      currentDate: buildInfo.date,
+      latestCommit: null,
+      latestDate: null,
       updateAvailable: false,
+      newCommits: [],
       error: error.message,
     };
   }
 }
 
 /**
- * Apply update - this creates an update script that will be run
- * The actual update requires restarting the containers
+ * Get current version from package.json (kept for backward compatibility)
  */
-export async function applyUpdate(targetVersion: string): Promise<UpdateResult> {
+export async function getCurrentVersion(): Promise<string> {
   try {
-    const installDir = process.cwd();
-
-    // Fetch latest tags
-    const { stderr: fetchErr } = await execAsync('git fetch --tags', { cwd: installDir });
-    if (fetchErr && !fetchErr.includes('From')) {
-      console.warn('Git fetch warning:', fetchErr);
-    }
-
-    // Check if tag exists
-    const { stdout: tags } = await execAsync('git tag -l', { cwd: installDir });
-    if (!tags.includes(targetVersion)) {
-      return {
-        success: false,
-        message: `Version ${targetVersion} not found. Available tags: ${tags.trim() || 'none'}`,
-      };
-    }
-
-    // Create update script
-    const updateScript = `#!/bin/bash
-# Allerac One Auto-Update Script
-# Generated at: ${new Date().toISOString()}
-# Target version: ${targetVersion}
-
-set -e
-
-cd "${installDir}"
-
-echo "Stopping services..."
-docker compose down
-
-echo "Checking out version ${targetVersion}..."
-git checkout ${targetVersion}
-
-echo "Rebuilding..."
-docker compose build
-
-echo "Starting services..."
-docker compose up -d
-
-echo "Update complete! Now running version ${targetVersion}"
-`;
-
-    const scriptPath = path.join(installDir, 'update.sh');
-    await fs.writeFile(scriptPath, updateScript, { mode: 0o755 });
-
-    return {
-      success: true,
-      message: `Update script created at ${scriptPath}. Run it to apply the update.`,
-      newVersion: targetVersion,
-    };
-  } catch (error: any) {
-    console.error('Error preparing update:', error);
-    return {
-      success: false,
-      message: error.message || 'Failed to prepare update',
-    };
-  }
-}
-
-/**
- * Get all available releases
- */
-export async function getAllReleases(): Promise<ReleaseInfo[]> {
-  try {
-    const response = await fetch(`${GITHUB_API}/repos/${GITHUB_REPO}/releases`, {
-      headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Allerac-One-Updater',
-      },
-      next: { revalidate: 300 },
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
-    return data.map((release: any) => ({
-      tag_name: release.tag_name,
-      name: release.name,
-      body: release.body || '',
-      published_at: release.published_at,
-      html_url: release.html_url,
-    }));
-  } catch (error) {
-    console.error('Error fetching releases:', error);
-    return [];
+    const packageJsonPath = path.join(process.cwd(), 'package.json');
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+    return packageJson.version || '0.0.0';
+  } catch {
+    return '0.0.0';
   }
 }

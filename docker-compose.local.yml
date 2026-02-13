@@ -59,6 +59,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        COMMIT_HASH: ${COMMIT_HASH:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     container_name: allerac-app
     restart: unless-stopped
     environment:
