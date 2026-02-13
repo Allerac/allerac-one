@@ -34,6 +34,7 @@ INSTALL_DIR="$HOME/allerac-one"
 DEFAULT_MODEL="llama3.2"
 INSTALL_OLLAMA=true
 INSTALL_MONITORING=false
+USE_SUDO=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -125,6 +126,10 @@ install_docker_debian() {
     # Add current user to docker group
     sudo usermod -aG docker "$USER"
 
+    # Start and enable Docker service
+    sudo systemctl start docker
+    sudo systemctl enable docker
+
     log_success "Docker installed successfully"
 }
 
@@ -168,11 +173,33 @@ install_docker() {
 
 # Check Docker is running
 check_docker_running() {
-    if ! docker info >/dev/null 2>&1; then
-        log_error "Docker is not running. Please start Docker and try again."
-        exit 1
+    # Try without sudo first
+    if docker info >/dev/null 2>&1; then
+        log_success "Docker is running"
+        USE_SUDO=""
+        return
     fi
-    log_success "Docker is running"
+
+    # Try with sudo (for fresh installs before re-login)
+    if sudo docker info >/dev/null 2>&1; then
+        log_warn "Docker requires sudo (re-login to use without sudo)"
+        USE_SUDO="sudo"
+        return
+    fi
+
+    # Docker not running, try to start it
+    log_info "Starting Docker service..."
+    sudo systemctl start docker
+    sleep 3
+
+    if sudo docker info >/dev/null 2>&1; then
+        log_success "Docker started successfully"
+        USE_SUDO="sudo"
+        return
+    fi
+
+    log_error "Docker is not running. Please start Docker and try again."
+    exit 1
 }
 
 # Clone or update repository
@@ -216,7 +243,7 @@ setup_environment() {
 start_services() {
     cd "$INSTALL_DIR"
 
-    log_info "Building and starting services..."
+    log_info "Building and starting services (this may take a few minutes)..."
 
     # Build the profiles string
     PROFILES=""
@@ -228,13 +255,13 @@ start_services() {
     fi
 
     # Pull images first
-    docker compose -f docker-compose.local.yml $PROFILES pull
+    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES pull
 
     # Build the app
-    docker compose -f docker-compose.local.yml $PROFILES build
+    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES build
 
     # Start services
-    docker compose -f docker-compose.local.yml $PROFILES up -d
+    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES up -d
 
     log_success "Services started"
 }
@@ -244,7 +271,7 @@ wait_for_services() {
     log_info "Waiting for services to be ready..."
 
     # Wait for the app
-    for i in {1..60}; do
+    for i in {1..90}; do
         if curl -s http://localhost:8080 >/dev/null 2>&1; then
             log_success "Application is ready!"
             return
@@ -253,11 +280,17 @@ wait_for_services() {
         sleep 2
     done
 
-    log_warn "Services may still be starting. Check with: docker compose -f docker-compose.local.yml logs"
+    log_warn "Services may still be starting. Check with: $USE_SUDO docker compose -f docker-compose.local.yml logs"
 }
 
 # Print success message
 print_success() {
+    # Determine docker command prefix
+    DOCKER_CMD="docker"
+    if [ -n "$USE_SUDO" ]; then
+        DOCKER_CMD="sudo docker"
+    fi
+
     echo ""
     echo -e "${GREEN}============================================${NC}"
     echo -e "${GREEN}   Allerac One - Installation Complete!    ${NC}"
@@ -275,14 +308,18 @@ print_success() {
     echo ""
     echo -e "Useful commands:"
     echo -e "  ${YELLOW}cd $INSTALL_DIR${NC}"
-    echo -e "  ${YELLOW}docker compose -f docker-compose.local.yml logs -f${NC}  # View logs"
-    echo -e "  ${YELLOW}docker compose -f docker-compose.local.yml down${NC}     # Stop services"
-    echo -e "  ${YELLOW}docker compose -f docker-compose.local.yml up -d${NC}    # Start services"
+    echo -e "  ${YELLOW}$DOCKER_CMD compose -f docker-compose.local.yml logs -f${NC}  # View logs"
+    echo -e "  ${YELLOW}$DOCKER_CMD compose -f docker-compose.local.yml down${NC}     # Stop services"
+    echo -e "  ${YELLOW}$DOCKER_CMD compose -f docker-compose.local.yml up -d${NC}    # Start services"
     echo ""
     if [ "$INSTALL_OLLAMA" = true ]; then
         echo -e "To download additional AI models:"
-        echo -e "  ${YELLOW}docker exec -it allerac-ollama ollama pull mistral${NC}"
-        echo -e "  ${YELLOW}docker exec -it allerac-ollama ollama pull llama3.1${NC}"
+        echo -e "  ${YELLOW}$DOCKER_CMD exec -it allerac-ollama ollama pull mistral${NC}"
+        echo -e "  ${YELLOW}$DOCKER_CMD exec -it allerac-ollama ollama pull llama3.1${NC}"
+        echo ""
+    fi
+    if [ -n "$USE_SUDO" ]; then
+        echo -e "${YELLOW}Note: Log out and back in to use docker without sudo${NC}"
         echo ""
     fi
     echo -e "Documentation: ${BLUE}https://github.com/Allerac/allerac-one/blob/main/docs/local-setup.md${NC}"
