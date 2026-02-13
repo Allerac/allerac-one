@@ -348,44 +348,49 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4"
       onClick={handleBackdropClick}
     >
       <div
-        className={`backdrop-blur-md rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden ${
+        className={`backdrop-blur-md shadow-xl w-full sm:max-w-4xl sm:rounded-lg rounded-t-2xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden ${
           isDarkMode
-            ? 'bg-gray-800/95 border border-gray-700'
-            : 'bg-white/95 border border-gray-200'
+            ? 'bg-gray-800/95 border-t sm:border border-gray-700'
+            : 'bg-white/95 border-t sm:border border-gray-200'
         }`}
       >
+        {/* Mobile drag indicator */}
+        <div className="flex justify-center pt-2 sm:hidden">
+          <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`} />
+        </div>
+
         {/* Header */}
         <div
-          className={`p-4 border-b flex items-center justify-between ${
+          className={`px-4 py-3 sm:p-4 border-b flex items-center justify-between ${
             isDarkMode ? 'border-gray-700' : 'border-gray-200'
           }`}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
-            <div>
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+            <div className="min-w-0">
+              <h2 className={`text-base sm:text-lg font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
                 {t('title')}
               </h2>
               {data && (
-                <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {t('lastUpdated')}: {new Date(data.timestamp).toLocaleTimeString()}
+                <p className={`text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {new Date(data.timestamp).toLocaleTimeString()}
                 </p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <button
               onClick={loadDashboard}
               disabled={isLoading}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                 isDarkMode
                   ? 'hover:bg-gray-700 text-gray-400'
                   : 'hover:bg-gray-100 text-gray-500'
@@ -397,7 +402,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
             </button>
             <button
               onClick={onClose}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                 isDarkMode
                   ? 'hover:bg-gray-700 text-gray-400'
                   : 'hover:bg-gray-100 text-gray-500'
@@ -411,7 +416,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
         </div>
 
         {/* Content */}
-        <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+        <div className="p-3 sm:p-4 overflow-y-auto max-h-[calc(95vh-60px)] sm:max-h-[calc(90vh-80px)]">
           {isLoading && !data ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
@@ -472,8 +477,8 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
 
                 {/* Version & Updates */}
                 <div className={`mt-4 pt-4 border-t ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
                       <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
                         {t('version')}: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                           v{updateStatus?.currentVersion || '0.0.0'}
@@ -489,7 +494,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                       <button
                         onClick={checkUpdates}
                         disabled={isCheckingUpdates}
-                        className={`px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1 ${
+                        className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-1 ${
                           isDarkMode
                             ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
                             : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
@@ -508,7 +513,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                         <button
                           onClick={handleUpdate}
                           disabled={isUpdating}
-                          className="px-3 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center gap-1"
+                          className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center justify-center gap-1"
                         >
                           {isUpdating && (
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
@@ -546,13 +551,13 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                   </span>
                 </h3>
                 {data.database.connected ? (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-4">
                     {Object.entries(data.database.tables).map(([table, count]) => (
-                      <div key={table} className={`text-center p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                        <div className={`text-2xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                      <div key={table} className={`text-center p-2 sm:p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                        <div className={`text-lg sm:text-2xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
                           {count.toLocaleString()}
                         </div>
-                        <div className={`text-xs capitalize ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <div className={`text-[10px] sm:text-xs capitalize truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                           {table}
                         </div>
                       </div>
@@ -572,7 +577,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
 
               {/* Backups */}
               <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                   <h3 className={`text-sm font-medium flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
@@ -593,7 +598,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isImportingBackup}
-                      className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2 ${
+                      className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 ${
                         isDarkMode
                           ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
                           : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
@@ -605,17 +610,18 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
-                      {isImportingBackup ? tBackup('importing') : tBackup('import')}
+                      <span className="hidden sm:inline">{isImportingBackup ? tBackup('importing') : tBackup('import')}</span>
                     </button>
                     <button
                       onClick={handleCreateBackup}
                       disabled={isCreatingBackup}
-                      className="px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center gap-2"
+                      className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
                     >
                       {isCreatingBackup && (
                         <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
                       )}
-                      {isCreatingBackup ? tBackup('creating') : tBackup('create')}
+                      <span className="hidden sm:inline">{isCreatingBackup ? tBackup('creating') : tBackup('create')}</span>
+                      <span className="sm:hidden">+</span>
                     </button>
                   </div>
                 </div>
@@ -639,55 +645,57 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                     {backups.map((backup) => (
                       <div
                         key={backup.filename}
-                        className={`p-3 rounded-lg flex items-center justify-between ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}
+                        className={`p-2.5 sm:p-3 rounded-lg ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}
                       >
-                        <div className="flex-1 min-w-0">
-                          <div className={`text-sm font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                            {backup.filename}
+                        <div className="flex items-start sm:items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                              {backup.filename}
+                            </div>
+                            <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              {backup.sizeFormatted} • {backup.createdAtFormatted}
+                            </div>
                           </div>
-                          <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {backup.sizeFormatted} • {backup.createdAtFormatted}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 ml-2">
-                          <button
-                            onClick={() => handleDownloadBackup(backup.filename)}
-                            className={`p-1.5 rounded transition-colors ${
-                              isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
-                            }`}
-                            title={tBackup('download')}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleRestoreBackup(backup.filename)}
-                            disabled={isRestoringBackup === backup.filename}
-                            className={`p-1.5 rounded transition-colors ${
-                              isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
-                            }`}
-                            title={tBackup('restore')}
-                          >
-                            {isRestoringBackup === backup.filename ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                            ) : (
+                          <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => handleDownloadBackup(backup.filename)}
+                              className={`p-1.5 sm:p-2 rounded transition-colors ${
+                                isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
+                              }`}
+                              title={tBackup('download')}
+                            >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                               </svg>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBackup(backup.filename)}
-                            className={`p-1.5 rounded transition-colors ${
-                              isDarkMode ? 'hover:bg-red-900/50 text-red-400' : 'hover:bg-red-100 text-red-500'
-                            }`}
-                            title={tBackup('delete')}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                            </button>
+                            <button
+                              onClick={() => handleRestoreBackup(backup.filename)}
+                              disabled={isRestoringBackup === backup.filename}
+                              className={`p-1.5 sm:p-2 rounded transition-colors ${
+                                isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
+                              }`}
+                              title={tBackup('restore')}
+                            >
+                              {isRestoringBackup === backup.filename ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBackup(backup.filename)}
+                              className={`p-1.5 sm:p-2 rounded transition-colors ${
+                                isDarkMode ? 'hover:bg-red-900/50 text-red-400' : 'hover:bg-red-100 text-red-500'
+                              }`}
+                              title={tBackup('delete')}
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
