@@ -342,9 +342,10 @@ export class LLMService {
    * Determine error type from status code and message
    */
   private getErrorType(statusCode: number, message?: string): string {
-    if (message?.includes('Rate limit')) return 'RateLimitError';
-    if (message?.includes('authentication')) return 'AuthenticationError';
-    if (message?.includes('quota')) return 'QuotaError';
+    const msg = typeof message === 'string' ? message : '';
+    if (msg.includes('Rate limit')) return 'RateLimitError';
+    if (msg.includes('authentication')) return 'AuthenticationError';
+    if (msg.includes('quota')) return 'QuotaError';
 
     switch (statusCode) {
       case 400: return 'BadRequestError';
