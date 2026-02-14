@@ -66,10 +66,10 @@ export const MODELS: Model[] = [
   //   requiresToken: true
   // },
   {
-    id: 'llama3.2',
-    name: 'Llama 3.2 3B (Local)',
-    icon: '🦙',
-    description: 'Compact local model, good for general use',
+    id: 'qwen2.5:3b',
+    name: 'Qwen 2.5 3B (Local)',
+    icon: '🐼',
+    description: 'Fast & efficient local model (4GB RAM)',
     provider: 'ollama',
     baseUrl: '/api/ollama',
     requiresToken: false
