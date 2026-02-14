@@ -158,6 +158,35 @@ export default function AdminChat() {
     return () => clearInterval(interval);
   }, []);
 
+  // Polling for new messages (when conversation is active)
+  useEffect(() => {
+    if (!currentConversationId || isSending) return;
+
+    const pollMessages = async () => {
+      try {
+        const data = await chatActions.loadMessages(currentConversationId);
+        const loadedMessages = data?.map((msg: any) => ({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+        })) || [];
+
+        // Only update if there are new messages
+        if (loadedMessages.length > messages.length) {
+          setMessages(loadedMessages);
+          // Scroll to bottom when new messages arrive
+          setTimeout(() => scrollToBottom(), 100);
+        }
+      } catch (error) {
+        console.error('[Polling] Failed to fetch messages:', error);
+      }
+    };
+
+    // Poll every 3 seconds
+    const interval = setInterval(pollMessages, 3000);
+    return () => clearInterval(interval);
+  }, [currentConversationId, messages.length, isSending]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
