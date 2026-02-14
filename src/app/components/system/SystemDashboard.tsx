@@ -551,10 +551,12 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
                     </div>
                   )}
                   {updateMessage && (
-                    <div className={`mt-2 p-2 rounded text-xs font-mono break-all ${
-                      isDarkMode ? 'bg-gray-900/50 text-green-300' : 'bg-gray-100 text-gray-700'
+                    <div className={`mt-2 p-2 rounded text-xs break-all ${
+                      updateMessage.type === 'success'
+                        ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-700'
+                        : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-100 text-red-700'
                     }`}>
-                      {updateMessage}
+                      {updateMessage.text}
                     </div>
                   )}
                 </div>
