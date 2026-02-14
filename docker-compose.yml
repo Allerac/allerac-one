@@ -115,6 +115,31 @@ services:
     depends_on:
       - prometheus
 
+  # Telegram Bot (Optional)
+  # Usage: docker compose --profile telegram up -d
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram
+    container_name: allerac-telegram
+    restart: unless-stopped
+    profiles:
+      - telegram
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
+      - TELEGRAM_DEFAULT_USER=${TELEGRAM_DEFAULT_USER:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
   # Cloudflare Tunnel - Only for production deployment
   # Usage: docker compose --profile production up -d
   tunnel:

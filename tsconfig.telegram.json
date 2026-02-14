@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": false,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "baseUrl": "."
+  },
+  "include": [
+    "src/telegram-bot.ts",
+    "src/app/services/**/*.ts",
+    "src/app/clients/**/*.ts",
+    "src/app/tools/**/*.ts",
+    "src/app/types.ts",
+    "src/app/constants.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/app/components",
+    "src/app/api",
+    "src/app/actions"
+  ]
+}
