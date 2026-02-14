@@ -12,7 +12,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -27,6 +27,7 @@ export class UserSettingsService {
         github_token: row.github_token ? safeDecrypt(row.github_token) : null,
         tavily_api_key: row.tavily_api_key ? safeDecrypt(row.tavily_api_key) : null,
         telegram_bot_token: row.telegram_bot_token ? safeDecrypt(row.telegram_bot_token) : null,
+        system_message: row.system_message || null,
       };
     } catch (error) {
       console.error('Error loading user settings:', error);
