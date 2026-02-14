@@ -55,7 +55,7 @@ export default function ChatMessages({
                   : 'text-black'
               }`}>
                 {message.role === 'assistant' ? (
-                  <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'prose-headings:text-black prose-p:text-black prose-li:text-black prose-strong:text-black prose-code:text-black prose-pre:bg-gray-100 prose-pre:text-black'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium`}>
+                  <div className={`text-sm leading-loose prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'prose-headings:text-black prose-p:text-black prose-li:text-black prose-strong:text-black prose-code:text-black prose-pre:bg-gray-100 prose-pre:text-black'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-3 prose-headings:my-4`}>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -67,6 +67,7 @@ export default function ChatMessages({
                             className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
                           />
                         ),
+                        hr: () => null,
                       }}
                     >
                       {message.content}

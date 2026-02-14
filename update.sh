@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo -e "${BLUE}╔════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   Allerac One Update Script       ║${NC}"
+echo -e "${BLUE}║   Allerac One Update Script        ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════╝${NC}"
 echo ""
 
