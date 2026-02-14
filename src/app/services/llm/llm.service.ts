@@ -188,7 +188,9 @@ export class LLMService {
       if (!response.ok) {
         success = false;
         const errorData = await response.json();
-        errorMessage = errorData.error || response.statusText;
+        errorMessage = typeof errorData.error === 'string' 
+          ? errorData.error 
+          : errorData.error?.message || errorData.message || response.statusText;
 
         await this.logMetrics({
           model: request.model,
