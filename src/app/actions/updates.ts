@@ -160,47 +160,25 @@ export async function getCurrentVersion(): Promise<string> {
 }
 
 /**
- * Apply update by running the update.sh script
- * This will pull latest changes, rebuild, and restart services
+ * Apply update by creating a flag file that triggers the host to run update.sh
+ * A cron job or systemd service on the host should monitor /app/backups/.update-requested
  */
 export async function applyUpdate(): Promise<{ success: boolean; message: string }> {
   'use server';
   
   try {
-    const { execFile } = await import('child_process');
-    const { promisify } = await import('util');
-    const execFileAsync = promisify(execFile);
-    
-    const projectRoot = path.join(process.cwd(), '..');
-    const updateScript = path.join(projectRoot, 'update.sh');
-    
-    // Check if update.sh exists
-    try {
-      await fs.access(updateScript);
-    } catch {
-      return {
-        success: false,
-        message: 'Update script not found. Please run: cd ~/allerac-one && ./update.sh'
-      };
-    }
-    
-    // Execute update script in background (non-blocking)
-    // We use nohup to keep it running even after this process terminates
-    const { spawn } = await import('child_process');
-    spawn('nohup', [updateScript], {
-      cwd: projectRoot,
-      detached: true,
-      stdio: 'ignore'
-    }).unref();
+    // Create a flag file that signals the host to run update
+    const flagFile = '/app/backups/.update-requested';
+    await fs.writeFile(flagFile, new Date().toISOString());
     
     return {
       success: true,
-      message: 'Update started. The application will restart in a few moments.'
+      message: 'Update requested. Run on host: cd ~/allerac-one && ./update.sh'
     };
   } catch (error: any) {
     return {
       success: false,
-      message: error.message || 'Failed to apply update'
+      message: error.message || 'Failed to request update'
     };
   }
 }
