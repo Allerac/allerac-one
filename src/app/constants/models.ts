@@ -10,6 +10,7 @@ export const GITHUB_MODELS = [
 
 // Available Ollama Models (that we support)
 export const SUPPORTED_OLLAMA_MODELS = [
+  { id: 'qwen2.5:3b', name: 'Qwen 2.5 3B', icon: '🐼', description: 'Fast & efficient (4GB RAM)', size: '2 GB' },
   { id: 'qwen2.5:7b', name: 'Qwen 2.5 7B', icon: '🐼', description: 'Best quality (8GB RAM)', size: '4.7 GB' },
   { id: 'deepseek-r1:1.5b', name: 'DeepSeek R1 1.5B', icon: '🧠', description: 'Fast & light (CPU-friendly)', size: '1.1 GB' },
 ];
