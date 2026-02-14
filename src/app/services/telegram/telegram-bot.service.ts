@@ -393,15 +393,16 @@ export class AlleracTelegramBot {
 
           // Save to conversation_summaries table
           await pool.query(
-            `INSERT INTO conversation_summaries (conversation_id, user_id, summary, importance_score, key_topics, emotion)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
+            `INSERT INTO conversation_summaries (conversation_id, user_id, summary, importance_score, key_topics, emotion, message_count)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
               mapping.current_conversation_id,
               mapping.user_id,
               memoryContent,
               state.importance,
               ['user_preference', 'correction'],
-              emotion
+              emotion,
+              0 // message_count for manual corrections
             ]
           );
 
