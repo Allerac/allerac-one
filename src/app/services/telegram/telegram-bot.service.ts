@@ -144,6 +144,7 @@ export class AlleracTelegramBot {
         `/new - Start a new conversation\n` +
         `/model - Switch AI model\n` +
         `/memory - Show recent memories\n` +
+        `/save - Save conversation to memory\n` +
         `/help - Show this message`,
         { parse_mode: 'Markdown' }
       );
@@ -245,6 +246,49 @@ export class AlleracTelegramBot {
       }
     });
 
+    // /save command - Save current conversation to memory
+    this.bot.onText(/\/save/, async (msg) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from?.id;
+      if (!userId || !this.isAllowed(userId)) return;
+
+      const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
+
+      if (!mapping.current_conversation_id) {
+        await this.bot.sendMessage(chatId, 'No active conversation to save. Start chatting first!');
+        return;
+      }
+
+      try {
+        await this.bot.sendMessage(chatId, '🧠 Saving conversation to memory...');
+
+        const config = await this.getChatConfig(mapping.user_id, userId);
+        
+        // Generate and save summary
+        const summary = await maybeSummarizeConversation(
+          mapping.current_conversation_id,
+          mapping.user_id,
+          config.githubToken
+        );
+
+        if (summary) {
+          const topics = summary.key_topics?.join(', ') || 'general';
+          await this.bot.sendMessage(chatId,
+            `✅ *Memory Saved!*\n\n` +
+            `*Topics:* ${topics}\n` +
+            `*Importance:* ${summary.importance_score}/10\n\n` +
+            `*Summary:*\n${summary.summary}`,
+            { parse_mode: 'Markdown' }
+          );
+        } else {
+          await this.bot.sendMessage(chatId, '⚠️ Conversation too short to create a meaningful memory. Chat more and try again!');
+        }
+      } catch (error) {
+        console.error('[Telegram] Error saving memory:', error);
+        await this.bot.sendMessage(chatId, '❌ Failed to save memory. Please try again later.');
+      }
+    });
+
     // /help command
     this.bot.onText(/\/help/, async (msg) => {
       const chatId = msg.chat.id;
@@ -254,6 +298,7 @@ export class AlleracTelegramBot {
         `/model - Switch AI model\n` +
         `/model model-id - Switch to specific model\n` +
         `/memory - Show recent memories\n` +
+        `/save - Save current conversation to memory\n` +
         `/help - Show this message\n\n` +
         `Just send any text message to chat with your AI agent.`,
         { parse_mode: 'Markdown' }
