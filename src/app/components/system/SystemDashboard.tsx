@@ -127,7 +127,8 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
   const [error, setError] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
-  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Backup state
   const [backups, setBackups] = useState<BackupInfo[]>([]);
@@ -186,9 +187,34 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
   };
 
   const handleUpdate = async () => {
-    // Updates are applied from the host machine, not from inside the container
-    // Show the user the command to run
-    setUpdateMessage('Run on your server: cd ~/allerac-one && git pull && COMMIT_HASH=$(git rev-parse --short HEAD) BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") docker compose -f docker-compose.local.yml build && docker compose -f docker-compose.local.yml up -d');
+    setIsUpdating(true);
+    setUpdateMessage(null);
+    
+    try {
+      const result = await updateActions.applyUpdate();
+      if (result.success) {
+        setUpdateMessage({ 
+          type: 'success', 
+          text: result.message 
+        });
+        // Refresh status after a delay
+        setTimeout(() => {
+          checkUpdates();
+        }, 10000); // Check again after 10 seconds
+      } else {
+        setUpdateMessage({ 
+          type: 'error', 
+          text: result.message 
+        });
+      }
+    } catch (err: any) {
+      setUpdateMessage({ 
+        type: 'error', 
+        text: err.message || 'Failed to apply update' 
+      });
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const loadBackups = async () => {

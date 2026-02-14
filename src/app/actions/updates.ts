@@ -158,3 +158,49 @@ export async function getCurrentVersion(): Promise<string> {
     return '0.0.0';
   }
 }
+
+/**
+ * Apply update by running the update.sh script
+ * This will pull latest changes, rebuild, and restart services
+ */
+export async function applyUpdate(): Promise<{ success: boolean; message: string }> {
+  'use server';
+  
+  try {
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+    
+    const projectRoot = path.join(process.cwd(), '..');
+    const updateScript = path.join(projectRoot, 'update.sh');
+    
+    // Check if update.sh exists
+    try {
+      await fs.access(updateScript);
+    } catch {
+      return {
+        success: false,
+        message: 'Update script not found. Please run: cd ~/allerac-one && ./update.sh'
+      };
+    }
+    
+    // Execute update script in background (non-blocking)
+    // We use nohup to keep it running even after this process terminates
+    const { spawn } = await import('child_process');
+    spawn('nohup', [updateScript], {
+      cwd: projectRoot,
+      detached: true,
+      stdio: 'ignore'
+    }).unref();
+    
+    return {
+      success: true,
+      message: 'Update started. The application will restart in a few moments.'
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || 'Failed to apply update'
+    };
+  }
+}
