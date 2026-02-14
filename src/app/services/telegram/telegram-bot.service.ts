@@ -164,7 +164,6 @@ export class AlleracTelegramBot {
       }
 
       // Clear current conversation
-      await this.updateConversationId(chatId, '');
       await pool.query(
         'UPDATE telegram_chat_mapping SET current_conversation_id = NULL WHERE telegram_chat_id = $1',
         [chatId]
