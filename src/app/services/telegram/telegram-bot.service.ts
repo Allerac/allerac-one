@@ -90,7 +90,7 @@ export class AlleracTelegramBot {
       selectedModel: activeModel.id,
       modelProvider: activeModel.provider,
       modelBaseUrl: baseUrl,
-      systemMessage: 'You are a helpful AI assistant communicating via Telegram. Keep responses concise and well-formatted. Use markdown when helpful.',
+      systemMessage: settings?.system_message || 'You are a helpful AI assistant communicating via Telegram. Keep responses concise and well-formatted. Use markdown when helpful.',
     };
   }
 
