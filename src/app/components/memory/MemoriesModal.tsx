@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import ConversationMemoriesView from '../memory/ConversationMemoriesView';
 
 interface MemoriesModalProps {
@@ -17,6 +18,17 @@ export default function MemoriesModal({
   userId,
   githubToken,
 }: MemoriesModalProps) {
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !userId || !githubToken) return null;
 
   return (

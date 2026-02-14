@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 interface TokenConfigurationProps {
   isOpen: boolean;
   onClose: () => void;
@@ -31,6 +33,17 @@ export default function TokenConfiguration({
   setTelegramBotTokenInput,
   onSave
 }: TokenConfigurationProps) {
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -121,14 +134,12 @@ export default function TokenConfiguration({
             >
               Save Keys
             </button>
-            {(githubToken || telegramBotToken) && (
-              <button
-                onClick={onClose}
-                className={`flex-1 px-4 py-2 rounded-md transition-colors ${isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'}`}
-              >
-                Cancel
-              </button>
-            )}
+            <button
+              onClick={onClose}
+              className={`flex-1 px-4 py-2 rounded-md transition-colors ${isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'}`}
+            >
+              {githubToken || telegramBotToken ? 'Cancel' : 'Skip for Now'}
+            </button>
           </div>
         </div>
       </div>

@@ -28,6 +28,19 @@ export default function MemorySettingsModal({
     }
   }, [isOpen, systemMessage, setSystemMessageEdit]);
 
+  // ESC key handler
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        setSystemMessageEdit(systemMessage);
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose, systemMessage, setSystemMessageEdit]);
+
   if (!isOpen) return null;
 
   const handleSave = async () => {

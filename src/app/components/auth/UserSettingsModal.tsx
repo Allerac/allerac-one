@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import LanguageSelector from '@/app/components/LanguageSelector';
 
@@ -22,6 +23,17 @@ export default function UserSettingsModal({
 }: UserSettingsModalProps) {
   const t = useTranslations('userSettings');
   const locale = useLocale();
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 

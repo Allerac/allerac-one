@@ -20,6 +20,17 @@ export default function DocumentsModal({
 }: DocumentsModalProps) {
   const t = useTranslations('documents');
 
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !userId) return null;
 
   return (

@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 interface MemorySaveModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -21,6 +23,17 @@ export default function MemorySaveModal({
   result,
   isDarkMode 
 }: MemorySaveModalProps) {
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !loading) {
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose, loading]);
+
   if (!isOpen) return null;
 
   return (
