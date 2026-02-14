@@ -188,9 +188,10 @@ export class LLMService {
       if (!response.ok) {
         success = false;
         const errorData = await response.json();
+        console.error('[LLM] Error response:', JSON.stringify(errorData, null, 2));
         errorMessage = typeof errorData.error === 'string' 
           ? errorData.error 
-          : errorData.error?.message || errorData.message || response.statusText;
+          : errorData.error?.message || errorData.message || JSON.stringify(errorData) || response.statusText;
 
         await this.logMetrics({
           model: request.model,
