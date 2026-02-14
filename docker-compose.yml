@@ -132,6 +132,8 @@ services:
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
       - TELEGRAM_DEFAULT_USER=${TELEGRAM_DEFAULT_USER:-}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       migrations:
         condition: service_completed_successfully
