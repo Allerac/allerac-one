@@ -382,7 +382,7 @@ export class AlleracTelegramBot {
         try {
           // Get last AI message
           const messages = await pool.query(
-            `SELECT content FROM messages 
+            `SELECT content FROM chat_messages 
              WHERE conversation_id = $1 AND role = 'assistant' 
              ORDER BY created_at DESC LIMIT 1`,
             [mapping.current_conversation_id]
