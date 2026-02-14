@@ -9,8 +9,8 @@ export async function loadUserSettings(userId: string) {
     return await userSettingsService.loadUserSettings(userId);
 }
 
-export async function saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string) {
-    return await userSettingsService.saveUserSettings(userId, githubToken, tavilyApiKey);
+export async function saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string) {
+    return await userSettingsService.saveUserSettings(userId, githubToken, tavilyApiKey, telegramBotToken);
 }
 
 export async function getLanguage(): Promise<string> {

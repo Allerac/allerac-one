@@ -15,6 +15,7 @@
 # Options:
 #   --no-ollama     Skip Ollama installation (use external LLM)
 #   --no-monitoring Skip monitoring stack (Grafana/Prometheus)
+#   --with-telegram Enable Telegram bot integration
 #   --model <name>  Specify LLM model (default: llama3.2)
 #   --help          Show this help message
 #
@@ -34,6 +35,7 @@ INSTALL_DIR="$HOME/allerac-one"
 DEFAULT_MODEL="llama3.2"
 INSTALL_OLLAMA=true
 INSTALL_MONITORING=false
+INSTALL_TELEGRAM=false
 USE_SUDO=""
 
 # Parse arguments
@@ -49,6 +51,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --with-monitoring)
             INSTALL_MONITORING=true
+            shift
+            ;;
+        --with-telegram)
+            INSTALL_TELEGRAM=true
             shift
             ;;
         --model)
@@ -253,6 +259,9 @@ start_services() {
     if [ "$INSTALL_MONITORING" = true ]; then
         PROFILES="$PROFILES --profile monitoring"
     fi
+    if [ "$INSTALL_TELEGRAM" = true ]; then
+        PROFILES="$PROFILES --profile telegram"
+    fi
 
     # Pull images first
     $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES pull
@@ -303,6 +312,11 @@ print_success() {
     echo -e "Access your private AI agent at:"
     echo -e "  ${BLUE}http://localhost:8080${NC}"
     echo ""
+    if [ "$INSTALL_TELEGRAM" = true ]; then
+        echo -e "Telegram bot: ${GREEN}Running${NC}"
+        echo -e "  Configure TELEGRAM_BOT_TOKEN in .env"
+        echo ""
+    fi
     if [ "$INSTALL_MONITORING" = true ]; then
         echo -e "Monitoring dashboard:"
         echo -e "  ${BLUE}http://localhost:3001${NC} (admin/admin)"

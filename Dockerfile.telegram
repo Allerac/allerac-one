@@ -1,0 +1,20 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# Copy source files needed by the bot
+COPY tsconfig.json ./
+COPY src/telegram-bot.ts ./src/
+COPY src/app/clients/ ./src/app/clients/
+COPY src/app/actions/ ./src/app/actions/
+COPY src/app/services/ ./src/app/services/
+COPY src/app/tools/ ./src/app/tools/
+COPY src/app/types.ts ./src/app/types.ts
+COPY src/app/constants.ts ./src/app/constants.ts
+COPY src/app/constants/ ./src/app/constants/
+
+CMD ["npx", "tsx", "src/telegram-bot.ts"]

@@ -6,10 +6,13 @@ interface TokenConfigurationProps {
   isDarkMode: boolean;
   githubToken: string;
   tavilyApiKey: string;
+  telegramBotToken: string;
   tokenInput: string;
   setTokenInput: (value: string) => void;
   tavilyKeyInput: string;
   setTavilyKeyInput: (value: string) => void;
+  telegramBotTokenInput: string;
+  setTelegramBotTokenInput: (value: string) => void;
   onSave: () => void;
 }
 
@@ -19,10 +22,13 @@ export default function TokenConfiguration({
   isDarkMode,
   githubToken,
   tavilyApiKey,
+  telegramBotToken,
   tokenInput,
   setTokenInput,
   tavilyKeyInput,
   setTavilyKeyInput,
+  telegramBotTokenInput,
+  setTelegramBotTokenInput,
   onSave
 }: TokenConfigurationProps) {
   if (!isOpen) return null;
@@ -81,16 +87,41 @@ export default function TokenConfiguration({
               {' '}to enable web search capabilities
             </p>
           </div>
-          
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Telegram Bot Token (Optional - for Telegram access)
+            </label>
+            <input
+              type="password"
+              value={telegramBotTokenInput}
+              onChange={(e) => setTelegramBotTokenInput(e.target.value)}
+              placeholder={telegramBotToken ? '••••••••' : 'Enter bot token...'}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+            />
+            <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Create a bot via{' '}
+              <a
+                href="https://t.me/BotFather"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                @BotFather
+              </a>
+              {' '}on Telegram to get your token
+            </p>
+          </div>
+
           <div className="flex gap-3">
             <button
               onClick={onSave}
-              disabled={!tokenInput.trim() && !tavilyKeyInput.trim()}
+              disabled={!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim()}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Save Keys
             </button>
-            {githubToken && (
+            {(githubToken || telegramBotToken) && (
               <button
                 onClick={onClose}
                 className={`flex-1 px-4 py-2 rounded-md transition-colors ${isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'}`}

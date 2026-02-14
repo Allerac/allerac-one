@@ -73,9 +73,11 @@ export default function AdminChat() {
   const [isSending, setIsSending] = useState(false);
   const [githubToken, setGithubToken] = useState('');
   const [tavilyApiKey, setTavilyApiKey] = useState('');
+  const [telegramBotToken, setTelegramBotToken] = useState('');
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
+  const [telegramBotTokenInput, setTelegramBotTokenInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
@@ -212,6 +214,7 @@ export default function AdminChat() {
       if (settings) {
         if (!savedToken && settings.github_token) savedToken = settings.github_token;
         if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
+        if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
       }
 
       setGithubToken(savedToken);
@@ -371,6 +374,7 @@ export default function AdminChat() {
     if (settings) {
       if (!savedToken && settings.github_token) savedToken = settings.github_token;
       if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
+      if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
     }
 
     setGithubToken(savedToken);
@@ -412,8 +416,9 @@ export default function AdminChat() {
 
     const newGithubToken = tokenInput.trim();
     const newTavilyKey = tavilyKeyInput.trim();
+    const newTelegramToken = telegramBotTokenInput.trim();
 
-    if (!newGithubToken && !newTavilyKey) return;
+    if (!newGithubToken && !newTavilyKey && !newTelegramToken) return;
 
     try {
       // Save to localStorage
@@ -427,9 +432,13 @@ export default function AdminChat() {
         setTavilyApiKey(newTavilyKey);
         setTavilyKeyInput('');
       }
+      if (newTelegramToken) {
+        setTelegramBotToken(newTelegramToken);
+        setTelegramBotTokenInput('');
+      }
 
       // Save to DB
-      await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined);
+      await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, newTelegramToken || undefined);
 
       setIsTokenModalOpen(false);
     } catch (error) {
@@ -653,14 +662,18 @@ export default function AdminChat() {
           setIsTokenModalOpen(false);
           setTokenInput('');
           setTavilyKeyInput('');
+          setTelegramBotTokenInput('');
         }}
         isDarkMode={isDarkMode}
         githubToken={githubToken}
         tavilyApiKey={tavilyApiKey}
+        telegramBotToken={telegramBotToken}
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}
         tavilyKeyInput={tavilyKeyInput}
         setTavilyKeyInput={setTavilyKeyInput}
+        telegramBotTokenInput={telegramBotTokenInput}
+        setTelegramBotTokenInput={setTelegramBotTokenInput}
         onSave={handleSaveToken}
       />
 
