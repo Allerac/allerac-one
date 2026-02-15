@@ -79,6 +79,7 @@ export default function UserSettingsModal({
           <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100'}`}>
             <p className={`text-xs font-medium mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('language')}</p>
             <LanguageSelector currentLocale={locale} isDarkMode={isDarkMode} />
+          </div>
 
           {/* Telegram Bot Settings Button */}
           {onOpenTelegramSettings && (
@@ -104,7 +105,6 @@ export default function UserSettingsModal({
               </svg>
             </button>
           )}
-          </div>
         </div>
       </div>
     </div>

@@ -171,32 +171,32 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
               Telegram Bot Settings
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
               Manage your personal Telegram bots
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl leading-none"
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl sm:text-3xl leading-none flex-shrink-0 ml-2"
           >
             ×
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6">
           {/* Add/Edit Form */}
           {showAddForm ? (
-            <form onSubmit={handleSubmit} className="mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+            <form onSubmit={handleSubmit} className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+              <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-white">
                 {editingBot ? 'Edit Bot' : 'Add New Bot'}
               </h3>
 
@@ -232,7 +232,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     Bot Token *
                     {editingBot && <span className="text-xs ml-2 text-gray-500">(leave masked to keep current)</span>}
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
                       value={formData.botToken}
@@ -286,7 +286,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                 </div>
               </div>
 
-              <div className="flex gap-2 mt-6">
+              <div className="flex flex-col sm:flex-row gap-2 mt-6">
                 <button
                   type="submit"
                   disabled={submitting}
@@ -306,7 +306,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
           ) : (
             <button
               onClick={() => setShowAddForm(true)}
-              className="w-full mb-6 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2"
+              className="w-full mb-4 sm:mb-6 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2"
             >
               <span className="text-xl">+</span>
               Add New Bot
@@ -318,37 +318,37 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
             <div className="text-center py-8 text-gray-500">Loading bots...</div>
           ) : bots.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p className="text-lg mb-2">No bots configured yet</p>
+              <p className="text-base sm:text-lg mb-2">No bots configured yet</p>
               <p className="text-sm">Click "Add New Bot" to get started</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {bots.map((bot) => (
                 <div
                   key={bot.id}
-                  className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow"
+                  className="p-3 sm:p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                        {bot.botName}
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
+                        <span className="truncate">{bot.botName}</span>
                         {bot.enabled ? (
-                          <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
+                          <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full whitespace-nowrap">
                             Active
                           </span>
                         ) : (
-                          <span className="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
+                          <span className="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full whitespace-nowrap">
                             Inactive
                           </span>
                         )}
                       </h3>
                       {bot.botUsername && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 truncate">
                           @{bot.botUsername}
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                       <button
                         onClick={() => handleToggle(bot.id)}
                         className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
