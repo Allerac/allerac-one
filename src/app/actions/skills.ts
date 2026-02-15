@@ -6,7 +6,11 @@ const skillsService = new SkillsService();
 
 export async function getAllSkills(userId: string | null) {
   try {
-    return await skillsService.getAllSkills(userId);
+    if (!userId) {
+      // Return only public shared skills if no user
+      return await skillsService.getAvailableSkills('00000000-0000-0000-0000-000000000000');
+    }
+    return await skillsService.getAvailableSkills(userId);
   } catch (error) {
     console.error('[Actions] Error getting skills:', error);
     throw error;
@@ -33,7 +37,18 @@ export async function createSkill(data: {
   shared?: boolean;
 }) {
   try {
-    return await skillsService.createSkill(data);
+    return await skillsService.createSkill({
+      user_id: data.userId,
+      name: data.name,
+      display_name: data.displayName,
+      description: data.description,
+      content: data.systemPrompt, // 'content' is the field name in DB
+      category: data.category || 'workflow',
+      shared: data.shared || false,
+      learning_enabled: false,
+      memory_scope: 'user',
+      rag_integration: false,
+    });
   } catch (error) {
     console.error('[Actions] Error creating skill:', error);
     throw error;
@@ -51,16 +66,23 @@ export async function updateSkill(skillId: string, data: {
   enabled?: boolean;
 }) {
   try {
-    return await skillsService.updateSkill(skillId, data);
+    return await skillsService.updateSkill(skillId, {
+      name: data.name,
+      display_name: data.displayName,
+      description: data.description,
+      content: data.systemPrompt,
+      category: data.category,
+      shared: data.shared,
+    });
   } catch (error) {
     console.error('[Actions] Error updating skill:', error);
     throw error;
   }
 }
 
-export async function deleteSkill(skillId: string) {
+export async function deleteSkill(skillId: string, userId: string) {
   try {
-    return await skillsService.deleteSkill(skillId);
+    return await skillsService.deleteSkill(skillId, userId);
   } catch (error) {
     console.error('[Actions] Error deleting skill:', error);
     throw error;
@@ -69,7 +91,7 @@ export async function deleteSkill(skillId: string) {
 
 export async function getSkillUsageStats(skillId: string) {
   try {
-    return await skillsService.getSkillUsageStats(skillId);
+    return await skillsService.getSkillStats(skillId);
   } catch (error) {
     console.error('[Actions] Error getting skill stats:', error);
     throw error;
@@ -87,7 +109,7 @@ export async function getBotSkills(botId: string) {
 
 export async function assignSkillToBot(botId: string, skillId: string, isDefault: boolean = false) {
   try {
-    return await skillsService.assignSkillToBot(botId, skillId, isDefault);
+    return await skillsService.assignSkillToBot(skillId, botId, isDefault);
   } catch (error) {
     console.error('[Actions] Error assigning skill to bot:', error);
     throw error;
@@ -96,7 +118,7 @@ export async function assignSkillToBot(botId: string, skillId: string, isDefault
 
 export async function removeSkillFromBot(botId: string, skillId: string) {
   try {
-    return await skillsService.removeSkillFromBot(botId, skillId);
+    return await skillsService.unassignSkillFromBot(skillId, botId);
   } catch (error) {
     console.error('[Actions] Error removing skill from bot:', error);
     throw error;

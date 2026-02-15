@@ -2,27 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { getAllSkills, createSkill, updateSkill, deleteSkill, getSkillUsageStats } from '../../actions/skills';
-
-interface Skill {
-  id: string;
-  name: string;
-  display_name: string;
-  description: string;
-  system_prompt: string;
-  category: string | null;
-  tags: string[] | null;
-  shared: boolean;
-  verified: boolean;
-  user_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import type { Skill } from '../../services/skills/skills.service';
 
 interface SkillStats {
-  total_uses: number;
-  total_tokens: number;
-  avg_rating: number | null;
-  last_used: string | null;
+  count: number;
+  avgRating: number;
+  successRate: number;
+  avgTokens: number;
 }
 
 interface SkillsLibraryProps {
@@ -54,7 +40,6 @@ export default function SkillsLibrary({
     description: '',
     systemPrompt: '',
     category: '',
-    tags: '',
     shared: false,
   });
 
@@ -117,7 +102,6 @@ export default function SkillsLibrary({
         description: formData.description,
         systemPrompt: formData.systemPrompt,
         category: formData.category || undefined,
-        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : undefined,
         shared: formData.shared,
       });
       
@@ -128,7 +112,6 @@ export default function SkillsLibrary({
         description: '',
         systemPrompt: '',
         category: '',
-        tags: '',
         shared: false,
       });
       
@@ -154,7 +137,6 @@ export default function SkillsLibrary({
         description: formData.description,
         systemPrompt: formData.systemPrompt,
         category: formData.category || undefined,
-        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : undefined,
         shared: formData.shared,
       });
       
@@ -171,11 +153,12 @@ export default function SkillsLibrary({
 
   const handleDeleteSkill = async (skillId: string) => {
     if (!confirm('Are you sure you want to delete this skill?')) return;
+    if (!userId) return;
 
     setLoading(true);
     setError(null);
     try {
-      await deleteSkill(skillId);
+      await deleteSkill(skillId, userId);
       await loadSkills();
       if (selectedSkill?.id === skillId) {
         setSelectedSkill(null);
@@ -194,9 +177,8 @@ export default function SkillsLibrary({
       name: skill.name,
       displayName: skill.display_name,
       description: skill.description,
-      systemPrompt: skill.system_prompt,
+      systemPrompt: skill.content,
       category: skill.category || '',
-      tags: skill.tags?.join(', ') || '',
       shared: skill.shared,
     });
     setActiveTab('edit');
@@ -263,7 +245,6 @@ export default function SkillsLibrary({
                 description: '',
                 systemPrompt: '',
                 category: '',
-                tags: '',
                 shared: false,
               });
               setActiveTab('create');
@@ -365,23 +346,10 @@ export default function SkillsLibrary({
                           {skill.description}
                         </p>
                         
-                        {skill.tags && skill.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {skill.tags.map((tag, idx) => (
-                              <span
-                                key={idx}
-                                className={`text-xs px-2 py-1 rounded ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`}
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        
                         {stats && (
                           <div className={`flex gap-4 text-xs pt-3 border-t ${isDarkMode ? 'border-gray-600 text-gray-400' : 'border-gray-200 text-gray-600'}`}>
-                            <span>📊 {stats.total_uses} uses</span>
-                            {stats.avg_rating && <span>⭐ {stats.avg_rating.toFixed(1)}</span>}
+                            <span>📊 {stats.count} uses</span>
+                            {stats.avgRating > 0 && <span>⭐ {stats.avgRating.toFixed(1)}</span>}
                           </div>
                         )}
                         
@@ -459,37 +427,22 @@ export default function SkillsLibrary({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Category
-                  </label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-                  >
-                    <option value="">None</option>
-                    <option value="assistant">Assistant</option>
-                    <option value="code">Code</option>
-                    <option value="research">Research</option>
-                    <option value="creative">Creative</option>
-                    <option value="education">Education</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Tags <span className="text-xs text-gray-500">(comma-separated)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.tags}
-                    onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                    className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-                    placeholder="productivity, chat, helper"
-                  />
-                </div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Category
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                >
+                  <option value="">None</option>
+                  <option value="assistant">Assistant</option>
+                  <option value="code">Code</option>
+                  <option value="research">Research</option>
+                  <option value="creative">Creative</option>
+                  <option value="education">Education</option>
+                </select>
               </div>
 
               <div className="flex items-center gap-2">
