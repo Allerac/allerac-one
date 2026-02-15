@@ -23,6 +23,12 @@ export interface ChatHandlerConfig {
   systemMessage: string;
 }
 
+export interface ChatImageAttachment {
+  data: Buffer;
+  mimeType: string;
+  filename?: string;
+}
+
 export interface ChatHandlerResult {
   conversationId: string;
   response: string;
@@ -43,7 +49,8 @@ const chatService = new ChatService();
 export async function handleChatMessage(
   message: string,
   conversationId: string | null,
-  config: ChatHandlerConfig
+  config: ChatHandlerConfig,
+  imageAttachments?: ChatImageAttachment[]
 ): Promise<ChatHandlerResult> {
   const { userId, githubToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage } = config;
 
@@ -57,8 +64,11 @@ export async function handleChatMessage(
     if (!convId) throw new Error('Failed to create conversation');
   }
 
-  // Save user message
-  await chatService.saveMessage(convId, 'user', message);
+  // Save user message (with image indicator if present)
+  const messageToSave = imageAttachments && imageAttachments.length > 0
+    ? `${message} [Image attached: ${imageAttachments.length} file(s)]`
+    : message;
+  await chatService.saveMessage(convId, 'user', messageToSave);
 
   // 2. Load memory context
   let conversationMemories = '';
@@ -97,13 +107,38 @@ export async function handleChatMessage(
   const history = await chatService.loadMessages(convId);
   const conversationMessages: Array<{
     role: string;
-    content: string;
+    content: string | any[];
     tool_call_id?: string;
     tool_calls?: any;
   }> = [
     { role: 'system', content: enrichedSystemMessage },
     ...history.map((m: any) => ({ role: m.role, content: m.content })),
   ];
+
+  // Build multimodal message if images are provided
+  if (imageAttachments && imageAttachments.length > 0) {
+    // Replace last user message with multimodal content
+    const lastUserMsgIndex = conversationMessages.length - 1;
+    const contentParts: any[] = [
+      { type: 'text', text: message }
+    ];
+
+    // Add images as base64 data URLs
+    for (const img of imageAttachments) {
+      const base64 = img.data.toString('base64');
+      contentParts.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${img.mimeType};base64,${base64}`
+        }
+      });
+    }
+
+    conversationMessages[lastUserMsgIndex] = {
+      role: 'user',
+      content: contentParts
+    };
+  }
 
   // 5. Call LLM
   const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken });

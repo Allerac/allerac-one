@@ -6,11 +6,13 @@
  */
 
 import TelegramBot from 'node-telegram-bot-api';
-import { handleChatMessage, maybeSummarizeConversation, ChatHandlerConfig } from '../chat/chat-handler';
+import { handleChatMessage, maybeSummarizeConversation, ChatHandlerConfig, ChatImageAttachment } from '../chat/chat-handler';
 import { UserSettingsService } from '../user/user-settings.service';
 import { ConversationMemoryService } from '../memory/conversation-memory.service';
 import { MODELS } from '../llm/models';
 import pool from '../../clients/db';
+import https from 'https';
+import http from 'http';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const MAX_TELEGRAM_MESSAGE_LENGTH = 4096;
@@ -131,6 +133,29 @@ export class AlleracTelegramBot {
     return chunks;
   }
 
+  /**
+   * Download file from Telegram servers
+   */
+  private async downloadTelegramFile(fileId: string): Promise<Buffer> {
+    try {
+      const fileLink = await this.bot.getFileLink(fileId);
+      
+      return new Promise<Buffer>((resolve, reject) => {
+        const protocol = fileLink.startsWith('https') ? https : http;
+        protocol.get(fileLink, (response) => {
+          const chunks: Buffer[] = [];
+          
+          response.on('data', (chunk) => chunks.push(chunk));
+          response.on('end', () => resolve(Buffer.concat(chunks)));
+          response.on('error', reject);
+        }).on('error', reject);
+      });
+    } catch (error) {
+      console.error('[Telegram] Error downloading file:', error);
+      throw error;
+    }
+  }
+
   private registerHandlers() {
     // /start command
     this.bot.onText(/\/start/, async (msg) => {
@@ -153,7 +178,12 @@ export class AlleracTelegramBot {
         `/memory - Show recent memories\n` +
         `/save - Save conversation to memory\n` +
         `/correct - Correct AI and memorize\n` +
-        `/help - Show this message`,
+        `/help - Show this message\n\n` +
+        `*Features:*\n` +
+        `📝 Text chat\n` +
+        `📷 Image analysis (with GPT-4o)\n` +
+        `🔍 Web search\n` +
+        `🧠 Conversation memory`,
         { parse_mode: 'Markdown' }
       );
     });
@@ -448,7 +478,11 @@ export class AlleracTelegramBot {
         `/save - Save current conversation to memory\n` +
         `/correct - Correct AI response and memorize\n` +
         `/help - Show this message\n\n` +
-        `Just send any text message to chat with your AI agent.`,
+        `*Features:*\n` +
+        `📝 Send text messages to chat\n` +
+        `📷 Send photos for AI vision analysis (GPT-4o)\n` +
+        `🖼️ Send image files for analysis\n\n` +
+        `💡 _Tip: Use gpt-4o or gpt-4o-mini for image analysis_`,
         { parse_mode: 'Markdown' }
       );
     });
@@ -457,14 +491,28 @@ export class AlleracTelegramBot {
     this.bot.on('message', async (msg) => {
       // Skip commands
       if (msg.text?.startsWith('/')) return;
-      if (!msg.text) return;
-
+      
       const chatId = msg.chat.id;
       const userId = msg.from?.id;
       if (!userId || !this.isAllowed(userId)) {
         await this.bot.sendMessage(chatId, 'Access denied.');
         return;
       }
+
+      // Handle photos
+      if (msg.photo && msg.photo.length > 0) {
+        await this.handlePhotoMessage(msg);
+        return;
+      }
+
+      // Handle documents (PDFs, images, etc)
+      if (msg.document) {
+        await this.handleDocumentMessage(msg);
+        return;
+      }
+
+      // Regular text messages
+      if (!msg.text) return;
 
       // Check if user is in correction flow
       const correctionState = this.correctionStates.get(chatId);
@@ -557,6 +605,142 @@ export class AlleracTelegramBot {
         await this.bot.sendMessage(chatId, `Error: ${error.message || 'Something went wrong. Try again.'}`);
       }
     });
+  }
+
+  /**
+   * Handle photo messages
+   */
+  private async handlePhotoMessage(msg: TelegramBot.Message) {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id;
+    if (!userId) return;
+
+    try {
+      await this.bot.sendChatAction(chatId, 'typing');
+
+      // Get highest quality photo
+      const photo = msg.photo![msg.photo!.length - 1];
+      const imageData = await this.downloadTelegramFile(photo.file_id);
+
+      const imageAttachment: ChatImageAttachment = {
+        data: imageData,
+        mimeType: 'image/jpeg',
+        filename: `photo_${Date.now()}.jpg`
+      };
+
+      const caption = msg.caption || 'What do you see in this image?';
+      
+      const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
+      const chatConfig = await this.getChatConfig(mapping.user_id, userId);
+
+      // Check if model supports vision
+      const model = MODELS.find(m => m.id === chatConfig.selectedModel);
+      if (model && !model.id.includes('gpt-4o') && !model.id.includes('gpt-4-turbo')) {
+        await this.bot.sendMessage(chatId, 
+          '⚠️ Current model does not support image analysis.\n\n' +
+          'Use `/model gpt-4o` or `/model gpt-4o-mini` for vision capabilities.'
+        );
+        return;
+      }
+
+      const result = await handleChatMessage(
+        caption,
+        mapping.current_conversation_id,
+        chatConfig,
+        [imageAttachment]
+      );
+
+      // Update conversation mapping if new
+      if (result.conversationId !== mapping.current_conversation_id) {
+        await this.updateConversationId(chatId, result.conversationId);
+      }
+
+      // Send response
+      const chunks = this.splitMessage(result.response);
+      for (const chunk of chunks) {
+        try {
+          await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+        } catch {
+          await this.bot.sendMessage(chatId, chunk);
+        }
+      }
+    } catch (error: any) {
+      console.error('[Telegram] Error processing photo:', error);
+      await this.bot.sendMessage(chatId, `❌ Error processing image: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Handle document messages (images, PDFs, etc)
+   */
+  private async handleDocumentMessage(msg: TelegramBot.Message) {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id;
+    if (!userId) return;
+
+    try {
+      const document = msg.document!;
+      const mimeType = document.mime_type || 'application/octet-stream';
+
+      // Only handle images for now
+      if (!mimeType.startsWith('image/')) {
+        await this.bot.sendMessage(chatId, 
+          '⚠️ Currently only image files are supported.\n\n' +
+          'Send images as photos or image files (JPG, PNG, etc).'
+        );
+        return;
+      }
+
+      await this.bot.sendChatAction(chatId, 'typing');
+
+      const imageData = await this.downloadTelegramFile(document.file_id);
+
+      const imageAttachment: ChatImageAttachment = {
+        data: imageData,
+        mimeType: mimeType,
+        filename: document.file_name || `document_${Date.now()}`
+      };
+
+      const caption = msg.caption || 'What do you see in this image?';
+      
+      const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
+      const chatConfig = await this.getChatConfig(mapping.user_id, userId);
+
+      // Check if model supports vision
+      const model = MODELS.find(m => m.id === chatConfig.selectedModel);
+      if (model && !model.id.includes('gpt-4o') && !model.id.includes('gpt-4-turbo')) {
+        await this.bot.sendMessage(chatId, 
+          '⚠️ Current model does not support image analysis.\n\n' +
+          'Use `/model gpt-4o` or `/model gpt-4o-mini` for vision capabilities.'
+        );
+        return;
+      }
+
+      const result = await handleChatMessage(
+        caption,
+        mapping.current_conversation_id,
+        chatConfig,
+        [imageAttachment]
+      );
+
+      // Update conversation mapping if new
+      if (result.conversationId !== mapping.current_conversation_id) {
+        await this.updateConversationId(chatId, result.conversationId);
+      }
+
+      // Send response
+      const chunks = this.splitMessage(result.response);
+      for (const chunk of chunks) {
+        try {
+          await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+        } catch {
+          await this.bot.sendMessage(chatId, chunk);
+        }
+      }
+    } catch (error: any) {
+      console.error('[Telegram] Error processing document:', error);
+      await this.bot.sendMessage(chatId, `❌ Error processing document: ${error.message || 'Unknown error'}`);
+    }
   }
 
   async start() {

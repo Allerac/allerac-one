@@ -2,11 +2,19 @@
 // Supports GitHub Models and Ollama providers
 import * as metricActions from '@/app/actions/metrics';
 
+export interface MessageContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: {
+    url: string;
+  };
+}
+
 export interface LLMRequest {
   model: string;
   messages: Array<{
     role: string;
-    content: string;
+    content: string | MessageContentPart[];
     tool_call_id?: string;
     tool_calls?: any;
   }>;

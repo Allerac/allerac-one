@@ -2,7 +2,7 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Message, Model } from '../../types';
+import { Message, Model, MessageContentPart } from '../../types';
 import CorrectAndMemorize from '../memory/CorrectAndMemorize';
 
 interface ChatMessagesProps {
@@ -33,6 +33,17 @@ export default function ChatMessages({
 }: ChatMessagesProps) {
   // Controla qual mensagem tem o CorrectAndMemorize aberto (índice)
   const [openCorrectionIdx, setOpenCorrectionIdx] = useState<number | null>(null);
+
+  // Helper to render message content (text or multimodal)
+  const renderContent = (content: string | MessageContentPart[]) => {
+    if (typeof content === 'string') {
+      return content;
+    }
+    
+    // Multimodal content - extract text parts
+    const textParts = content.filter(part => part.type === 'text').map(part => part.text).join('\n');
+    return textParts || '[Image content]';
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
@@ -70,11 +81,11 @@ export default function ChatMessages({
                         hr: () => null,
                       }}
                     >
-                      {message.content}
+                      {renderContent(message.content)}
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{renderContent(message.content)}</p>
                 )}
               </div>
               <div className="flex items-center gap-3">
@@ -83,7 +94,7 @@ export default function ChatMessages({
                 </p>
                 {message.role === 'assistant' && (
                   <CorrectAndMemorize
-                    llmResponse={message.content}
+                    llmResponse={typeof message.content === 'string' ? message.content : renderContent(message.content)}
                     conversationId={currentConversationId}
                     userId={userId}
                     githubToken={githubToken}

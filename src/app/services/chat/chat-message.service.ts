@@ -146,7 +146,7 @@ export class ChatMessageService {
 
       const conversationMessages: Array<{
         role: string;
-        content: string;
+        content: string | any[];
         tool_call_id?: string;
         tool_calls?: any;
       }> = [

@@ -1,8 +1,16 @@
 // Types and interfaces for the chat admin
 
+export interface MessageContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: {
+    url: string; // data:image/jpeg;base64,... or http://...
+  };
+}
+
 export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
+  content: string | MessageContentPart[];
   timestamp: Date;
   tool_call_id?: string;
 }
