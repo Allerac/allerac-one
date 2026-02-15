@@ -27,6 +27,7 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - NEXT_PUBLIC_API_URL=http://localhost:3000
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
+      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:-default-key-change-in-production!!}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=allerac
@@ -125,13 +126,17 @@ services:
     restart: unless-stopped
     profiles:
       - telegram
+    volumes:
+      - ./telegram-bots.json:/app/telegram-bots.json:ro
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
+      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:-default-key-change-in-production!!}
+      # Legacy env vars (for backward compatibility with single-bot mode)
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
       - TELEGRAM_DEFAULT_USER=${TELEGRAM_DEFAULT_USER:-}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

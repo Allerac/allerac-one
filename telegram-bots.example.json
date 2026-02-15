@@ -1,0 +1,11 @@
+{
+  "bots": [
+    {
+      "name": "User 1",
+      "token": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
+      "alleracUserId": "0827de78-2b42-46ca-9bb0-90c9b2d55013",
+      "allowedTelegramIds": [6000777143],
+      "enabled": true
+    }
+  ]
+}

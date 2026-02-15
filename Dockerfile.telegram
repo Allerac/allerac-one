@@ -9,6 +9,7 @@ RUN npm ci
 # Copy source files needed by the bot
 COPY tsconfig.json ./
 COPY src/telegram-bot.ts ./src/
+COPY src/telegram-multi-bot.ts ./src/
 COPY src/app/clients/ ./src/app/clients/
 COPY src/app/actions/ ./src/app/actions/
 COPY src/app/services/ ./src/app/services/
@@ -17,4 +18,5 @@ COPY src/app/types.ts ./src/app/types.ts
 COPY src/app/constants.ts ./src/app/constants.ts
 COPY src/app/constants/ ./src/app/constants/
 
-CMD ["npx", "tsx", "src/telegram-bot.ts"]
+# Default to multi-bot (can be overridden to single-bot for backward compatibility)
+CMD ["npx", "tsx", "src/telegram-multi-bot.ts"]

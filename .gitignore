@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env*.example
 
+# telegram bot configuration (contains sensitive tokens)
+telegram-bots.json
+
 # vercel
 .vercel
 

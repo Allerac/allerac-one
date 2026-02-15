@@ -27,6 +27,7 @@ import UserSettingsModal from './components/auth/UserSettingsModal';
 import LoginModal from './components/auth/LoginModal';
 import SetupWizard from './components/setup/SetupWizard';
 import SystemDashboard from './components/system/SystemDashboard';
+import TelegramBotSettings from './components/settings/TelegramBotSettings';
 
 export default function AdminChat() {
   const t = useTranslations('home');
@@ -95,6 +96,7 @@ export default function AdminChat() {
   const [isFirstRun, setIsFirstRun] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
+  const [isTelegramBotSettingsOpen, setIsTelegramBotSettingsOpen] = useState(false);
   const [ollamaConnected, setOllamaConnected] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<Array<{ name: string; size: number; modified_at: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -755,7 +757,19 @@ export default function AdminChat() {
         userName={userName}
         userEmail={userEmail}
         userId={userId}
+        onOpenTelegramSettings={() => {
+          setIsUserSettingsOpen(false);
+          setIsTelegramBotSettingsOpen(true);
+        }}
       />
+
+      {/* Telegram Bot Settings Modal */}
+      {isTelegramBotSettingsOpen && userId && (
+        <TelegramBotSettings
+          userId={userId}
+          onClose={() => setIsTelegramBotSettingsOpen(false)}
+        />
+      )}
 
       {/* Login Modal */}
       <LoginModal
