@@ -85,14 +85,33 @@ export class ChatMessageService {
   async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>) {
     if ((!inputMessage.trim() && (!imageAttachments || imageAttachments.length === 0)) || !this.config.githubToken) return;
 
-    // Build user message content
+    const messageContent = inputMessage || 'What do you see in this image?';
+    
+    // Build multimodal content for display if images are attached
+    let displayContent: string | any[] = messageContent;
+    if (imageAttachments && imageAttachments.length > 0) {
+      const contentParts: any[] = [
+        { type: 'text', text: messageContent }
+      ];
+      
+      // Add image previews for display
+      for (const img of imageAttachments) {
+        contentParts.push({
+          type: 'image_url',
+          image_url: { url: img.preview }
+        });
+      }
+      
+      displayContent = contentParts;
+    }
+
+    // Build user message with multimodal content
     const userMessage: Message = {
       role: 'user',
-      content: inputMessage || 'Attached image(s)',
+      content: displayContent,
       timestamp: new Date(),
     };
 
-    const messageContent = inputMessage || 'What do you see in this image?';
     this.config.setMessages(prev => [...prev, userMessage]);
 
     try {

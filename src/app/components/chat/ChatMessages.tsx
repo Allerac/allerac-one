@@ -35,14 +35,44 @@ export default function ChatMessages({
   const [openCorrectionIdx, setOpenCorrectionIdx] = useState<number | null>(null);
 
   // Helper to render message content (text or multimodal)
-  const renderContent = (content: string | MessageContentPart[]) => {
+  const renderContent = (content: string | MessageContentPart[], role: 'user' | 'assistant'): any => {
     if (typeof content === 'string') {
       return content;
     }
     
-    // Multimodal content - extract text parts
-    const textParts = content.filter(part => part.type === 'text').map(part => part.text).join('\n');
-    return textParts || '[Image content]';
+    // Multimodal content - render text and images
+    if (role === 'user') {
+      // For user messages, show images inline
+      const textParts = content.filter(part => part.type === 'text').map(part => part.text);
+      const imageParts = content.filter(part => part.type === 'image_url');
+      
+      return (
+        <div className="space-y-2">
+          {textParts.length > 0 && (
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+              {textParts.join('\n')}
+            </p>
+          )}
+          {imageParts.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {imageParts.map((img, idx) => (
+                <img
+                  key={idx}
+                  src={img.image_url?.url}
+                  alt={`Uploaded ${idx + 1}`}
+                  className="max-w-xs rounded-lg border-2 border-blue-500/30"
+                  style={{ maxHeight: '200px' }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    } else {
+      // For assistant messages, just extract text
+      const textParts = content.filter(part => part.type === 'text').map(part => part.text).join('\n');
+      return textParts || '[Image content]';
+    }
   };
 
   return (
@@ -81,11 +111,17 @@ export default function ChatMessages({
                         hr: () => null,
                       }}
                     >
-                      {renderContent(message.content)}
+                      {typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant')}
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{renderContent(message.content)}</p>
+                  <div className="text-sm leading-relaxed">
+                    {typeof message.content === 'string' ? (
+                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                    ) : (
+                      renderContent(message.content, 'user')
+                    )}
+                  </div>
                 )}
               </div>
               <div className="flex items-center gap-3">
@@ -94,7 +130,7 @@ export default function ChatMessages({
                 </p>
                 {message.role === 'assistant' && (
                   <CorrectAndMemorize
-                    llmResponse={typeof message.content === 'string' ? message.content : renderContent(message.content)}
+                    llmResponse={typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant') as string}
                     conversationId={currentConversationId}
                     userId={userId}
                     githubToken={githubToken}
