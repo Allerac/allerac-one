@@ -4,7 +4,7 @@
 -- Skills table (follows Anthropic standard + Allerac extensions)
 CREATE TABLE IF NOT EXISTS skills (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,  -- NULL = public/shared
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,  -- NULL = public/shared
   name VARCHAR(100) NOT NULL,  -- kebab-case identifier
   display_name VARCHAR(200) NOT NULL,
   description TEXT NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS telegram_bot_skills (
 -- Assignment: Skills to web users (many-to-many)
 CREATE TABLE IF NOT EXISTS user_skills (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   skill_id UUID REFERENCES skills(id) ON DELETE CASCADE,
   is_default BOOLEAN DEFAULT false,  -- Skill active on chat start
   enabled BOOLEAN DEFAULT true,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS user_skills (
 
 -- Track active skill per conversation
 CREATE TABLE IF NOT EXISTS conversation_active_skills (
-  conversation_id UUID PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+  conversation_id UUID PRIMARY KEY REFERENCES chat_conversations(id) ON DELETE CASCADE,
   skill_id UUID REFERENCES skills(id) ON DELETE SET NULL,
   activated_at TIMESTAMP DEFAULT NOW(),
   previous_skill_id UUID REFERENCES skills(id)
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS skill_usage (
   skill_id UUID REFERENCES skills(id) ON DELETE SET NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   bot_id UUID REFERENCES telegram_bot_configs(id) ON DELETE SET NULL,  -- NULL for web chat
-  conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+  conversation_id UUID REFERENCES chat_conversations(id) ON DELETE SET NULL,
   
   -- Trigger context
   trigger_type VARCHAR(20) DEFAULT 'manual',  -- manual, auto, command
