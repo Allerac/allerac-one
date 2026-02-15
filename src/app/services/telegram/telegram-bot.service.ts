@@ -8,6 +8,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { handleChatMessage, maybeSummarizeConversation, ChatHandlerConfig } from '../chat/chat-handler';
 import { UserSettingsService } from '../user/user-settings.service';
+import { ConversationMemoryService } from '../memory/conversation-memory.service';
 import { MODELS } from '../llm/models';
 import pool from '../../clients/db';
 
@@ -271,11 +272,11 @@ export class AlleracTelegramBot {
 
         const config = await this.getChatConfig(mapping.user_id, userId);
         
-        // Generate and save summary
-        const summary = await maybeSummarizeConversation(
+        // Generate and save summary directly
+        const memoryService = new ConversationMemoryService(config.githubToken);
+        const summary = await memoryService.generateConversationSummary(
           mapping.current_conversation_id,
-          mapping.user_id,
-          config.githubToken
+          mapping.user_id
         );
 
         if (summary) {

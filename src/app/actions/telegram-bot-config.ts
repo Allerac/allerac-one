@@ -5,7 +5,6 @@
  */
 
 import { TelegramBotConfigService } from '@/app/services/telegram/telegram-bot-config.service';
-import { createClient } from '@/app/clients/db';
 
 /**
  * Get current user's bot configurations

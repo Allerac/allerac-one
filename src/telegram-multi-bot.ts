@@ -4,8 +4,8 @@
  * Reads configuration from database and starts/stops bots dynamically with hot reload
  */
 
-import { AlleracTelegramBot } from './src/app/services/telegram/telegram-bot.service';
-import { TelegramBotConfigService } from './src/app/services/telegram/telegram-bot-config.service';
+import { AlleracTelegramBot } from './app/services/telegram/telegram-bot.service';
+import { TelegramBotConfigService } from './app/services/telegram/telegram-bot-config.service';
 
 interface RunningBot {
   id: string;

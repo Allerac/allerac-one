@@ -3,7 +3,7 @@
  * Manages self-service bot configurations stored in the database
  */
 
-import { pool } from '@/app/clients/db';
+import pool from '@/app/clients/db';
 import crypto from 'crypto';
 
 // Encryption key from environment (should be 32 bytes for AES-256)
