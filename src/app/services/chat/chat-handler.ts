@@ -11,6 +11,7 @@ import { VectorSearchService } from '../rag/vector-search.service';
 import { EmbeddingService } from '../rag/embedding.service';
 import { SearchWebTool } from '../../tools/search-web.tool';
 import { ChatService } from '../database/chat.service';
+import { skillsService } from '../skills/skills.service';
 import { TOOLS } from '../../tools/tools';
 
 export interface ChatHandlerConfig {
@@ -21,6 +22,7 @@ export interface ChatHandlerConfig {
   modelProvider: 'github' | 'ollama';
   modelBaseUrl: string;
   systemMessage: string;
+  botId?: string;  // For Telegram bot skill assignment
 }
 
 export interface ChatImageAttachment {
@@ -52,7 +54,7 @@ export async function handleChatMessage(
   config: ChatHandlerConfig,
   imageAttachments?: ChatImageAttachment[]
 ): Promise<ChatHandlerResult> {
-  const { userId, githubToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage } = config;
+  const { userId, githubToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId } = config;
 
   // 1. Create conversation if needed
   let convId = conversationId;
@@ -62,6 +64,61 @@ export async function handleChatMessage(
     const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
     convId = await chatService.createConversation(userId, title);
     if (!convId) throw new Error('Failed to create conversation');
+  }
+
+  // Load active skill or activate default skill for new conversations
+  let activeSkill = await skillsService.getActiveSkill(convId);
+  
+  if (!activeSkill && !conversationId) {
+    // New conversation - try to load default skill
+    const defaultSkill = botId 
+      ? await skillsService.getDefaultBotSkill(botId)
+      : await skillsService.getDefaultUserSkill(userId);
+    
+    if (defaultSkill) {
+      await skillsService.activateSkill(
+        defaultSkill.id,
+        convId,
+        userId,
+        'auto',
+        'Default skill activated',
+        botId
+      );
+      activeSkill = defaultSkill;
+      console.log(`[ChatHandler] Activated default skill: ${defaultSkill.name}`);
+    }
+  }
+
+  // Check if we should auto-switch skills based on message content
+  if (activeSkill) {
+    // Get all available skills for auto-switching
+    const availableSkills = botId
+      ? await skillsService.getBotSkills(botId)
+      : await skillsService.getUserSkills(userId);
+
+    // Check if any skill should auto-activate
+    for (const skill of availableSkills) {
+      if (skill.id !== activeSkill.id && skill.auto_switch_rules) {
+        const shouldSwitch = await skillsService.shouldAutoActivate(skill, {
+          message,
+          conversationHistory: await chatService.loadMessages(convId),
+        });
+
+        if (shouldSwitch) {
+          await skillsService.activateSkill(
+            skill.id,
+            convId,
+            userId,
+            'auto',
+            message,
+            botId
+          );
+          activeSkill = skill;
+          console.log(`[ChatHandler] Auto-switched to skill: ${skill.name}`);
+          break;
+        }
+      }
+    }
   }
 
   // Save user message (with image indicator if present)
@@ -94,6 +151,21 @@ export async function handleChatMessage(
 
   // 4. Build system message with context
   let enrichedSystemMessage = systemMessage || 'You are a helpful AI assistant.';
+
+  // Inject active skill content if available
+  if (activeSkill) {
+    try {
+      const skillContent = await skillsService.getEnrichedSkillContent(
+        activeSkill.id,
+        userId,
+        message
+      );
+      enrichedSystemMessage = `# Active Skill: ${activeSkill.display_name}\n\n${skillContent}\n\n---\n\n${enrichedSystemMessage}`;
+      console.log(`[ChatHandler] Loaded skill content for: ${activeSkill.name}`);
+    } catch (error) {
+      console.error('[ChatHandler] Failed to load skill content:', error);
+    }
+  }
 
   if (conversationMemories) {
     enrichedSystemMessage = conversationMemories + '\n\n' + enrichedSystemMessage;
@@ -198,6 +270,20 @@ export async function handleChatMessage(
 
   // 7. Save assistant response
   await chatService.saveMessage(convId, 'assistant', assistantMessage.content);
+
+  // Track skill usage completion
+  if (activeSkill) {
+    try {
+      await skillsService.completeSkillUsage(
+        convId,
+        true,
+        data.usage?.total_tokens,
+        assistantMessage.tool_calls?.length || 0
+      );
+    } catch (error) {
+      console.error('[ChatHandler] Failed to track skill usage:', error);
+    }
+  }
 
   return {
     conversationId: convId,

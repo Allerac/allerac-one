@@ -9,6 +9,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { handleChatMessage, maybeSummarizeConversation, ChatHandlerConfig, ChatImageAttachment } from '../chat/chat-handler';
 import { UserSettingsService } from '../user/user-settings.service';
 import { ConversationMemoryService } from '../memory/conversation-memory.service';
+import { skillsService } from '../skills/skills.service';
 import { MODELS } from '../llm/models';
 import pool from '../../clients/db';
 import https from 'https';
@@ -78,7 +79,43 @@ export class AlleracTelegramBot {
     );
   }
 
-  private async getChatConfig(alleracUserId: string, telegramUserId: number): Promise<ChatHandlerConfig> {
+  private async getBotConfig(chatId: number): Promise<any | null> {
+    try {
+      // In the current setup, we use telegram_chat_mapping
+      // For now, return a temporary config or extend the schema later
+      const result = await pool.query(
+        `SELECT tbc.* FROM telegram_bot_configs tbc
+         JOIN telegram_chat_mapping tcm ON tcm.user_id = tbc.user_id
+         WHERE tcm.telegram_chat_id = $1
+         LIMIT 1`,
+        [chatId]
+      );
+      
+      if (result.rows.length === 0) {
+        // Try to get any bot config for this user
+        const mapping = await pool.query(
+          'SELECT user_id FROM telegram_chat_mapping WHERE telegram_chat_id = $1',
+          [chatId]
+        );
+        
+        if (mapping.rows.length === 0) return null;
+        
+        const botResult = await pool.query(
+          'SELECT * FROM telegram_bot_configs WHERE user_id = $1 LIMIT 1',
+          [mapping.rows[0].user_id]
+        );
+        
+        return botResult.rows[0] || null;
+      }
+      
+      return result.rows[0];
+    } catch (error) {
+      console.error('[TelegramBot] Error getting bot config:', error);
+      return null;
+    }
+  }
+
+  private async getChatConfig(alleracUserId: string, telegramUserId: number, botId?: string): Promise<ChatHandlerConfig> {
     const settings = await this.userSettings.loadUserSettings(alleracUserId);
     const selectedModel = this.selectedModels.get(telegramUserId);
 
@@ -100,6 +137,7 @@ export class AlleracTelegramBot {
       modelProvider: activeModel.provider,
       modelBaseUrl: baseUrl,
       systemMessage: settings?.system_message || 'You are a helpful AI assistant communicating via Telegram. Keep responses concise and well-formatted. Use markdown when helpful.',
+      botId: botId,
     };
   }
 
@@ -474,6 +512,9 @@ export class AlleracTelegramBot {
         `/new - Start a new conversation\n` +
         `/model - Switch AI model\n` +
         `/model model-id - Switch to specific model\n` +
+        `/skills - List available skills\n` +
+        `/skill <name> - Activate a skill\n` +
+        `/skill_info - Show current skill details\n` +
         `/memory - Show recent memories\n` +
         `/save - Save current conversation to memory\n` +
         `/correct - Correct AI response and memorize\n` +
@@ -481,10 +522,194 @@ export class AlleracTelegramBot {
         `*Features:*\n` +
         `📝 Send text messages to chat\n` +
         `📷 Send photos for AI vision analysis (GPT-4o)\n` +
-        `🖼️ Send image files for analysis\n\n` +
+        `🖼️ Send image files for analysis\n` +
+        `🎯 Use skills for specialized workflows\n\n` +
         `💡 _Tip: Use gpt-4o or gpt-4o-mini for image analysis_`,
         { parse_mode: 'Markdown' }
       );
+    });
+
+    // /skills - List available skills
+    this.bot.onText(/^\/skills$/, async (msg) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from?.id;
+      if (!userId || !this.isAllowed(userId)) {
+        await this.bot.sendMessage(chatId, 'Access denied.');
+        return;
+      }
+
+      try {
+        const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
+        const botConfig = await this.getBotConfig(chatId);
+        
+        if (!botConfig) {
+          await this.bot.sendMessage(chatId, 'Bot not configured. Please set up your bot first.');
+          return;
+        }
+
+        const skills = await skillsService.getBotSkills(botConfig.id);
+        const activeSkill = mapping.current_conversation_id 
+          ? await skillsService.getActiveSkill(mapping.current_conversation_id)
+          : null;
+
+        if (skills.length === 0) {
+          await this.bot.sendMessage(chatId,
+            '📚 No skills assigned yet.\n\n' +
+            'Skills can be assigned in the web interface.',
+            { parse_mode: 'Markdown' }
+          );
+          return;
+        }
+
+        const skillList = skills.map((s: any) => {
+          const isActive = activeSkill && s.id === activeSkill.id;
+          const icon = isActive ? '▶️' : '🎯';
+          return `${icon} \`${s.name}\` - ${s.display_name}`;
+        }).join('\n');
+
+        await this.bot.sendMessage(chatId,
+          `*Available Skills:*\n\n${skillList}\n\n` +
+          `Usage: \`/skill <skill-name>\`\n` +
+          `Example: \`/skill code-reviewer\``,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('[TelegramBot] Error listing skills:', error);
+        await this.bot.sendMessage(chatId, '❌ Failed to load skills.');
+      }
+    });
+
+    // /skill <name> - Activate specific skill
+    this.bot.onText(/^\/skill\s+(.+)/, async (msg, match) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from?.id;
+      if (!userId || !this.isAllowed(userId)) {
+        await this.bot.sendMessage(chatId, 'Access denied.');
+        return;
+      }
+
+      const skillName = match?.[1]?.trim();
+      if (!skillName) {
+        await this.bot.sendMessage(chatId, 'Usage: `/skill <skill-name>`', { parse_mode: 'Markdown' });
+        return;
+      }
+
+      try {
+        const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
+        const botConfig = await this.getBotConfig(chatId);
+        
+        if (!botConfig) {
+          await this.bot.sendMessage(chatId, 'Bot not configured.');
+          return;
+        }
+
+        // Find skill
+        const skill = await skillsService.getSkillByName(skillName, mapping.user_id);
+        
+        if (!skill) {
+          await this.bot.sendMessage(chatId,
+            `❌ Skill "${skillName}" not found.\n\nUse /skills to see available skills.`
+          );
+          return;
+        }
+
+        // Check if skill is assigned to bot
+        const botSkills = await skillsService.getBotSkills(botConfig.id);
+        const isAssigned = botSkills.some((s: any) => s.id === skill.id);
+
+        if (!isAssigned) {
+          await this.bot.sendMessage(chatId,
+            `❌ Skill "${skill.display_name}" is not assigned to this bot.\n\n` +
+            `Assign skills in the web interface.`
+          );
+          return;
+        }
+
+        // Create conversation if needed
+        let conversationId = mapping.current_conversation_id;
+        if (!conversationId) {
+          const result = await pool.query(
+            'INSERT INTO conversations (user_id, title) VALUES ($1, $2) RETURNING id',
+            [mapping.user_id, `Telegram: ${skill.display_name}`]
+          );
+          conversationId = result.rows[0].id;
+          await this.updateConversationId(chatId, conversationId);
+        }
+
+        // Activate skill
+        const previousSkill = await skillsService.getActiveSkill(conversationId);
+        await skillsService.activateSkill(
+          skill.id,
+          conversationId,
+          mapping.user_id,
+          'command',
+          `/skill ${skillName}`,
+          botConfig.id
+        );
+
+        const switchMsg = previousSkill 
+          ? `Switched from "${previousSkill.display_name}" to "${skill.display_name}"`
+          : `Activated "${skill.display_name}"`;
+
+        await this.bot.sendMessage(chatId,
+          `🎯 ${switchMsg}!\n\n${skill.description}`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('[TelegramBot] Error activating skill:', error);
+        await this.bot.sendMessage(chatId, '❌ Failed to activate skill.');
+      }
+    });
+
+    // /skill_info - Show current skill details
+    this.bot.onText(/^\/skill_info$/, async (msg) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from?.id;
+      if (!userId || !this.isAllowed(userId)) {
+        await this.bot.sendMessage(chatId, 'Access denied.');
+        return;
+      }
+
+      try {
+        const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
+        
+        if (!mapping.current_conversation_id) {
+          await this.bot.sendMessage(chatId, 'No active conversation. Start chatting to see the active skill!');
+          return;
+        }
+
+        const skill = await skillsService.getActiveSkill(mapping.current_conversation_id);
+        
+        if (!skill) {
+          await this.bot.sendMessage(chatId, 'No skill currently active. Use /skills to select one.');
+          return;
+        }
+
+        // Get usage stats
+        const stats = await skillsService.getSkillStats(skill.id, mapping.user_id);
+        
+        const learningStatus = skill.learning_enabled ? '✅ Yes (adapts from corrections)' : '❌ No';
+        const ragStatus = skill.rag_integration ? '✅ Yes (searches your documents)' : '❌ No';
+
+        await this.bot.sendMessage(chatId,
+          `🎯 *Current Skill*\n\n` +
+          `*Name:* ${skill.display_name}\n` +
+          `*Description:* ${skill.description}\n` +
+          `*Category:* ${skill.category}\n\n` +
+          `*Features:*\n` +
+          `🧠 Learning: ${learningStatus}\n` +
+          `📄 RAG Integration: ${ragStatus}\n\n` +
+          `*Your Usage:*\n` +
+          `📊 Times used: ${stats.count}\n` +
+          `⭐ Average rating: ${stats.avgRating.toFixed(1)}/5.0\n` +
+          `✅ Success rate: ${stats.successRate}%\n\n` +
+          `Use /skills to switch to another skill.`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('[TelegramBot] Error getting skill info:', error);
+        await this.bot.sendMessage(chatId, '❌ Failed to load skill information.');
+      }
     });
 
     // Regular messages
@@ -577,7 +802,8 @@ export class AlleracTelegramBot {
 
       try {
         const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
-        const chatConfig = await this.getChatConfig(mapping.user_id, userId);
+        const botConfig = await this.getBotConfig(chatId);
+        const chatConfig = await this.getChatConfig(mapping.user_id, userId, botConfig?.id);
 
         const result = await handleChatMessage(
           msg.text,
@@ -631,7 +857,8 @@ export class AlleracTelegramBot {
       const caption = msg.caption || 'What do you see in this image?';
       
       const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
-      const chatConfig = await this.getChatConfig(mapping.user_id, userId);
+      const botConfig = await this.getBotConfig(chatId);
+      const chatConfig = await this.getChatConfig(mapping.user_id, userId, botConfig?.id);
 
       // Check if model supports vision
       const model = MODELS.find(m => m.id === chatConfig.selectedModel);
@@ -704,7 +931,8 @@ export class AlleracTelegramBot {
       const caption = msg.caption || 'What do you see in this image?';
       
       const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
-      const chatConfig = await this.getChatConfig(mapping.user_id, userId);
+      const botConfig = await this.getBotConfig(chatId);
+      const chatConfig = await this.getChatConfig(mapping.user_id, userId, botConfig?.id);
 
       // Check if model supports vision
       const model = MODELS.find(m => m.id === chatConfig.selectedModel);
