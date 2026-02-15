@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS conversation_active_skills (
 CREATE TABLE IF NOT EXISTS skill_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   skill_id UUID REFERENCES skills(id) ON DELETE SET NULL,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   bot_id UUID REFERENCES telegram_bot_configs(id) ON DELETE SET NULL,  -- NULL for web chat
   conversation_id UUID REFERENCES chat_conversations(id) ON DELETE SET NULL,
   
