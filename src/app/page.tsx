@@ -99,7 +99,9 @@ export default function AdminChat() {
   const [isTelegramBotSettingsOpen, setIsTelegramBotSettingsOpen] = useState(false);
   const [ollamaConnected, setOllamaConnected] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<Array<{ name: string; size: number; modified_at: string }>>([]);
+  const [imageAttachments, setImageAttachments] = useState<Array<{ file: File; preview: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
 
   // Initialize chatMessageService
@@ -482,11 +484,42 @@ export default function AdminChat() {
     if (isSending) return;
     setIsSending(true);
     try {
-      await chatMessageService.sendMessage(inputMessage);
+      await chatMessageService.sendMessage(inputMessage, imageAttachments);
       setInputMessage('');
+      // Clear image attachments
+      imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
+      setImageAttachments([]);
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newImages: Array<{ file: File; preview: string }> = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type.startsWith('image/')) {
+        newImages.push({
+          file,
+          preview: URL.createObjectURL(file)
+        });
+      }
+    }
+    setImageAttachments(prev => [...prev, ...newImages]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImageAttachments(prev => {
+      const removed = prev[index];
+      URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -638,6 +671,10 @@ export default function AdminChat() {
                         githubToken={githubToken}
                         isDarkMode={isDarkMode}
                         setIsDocumentModalOpen={setIsDocumentModalOpen}
+                        imageAttachments={imageAttachments}
+                        onImageSelect={handleImageSelect}
+                        onRemoveImage={removeImage}
+                        fileInputRef={fileInputRef}
                       />
                     </div>
                   </div>
@@ -679,6 +716,10 @@ export default function AdminChat() {
                   githubToken={githubToken}
                   isDarkMode={isDarkMode}
                   setIsDocumentModalOpen={setIsDocumentModalOpen}
+                  imageAttachments={imageAttachments}
+                  onImageSelect={handleImageSelect}
+                  onRemoveImage={removeImage}
+                  fileInputRef={fileInputRef}
                 />
               </div>
             </div>

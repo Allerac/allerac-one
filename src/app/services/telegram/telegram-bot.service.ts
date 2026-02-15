@@ -82,8 +82,8 @@ export class AlleracTelegramBot {
     const settings = await this.userSettings.loadUserSettings(alleracUserId);
     const selectedModel = this.selectedModels.get(telegramUserId);
 
-    // Find model config - default to first Ollama model for local use
-    const defaultModel = MODELS.find(m => m.provider === 'ollama') || MODELS[0];
+    // Find model config - default to gpt-4o for vision support
+    const defaultModel = MODELS.find(m => m.id === 'gpt-4o') || MODELS[0];
     const model = selectedModel ? MODELS.find(m => m.id === selectedModel) : null;
     const activeModel = model || defaultModel;
 

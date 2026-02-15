@@ -82,16 +82,17 @@ export class ChatMessageService {
     }
   }
 
-  async sendMessage(inputMessage: string) {
-    if (!inputMessage.trim() || !this.config.githubToken) return;
+  async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>) {
+    if ((!inputMessage.trim() && (!imageAttachments || imageAttachments.length === 0)) || !this.config.githubToken) return;
 
+    // Build user message content
     const userMessage: Message = {
       role: 'user',
-      content: inputMessage,
+      content: inputMessage || 'Attached image(s)',
       timestamp: new Date(),
     };
 
-    const messageContent = inputMessage;
+    const messageContent = inputMessage || 'What do you see in this image?';
     this.config.setMessages(prev => [...prev, userMessage]);
 
     try {
@@ -155,8 +156,38 @@ export class ChatMessageService {
             content: systemMessageWithContext,
           },
           ...this.config.messages.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: inputMessage },
+          { role: 'user', content: messageContent },
         ];
+
+      // Build multimodal message if images are provided
+      if (imageAttachments && imageAttachments.length > 0) {
+        // Replace last user message with multimodal content
+        const lastUserMsgIndex = conversationMessages.length - 1;
+        const contentParts: any[] = [
+          { type: 'text', text: messageContent }
+        ];
+
+        // Add images as base64 data URLs
+        for (const img of imageAttachments) {
+          const reader = new FileReader();
+          const base64 = await new Promise<string>((resolve) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(img.file);
+          });
+
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: base64
+            }
+          });
+        }
+
+        conversationMessages[lastUserMsgIndex] = {
+          role: 'user',
+          content: contentParts
+        };
+      }
 
       console.log('🔑 GitHub Token (first 10 chars):', this.config.githubToken?.substring(0, 10));
       console.log('🤖 Selected Model:', this.config.selectedModel);
