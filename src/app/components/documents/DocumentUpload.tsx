@@ -248,7 +248,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
         <input
           ref={fileInputRef}
           type="file"
-          accept=".txt,.pdf"
+          accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp"
           onChange={handleFileSelect}
           className="hidden"
           disabled={isUploading}
@@ -272,7 +272,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
           {isUploading ? uploadProgress : 'Drag and drop a file here, or click to select'}
         </p>
         <p className={`mt-1 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-          Supported formats: .txt, .pdf
+          Supported: .txt, .pdf, .jpg, .png, .gif, .webp
         </p>
       </div>
 
