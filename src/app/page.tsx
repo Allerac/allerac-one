@@ -23,6 +23,7 @@ import TokenConfiguration from './components/settings/TokenConfiguration';
 import MemorySettingsModal from './components/memory/MemorySettingsModal';
 import DocumentsModal from './components/documents/DocumentsModal';
 import MemoriesModal from './components/memory/MemoriesModal';
+import SkillsLibrary from './components/skills/SkillsLibrary';
 import UserSettingsModal from './components/auth/UserSettingsModal';
 import LoginModal from './components/auth/LoginModal';
 import SetupWizard from './components/setup/SetupWizard';
@@ -88,6 +89,7 @@ export default function AdminChat() {
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
+  const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
   const [memorySaveLoading, setMemorySaveLoading] = useState(false);
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
@@ -594,6 +596,7 @@ export default function AdminChat() {
             setIsEditingSettings={setIsEditingSettings}
             setIsDocumentModalOpen={setIsDocumentModalOpen}
             setIsMemoryModalOpen={setIsMemoryModalOpen}
+            setIsSkillsLibraryOpen={setIsSkillsLibraryOpen}
             setIsUserSettingsOpen={setIsUserSettingsOpen}
             handleLogout={handleLogout}
           />
@@ -620,6 +623,7 @@ export default function AdminChat() {
             setIsEditingSettings={setIsEditingSettings}
             setIsDocumentModalOpen={setIsDocumentModalOpen}
             setIsMemoryModalOpen={setIsMemoryModalOpen}
+            setIsSkillsLibraryOpen={setIsSkillsLibraryOpen}
             setIsUserSettingsOpen={setIsUserSettingsOpen}
             handleLogout={handleLogout}
           />
@@ -776,6 +780,14 @@ export default function AdminChat() {
         isDarkMode={isDarkMode}
         userId={userId}
         githubToken={githubToken}
+      />
+
+      {/* Skills Library Modal */}
+      <SkillsLibrary
+        isOpen={isSkillsLibraryOpen}
+        onClose={() => setIsSkillsLibraryOpen(false)}
+        isDarkMode={isDarkMode}
+        userId={userId}
       />
 
       {/* Memory Save Modal */}

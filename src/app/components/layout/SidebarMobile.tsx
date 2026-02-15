@@ -22,6 +22,7 @@ interface SidebarMobileProps {
   setIsEditingSettings: (editing: boolean) => void;
   setIsDocumentModalOpen: (open: boolean) => void;
   setIsMemoryModalOpen: (open: boolean) => void;
+  setIsSkillsLibraryOpen: (open: boolean) => void;
   setIsUserSettingsOpen: (open: boolean) => void;
   handleLogout: () => void;
 }
@@ -44,6 +45,7 @@ export default function SidebarMobile({
   setIsEditingSettings,
   setIsDocumentModalOpen,
   setIsMemoryModalOpen,
+  setIsSkillsLibraryOpen,
   setIsUserSettingsOpen,
   handleLogout
 }: SidebarMobileProps) {
