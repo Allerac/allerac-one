@@ -40,6 +40,7 @@ export default function AdminChat() {
     const openUserSettingsModal = () => setIsUserSettingsOpen(true);
     const openDocumentsModal = () => setIsDocumentModalOpen(true);
     const openMemoriesModal = () => setIsMemoryModalOpen(true);
+    const openSkillsLibrary = () => setIsSkillsLibraryOpen(true);
     const openSystemDashboard = () => setIsSystemDashboardOpen(true);
     const onLogout = () => handleLogoutRef.current();
 
@@ -48,6 +49,7 @@ export default function AdminChat() {
     window.addEventListener('openUserSettingsModal', openUserSettingsModal);
     window.addEventListener('openDocumentsModal', openDocumentsModal);
     window.addEventListener('openMemoriesModal', openMemoriesModal);
+    window.addEventListener('openSkillsLibrary', openSkillsLibrary);
     window.addEventListener('openSystemDashboard', openSystemDashboard);
     window.addEventListener('logout', onLogout);
 
@@ -57,6 +59,7 @@ export default function AdminChat() {
       window.removeEventListener('openUserSettingsModal', openUserSettingsModal);
       window.removeEventListener('openDocumentsModal', openDocumentsModal);
       window.removeEventListener('openMemoriesModal', openMemoriesModal);
+      window.removeEventListener('openSkillsLibrary', openSkillsLibrary);
       window.removeEventListener('openSystemDashboard', openSystemDashboard);
       window.removeEventListener('logout', onLogout);
     };
