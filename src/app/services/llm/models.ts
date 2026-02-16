@@ -92,15 +92,6 @@ export const MODELS: Model[] = [
     baseUrl: '/api/ollama',
     requiresToken: false
   },
-  {
-    id: 'minimax-m2.5:cloud',
-    name: 'MiniMax M2.5 (Cloud)',
-    icon: '☁️',
-    description: 'MiniMax cloud model via Ollama',
-    provider: 'ollama',
-    baseUrl: '/api/ollama',
-    requiresToken: false
-  },
   // {
   //   id: 'gemini-2-pro',
   //   name: 'Gemini 2 Pro',
