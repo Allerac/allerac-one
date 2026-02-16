@@ -60,7 +60,7 @@ export default function SidebarMobile({
         <div className="flex gap-2">
           <button
             onClick={toggleTheme}
-            className="flex-1 flex items-center justify-center px-4 py-3 rounded-lg text-yellow-500 hover:bg-yellow-500/10 transition-colors"
+            className="flex-1 flex items-center justify-center px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 transition-colors"
             title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           >
             {isDarkMode ? (
@@ -75,7 +75,7 @@ export default function SidebarMobile({
           </button>
           <button
             onClick={clearChat}
-            className="flex-1 flex items-center justify-center px-4 py-3 rounded-lg text-blue-500 hover:bg-blue-500/10 transition-colors"
+            className="flex-1 flex items-center justify-center px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 transition-colors"
             title="New Chat"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

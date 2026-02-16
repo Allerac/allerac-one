@@ -2,12 +2,13 @@
   "sidebar": {
     "conversations": "Conversaciones",
     "noConversations": "Sin conversaciones aún",
-    "configuration": "Configuración",
+    "configuración": "Configuración",
     "apiKeys": "Claves de API",
     "memorySettings": "Configuración de Memoria",
     "userSettings": "Configuración de Usuario",
     "documents": "Documentos",
     "memories": "Memorias",
+    "skills": "Habilidades",
     "logout": "Cerrar sesión",
     "deleteConversation": "Eliminar conversación",
     "systemDashboard": "Panel del Sistema"
