@@ -66,6 +66,8 @@ export default function ChatHeader({
     }
     if (model.provider === 'ollama') {
       if (!ollamaConnected) return false;
+      // Cloud models are always available if Ollama is connected
+      if (model.id.includes(':cloud')) return true;
       return ollamaModels.some(
         m => m.name === model.id || m.name.startsWith(model.id.split(':')[0])
       );
