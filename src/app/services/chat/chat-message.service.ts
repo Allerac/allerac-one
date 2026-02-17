@@ -158,7 +158,9 @@ export class ChatMessageService {
       
       if (this.config.activeSkill?.system_prompt) {
         console.log('[Skills] Using active skill:', this.config.activeSkill.name);
-        baseSystemMessage = this.config.activeSkill.system_prompt;
+        // Add skill context so the model knows which skill is active
+        const skillHeader = `[ACTIVE SKILL: ${this.config.activeSkill.display_name || this.config.activeSkill.name}]\n${this.config.activeSkill.description ? `Description: ${this.config.activeSkill.description}\n` : ''}\n`;
+        baseSystemMessage = skillHeader + this.config.activeSkill.system_prompt;
       }
 
       let systemMessageWithContext = baseSystemMessage;
