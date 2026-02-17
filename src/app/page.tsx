@@ -750,6 +750,113 @@ export default function AdminChat() {
                     <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
                     <h3 className={`text-xl font-medium mb-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
 
+                    {/* Skills Selector in Empty State */}
+                    {availableSkills.length > 0 && (
+                      <div className="mb-6 flex justify-center">
+                        <div className="relative">
+                          <button
+                            onClick={() => {
+                              const dropdown = document.getElementById('empty-state-skills-dropdown');
+                              if (dropdown) dropdown.classList.toggle('hidden');
+                            }}
+                            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                              preSelectedSkill
+                                ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                                : isDarkMode
+                                ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                                : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                            }`}
+                          >
+                            {preSelectedSkill ? (
+                              <>
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                {preSelectedSkill.display_name || preSelectedSkill.name}
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                Select Skill
+                              </>
+                            )}
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          
+                          <div
+                            id="empty-state-skills-dropdown"
+                            className={`hidden absolute top-full mt-2 right-0 w-80 rounded-lg shadow-lg z-50 ${
+                              isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+                            }`}
+                          >
+                            {preSelectedSkill && (
+                              <button
+                                onClick={() => {
+                                  handleDeactivateSkill();
+                                  document.getElementById('empty-state-skills-dropdown')?.classList.add('hidden');
+                                }}
+                                className={`w-full px-4 py-3 text-left border-b flex items-center gap-2 ${
+                                  isDarkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                <span className="text-red-500 font-medium">Deactivate Skill</span>
+                              </button>
+                            )}
+                            
+                            <div className="max-h-96 overflow-y-auto">
+                              {availableSkills.map((skill) => (
+                                <button
+                                  key={skill.id}
+                                  onClick={() => {
+                                    handleActivateSkill(skill.id);
+                                    document.getElementById('empty-state-skills-dropdown')?.classList.add('hidden');
+                                  }}
+                                  className={`w-full px-4 py-3 text-left border-b transition-colors ${
+                                    preSelectedSkill?.id === skill.id
+                                      ? isDarkMode
+                                        ? 'bg-purple-900 border-purple-700'
+                                        : 'bg-purple-50 border-purple-200'
+                                      : isDarkMode
+                                      ? 'border-gray-700 hover:bg-gray-700'
+                                      : 'border-gray-200 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className={`font-medium ${
+                                      preSelectedSkill?.id === skill.id
+                                        ? 'text-purple-400'
+                                        : isDarkMode
+                                        ? 'text-gray-200'
+                                        : 'text-gray-900'
+                                    }`}>
+                                      {skill.display_name || skill.name}
+                                    </span>
+                                    {preSelectedSkill?.id === skill.id && (
+                                      <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  {skill.description && (
+                                    <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                      {skill.description}
+                                    </p>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Input Box in Empty State */}
                     <div className="mt-8">
                       <ChatInput
