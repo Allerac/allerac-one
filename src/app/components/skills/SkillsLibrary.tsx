@@ -24,6 +24,7 @@ interface SkillsLibraryProps {
   onClose: () => void;
   isDarkMode: boolean;
   userId: string | null;
+  onSkillCreated?: () => void;
 }
 
 type Tab = 'library' | 'create' | 'edit';
@@ -33,6 +34,7 @@ export default function SkillsLibrary({
   onClose,
   isDarkMode,
   userId,
+  onSkillCreated,
 }: SkillsLibraryProps) {
   const [activeTab, setActiveTab] = useState<Tab>('library');
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -158,6 +160,11 @@ export default function SkillsLibrary({
       
       await loadSkills();
       setActiveTab('library');
+      
+      // Notify parent to reload available skills
+      if (onSkillCreated) {
+        onSkillCreated();
+      }
     } catch (err) {
       setError('Failed to create skill');
       console.error('Error creating skill:', err);

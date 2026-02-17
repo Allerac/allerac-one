@@ -126,6 +126,7 @@ export default function AdminChat() {
     setMessages,
     MODELS,
     TOOLS,
+    activeSkill,
     onConversationCreated: () => {
       if (userId) loadConversations(userId);
     },
@@ -851,6 +852,9 @@ export default function AdminChat() {
         onClose={() => setIsSkillsLibraryOpen(false)}
         isDarkMode={isDarkMode}
         userId={userId}
+        onSkillCreated={() => {
+          if (userId) loadAvailableSkills(userId);
+        }}
       />
 
       {/* Memory Save Modal */}

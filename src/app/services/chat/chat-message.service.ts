@@ -17,6 +17,7 @@ interface ChatMessageServiceConfig {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   MODELS: Model[];
   TOOLS: any[];
+  activeSkill?: any | null;
   onConversationCreated?: () => void;
 }
 
@@ -152,7 +153,15 @@ export class ChatMessageService {
       }
 
       // Step 3: Build conversation messages with all context
-      let systemMessageWithContext = this.config.systemMessage || 'You are a helpful AI assistant. You have access to web search and document knowledge base. Use these tools to provide accurate, up-to-date information. Always search for current information when needed.';
+      // Use skill's system_prompt if active, otherwise use default systemMessage
+      let baseSystemMessage = this.config.systemMessage || 'You are a helpful AI assistant. You have access to web search and document knowledge base. Use these tools to provide accurate, up-to-date information. Always search for current information when needed.';
+      
+      if (this.config.activeSkill?.system_prompt) {
+        console.log('[Skills] Using active skill:', this.config.activeSkill.name);
+        baseSystemMessage = this.config.activeSkill.system_prompt;
+      }
+
+      let systemMessageWithContext = baseSystemMessage;
 
       // Prepend conversation memories if available
       if (conversationMemories) {
