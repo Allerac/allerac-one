@@ -116,16 +116,13 @@ services:
     depends_on:
       - prometheus
 
-  # Telegram Bot (Optional)
-  # Usage: docker compose --profile telegram up -d
+  # Telegram Bot
   telegram-bot:
     build:
       context: .
       dockerfile: Dockerfile.telegram
     container_name: allerac-telegram
     restart: unless-stopped
-    profiles:
-      - telegram
     volumes:
       - ./telegram-bots.json:/app/telegram-bots.json:ro
     environment:
@@ -147,8 +144,7 @@ services:
         limits:
           memory: 256M
 
-  # Cloudflare Tunnel - Only for production deployment
-  # Usage: docker compose --profile production up -d
+  # Cloudflare Tunnel
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: allerac-tunnel
@@ -159,8 +155,6 @@ services:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     depends_on:
       - app
-    profiles:
-      - production
 
 volumes:
   db_data:

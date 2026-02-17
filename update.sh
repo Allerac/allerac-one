@@ -5,8 +5,7 @@
 # Pulls latest changes, rebuilds with proper build info, and restarts services
 #
 # Usage:
-#   ./update.sh                    # Update with production profile (includes tunnel)
-#   ./update.sh --no-tunnel        # Update without tunnel (local testing)
+#   ./update.sh
 
 set -e
 
@@ -16,23 +15,6 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
-
-# Configuration
-PROFILE="production"
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --no-tunnel)
-            PROFILE=""
-            shift
-            ;;
-        *)
-            echo -e "${RED}Unknown option: $1${NC}"
-            exit 1
-            ;;
-    esac
-done
 
 echo -e "${BLUE}╔════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Allerac One Update Script        ║${NC}"
@@ -66,33 +48,19 @@ echo ""
 
 # Step 3: Rebuild Docker images
 echo -e "${YELLOW}[3/5]${NC} Rebuilding Docker images..."
-if [ -n "$PROFILE" ]; then
-    docker compose --profile "$PROFILE" build --no-cache app || {
-        echo -e "${RED}Failed to rebuild images${NC}"
-        exit 1
-    }
-else
-    docker compose build --no-cache app || {
-        echo -e "${RED}Failed to rebuild images${NC}"
-        exit 1
-    }
-fi
+docker compose build --no-cache app telegram-bot || {
+    echo -e "${RED}Failed to rebuild images${NC}"
+    exit 1
+}
 echo -e "${GREEN}✓ Images rebuilt successfully${NC}"
 echo ""
 
 # Step 4: Restart services
 echo -e "${YELLOW}[4/5]${NC} Restarting services..."
-if [ -n "$PROFILE" ]; then
-    docker compose --profile "$PROFILE" up -d || {
-        echo -e "${RED}Failed to restart services${NC}"
-        exit 1
-    }
-else
-    docker compose up -d || {
-        echo -e "${RED}Failed to restart services${NC}"
-        exit 1
-    }
-fi
+docker compose up -d || {
+    echo -e "${RED}Failed to restart services${NC}"
+    exit 1
+}
 echo -e "${GREEN}✓ Services restarted${NC}"
 echo ""
 
@@ -107,12 +75,16 @@ else
     exit 1
 fi
 
-if [ -n "$PROFILE" ]; then
-    if docker ps | grep -q allerac-tunnel; then
-        echo -e "${GREEN}✓ Tunnel is running${NC}"
-    else
-        echo -e "${YELLOW}⚠ Tunnel is not running${NC}"
-    fi
+if docker ps | grep -q allerac-telegram; then
+    echo -e "${GREEN}✓ Telegram bot is running${NC}"
+else
+    echo -e "${YELLOW}⚠ Telegram bot is not running${NC}"
+fi
+
+if docker ps | grep -q allerac-tunnel; then
+    echo -e "${GREEN}✓ Tunnel is running${NC}"
+else
+    echo -e "${YELLOW}⚠ Tunnel is not running${NC}"
 fi
 
 echo ""
@@ -121,9 +93,5 @@ echo -e "${GREEN}║   Update completed successfully!   ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════╝${NC}"
 echo ""
 echo "Build: ${COMMIT_HASH:0:7} ($BUILD_DATE)"
-
-if [ -n "$PROFILE" ]; then
-    echo "Access: https://chat.allerac.ai"
-else
-    echo "Access: http://localhost:8080"
-fi
+echo "Public: https://chat.allerac.ai"
+echo "Local: http://localhost:8080"
