@@ -108,6 +108,7 @@ export default function AdminChat() {
   const [imageAttachments, setImageAttachments] = useState<Array<{ file: File; preview: string }>>([]);
   const [availableSkills, setAvailableSkills] = useState<any[]>([]);
   const [activeSkill, setActiveSkill] = useState<any | null>(null);
+  const [preSelectedSkill, setPreSelectedSkill] = useState<any | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
@@ -127,8 +128,16 @@ export default function AdminChat() {
     MODELS,
     TOOLS,
     activeSkill,
+    preSelectedSkill,
     onConversationCreated: () => {
       if (userId) loadConversations(userId);
+    },
+    onConversationCreatedWithSkill: async (conversationId, skillId) => {
+      if (userId) {
+        await skillActions.activateSkill(skillId, conversationId, userId);
+        await loadActiveSkill(conversationId);
+        setPreSelectedSkill(null);
+      }
     },
   });
 
@@ -243,7 +252,15 @@ export default function AdminChat() {
 
   // Handle skill activation
   const handleActivateSkill = async (skillId: string) => {
-    if (!currentConversationId || !userId) return;
+    if (!currentConversationId || !userId) {
+      // No conversation yet - pre-select the skill for auto-activation
+      const skill = availableSkills.find(s => s.id === skillId);
+      if (skill) {
+        console.log('[Skills] Pre-selecting skill for new conversation:', skill.name);
+        setPreSelectedSkill(skill);
+      }
+      return;
+    }
     
     try {
       await skillActions.activateSkill(skillId, currentConversationId, userId);
@@ -256,7 +273,11 @@ export default function AdminChat() {
 
   // Handle skill deactivation
   const handleDeactivateSkill = async () => {
-    if (!currentConversationId) return;
+    if (!currentConversationId) {
+      // No conversation - just clear pre-selection
+      setPreSelectedSkill(null);
+      return;
+    }
     
     try {
       await skillActions.deactivateSkill(currentConversationId);
@@ -709,7 +730,7 @@ export default function AdminChat() {
             onDownloadModel={handleDownloadModel}
             userId={userId}
             availableSkills={availableSkills}
-            activeSkill={activeSkill}
+            activeSkill={activeSkill || preSelectedSkill}
             onActivateSkill={handleActivateSkill}
             onDeactivateSkill={handleDeactivateSkill}
           />

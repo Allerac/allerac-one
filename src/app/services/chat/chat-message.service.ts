@@ -18,7 +18,9 @@ interface ChatMessageServiceConfig {
   MODELS: Model[];
   TOOLS: any[];
   activeSkill?: any | null;
+  preSelectedSkill?: any | null;
   onConversationCreated?: () => void;
+  onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
 }
 
 export class ChatMessageService {
@@ -70,6 +72,12 @@ export class ChatMessageService {
     // Notify that a new conversation was created
     if (this.config.onConversationCreated) {
       this.config.onConversationCreated();
+    }
+
+    // Auto-activate pre-selected skill if available
+    if (this.config.preSelectedSkill && this.config.onConversationCreatedWithSkill) {
+      console.log('[Skills] Auto-activating pre-selected skill:', this.config.preSelectedSkill.name);
+      await this.config.onConversationCreatedWithSkill(conversationId, this.config.preSelectedSkill.id);
     }
 
     return conversationId;
