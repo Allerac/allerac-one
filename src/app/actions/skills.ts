@@ -124,3 +124,58 @@ export async function removeSkillFromBot(botId: string, skillId: string) {
     throw error;
   }
 }
+
+// Web chat actions
+export async function getUserSkills(userId: string) {
+  try {
+    return await skillsService.getUserSkills(userId);
+  } catch (error) {
+    console.error('[Actions] Error getting user skills:', error);
+    throw error;
+  }
+}
+
+export async function assignSkillToUser(userId: string, skillId: string, isDefault: boolean = false) {
+  try {
+    return await skillsService.assignSkillToUser(skillId, userId, isDefault);
+  } catch (error) {
+    console.error('[Actions] Error assigning skill to user:', error);
+    throw error;
+  }
+}
+
+export async function activateSkill(
+  skillId: string,
+  conversationId: string,
+  userId: string
+) {
+  try {
+    return await skillsService.activateSkill(
+      skillId,
+      conversationId,
+      userId,
+      'manual'
+    );
+  } catch (error) {
+    console.error('[Actions] Error activating skill:', error);
+    throw error;
+  }
+}
+
+export async function deactivateSkill(conversationId: string) {
+  try {
+    return await skillsService.deactivateSkill(conversationId);
+  } catch (error) {
+    console.error('[Actions] Error deactivating skill:', error);
+    throw error;
+  }
+}
+
+export async function getActiveSkill(conversationId: string) {
+  try {
+    return await skillsService.getActiveSkill(conversationId);
+  } catch (error) {
+    console.error('[Actions] Error getting active skill:', error);
+    return null;
+  }
+}

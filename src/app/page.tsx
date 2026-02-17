@@ -12,6 +12,7 @@ import * as userActions from '@/app/actions/user';
 import * as memoryActions from '@/app/actions/memory';
 import * as authActions from '@/app/actions/auth';
 import * as systemActions from '@/app/actions/system';
+import * as skillActions from '@/app/actions/skills';
 
 import SidebarMobile from './components/layout/SidebarMobile';
 import SidebarDesktop from './components/layout/SidebarDesktop';
@@ -105,6 +106,8 @@ export default function AdminChat() {
   const [ollamaConnected, setOllamaConnected] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<Array<{ name: string; size: number; modified_at: string }>>([]);
   const [imageAttachments, setImageAttachments] = useState<Array<{ file: File; preview: string }>>([]);
+  const [availableSkills, setAvailableSkills] = useState<any[]>([]);
+  const [activeSkill, setActiveSkill] = useState<any | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
@@ -215,6 +218,52 @@ export default function AdminChat() {
     }
   };
 
+  // Load available skills for user
+  const loadAvailableSkills = async (uid: string) => {
+    try {
+      const skills = await skillActions.getAllSkills(uid);
+      setAvailableSkills(skills || []);
+    } catch (err) {
+      console.error('Failed to load skills:', err);
+      setAvailableSkills([]);
+    }
+  };
+
+  // Load active skill for current conversation
+  const loadActiveSkill = async (conversationId: string) => {
+    try {
+      const skill = await skillActions.getActiveSkill(conversationId);
+      setActiveSkill(skill);
+    } catch (err) {
+      console.error('Failed to load active skill:', err);
+      setActiveSkill(null);
+    }
+  };
+
+  // Handle skill activation
+  const handleActivateSkill = async (skillId: string) => {
+    if (!currentConversationId || !userId) return;
+    
+    try {
+      await skillActions.activateSkill(skillId, currentConversationId, userId);
+      await loadActiveSkill(currentConversationId);
+    } catch (err) {
+      console.error('Failed to activate skill:', err);
+    }
+  };
+
+  // Handle skill deactivation
+  const handleDeactivateSkill = async () => {
+    if (!currentConversationId) return;
+    
+    try {
+      await skillActions.deactivateSkill(currentConversationId);
+      setActiveSkill(null);
+    } catch (err) {
+      console.error('Failed to deactivate skill:', err);
+    }
+  };
+
   const checkAuth = async () => {
     try {
       // Check if this is first run (no users exist)
@@ -243,6 +292,9 @@ export default function AdminChat() {
       setUserId(user.id);
       setUserName(user.name || 'User');
       setUserEmail(user.email);
+
+      // Load available skills for user
+      await loadAvailableSkills(user.id);
 
       // Load API keys from localStorage first, then fallback to environment
       let savedToken = localStorage.getItem('github_token') || process.env.NEXT_PUBLIC_GITHUB_TOKEN || '';
@@ -340,6 +392,9 @@ export default function AdminChat() {
 
     setMessages(loadedMessages);
     setCurrentConversationId(conversationId);
+
+    // Load active skill for this conversation
+    await loadActiveSkill(conversationId);
 
     // Check if this conversation already has a memory
     const existingMemory = await memoryActions.shouldSummarizeConversation(conversationId, githubToken); // Wait, shouldSummarize returns true if NO memory. So if false, it MIGHT mean it has memory OR not enough messages.
@@ -650,6 +705,11 @@ export default function AdminChat() {
             ollamaConnected={ollamaConnected}
             ollamaModels={ollamaModels}
             onDownloadModel={handleDownloadModel}
+            userId={userId}
+            availableSkills={availableSkills}
+            activeSkill={activeSkill}
+            onActivateSkill={handleActivateSkill}
+            onDeactivateSkill={handleDeactivateSkill}
           />
 
           {/* Messages Container */}
