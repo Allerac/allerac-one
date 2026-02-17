@@ -1,6 +1,7 @@
 'use server';
 
 import { SkillsService } from '../services/skills/skills.service';
+import { TelegramBotConfigService } from '../services/telegram/telegram-bot-config.service';
 
 const skillsService = new SkillsService();
 
@@ -176,6 +177,18 @@ export async function getActiveSkill(conversationId: string) {
     return await skillsService.getActiveSkill(conversationId);
   } catch (error) {
     console.error('[Actions] Error getting active skill:', error);
+    return null;
+  }
+}
+
+// Telegram bot related
+export async function getUserTelegramBot(userId: string) {
+  try {
+    const bots = await TelegramBotConfigService.getUserBotConfigs(userId);
+    // Return the first enabled bot
+    return bots.find(bot => bot.enabled) || null;
+  } catch (error) {
+    console.error('[Actions] Error getting user telegram bot:', error);
     return null;
   }
 }

@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getAllSkills, createSkill, updateSkill, deleteSkill, getSkillUsageStats } from '../../actions/skills';
+import { 
+  getAllSkills, 
+  createSkill, 
+  updateSkill, 
+  deleteSkill, 
+  getSkillUsageStats,
+  getUserTelegramBot,
+  assignSkillToBot
+} from '../../actions/skills';
 import type { Skill } from '../../services/skills/skills.service';
 
 interface SkillStats {
@@ -32,6 +40,8 @@ export default function SkillsLibrary({
   const [error, setError] = useState<string | null>(null);
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [skillStats, setSkillStats] = useState<Record<string, SkillStats>>({});
+  const [hasTelegramBot, setHasTelegramBot] = useState(false);
+  const [telegramBotId, setTelegramBotId] = useState<string | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -41,6 +51,7 @@ export default function SkillsLibrary({
     systemPrompt: '',
     category: '',
     shared: false,
+    assignToTelegram: false,
   });
 
   useEffect(() => {
@@ -57,8 +68,21 @@ export default function SkillsLibrary({
   useEffect(() => {
     if (isOpen) {
       loadSkills();
+      checkTelegramBot();
     }
   }, [isOpen, userId]);
+
+  const checkTelegramBot = async () => {
+    if (!userId) return;
+    
+    try {
+      const bot = await getUserTelegramBot(userId);
+      setHasTelegramBot(!!bot);
+      setTelegramBotId(bot?.id || null);
+    } catch (err) {
+      console.error('Error checking telegram bot:', err);
+    }
+  };
 
   const loadSkills = async () => {
     setLoading(true);
@@ -95,7 +119,7 @@ export default function SkillsLibrary({
     setLoading(true);
     setError(null);
     try {
-      await createSkill({
+      const newSkill = await createSkill({
         userId,
         name: formData.name.toLowerCase().replace(/\s+/g, '-'),
         displayName: formData.displayName,
@@ -104,6 +128,16 @@ export default function SkillsLibrary({
         category: formData.category || undefined,
         shared: formData.shared,
       });
+
+      // Assign to Telegram bot if checkbox is checked
+      if (formData.assignToTelegram && telegramBotId && newSkill) {
+        try {
+          await assignSkillToBot(telegramBotId, newSkill.id, false);
+        } catch (err) {
+          console.error('Failed to assign skill to bot:', err);
+          setError('Skill created but failed to assign to Telegram bot');
+        }
+      }
       
       // Reset form
       setFormData({
@@ -113,6 +147,7 @@ export default function SkillsLibrary({
         systemPrompt: '',
         category: '',
         shared: false,
+        assignToTelegram: false,
       });
       
       await loadSkills();
@@ -180,6 +215,7 @@ export default function SkillsLibrary({
       systemPrompt: skill.content,
       category: skill.category || '',
       shared: skill.shared,
+      assignToTelegram: false, // Not applicable for edit
     });
     setActiveTab('edit');
   };
@@ -246,6 +282,7 @@ export default function SkillsLibrary({
                 systemPrompt: '',
                 category: '',
                 shared: false,
+                assignToTelegram: false,
               });
               setActiveTab('create');
             }}
@@ -457,6 +494,21 @@ export default function SkillsLibrary({
                   Share this skill publicly
                 </label>
               </div>
+
+              {hasTelegramBot && activeTab === 'create' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="assignToTelegram"
+                    checked={formData.assignToTelegram}
+                    onChange={(e) => setFormData({ ...formData, assignToTelegram: e.target.checked })}
+                    className="rounded"
+                  />
+                  <label htmlFor="assignToTelegram" className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Assign to Telegram bot (available in /skills)
+                  </label>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button
