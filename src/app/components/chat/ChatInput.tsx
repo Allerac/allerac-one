@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { useEffect, useRef } from 'react';
 
 interface ChatInputProps {
   inputMessage: string;
@@ -44,6 +45,32 @@ export default function ChatInput({
 }: ChatInputProps) {
   const t = useTranslations('chat');
   const currentSkill = activeSkill || preSelectedSkill;
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on ESC or click outside
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        const dropdown = document.getElementById('chat-input-skills-dropdown');
+        dropdown?.classList.add('hidden');
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        const dropdown = document.getElementById('chat-input-skills-dropdown');
+        dropdown?.classList.add('hidden');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   return (
     <div className={`border rounded-2xl ${isDarkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-white'}`}>
@@ -126,7 +153,7 @@ export default function ChatInput({
           
           {/* Skills dropdown */}
           {availableSkills.length > 0 && (
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => {
                   const dropdown = document.getElementById('chat-input-skills-dropdown');
@@ -149,7 +176,7 @@ export default function ChatInput({
               
               <div
                 id="chat-input-skills-dropdown"
-                className={`hidden absolute bottom-full mb-2 left-0 w-80 rounded-lg shadow-lg z-50 ${
+                className={`hidden absolute bottom-full mb-2 right-0 w-72 sm:w-80 max-w-[90vw] rounded-lg shadow-lg z-50 ${
                   isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
                 }`}
               >
