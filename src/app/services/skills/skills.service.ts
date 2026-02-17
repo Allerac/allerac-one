@@ -607,10 +607,28 @@ export class SkillsService {
    */
   async deleteSkill(skillId: string, userId: string): Promise<void> {
     // Only allow deletion of own skills
-    await pool.query(
-      'DELETE FROM skills WHERE id = $1 AND user_id = $2',
-      [skillId, userId]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Delete all references first to avoid foreign key constraints
+      await client.query('DELETE FROM conversation_active_skills WHERE skill_id = $1', [skillId]);
+      await client.query('DELETE FROM telegram_bot_skills WHERE skill_id = $1', [skillId]);
+      await client.query('DELETE FROM skill_usage WHERE skill_id = $1', [skillId]);
+      
+      // Now delete the skill itself (only if owned by user)
+      await client.query(
+        'DELETE FROM skills WHERE id = $1 AND user_id = $2',
+        [skillId, userId]
+      );
+      
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 
