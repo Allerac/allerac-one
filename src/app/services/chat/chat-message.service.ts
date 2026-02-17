@@ -160,11 +160,15 @@ export class ChatMessageService {
       
       let baseSystemMessage = this.config.systemMessage || 'You are a helpful AI assistant. You have access to web search and document knowledge base. Use these tools to provide accurate, up-to-date information. Always search for current information when needed.';
       
-      if (currentSkill?.system_prompt) {
+      // Skills use 'content' field for system prompt
+      const skillSystemPrompt = currentSkill?.system_prompt || currentSkill?.content;
+      
+      if (skillSystemPrompt) {
         console.log('[Skills] Using active skill:', currentSkill.name);
+        console.log('[Skills] Skill system prompt:', skillSystemPrompt);
         // Add skill context so the model knows which skill is active
         const skillHeader = `[ACTIVE SKILL: ${currentSkill.display_name || currentSkill.name}]\n${currentSkill.description ? `Description: ${currentSkill.description}\n` : ''}\n`;
-        baseSystemMessage = skillHeader + currentSkill.system_prompt;
+        baseSystemMessage = skillHeader + skillSystemPrompt;
       }
 
       let systemMessageWithContext = baseSystemMessage;
