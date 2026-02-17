@@ -154,6 +154,8 @@ export class ChatMessageService {
 
       // Step 3: Build conversation messages with all context
       // Use skill's system_prompt if active, otherwise use default systemMessage
+      console.log('[Skills] activeSkill in ChatMessageService:', this.config.activeSkill);
+      
       let baseSystemMessage = this.config.systemMessage || 'You are a helpful AI assistant. You have access to web search and document knowledge base. Use these tools to provide accurate, up-to-date information. Always search for current information when needed.';
       
       if (this.config.activeSkill?.system_prompt) {

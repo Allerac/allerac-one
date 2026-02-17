@@ -248,6 +248,7 @@ export default function AdminChat() {
     try {
       await skillActions.activateSkill(skillId, currentConversationId, userId);
       await loadActiveSkill(currentConversationId);
+      console.log('[Skills] Skill activated, activeSkill state:', activeSkill);
     } catch (err) {
       console.error('Failed to activate skill:', err);
     }
