@@ -546,7 +546,7 @@ export default function AdminChat() {
     if (isSending) return;
     setIsSending(true);
     try {
-      await chatMessageService.sendMessage(inputMessage, imageAttachments);
+      await chatMessageService.sendMessage(inputMessage, imageAttachments, activeSkill);
       setInputMessage('');
       // Clear image attachments
       imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));

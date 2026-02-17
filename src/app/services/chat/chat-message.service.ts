@@ -83,7 +83,7 @@ export class ChatMessageService {
     }
   }
 
-  async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>) {
+  async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>, activeSkill?: any | null) {
     if ((!inputMessage.trim() && (!imageAttachments || imageAttachments.length === 0)) || !this.config.githubToken) return;
 
     const messageContent = inputMessage || 'What do you see in this image?';
@@ -154,15 +154,17 @@ export class ChatMessageService {
 
       // Step 3: Build conversation messages with all context
       // Use skill's system_prompt if active, otherwise use default systemMessage
-      console.log('[Skills] activeSkill in ChatMessageService:', this.config.activeSkill);
+      // Use the activeSkill passed as parameter (not from config, to avoid stale state)
+      const currentSkill = activeSkill ?? this.config.activeSkill;
+      console.log('[Skills] activeSkill in ChatMessageService:', currentSkill);
       
       let baseSystemMessage = this.config.systemMessage || 'You are a helpful AI assistant. You have access to web search and document knowledge base. Use these tools to provide accurate, up-to-date information. Always search for current information when needed.';
       
-      if (this.config.activeSkill?.system_prompt) {
-        console.log('[Skills] Using active skill:', this.config.activeSkill.name);
+      if (currentSkill?.system_prompt) {
+        console.log('[Skills] Using active skill:', currentSkill.name);
         // Add skill context so the model knows which skill is active
-        const skillHeader = `[ACTIVE SKILL: ${this.config.activeSkill.display_name || this.config.activeSkill.name}]\n${this.config.activeSkill.description ? `Description: ${this.config.activeSkill.description}\n` : ''}\n`;
-        baseSystemMessage = skillHeader + this.config.activeSkill.system_prompt;
+        const skillHeader = `[ACTIVE SKILL: ${currentSkill.display_name || currentSkill.name}]\n${currentSkill.description ? `Description: ${currentSkill.description}\n` : ''}\n`;
+        baseSystemMessage = skillHeader + currentSkill.system_prompt;
       }
 
       let systemMessageWithContext = baseSystemMessage;
