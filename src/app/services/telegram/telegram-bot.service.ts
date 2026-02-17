@@ -542,12 +542,17 @@ export class AlleracTelegramBot {
         const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
         const botConfig = await this.getBotConfig(chatId);
         
+        console.log('[TelegramBot] /skills - botConfig:', botConfig?.id, botConfig?.botName);
+        
         if (!botConfig) {
           await this.bot.sendMessage(chatId, 'Bot not configured. Please set up your bot first.');
           return;
         }
 
         const skills = await skillsService.getBotSkills(botConfig.id);
+        
+        console.log('[TelegramBot] /skills - skills loaded:', skills.length, skills.map(s => s.name));
+        
         const activeSkill = mapping.current_conversation_id 
           ? await skillsService.getActiveSkill(mapping.current_conversation_id)
           : null;
