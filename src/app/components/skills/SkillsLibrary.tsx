@@ -129,10 +129,16 @@ export default function SkillsLibrary({
         shared: formData.shared,
       });
 
+      console.log('[SkillsLibrary] Skill created:', newSkill);
+      console.log('[SkillsLibrary] assignToTelegram:', formData.assignToTelegram);
+      console.log('[SkillsLibrary] telegramBotId:', telegramBotId);
+
       // Assign to Telegram bot if checkbox is checked
       if (formData.assignToTelegram && telegramBotId && newSkill) {
+        console.log('[SkillsLibrary] Assigning skill to bot...');
         try {
           await assignSkillToBot(telegramBotId, newSkill.id, false);
+          console.log('[SkillsLibrary] Skill assigned successfully!');
         } catch (err) {
           console.error('Failed to assign skill to bot:', err);
           setError('Skill created but failed to assign to Telegram bot');
