@@ -18,4 +18,29 @@ export const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'execute_shell',
+      description: 'Execute a shell command on the host machine. Use this to run scripts, list files, install packages, call APIs via curl, send emails via sendmail/msmtp, manipulate files, or perform any system operation. Returns stdout, stderr, and exit code.',
+      parameters: {
+        type: 'object',
+        properties: {
+          command: {
+            type: 'string',
+            description: 'The shell command to execute (bash syntax)',
+          },
+          cwd: {
+            type: 'string',
+            description: 'Working directory for the command (optional, defaults to app root)',
+          },
+          timeout: {
+            type: 'number',
+            description: 'Timeout in milliseconds (optional, default 30000)',
+          },
+        },
+        required: ['command'],
+      },
+    },
+  },
 ];

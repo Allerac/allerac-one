@@ -71,7 +71,7 @@ export const MODELS: Model[] = [
     icon: '🐼',
     description: 'Fast & efficient local model (4GB RAM)',
     provider: 'ollama',
-    baseUrl: '/api/ollama',
+    baseUrl: 'http://localhost:11434',
     requiresToken: false
   },
   {

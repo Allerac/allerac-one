@@ -58,6 +58,37 @@ services:
       db:
         condition: service_healthy
 
+  executor:
+    build:
+      context: ./infra/executor
+      dockerfile: Dockerfile
+    container_name: allerac-executor
+    restart: unless-stopped
+    environment:
+      - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+      # Mount point exposed to the agent as its working directory
+      - DEFAULT_CWD=/workspace
+    volumes:
+      # Give the agent access to the host home directory
+      # Change HOST_WORKSPACE in .env to restrict or expand the scope
+      - ${HOST_WORKSPACE:-/home}:/workspace
+      # Docker socket for self-update (docker compose build/up)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Project directory so the agent can run update.sh
+      - ${COMPOSE_DIR:-.}:/project
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
   app:
     build:
       context: .
@@ -74,6 +105,9 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       # Optional external APIs (not required for local use)
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      # Executor service for shell tool
+      - EXECUTOR_URL=http://executor:3001
+      - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
     ports:
       - "${APP_PORT:-8080}:8080"
     extra_hosts:
@@ -81,6 +115,8 @@ services:
     depends_on:
       migrations:
         condition: service_completed_successfully
+      executor:
+        condition: service_healthy
     # Memory limits for stability
     deploy:
       resources:

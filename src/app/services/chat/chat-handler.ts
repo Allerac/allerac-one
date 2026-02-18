@@ -10,6 +10,7 @@ import { ConversationMemoryService } from '../memory/conversation-memory.service
 import { VectorSearchService } from '../rag/vector-search.service';
 import { EmbeddingService } from '../rag/embedding.service';
 import { SearchWebTool } from '../../tools/search-web.tool';
+import { ShellTool } from '../../tools/shell.tool';
 import { ChatService } from '../database/chat.service';
 import { skillsService } from '../skills/skills.service';
 import { TOOLS } from '../../tools/tools';
@@ -228,30 +229,48 @@ export async function handleChatMessage(
 
   // 6. Handle tool calls
   while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+    // Push the original assistant message unchanged so Ollama receives its own native format
+    // (arguments as object, no id). OpenAI always provides id and string arguments — both work as-is.
     conversationMessages.push(assistantMessage);
 
     for (const toolCall of assistantMessage.tool_calls) {
       const toolName = toolCall.function.name;
-      const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
+      // Ollama omits id — generate one for our own bookkeeping
+      const toolCallId = toolCall.id || `call_${toolName}_${Date.now()}`;
+      // Ollama sends arguments as an object; OpenAI sends a JSON string — handle both
+      const rawArgs = toolCall.function.arguments;
+      const toolArgs = rawArgs == null
+        ? {}
+        : typeof rawArgs === 'object'
+          ? rawArgs
+          : (() => { try { return JSON.parse(rawArgs); } catch { return {}; } })();
+
+      console.log(`[ChatHandler] Tool call: ${toolName}`, JSON.stringify(toolArgs));
 
       try {
         let toolResult: any;
         if (toolName === 'search_web' && tavilyApiKey) {
           const searchTool = new SearchWebTool(tavilyApiKey);
           toolResult = await searchTool.execute(toolArgs.query);
+        } else if (toolName === 'execute_shell') {
+          const shellTool = new ShellTool();
+          toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
         } else {
           toolResult = { error: `Tool ${toolName} not available` };
         }
 
+        console.log(`[ChatHandler] Tool result for ${toolName}:`, toolResult);
+
         conversationMessages.push({
           role: 'tool',
-          tool_call_id: toolCall.id,
+          tool_call_id: toolCallId,
           content: JSON.stringify(toolResult),
         });
       } catch (error: any) {
+        console.error(`[ChatHandler] Tool error for ${toolName}:`, error);
         conversationMessages.push({
           role: 'tool',
-          tool_call_id: toolCall.id,
+          tool_call_id: toolCallId,
           content: JSON.stringify({ error: error.message }),
         });
       }

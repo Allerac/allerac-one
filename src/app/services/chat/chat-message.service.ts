@@ -34,6 +34,9 @@ export class ChatMessageService {
     if (toolName === 'search_web') {
       return await toolActions.executeWebSearch(toolArgs.query, this.config.tavilyApiKey);
     }
+    if (toolName === 'execute_shell') {
+      return await toolActions.executeShellCommand(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
+    }
     throw new Error(`Unknown tool: ${toolName}`);
   }
 
@@ -267,24 +270,33 @@ export class ChatMessageService {
 
       // Handle tool calls
       while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        // Push original message unchanged — Ollama expects its own native format (object arguments, no id)
         conversationMessages.push(assistantMessage);
 
         // Execute all tool calls
         for (const toolCall of assistantMessage.tool_calls) {
           const toolName = toolCall.function.name;
-          const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
+          // Ollama sends arguments as an object; OpenAI sends a JSON string — handle both
+          const rawArgs = toolCall.function.arguments;
+          const toolArgs = rawArgs == null
+            ? {}
+            : typeof rawArgs === 'object'
+              ? rawArgs
+              : (() => { try { return JSON.parse(rawArgs); } catch { return {}; } })();
+          // Ollama omits id — generate a fallback
+          const toolCallId = toolCall.id || `call_${toolName}_${Date.now()}`;
 
           try {
             const toolResult = await this.executeTool(toolName, toolArgs);
             conversationMessages.push({
               role: 'tool',
-              tool_call_id: toolCall.id,
+              tool_call_id: toolCallId,
               content: JSON.stringify(toolResult),
             });
           } catch (error: any) {
             conversationMessages.push({
               role: 'tool',
-              tool_call_id: toolCall.id,
+              tool_call_id: toolCallId,
               content: JSON.stringify({ error: error.message }),
             });
           }

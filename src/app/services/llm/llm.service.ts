@@ -184,6 +184,7 @@ export class LLMService {
           model: request.model,
           messages: request.messages,
           stream: false,
+          tools: request.tools,
           options: {
             temperature: request.temperature,
             num_predict: request.max_tokens,
@@ -222,8 +223,9 @@ export class LLMService {
           message: {
             role: 'assistant',
             content: data.message?.content || '',
+            tool_calls: data.message?.tool_calls,
           },
-          finish_reason: data.done ? 'stop' : 'length',
+          finish_reason: data.done_reason || (data.done ? 'stop' : 'length'),
         }],
         usage: {
           prompt_tokens: data.prompt_eval_count || 0,
