@@ -612,12 +612,21 @@ export class SkillsService {
       await client.query('BEGIN');
       
       // Delete all references first to avoid foreign key constraints
-      // Clear previous_skill_id references
+      // Clear previous_skill_id references in conversation_active_skills
       await client.query('UPDATE conversation_active_skills SET previous_skill_id = NULL WHERE previous_skill_id = $1', [skillId]);
+      
+      // Clear previous_skill_id references in skill_usage
+      await client.query('UPDATE skill_usage SET previous_skill_id = NULL WHERE previous_skill_id = $1', [skillId]);
+      
       // Delete active skills
       await client.query('DELETE FROM conversation_active_skills WHERE skill_id = $1', [skillId]);
+      
       // Delete bot assignments
       await client.query('DELETE FROM telegram_bot_skills WHERE skill_id = $1', [skillId]);
+      
+      // Delete user assignments
+      await client.query('DELETE FROM user_skills WHERE skill_id = $1', [skillId]);
+      
       // Delete usage stats
       await client.query('DELETE FROM skill_usage WHERE skill_id = $1', [skillId]);
       
