@@ -39,6 +39,11 @@ function encode(data: object): Uint8Array {
 export async function POST(request: Request): Promise<Response> {
   const stream = new ReadableStream({
     async start(controller) {
+      // Enqueue immediately so Next.js flushes the 200 + text/event-stream headers
+      // before any async work. Without this, Cloudflare waits for the first byte
+      // and issues a 524 if the LLM or DB takes more than ~100 s.
+      controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
+
       try {
         // 1. Authenticate via session cookie
         const cookieStore = await cookies();
@@ -323,6 +328,7 @@ export async function POST(request: Request): Promise<Response> {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',  // disable nginx buffering if present
     },
   });
 }
