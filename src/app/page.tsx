@@ -614,6 +614,8 @@ export default function AdminChat() {
   const clearChat = () => {
     setMessages([]);
     setCurrentConversationId(null);
+    setActiveSkill(null);
+    setPreSelectedSkill(null);
   };
 
   const deleteConversation = async (conversationId: string) => {
