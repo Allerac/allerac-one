@@ -1,9 +1,4 @@
 import { Message, Model } from '../../types';
-import { LLMService } from '../llm/llm.service';
-import * as chatActions from '@/app/actions/chat';
-import * as memoryActions from '@/app/actions/memory';
-import * as ragActions from '@/app/actions/rag';
-import * as toolActions from '@/app/actions/tools';
 
 interface ChatMessageServiceConfig {
   githubToken: string;
@@ -30,311 +25,146 @@ export class ChatMessageService {
     this.config = config;
   }
 
-  private async executeTool(toolName: string, toolArgs: any) {
-    if (toolName === 'search_web') {
-      return await toolActions.executeWebSearch(toolArgs.query, this.config.tavilyApiKey);
-    }
-    if (toolName === 'execute_shell') {
-      return await toolActions.executeShellCommand(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
-    }
-    throw new Error(`Unknown tool: ${toolName}`);
-  }
-
-  private async createNewConversation(firstMessage: string): Promise<string | null> {
-    if (!this.config.userId) return null;
-
-    // Before creating new conversation, try to summarize the current one
-    if (this.config.currentConversationId && this.config.githubToken) {
-      console.log(`[Memory] Creating new conversation, checking if ${this.config.currentConversationId} should be summarized`);
-      try {
-        const shouldSummarize = await memoryActions.shouldSummarizeConversation(this.config.currentConversationId, this.config.githubToken);
-        console.log(`[Memory] Should summarize ${this.config.currentConversationId}:`, shouldSummarize);
-
-        if (shouldSummarize) {
-          console.log(`[Memory] Generating summary for conversation ${this.config.currentConversationId}...`);
-          // Generate summary in background
-          memoryActions.generateConversationSummary(this.config.currentConversationId, this.config.userId!, this.config.githubToken)
-            .then(summary => console.log('[Memory] Summary generated:', summary))
-            .catch(err => console.error('[Memory] Failed to generate summary:', err));
-        }
-      } catch (error) {
-        console.error('[Memory] Error in summary generation:', error);
-      }
-    }
-
-    const title = firstMessage.slice(0, 50) + (firstMessage.length > 50 ? '...' : '');
-    const conversationId = await chatActions.createConversation(this.config.userId, title);
-
-    if (!conversationId) {
-      console.error('Error creating conversation');
-      return null;
-    }
-
-    this.config.setCurrentConversationId(conversationId);
-
-    // Notify that a new conversation was created
-    if (this.config.onConversationCreated) {
-      this.config.onConversationCreated();
-    }
-
-    // Auto-activate pre-selected skill if available
-    if (this.config.preSelectedSkill && this.config.onConversationCreatedWithSkill) {
-      console.log('[Skills] Auto-activating pre-selected skill:', this.config.preSelectedSkill.name);
-      await this.config.onConversationCreatedWithSkill(conversationId, this.config.preSelectedSkill.id);
-    }
-
-    return conversationId;
-  }
-
-  private async saveMessage(conversationId: string, role: string, content: string) {
-    const result = await chatActions.saveMessage(conversationId, role, content);
-
-    if (!result.success) {
-      console.error('Error saving message:', result.error);
-    }
-  }
-
   async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>, activeSkill?: any | null) {
-    if ((!inputMessage.trim() && (!imageAttachments || imageAttachments.length === 0)) || !this.config.githubToken) return;
+    if (!inputMessage.trim() && (!imageAttachments || imageAttachments.length === 0)) return;
+    if (!this.config.userId) return;
 
     const messageContent = inputMessage || 'What do you see in this image?';
-    
-    // Build multimodal content for display if images are attached
+
+    // Build display content (text + image previews for the UI)
     let displayContent: string | any[] = messageContent;
     if (imageAttachments && imageAttachments.length > 0) {
-      const contentParts: any[] = [
-        { type: 'text', text: messageContent }
-      ];
-      
-      // Add image previews for display
-      for (const img of imageAttachments) {
-        contentParts.push({
+      displayContent = [
+        { type: 'text', text: messageContent },
+        ...imageAttachments.map(img => ({
           type: 'image_url',
-          image_url: { url: img.preview }
-        });
-      }
-      
-      displayContent = contentParts;
+          image_url: { url: img.preview },
+        })),
+      ];
     }
 
-    // Build user message with multimodal content
-    const userMessage: Message = {
-      role: 'user',
-      content: displayContent,
-      timestamp: new Date(),
-    };
+    // 1. Add user message for immediate display
+    this.config.setMessages(prev => [
+      ...prev,
+      { role: 'user', content: displayContent, timestamp: new Date() } as Message,
+    ]);
 
-    this.config.setMessages(prev => [...prev, userMessage]);
+    // 2. Add empty assistant placeholder so the UI shows a typing indicator
+    this.config.setMessages(prev => [
+      ...prev,
+      { role: 'assistant', content: '', timestamp: new Date() } as Message,
+    ]);
 
     try {
-      // Create new conversation if needed
-      let convId = this.config.currentConversationId;
-      if (!convId) {
-        convId = await this.createNewConversation(messageContent);
-        if (!convId) throw new Error('Failed to create conversation');
-      }
-
-      // Save user message
-      await this.saveMessage(convId, 'user', messageContent);
-
-      // Step 1: Get conversation memories from past chats
-      let conversationMemories = '';
-      if (this.config.userId) {
-        try {
-          // Get recent summaries (exclude current conversation)
-          const summaries = await memoryActions.getRecentSummaries(this.config.userId, this.config.githubToken, 3, 4);
-          if (summaries && summaries.length > 0) {
-            conversationMemories = await memoryActions.formatMemoryContext(summaries, this.config.githubToken);
-          }
-        } catch (error) {
-          console.log('Failed to load conversation memories:', error);
-        }
-      }
-
-      // Step 2: Search for relevant documents using RAG (filtered by user)
-      let relevantContext = '';
-      if (this.config.userId) {
-        try {
-          // Get relevant context from documents owned by this user
-          relevantContext = await ragActions.getRelevantContext(messageContent, this.config.userId, this.config.githubToken);
-        } catch (error) {
-          console.log('No documents available or search failed:', error);
-          // Continue without document context
-        }
-      }
-
-      // Step 3: Build conversation messages with all context
-      // Use skill's system_prompt if active, otherwise use default systemMessage
-      // Use the activeSkill passed as parameter (not from config, to avoid stale state)
-      const currentSkill = activeSkill ?? this.config.activeSkill;
-      console.log('[Skills] activeSkill in ChatMessageService:', currentSkill);
-      
-      let baseSystemMessage = this.config.systemMessage || 'You are a helpful AI assistant. You have access to web search and document knowledge base. Use these tools to provide accurate, up-to-date information. Always search for current information when needed.';
-      
-      // Skills use 'content' field for system prompt
-      const skillSystemPrompt = currentSkill?.system_prompt || currentSkill?.content;
-      
-      if (skillSystemPrompt) {
-        console.log('[Skills] Using active skill:', currentSkill.name);
-        console.log('[Skills] Skill system prompt:', skillSystemPrompt);
-        // Add skill context so the model knows which skill is active
-        const skillHeader = `[ACTIVE SKILL: ${currentSkill.display_name || currentSkill.name}]\n${currentSkill.description ? `Description: ${currentSkill.description}\n` : ''}\n`;
-        baseSystemMessage = skillHeader + skillSystemPrompt;
-      }
-
-      let systemMessageWithContext = baseSystemMessage;
-
-      // Prepend conversation memories if available
-      if (conversationMemories) {
-        systemMessageWithContext = conversationMemories + '\n\n' + systemMessageWithContext;
-      }
-
-      // Append document context if available
-      if (relevantContext && !relevantContext.includes('No relevant documents found')) {
-        systemMessageWithContext += '\n\n' + relevantContext;
-      }
-
-      const conversationMessages: Array<{
-        role: string;
-        content: string | any[];
-        tool_call_id?: string;
-        tool_calls?: any;
-      }> = [
-          {
-            role: 'system',
-            content: systemMessageWithContext,
-          },
-          ...this.config.messages.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: messageContent },
-        ];
-
-      // Build multimodal message if images are provided
+      // 3. Encode images to base64 data URLs for the server
+      let encodedImages: Array<{ url: string }> | undefined;
       if (imageAttachments && imageAttachments.length > 0) {
-        // Replace last user message with multimodal content
-        const lastUserMsgIndex = conversationMessages.length - 1;
-        const contentParts: any[] = [
-          { type: 'text', text: messageContent }
-        ];
-
-        // Add images as base64 data URLs
-        for (const img of imageAttachments) {
-          const reader = new FileReader();
-          const base64 = await new Promise<string>((resolve) => {
-            reader.onload = () => resolve(reader.result as string);
+        encodedImages = await Promise.all(
+          imageAttachments.map(img => new Promise<{ url: string }>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve({ url: reader.result as string });
             reader.readAsDataURL(img.file);
-          });
-
-          contentParts.push({
-            type: 'image_url',
-            image_url: {
-              url: base64
-            }
-          });
-        }
-
-        conversationMessages[lastUserMsgIndex] = {
-          role: 'user',
-          content: contentParts
-        };
+          }))
+        );
       }
 
-      console.log('🔑 GitHub Token (first 10 chars):', this.config.githubToken?.substring(0, 10));
-      console.log('🤖 Selected Model:', this.config.selectedModel);
-      console.log('📨 Sending request to LLM API...');
-
-      // Get model configuration
+      // Determine provider from model config
       const currentModel = this.config.MODELS.find(m => m.id === this.config.selectedModel);
-      if (!currentModel) {
-        throw new Error(`Model ${this.config.selectedModel} not found in configuration`);
+      const provider = currentModel?.provider || 'github';
+
+      // 4. POST to the SSE Route Handler
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: messageContent,
+          conversationId: this.config.currentConversationId,
+          model: this.config.selectedModel,
+          provider,
+          imageAttachments: encodedImages,
+          // Pass pre-selected skill ID only for new conversations so the server
+          // activates and uses it on the very first message
+          preSelectedSkillId: !this.config.currentConversationId && this.config.preSelectedSkill
+            ? this.config.preSelectedSkill.id
+            : undefined,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        const text = await response.text().catch(() => `HTTP ${response.status}`);
+        throw new Error(text || `HTTP error ${response.status}`);
       }
 
-      console.log('🔌 Using provider:', currentModel.provider);
-      console.log('🌐 Base URL:', currentModel.baseUrl);
+      // 5. Parse the SSE stream, updating the assistant placeholder as tokens arrive
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      // Use LLM service with model configuration
-      const llmService = new LLMService(
-        currentModel.provider,
-        currentModel.baseUrl!,
-        { githubToken: this.config.githubToken }
-      );
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      let data = await llmService.chatCompletion({
-        messages: conversationMessages,
-        model: this.config.selectedModel,
-        temperature: 0.7,
-        max_tokens: 2000,
-        tools: this.config.TOOLS,
-        tool_choice: 'auto',
-      });
-      let assistantMessage = data.choices[0].message;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
-      // Handle tool calls
-      while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        // Push original message unchanged — Ollama expects its own native format (object arguments, no id)
-        conversationMessages.push(assistantMessage);
-
-        // Execute all tool calls
-        for (const toolCall of assistantMessage.tool_calls) {
-          const toolName = toolCall.function.name;
-          // Ollama sends arguments as an object; OpenAI sends a JSON string — handle both
-          const rawArgs = toolCall.function.arguments;
-          const toolArgs = rawArgs == null
-            ? {}
-            : typeof rawArgs === 'object'
-              ? rawArgs
-              : (() => { try { return JSON.parse(rawArgs); } catch { return {}; } })();
-          // Ollama omits id — generate a fallback
-          const toolCallId = toolCall.id || `call_${toolName}_${Date.now()}`;
-
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let event: any;
           try {
-            const toolResult = await this.executeTool(toolName, toolArgs);
-            conversationMessages.push({
-              role: 'tool',
-              tool_call_id: toolCallId,
-              content: JSON.stringify(toolResult),
+            event = JSON.parse(line.slice(6));
+          } catch { continue; }
+
+          if (event.type === 'token') {
+            // Append token to the last (assistant placeholder) message
+            this.config.setMessages(prev => {
+              const msgs = [...prev];
+              const last = msgs[msgs.length - 1];
+              if (last && last.role === 'assistant') {
+                msgs[msgs.length - 1] = {
+                  ...last,
+                  content: (last.content as string) + event.content,
+                };
+              }
+              return msgs;
             });
-          } catch (error: any) {
-            conversationMessages.push({
-              role: 'tool',
-              tool_call_id: toolCallId,
-              content: JSON.stringify({ error: error.message }),
-            });
+          } else if (event.type === 'done') {
+            const newConvId: string = event.conversationId;
+            const wasNew = !this.config.currentConversationId;
+
+            this.config.setCurrentConversationId(newConvId);
+
+            if (wasNew) {
+              if (this.config.onConversationCreated) {
+                this.config.onConversationCreated();
+              }
+              // Activate pre-selected skill on the new conversation
+              if (this.config.preSelectedSkill && this.config.onConversationCreatedWithSkill) {
+                console.log('[Skills] Auto-activating pre-selected skill:', this.config.preSelectedSkill.name);
+                await this.config.onConversationCreatedWithSkill(newConvId, this.config.preSelectedSkill.id);
+              }
+            }
+          } else if (event.type === 'error') {
+            throw new Error(event.message || 'Server error');
           }
         }
-
-        // Get final response from model
-        console.log('🔄 Sending follow-up request after tool execution...');
-        data = await llmService.chatCompletion({
-          messages: conversationMessages,
-          model: this.config.selectedModel,
-          temperature: 0.7,
-          max_tokens: 2000,
-          tools: this.config.TOOLS,
-          tool_choice: 'auto',
-        });
-        assistantMessage = data.choices[0].message;
-      }
-
-      const finalMessage: Message = {
-        role: 'assistant',
-        content: assistantMessage.content,
-        timestamp: new Date(),
-      };
-
-      this.config.setMessages(prev => [...prev, finalMessage]);
-
-      // Save assistant message
-      if (convId) {
-        await this.saveMessage(convId, 'assistant', assistantMessage.content);
       }
     } catch (error: any) {
       console.error('❌ Error sending message:', error);
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: error.message,
-        timestamp: new Date(),
-      };
-      this.config.setMessages(prev => [...prev, errorMessage]);
+      // Replace empty assistant placeholder with the error
+      this.config.setMessages(prev => {
+        const msgs = [...prev];
+        const last = msgs[msgs.length - 1];
+        if (last && last.role === 'assistant' && last.content === '') {
+          msgs[msgs.length - 1] = {
+            ...last,
+            content: error.message,
+          };
+        } else {
+          msgs.push({ role: 'assistant', content: error.message, timestamp: new Date() } as Message);
+        }
+        return msgs;
+      });
     }
   }
 }

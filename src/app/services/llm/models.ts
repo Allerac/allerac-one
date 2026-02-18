@@ -84,6 +84,15 @@ export const MODELS: Model[] = [
     requiresToken: false
   },
   {
+    id: 'llama3.2:1b',
+    name: 'Llama 3.2 1B (Local)',
+    icon: '🧠',
+    description: 'Fast local model via Ollama (CPU-friendly)',
+    provider: 'ollama',
+    baseUrl: '/api/ollama',
+    requiresToken: false
+  },
+  {
     id: 'deepseek-r1:1.5b',
     name: 'DeepSeek R1 1.5B (Local)',
     icon: '🧠',

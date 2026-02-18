@@ -71,6 +71,101 @@ export class LLMService {
   }
 
   /**
+   * Stream LLM response, yielding string tokens one by one.
+   * Tool-detection calls stay non-streaming; use this for the final user-facing response.
+   */
+  async *streamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    if (this.provider === 'github') {
+      yield* this.githubStreamChatCompletion(request);
+    } else {
+      yield* this.ollamaStreamChatCompletion(request);
+    }
+  }
+
+  private async *githubStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.githubToken}`,
+      },
+      body: JSON.stringify({ ...request, stream: true }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || response.statusText);
+    }
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') return;
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) yield content;
+        } catch { /* skip malformed lines */ }
+      }
+    }
+  }
+
+  private async *ollamaStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    const response = await fetch(`${this.baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: request.model,
+        messages: request.messages,
+        stream: true,
+        tools: request.tools,
+        options: {
+          temperature: request.temperature,
+          num_predict: request.max_tokens,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || response.statusText);
+    }
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed.done) return;
+          const content = parsed.message?.content;
+          if (content) yield content;
+        } catch { /* skip malformed lines */ }
+      }
+    }
+  }
+
+  /**
    * Call GitHub Models API
    */
   private async githubChatCompletion(request: LLMRequest): Promise<LLMResponse> {

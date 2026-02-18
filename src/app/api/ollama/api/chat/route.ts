@@ -22,8 +22,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    // Stream through instead of buffering the entire response
+    return new Response(response.body, {
+      headers: {
+        'Content-Type': response.headers.get('Content-Type') ?? 'application/json',
+      },
+    });
   } catch (error: any) {
     console.error('Ollama proxy error:', error);
     return NextResponse.json(
