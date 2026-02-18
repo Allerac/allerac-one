@@ -17,7 +17,7 @@ interface ChatMessagesProps {
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 // ...existing code...
 
 export default function ChatMessages({
@@ -31,8 +31,36 @@ export default function ChatMessages({
   githubToken,
   messagesEndRef
 }: ChatMessagesProps) {
-  // Controla qual mensagem tem o CorrectAndMemorize aberto (índice)
-  const [openCorrectionIdx, setOpenCorrectionIdx] = useState<number | null>(null);
+  // Controla qual mensagem tem o menu aberto (índice)
+  const [openMenuIdx, setOpenMenuIdx] = useState<number | null>(null);
+  const [showCorrectAndMemorize, setShowCorrectAndMemorize] = useState<number | null>(null);
+  const menuRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+
+  // Close menu on ESC or click outside
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMenuIdx(null);
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (openMenuIdx !== null) {
+        const menuRef = menuRefs.current[openMenuIdx];
+        if (menuRef && !menuRef.contains(e.target as Node)) {
+          setOpenMenuIdx(null);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openMenuIdx]);
 
   // Helper to render message content (text or multimodal)
   const renderContent = (content: string | MessageContentPart[], role: 'user' | 'assistant'): any => {
@@ -76,45 +104,18 @@ export default function ChatMessages({
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+    <div data-name="chat-messages-wrapper" className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       <div className="space-y-6">
         {messages.map((message, index) => (
-          <div key={index} className={`flex ${message.role === 'user' ? 'flex-row-reverse' : 'gap-0 flex-row'}`}>
-            {message.role === 'assistant' && (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
-              </div>
-            )}
-            <div className={message.role === 'user' ? 'max-w-[70%]' : 'flex-1 ml-3'}>
-              <div className={`rounded-2xl py-3 ${
-                message.role === 'user'
-                  ? isDarkMode
-                    ? 'bg-gray-800 text-gray-100 px-4'
-                    : 'bg-gray-100 text-black px-4'
-                  : isDarkMode
-                  ? 'text-gray-100'
-                  : 'text-black'
-              }`}>
-                {message.role === 'assistant' ? (
-                  <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'prose-headings:text-black prose-p:text-black prose-li:text-black prose-strong:text-black prose-code:text-black prose-pre:bg-gray-100 prose-pre:text-black'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        a: ({ node, ...props }) => (
-                          <a
-                            {...props}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
-                          />
-                        ),
-                        hr: () => null,
-                      }}
-                    >
-                      {typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant')}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
+          <div key={index} className={`${message.role === 'user' ? 'flex justify-end' : ''}`}>
+            {/* User message - simple bubble on right */}
+            {message.role === 'user' ? (
+              <div className="max-w-[80%]">
+                <div className={`rounded-2xl py-3 px-4 ${
+                  isDarkMode
+                    ? 'bg-gray-800 text-gray-100'
+                    : 'bg-gray-100 text-black'
+                }`}>
                   <div className="text-sm leading-relaxed">
                     {typeof message.content === 'string' ? (
                       <p className="whitespace-pre-wrap break-words">{message.content}</p>
@@ -122,28 +123,120 @@ export default function ChatMessages({
                       renderContent(message.content, 'user')
                     )}
                   </div>
+                </div>
+              </div>
+            ) : (
+              /* Assistant message - compact layout with icon on top */
+              <div className="w-full">
+                {/* Header: Icon and Menu */}
+                <div className="flex items-start justify-between mb-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
+                  </div>
+                  
+                  {/* 3-dot menu */}
+                  <div className="relative" ref={el => { menuRefs.current[index] = el; }}>
+                    <button
+                      onClick={() => setOpenMenuIdx(openMenuIdx === index ? null : index)}
+                      className={`p-1 rounded-lg transition-colors ${
+                        isDarkMode
+                          ? 'hover:bg-gray-700 text-gray-400'
+                          : 'hover:bg-gray-200 text-gray-600'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                      </svg>
+                    </button>
+
+                    {/* Dropdown menu */}
+                    {openMenuIdx === index && (
+                      <div className={`absolute right-0 top-full mt-1 w-48 rounded-lg shadow-xl border z-50 ${
+                        isDarkMode
+                          ? 'bg-gray-800 border-gray-700'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <button
+                          onClick={() => {
+                            setShowCorrectAndMemorize(index);
+                            setOpenMenuIdx(null);
+                          }}
+                          className={`w-full px-4 py-3 text-left text-sm flex items-center gap-3 transition-colors ${
+                            isDarkMode
+                              ? 'hover:bg-gray-700 text-gray-300'
+                              : 'hover:bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          <span>Correct & Memorize</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              typeof message.content === 'string' 
+                                ? message.content 
+                                : renderContent(message.content, 'assistant') as string
+                            );
+                            setOpenMenuIdx(null);
+                          }}
+                          className={`w-full px-4 py-3 text-left text-sm border-t flex items-center gap-3 transition-colors ${
+                            isDarkMode
+                              ? 'hover:bg-gray-700 text-gray-300 border-gray-700'
+                              : 'hover:bg-gray-100 text-gray-700 border-gray-200'
+                          }`}
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                          <span>Copy</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Message content */}
+                <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'prose-headings:text-black prose-p:text-black prose-li:text-black prose-strong:text-black prose-code:text-black prose-pre:bg-gray-100 prose-pre:text-black'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ node, ...props }) => (
+                        <a
+                          {...props}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
+                        />
+                      ),
+                      hr: () => null,
+                    }}
+                  >
+                    {typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant')}
+                  </ReactMarkdown>
+                </div>
+
+                {/* Correct & Memorize modal */}
+                {showCorrectAndMemorize === index && (
+                  <div className="mt-3">
+                    <CorrectAndMemorize
+                      llmResponse={typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant') as string}
+                      conversationId={currentConversationId}
+                      userId={userId}
+                      githubToken={githubToken}
+                      isDarkMode={isDarkMode}
+                      showInput={true}
+                      onOpen={() => {}}
+                      onClose={() => setShowCorrectAndMemorize(null)}
+                    />
+                  </div>
                 )}
               </div>
-              <div className="flex items-center gap-3">
-                <p className={`text-xs mt-1 ${message.role === 'user' ? 'px-2' : ''} ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-                {message.role === 'assistant' && (
-                  <CorrectAndMemorize
-                    llmResponse={typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant') as string}
-                    conversationId={currentConversationId}
-                    userId={userId}
-                    githubToken={githubToken}
-                    isDarkMode={isDarkMode}
-                    showInput={openCorrectionIdx === index}
-                    onOpen={() => setOpenCorrectionIdx(index)}
-                    onClose={() => setOpenCorrectionIdx(null)}
-                  />
-                )}
-              </div>
-            </div>
+            )}
           </div>
         ))}
+        
         
         {isSending && (
           <div className="flex gap-0 flex-row">

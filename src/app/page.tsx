@@ -16,7 +16,6 @@ import * as skillActions from '@/app/actions/skills';
 
 import SidebarMobile from './components/layout/SidebarMobile';
 import SidebarDesktop from './components/layout/SidebarDesktop';
-import ChatHeader from './components/chat/ChatHeader';
 import ChatMessages from './components/chat/ChatMessages';
 import ChatInput from './components/chat/ChatInput';
 import MemorySaveModal from './components/memory/MemorySaveModal';
@@ -713,30 +712,24 @@ export default function AdminChat() {
         {/* Main Chat Area */}
         <div className={`flex-1 flex flex-col ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
           }`}>
-          {/* Header */}
-          <ChatHeader
-            isSidebarOpen={isSidebarOpen}
-            setIsSidebarOpen={setIsSidebarOpen}
-            isDarkMode={isDarkMode}
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
-            MODELS={MODELS}
-            currentConversationId={currentConversationId}
-            currentConversationHasMemory={currentConversationHasMemory}
-            handleGenerateSummary={handleGenerateSummary}
-            githubConfigured={!!githubToken}
-            ollamaConnected={ollamaConnected}
-            ollamaModels={ollamaModels}
-            onDownloadModel={handleDownloadModel}
-            userId={userId}
-            availableSkills={availableSkills}
-            activeSkill={activeSkill || preSelectedSkill}
-            onActivateSkill={handleActivateSkill}
-            onDeactivateSkill={handleDeactivateSkill}
-          />
+          
+          {/* Mobile Menu FAB - Only visible on mobile */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className={`lg:hidden fixed top-4 left-3 z-50 w-12 h-12 rounded-full shadow-lg transition-all flex items-center justify-center ${
+              isDarkMode
+                ? 'bg-gray-800 bg-opacity-90 backdrop-blur-sm text-gray-300 hover:bg-gray-700'
+                : 'bg-white bg-opacity-90 backdrop-blur-sm text-gray-700 hover:bg-gray-100'
+            }`}
+            title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
 
           {/* Messages Container */}
-          <div className={`flex-1 overflow-y-auto ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+          <div data-name="messages-container" className={`flex-1 overflow-y-auto ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
             {messages.length === 0 ? (
               /* Empty State - Gemini Style */
               <div className="h-full flex flex-col items-center justify-center px-4">
@@ -770,6 +763,16 @@ export default function AdminChat() {
                         preSelectedSkill={preSelectedSkill}
                         onActivateSkill={handleActivateSkill}
                         onDeactivateSkill={handleDeactivateSkill}
+                        selectedModel={selectedModel}
+                        setSelectedModel={setSelectedModel}
+                        MODELS={MODELS}
+                        githubConfigured={!!githubToken}
+                        ollamaConnected={ollamaConnected}
+                        ollamaModels={ollamaModels}
+                        onDownloadModel={handleDownloadModel}
+                        currentConversationId={currentConversationId}
+                        currentConversationHasMemory={currentConversationHasMemory}
+                        handleGenerateSummary={handleGenerateSummary}
                       />
                     </div>
                   </div>
@@ -793,8 +796,8 @@ export default function AdminChat() {
 
           {/* Input Area - Only show when there are messages */}
           {messages.length > 0 && (
-            <div className={`border-t ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
-              <div className="max-w-3xl mx-auto px-4 py-4">
+            <div data-name="input-area-wrapper">
+              <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4">
                 {!githubToken && (
                   <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                     <p className="text-sm text-red-800">
@@ -820,6 +823,16 @@ export default function AdminChat() {
                   preSelectedSkill={preSelectedSkill}
                   onActivateSkill={handleActivateSkill}
                   onDeactivateSkill={handleDeactivateSkill}
+                  selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel}
+                  MODELS={MODELS}
+                  githubConfigured={!!githubToken}
+                  ollamaConnected={ollamaConnected}
+                  ollamaModels={ollamaModels}
+                  onDownloadModel={handleDownloadModel}
+                  currentConversationId={currentConversationId}
+                  currentConversationHasMemory={currentConversationHasMemory}
+                  handleGenerateSummary={handleGenerateSummary}
                 />
               </div>
             </div>

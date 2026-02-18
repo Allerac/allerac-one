@@ -57,7 +57,7 @@ export default function SidebarMobile({
     }`}>
       {/* Top Actions - Fixed */}
       <div className="p-4 border-b border-gray-800">
-        <div className="flex gap-2">
+        <div className="flex gap-2 ml-16">
           <button
             onClick={toggleTheme}
             className="flex-1 flex items-center justify-center px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 transition-colors"
