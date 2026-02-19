@@ -37,6 +37,28 @@ function encode(data: object): Uint8Array {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Parse request body and cookies BEFORE creating the stream
+  // (request.json() can only be called once, and must happen before the response is sent)
+  const body = await request.json();
+  const {
+    message,
+    conversationId: inputConversationId,
+    model: modelId,
+    provider,
+    imageAttachments,
+    preSelectedSkillId,
+  }: {
+    message: string;
+    conversationId: string | null;
+    model: string;
+    provider: 'github' | 'ollama';
+    imageAttachments?: Array<{ url: string }>;
+    preSelectedSkillId?: string;
+  } = body;
+
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get('session_token')?.value;
+
   const stream = new ReadableStream({
     async start(controller) {
       // Enqueue immediately so Next.js flushes the 200 + text/event-stream headers
@@ -46,8 +68,6 @@ export async function POST(request: Request): Promise<Response> {
 
       try {
         // 1. Authenticate via session cookie
-        const cookieStore = await cookies();
-        const sessionToken = cookieStore.get('session_token')?.value;
         if (!sessionToken) {
           controller.enqueue(encode({ type: 'error', message: 'Unauthorized' }));
           controller.close();
@@ -68,24 +88,6 @@ export async function POST(request: Request): Promise<Response> {
         const githubToken = settings?.github_token || '';
         const tavilyApiKey = settings?.tavily_api_key || undefined;
         const systemMessage = settings?.system_message || 'You are a helpful AI assistant.';
-
-        // 3. Parse request body
-        const body = await request.json();
-        const {
-          message,
-          conversationId: inputConversationId,
-          model: modelId,
-          provider,
-          imageAttachments,
-          preSelectedSkillId,
-        }: {
-          message: string;
-          conversationId: string | null;
-          model: string;
-          provider: 'github' | 'ollama';
-          imageAttachments?: Array<{ url: string }>;
-          preSelectedSkillId?: string;
-        } = body;
 
         if (!message && (!imageAttachments || imageAttachments.length === 0)) {
           controller.enqueue(encode({ type: 'error', message: 'Message is required' }));
