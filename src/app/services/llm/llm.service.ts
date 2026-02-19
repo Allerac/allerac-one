@@ -264,6 +264,8 @@ export class LLMService {
 
   /**
    * Call Ollama API
+   * Uses stream=true internally to avoid headersTimeout on slow responses,
+   * but buffers the full response before returning (acts like non-streaming).
    */
   private async ollamaChatCompletion(request: LLMRequest): Promise<LLMResponse> {
     const startTime = Date.now();
@@ -280,14 +282,13 @@ export class LLMService {
         body: JSON.stringify({
           model: request.model,
           messages: request.messages,
-          stream: false,
+          stream: true,  // Use streaming to send headers immediately
           tools: request.tools,
           options: {
             temperature: request.temperature,
             num_predict: request.max_tokens,
           },
         }),
-        // Ollama can be very slow with large responses — allow up to 10 minutes
         signal: AbortSignal.timeout(600000),
       });
 
@@ -295,11 +296,8 @@ export class LLMService {
 
       if (!response.ok) {
         success = false;
-        const errorData = await response.json();
-        console.error('[LLM] Error response:', JSON.stringify(errorData, null, 2));
-        errorMessage = typeof errorData.error === 'string' 
-          ? errorData.error 
-          : errorData.error?.message || errorData.message || JSON.stringify(errorData) || response.statusText;
+        const errorText = await response.text();
+        errorMessage = errorText || response.statusText;
 
         await this.logMetrics({
           model: request.model,
@@ -314,7 +312,35 @@ export class LLMService {
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      // Read the stream and reconstruct the final response
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalData: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed.done) {
+              finalData = parsed;
+            }
+          } catch { /* skip malformed lines */ }
+        }
+      }
+
+      if (!finalData) {
+        throw new Error('No final response from Ollama stream');
+      }
+
+      const data = finalData;
 
       // Convert Ollama response to standard format
       const standardResponse: LLMResponse = {
