@@ -40,11 +40,11 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "# Docker Logs Dashboard\n\nView real-time logs from all Docker containers. Use the filters below to narrow down to specific services or search for patterns.",
+        "content": "# Docker Logs Dashboard",
         "mode": "markdown"
       },
       "pluginVersion": "10.0.0",
-      "title": "Instructions",
+      "title": "",
       "type": "text"
     },
     {
