@@ -224,6 +224,15 @@ export async function POST(request: Request): Promise<Response> {
         const llmService = new LLMService(provider, modelBaseUrl, { githubToken });
 
         // 10. First LLM call — non-streaming for tool detection
+        // Send periodic keepalives during long LLM calls to prevent client timeout
+        const keepaliveInterval = setInterval(() => {
+          try {
+            controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
+          } catch {
+            clearInterval(keepaliveInterval);
+          }
+        }, 15000); // Every 15 seconds
+
         console.log('[ChatRoute] Starting first LLM call (tool detection)...');
         let data = await llmService.chatCompletion({
           messages: conversationMessages,
@@ -234,6 +243,7 @@ export async function POST(request: Request): Promise<Response> {
           tool_choice: 'auto',
         });
         console.log('[ChatRoute] First LLM call completed');
+        clearInterval(keepaliveInterval);
         let assistantMessage = data.choices[0].message;
 
         // 11. Tool loop — non-streaming until no more tool calls
