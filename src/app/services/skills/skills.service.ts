@@ -366,10 +366,14 @@ export class SkillsService {
            tokens_used = $3,
            tool_calls_count = $4,
            error_message = $5
-       WHERE conversation_id = $1 
-         AND completed_at IS NULL
-       ORDER BY started_at DESC
-       LIMIT 1`,
+       WHERE id = (
+         SELECT id
+         FROM skill_usage
+         WHERE conversation_id = $1
+           AND completed_at IS NULL
+         ORDER BY started_at DESC
+         LIMIT 1
+       )`,
       [conversationId, success, tokensUsed || null, toolCalls || 0, errorMessage || null]
     );
   }
@@ -391,9 +395,13 @@ export class SkillsService {
     await pool.query(
       `UPDATE skill_usage
        SET user_rating = $3, user_feedback = $4
-       WHERE skill_id = $1 AND conversation_id = $2
-       ORDER BY started_at DESC
-       LIMIT 1`,
+       WHERE id = (
+         SELECT id
+         FROM skill_usage
+         WHERE skill_id = $1 AND conversation_id = $2
+         ORDER BY started_at DESC
+         LIMIT 1
+       )`,
       [skillId, conversationId, rating, feedback || null]
     );
 
