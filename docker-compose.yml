@@ -155,6 +155,7 @@ services:
     image: grafana/loki:latest
     container_name: loki
     restart: unless-stopped
+    user: "0"  # Run as root to avoid permission issues with volumes
     volumes:
       - ./infra/monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
       - loki_data:/tmp/loki
