@@ -135,6 +135,8 @@ export class LLMService {
           num_predict: request.max_tokens,
         },
       }),
+      // Ollama streaming can take a long time — allow up to 10 minutes
+      signal: AbortSignal.timeout(600000),
     });
 
     if (!response.ok) {
@@ -285,6 +287,8 @@ export class LLMService {
             num_predict: request.max_tokens,
           },
         }),
+        // Ollama can be very slow with large responses — allow up to 10 minutes
+        signal: AbortSignal.timeout(600000),
       });
 
       statusCode = response.status;
