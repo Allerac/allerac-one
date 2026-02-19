@@ -224,6 +224,7 @@ export async function POST(request: Request): Promise<Response> {
         const llmService = new LLMService(provider, modelBaseUrl, { githubToken });
 
         // 10. First LLM call — non-streaming for tool detection
+        console.log('[ChatRoute] Starting first LLM call (tool detection)...');
         let data = await llmService.chatCompletion({
           messages: conversationMessages,
           model: modelId,
@@ -232,6 +233,7 @@ export async function POST(request: Request): Promise<Response> {
           tools: TOOLS,
           tool_choice: 'auto',
         });
+        console.log('[ChatRoute] First LLM call completed');
         let assistantMessage = data.choices[0].message;
 
         // 11. Tool loop — non-streaming until no more tool calls
@@ -316,11 +318,17 @@ export async function POST(request: Request): Promise<Response> {
         controller.enqueue(encode({ type: 'done', conversationId: convId }));
         controller.close();
       } catch (error: any) {
-        console.error('[ChatRoute] Error:', error);
+        console.error('[ChatRoute] Caught error:', {
+          message: error.message,
+          code: error.code,
+          stack: error.stack,
+        });
         try {
           controller.enqueue(encode({ type: 'error', message: error.message || 'Internal server error' }));
-        } catch { /* controller may already be closed */ }
-        controller.close();
+          controller.close();
+        } catch (closeError: any) {
+          console.error('[ChatRoute] Failed to send error event (controller already closed):', closeError.message);
+        }
       }
     },
   });
