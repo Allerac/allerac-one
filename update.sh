@@ -87,6 +87,24 @@ else
     echo -e "${YELLOW}⚠ Tunnel is not running${NC}"
 fi
 
+if docker ps | grep -q grafana; then
+    echo -e "${GREEN}✓ Grafana is running${NC}"
+else
+    echo -e "${YELLOW}⚠ Grafana is not running${NC}"
+fi
+
+if docker ps | grep -q loki; then
+    echo -e "${GREEN}✓ Loki is running${NC}"
+else
+    echo -e "${YELLOW}⚠ Loki is not running${NC}"
+fi
+
+if docker ps | grep -q promtail; then
+    echo -e "${GREEN}✓ Promtail is running${NC}"
+else
+    echo -e "${YELLOW}⚠ Promtail is not running${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}╔════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║   Update completed successfully!   ║${NC}"
@@ -95,3 +113,4 @@ echo ""
 echo "Build: ${COMMIT_HASH:0:7} ($BUILD_DATE)"
 echo "Public: https://chat.allerac.ai"
 echo "Local: http://localhost:8080"
+echo "Grafana: http://localhost:3001 (logs & metrics)"
