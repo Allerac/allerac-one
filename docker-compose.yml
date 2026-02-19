@@ -194,11 +194,16 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
       - TELEGRAM_DEFAULT_USER=${TELEGRAM_DEFAULT_USER:-}
+      # Executor service for shell tool
+      - EXECUTOR_URL=http://executor:3001
+      - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       migrations:
         condition: service_completed_successfully
+      executor:
+        condition: service_healthy
     deploy:
       resources:
         limits:
