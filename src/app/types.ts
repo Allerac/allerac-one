@@ -53,3 +53,25 @@ export interface SearchWebResult {
   cached_at?: string;
   error?: string;
 }
+
+export interface ScheduledJob {
+  id: string;
+  userId: string;
+  name: string;
+  cronExpr: string;
+  prompt: string;
+  channels: string[];
+  enabled: boolean;
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JobExecution {
+  id: string;
+  jobId: string;
+  status: 'running' | 'completed' | 'failed';
+  result: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}

@@ -29,6 +29,7 @@ import LoginModal from './components/auth/LoginModal';
 import SetupWizard from './components/setup/SetupWizard';
 import SystemDashboard from './components/system/SystemDashboard';
 import TelegramBotSettings from './components/settings/TelegramBotSettings';
+import ScheduledJobsModal from './components/scheduled-jobs/ScheduledJobsModal';
 
 export default function AdminChat() {
   const t = useTranslations('home');
@@ -42,6 +43,7 @@ export default function AdminChat() {
     const openMemoriesModal = () => setIsMemoryModalOpen(true);
     const openSkillsLibrary = () => setIsSkillsLibraryOpen(true);
     const openSystemDashboard = () => setIsSystemDashboardOpen(true);
+    const openScheduledJobsModal = () => setIsScheduledJobsModalOpen(true);
     const onLogout = () => handleLogoutRef.current();
 
     window.addEventListener('openTokenModal', openTokenModal);
@@ -51,6 +53,7 @@ export default function AdminChat() {
     window.addEventListener('openMemoriesModal', openMemoriesModal);
     window.addEventListener('openSkillsLibrary', openSkillsLibrary);
     window.addEventListener('openSystemDashboard', openSystemDashboard);
+    window.addEventListener('openScheduledJobsModal', openScheduledJobsModal);
     window.addEventListener('logout', onLogout);
 
     return () => {
@@ -61,6 +64,7 @@ export default function AdminChat() {
       window.removeEventListener('openMemoriesModal', openMemoriesModal);
       window.removeEventListener('openSkillsLibrary', openSkillsLibrary);
       window.removeEventListener('openSystemDashboard', openSystemDashboard);
+      window.removeEventListener('openScheduledJobsModal', openScheduledJobsModal);
       window.removeEventListener('logout', onLogout);
     };
   }, []);
@@ -102,6 +106,7 @@ export default function AdminChat() {
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
   const [isTelegramBotSettingsOpen, setIsTelegramBotSettingsOpen] = useState(false);
+  const [isScheduledJobsModalOpen, setIsScheduledJobsModalOpen] = useState(false);
   const [ollamaConnected, setOllamaConnected] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<Array<{ name: string; size: number; modified_at: string }>>([]);
   const [imageAttachments, setImageAttachments] = useState<Array<{ file: File; preview: string }>>([]);
@@ -937,6 +942,14 @@ export default function AdminChat() {
           onClose={() => setIsTelegramBotSettingsOpen(false)}
         />
       )}
+
+      {/* Scheduled Jobs Modal */}
+      <ScheduledJobsModal
+        isOpen={isScheduledJobsModalOpen}
+        onClose={() => setIsScheduledJobsModalOpen(false)}
+        isDarkMode={isDarkMode}
+        userId={userId}
+      />
 
       {/* Login Modal */}
       <LoginModal

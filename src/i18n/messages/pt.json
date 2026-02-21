@@ -9,6 +9,7 @@
     "documents": "Documentos",
     "memories": "Memórias",
     "skills": "Skills",
+    "scheduledJobs": "Jobs Agendados",
     "logout": "Sair",
     "deleteConversation": "Excluir conversa",
     "systemDashboard": "Painel do Sistema"
@@ -123,6 +124,22 @@
     "backupFailed": "Falha ao criar backup",
     "importFailed": "Falha ao importar",
     "restoreFailed": "Falha ao restaurar"
+  },
+  "scheduledJobs": {
+    "title": "Jobs Agendados",
+    "description": "Automatize prompts com agendamento. Os resultados são entregues nos seus canais configurados.",
+    "newJob": "Novo Job",
+    "noJobs": "Nenhum job agendado ainda",
+    "tabs": { "list": "Jobs", "create": "Criar", "edit": "Editar" },
+    "fields": { "name": "Nome", "prompt": "Prompt", "channels": "Canais", "enabled": "Ativo", "frequency": "Frequência" },
+    "presets": { "hourly": "A cada hora", "daily": "Todo dia às", "weekly": "Toda semana no", "monthly": "Todo mês no dia", "custom": "Personalizado (cron)" },
+    "cronPreview": "Expressão cron",
+    "lastRun": "Última execução",
+    "never": "Nunca",
+    "actions": { "save": "Salvar", "cancel": "Cancelar", "delete": "Excluir", "edit": "Editar" },
+    "confirm": { "delete": "Excluir este job?" },
+    "success": { "created": "Job criado", "updated": "Job atualizado", "deleted": "Job excluído" },
+    "errors": { "invalidCron": "Expressão cron inválida", "nameRequired": "Nome é obrigatório", "promptRequired": "Prompt é obrigatório", "channelRequired": "Pelo menos um canal é obrigatório" }
   },
   "setup": {
     "title": "Bem-vindo ao Allerac One",

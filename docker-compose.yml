@@ -221,6 +221,52 @@ services:
     depends_on:
       - app
 
+  # Redis - Message broker for notification streams
+  redis:
+    image: redis:7-alpine
+    container_name: allerac-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  # Notifier - Cron scheduler + Redis Stream consumers (Go)
+  notifier:
+    build:
+      context: ./infra/notifier
+      dockerfile: Dockerfile
+    container_name: allerac-notifier
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
+      - REDIS_URL=redis://redis:6379
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
 volumes:
   db_data:
   prometheus_data:
@@ -228,3 +274,4 @@ volumes:
   loki_data:
   backups_data:
   executor_workspace:
+  redis_data:

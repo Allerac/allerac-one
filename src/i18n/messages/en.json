@@ -9,6 +9,7 @@
     "documents": "Documents",
     "memories": "Memories",
     "skills": "Skills",
+    "scheduledJobs": "Scheduled Jobs",
     "logout": "Logout",
     "deleteConversation": "Delete conversation",
     "systemDashboard": "System Dashboard"
@@ -123,6 +124,22 @@
     "backupFailed": "Backup failed",
     "importFailed": "Import failed",
     "restoreFailed": "Restore failed"
+  },
+  "scheduledJobs": {
+    "title": "Scheduled Jobs",
+    "description": "Automate prompts on a schedule. Results are delivered to your configured channels.",
+    "newJob": "New Job",
+    "noJobs": "No scheduled jobs yet",
+    "tabs": { "list": "Jobs", "create": "Create", "edit": "Edit" },
+    "fields": { "name": "Name", "prompt": "Prompt", "channels": "Channels", "enabled": "Enabled", "frequency": "Frequency" },
+    "presets": { "hourly": "Every hour", "daily": "Every day at", "weekly": "Every week on", "monthly": "Every month on day", "custom": "Custom (cron)" },
+    "cronPreview": "Cron expression",
+    "lastRun": "Last run",
+    "never": "Never",
+    "actions": { "save": "Save", "cancel": "Cancel", "delete": "Delete", "edit": "Edit" },
+    "confirm": { "delete": "Delete this job?" },
+    "success": { "created": "Job created", "updated": "Job updated", "deleted": "Job deleted" },
+    "errors": { "invalidCron": "Invalid cron expression", "nameRequired": "Name is required", "promptRequired": "Prompt is required", "channelRequired": "At least one channel is required" }
   },
   "setup": {
     "title": "Welcome to Allerac One",
