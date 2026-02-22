@@ -393,7 +393,8 @@ export class AlleracTelegramBot {
         const conversations = result.rows.map((r, i) => {
           const date = new Date(r.updated_at).toLocaleDateString();
           const isActive = r.id === mapping.current_conversation_id ? '▶️ ' : '';
-          return `${isActive}*${i + 1}.* ${r.title}\n   _${date}_ • \`${r.id.substring(0, 8)}\``;
+          const idPreview = r.id ? r.id.substring(0, Math.min(8, r.id.length)) : 'unknown';
+          return `${isActive}*${i + 1}.* ${r.title}\n   _${date}_ • \`${idPreview}\``;
         }).join('\n\n');
 
         await this.bot.sendMessage(chatId, 
@@ -483,6 +484,11 @@ export class AlleracTelegramBot {
           'SELECT title FROM chat_conversations WHERE id = $1',
           [conversationId]
         );
+
+        if (convResult.rows.length === 0) {
+          await this.bot.sendMessage(chatId, '❌ Conversation not found. It may have been deleted.');
+          return;
+        }
 
         await this.bot.sendMessage(chatId, 
           `✅ Switched to: *${convResult.rows[0].title}*\n\n` +
