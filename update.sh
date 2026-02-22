@@ -38,7 +38,7 @@ echo -e "${GREEN}✓ Changes pulled successfully${NC}"
 echo ""
 
 # Step 2: Generate build info
-echo -e "${YELLOW}[2/5]${NC} Generating build information..."
+echo -e "${YELLOW}[2/6]${NC} Generating build information..."
 export COMMIT_HASH=$(git rev-parse HEAD)
 export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 echo "   Commit: ${COMMIT_HASH:0:7}"
@@ -46,17 +46,26 @@ echo "   Date: $BUILD_DATE"
 echo -e "${GREEN}✓ Build info generated${NC}"
 echo ""
 
-# Step 3: Rebuild Docker images
-echo -e "${YELLOW}[3/5]${NC} Rebuilding Docker images..."
-docker compose build --no-cache app telegram-bot || {
+# Step 3: Run database migrations
+echo -e "${YELLOW}[3/6]${NC} Running database migrations..."
+docker compose up --force-recreate migrations || {
+    echo -e "${RED}Failed to run migrations${NC}"
+    exit 1
+}
+echo -e "${GREEN}✓ Migrations completed${NC}"
+echo ""
+
+# Step 4: Rebuild Docker images
+echo -e "${YELLOW}[4/6]${NC} Rebuilding Docker images..."
+docker compose build --no-cache app telegram-bot notifier || {
     echo -e "${RED}Failed to rebuild images${NC}"
     exit 1
 }
 echo -e "${GREEN}✓ Images rebuilt successfully${NC}"
 echo ""
 
-# Step 4: Restart services
-echo -e "${YELLOW}[4/5]${NC} Restarting services..."
+# Step 5: Restart services
+echo -e "${YELLOW}[5/6]${NC} Restarting services..."
 docker compose up -d || {
     echo -e "${RED}Failed to restart services${NC}"
     exit 1
@@ -64,8 +73,8 @@ docker compose up -d || {
 echo -e "${GREEN}✓ Services restarted${NC}"
 echo ""
 
-# Step 5: Verify
-echo -e "${YELLOW}[5/5]${NC} Verifying deployment..."
+# Step 6: Verify
+echo -e "${YELLOW}[6/6]${NC} Verifying deployment..."
 sleep 3
 if docker ps | grep -q allerac-one-app; then
     echo -e "${GREEN}✓ App is running${NC}"
