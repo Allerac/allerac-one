@@ -2,8 +2,11 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,8 +17,9 @@ import (
 )
 
 const (
-	maxRunnerAttempts = 3
-	defaultRetryDelay = 5 * time.Second
+	maxRunnerAttempts  = 3
+	defaultRetryDelay  = 5 * time.Second
+	watchReconnectWait = 5 * time.Second
 )
 
 // DBPool is the subset of pgxpool.Pool used by the Scheduler.
@@ -47,11 +51,14 @@ type Job struct {
 
 // Scheduler loads jobs from PostgreSQL and executes them on cron schedule.
 type Scheduler struct {
-	db          DBPool
-	cron        *cron.Cron
-	runner      Runner
-	publisher   NotificationPublisher
-	retryDelay  time.Duration
+	db         DBPool
+	cron       *cron.Cron
+	runner     Runner
+	publisher  NotificationPublisher
+	retryDelay time.Duration
+
+	mu      sync.Mutex
+	entries map[string]cron.EntryID // job.ID → cron entry
 }
 
 // New creates a Scheduler with default settings.
@@ -62,6 +69,7 @@ func New(db DBPool, r Runner, p NotificationPublisher) *Scheduler {
 		runner:     r,
 		publisher:  p,
 		retryDelay: defaultRetryDelay,
+		entries:    make(map[string]cron.EntryID),
 	}
 }
 
@@ -95,12 +103,19 @@ func (s *Scheduler) Stop() {
 
 // RegisterJob adds a single job to the live cron scheduler.
 func (s *Scheduler) RegisterJob(_ context.Context, job Job) error {
-	_, err := s.cron.AddFunc(job.CronExpr, func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.registerLocked(job)
+}
+
+func (s *Scheduler) registerLocked(job Job) error {
+	entryID, err := s.cron.AddFunc(job.CronExpr, func() {
 		s.ExecuteJob(context.Background(), job)
 	})
 	if err != nil {
 		return fmt.Errorf("invalid cron expr %q: %w", job.CronExpr, err)
 	}
+	s.entries[job.ID] = entryID
 	log.Printf("[scheduler] Registered job: %q (%s)", job.Name, job.CronExpr)
 	return nil
 }
@@ -126,6 +141,112 @@ func (s *Scheduler) LoadJobs(ctx context.Context) ([]Job, error) {
 		jobs = append(jobs, j)
 	}
 	return jobs, rows.Err()
+}
+
+// loadJob fetches a single enabled job by ID. Returns nil if not found or disabled.
+func (s *Scheduler) loadJob(ctx context.Context, jobID string) (*Job, error) {
+	var j Job
+	err := s.db.QueryRow(ctx, `
+		SELECT id, user_id, name, cron_expr, prompt, channels
+		FROM scheduled_jobs
+		WHERE id = $1 AND enabled = true
+	`, jobID).Scan(&j.ID, &j.UserID, &j.Name, &j.CronExpr, &j.Prompt, &j.Channels)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil // disabled or deleted
+		}
+		return nil, err
+	}
+	return &j, nil
+}
+
+// SyncJob live-reloads a single job in response to a NOTIFY from PostgreSQL.
+// action is "insert", "update", or "delete".
+func (s *Scheduler) SyncJob(ctx context.Context, jobID, action string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Always remove any existing cron entry for this job.
+	if entryID, ok := s.entries[jobID]; ok {
+		s.cron.Remove(entryID)
+		delete(s.entries, jobID)
+	}
+
+	if action == "delete" {
+		log.Printf("[scheduler] Job %s removed (deleted)", jobID)
+		return
+	}
+
+	// Fetch fresh state from DB (returns nil if disabled or not found).
+	job, err := s.loadJob(ctx, jobID)
+	if err != nil {
+		log.Printf("[scheduler] Failed to reload job %s: %v", jobID, err)
+		return
+	}
+	if job == nil {
+		log.Printf("[scheduler] Job %s not scheduled (disabled or not found)", jobID)
+		return
+	}
+
+	if err := s.registerLocked(*job); err != nil {
+		log.Printf("[scheduler] Failed to re-register job %q: %v", job.Name, err)
+		return
+	}
+	log.Printf("[scheduler] Live-reloaded job %q (%s)", job.Name, job.CronExpr)
+}
+
+// Watch listens for PostgreSQL NOTIFY on the 'scheduled_jobs_changed' channel
+// and calls SyncJob on every notification. It reconnects automatically on
+// connection loss until ctx is cancelled.
+func (s *Scheduler) Watch(ctx context.Context, dbURL string) {
+	for {
+		if err := s.watch(ctx, dbURL); err != nil {
+			if ctx.Err() != nil {
+				return // context cancelled — clean shutdown
+			}
+			log.Printf("[scheduler] LISTEN connection lost: %v — reconnecting in %s",
+				err, watchReconnectWait)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(watchReconnectWait):
+			}
+		}
+	}
+}
+
+// watch opens a dedicated connection, issues LISTEN, and blocks until an
+// error or context cancellation. Exported for testing.
+func (s *Scheduler) watch(ctx context.Context, dbURL string) error {
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		return fmt.Errorf("connect: %w", err)
+	}
+	defer conn.Close(ctx)
+
+	if _, err := conn.Exec(ctx, "LISTEN scheduled_jobs_changed"); err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	log.Printf("[scheduler] Watching for job changes via LISTEN/NOTIFY")
+
+	for {
+		notification, err := conn.WaitForNotification(ctx)
+		if err != nil {
+			return err
+		}
+
+		var payload struct {
+			Action string `json:"action"`
+			JobID  string `json:"job_id"`
+		}
+		if err := json.Unmarshal([]byte(notification.Payload), &payload); err != nil {
+			log.Printf("[scheduler] Invalid notification payload %q: %v", notification.Payload, err)
+			continue
+		}
+
+		log.Printf("[scheduler] NOTIFY received: action=%s job_id=%s", payload.Action, payload.JobID)
+		s.SyncJob(ctx, payload.JobID, payload.Action)
+	}
 }
 
 // ExecuteJob runs a job: calls the LLM (with retries), records the execution,

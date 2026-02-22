@@ -46,6 +46,10 @@ func main() {
 	}
 	defer sched.Stop()
 
+	// Live-reload: listens for pg_notify on 'scheduled_jobs_changed'
+	// so new/updated/deleted jobs take effect without restarting the service.
+	go sched.Watch(ctx, cfg.DatabaseURL)
+
 	// Telegram consumer: reads stream and delivers messages
 	tgConsumer, err := telegram.New(cfg.RedisURL, pool, cfg.TelegramBotToken)
 	if err != nil {
