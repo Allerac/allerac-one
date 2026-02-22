@@ -116,6 +116,8 @@ Este guia explica como configurar seu próprio bot do Telegram para conectar ao 
 
 - `/start` - Iniciar o bot
 - `/new` - Começar nova conversa
+- `/conversations` - Listar suas conversas
+- `/switch <número>` - Trocar para uma conversa específica
 - `/model` - Ver/trocar modelo de IA
 - `/memory` - Ver memórias recentes
 - `/save` - Salvar conversa na memória
