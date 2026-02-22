@@ -212,6 +212,8 @@ export class AlleracTelegramBot {
         `Send me any message and I'll respond using your AI agent.\n\n` +
         `*Commands:*\n` +
         `/new - Start a new conversation\n` +
+        `/conversations - List your conversations\n` +
+        `/switch - Switch to a conversation\n` +
         `/model - Switch AI model\n` +
         `/memory - Show recent memories\n` +
         `/save - Save conversation to memory\n` +
@@ -365,6 +367,134 @@ export class AlleracTelegramBot {
       }
     });
 
+    // /conversations command - List all user conversations
+    this.bot.onText(/\/conversations/, async (msg) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from?.id;
+      if (!userId || !this.isAllowed(userId)) return;
+
+      const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
+
+      try {
+        const result = await pool.query(
+          `SELECT id, title, updated_at 
+           FROM chat_conversations 
+           WHERE user_id = $1 
+           ORDER BY updated_at DESC 
+           LIMIT 20`,
+          [mapping.user_id]
+        );
+
+        if (result.rows.length === 0) {
+          await this.bot.sendMessage(chatId, 'No conversations yet. Start chatting to create one!');
+          return;
+        }
+
+        const conversations = result.rows.map((r, i) => {
+          const date = new Date(r.updated_at).toLocaleDateString();
+          const isActive = r.id === mapping.current_conversation_id ? '▶️ ' : '';
+          return `${isActive}*${i + 1}.* ${r.title}\n   _${date}_ • \`${r.id.substring(0, 8)}\``;
+        }).join('\n\n');
+
+        await this.bot.sendMessage(chatId, 
+          `*Your Conversations:*\n\n${conversations}\n\n` +
+          `Use \`/switch <number>\` to switch to a conversation.\n` +
+          `Example: \`/switch 1\``,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('[Telegram] Error loading conversations:', error);
+        await this.bot.sendMessage(chatId, '❌ Failed to load conversations.');
+      }
+    });
+
+    // /switch command - Switch to a specific conversation
+    this.bot.onText(/\/switch(?:\s+(.+))?/, async (msg, match) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from?.id;
+      if (!userId || !this.isAllowed(userId)) return;
+
+      const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
+      const input = match?.[1]?.trim();
+
+      if (!input) {
+        await this.bot.sendMessage(chatId, 
+          'Usage: `/switch <number>` or `/switch <conversation-id>`\n\n' +
+          'Use `/conversations` to see available conversations.',
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+
+      try {
+        let conversationId: string | null = null;
+
+        // Check if input is a number (conversation list index)
+        const index = parseInt(input, 10);
+        if (!isNaN(index) && index > 0) {
+          // Get conversation by index from the list
+          const result = await pool.query(
+            `SELECT id, title 
+             FROM chat_conversations 
+             WHERE user_id = $1 
+             ORDER BY updated_at DESC 
+             LIMIT 1 OFFSET $2`,
+            [mapping.user_id, index - 1]
+          );
+
+          if (result.rows.length > 0) {
+            conversationId = result.rows[0].id;
+          }
+        } else {
+          // Try to use input as conversation ID (UUID or partial UUID)
+          const result = await pool.query(
+            `SELECT id, title 
+             FROM chat_conversations 
+             WHERE user_id = $1 AND (id::text = $2 OR id::text LIKE $3)
+             LIMIT 1`,
+            [mapping.user_id, input, `${input}%`]
+          );
+
+          if (result.rows.length > 0) {
+            conversationId = result.rows[0].id;
+          }
+        }
+
+        if (!conversationId) {
+          await this.bot.sendMessage(chatId, 
+            `❌ Conversation not found.\n\n` +
+            `Use \`/conversations\` to see your available conversations.`,
+            { parse_mode: 'Markdown' }
+          );
+          return;
+        }
+
+        // Summarize old conversation before switching
+        if (mapping.current_conversation_id && mapping.current_conversation_id !== conversationId) {
+          const config = await this.getChatConfig(mapping.user_id, userId);
+          await maybeSummarizeConversation(mapping.current_conversation_id, mapping.user_id, config.githubToken);
+        }
+
+        // Update the current conversation
+        await this.updateConversationId(chatId, conversationId);
+
+        // Get conversation details
+        const convResult = await pool.query(
+          'SELECT title FROM chat_conversations WHERE id = $1',
+          [conversationId]
+        );
+
+        await this.bot.sendMessage(chatId, 
+          `✅ Switched to: *${convResult.rows[0].title}*\n\n` +
+          `Continue your conversation or use \`/new\` to start fresh.`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('[Telegram] Error switching conversation:', error);
+        await this.bot.sendMessage(chatId, '❌ Failed to switch conversation. Please try again.');
+      }
+    });
+
     // /correct command - Start correction flow
     this.bot.onText(/\/correct$/, async (msg) => {
       const chatId = msg.chat.id;
@@ -510,6 +640,8 @@ export class AlleracTelegramBot {
       await this.bot.sendMessage(chatId,
         `*Allerac One - Commands*\n\n` +
         `/new - Start a new conversation\n` +
+        `/conversations - List your conversations\n` +
+        `/switch <number> - Switch to a conversation\n` +
         `/model - Switch AI model\n` +
         `/model model-id - Switch to specific model\n` +
         `/skills - List available skills\n` +
