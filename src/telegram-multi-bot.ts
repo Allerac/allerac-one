@@ -87,14 +87,43 @@ async function checkForUpdates(): Promise<void> {
 }
 
 /**
+ * Build a fallback config from legacy environment variables.
+ * Used when no rows exist in telegram_bot_configs.
+ */
+function envFallbackConfig(): any[] {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return [];
+
+  const allowedTelegramIds = process.env.TELEGRAM_ALLOWED_USERS
+    ? process.env.TELEGRAM_ALLOWED_USERS.split(',').map(Number).filter(Boolean)
+    : [];
+
+  console.log('[Telegram] No DB configs found — falling back to TELEGRAM_BOT_TOKEN env var');
+  return [{
+    id: 'legacy-env',
+    botName: 'Allerac Bot',
+    botUsername: '',
+    botToken: token,
+    userId: process.env.TELEGRAM_DEFAULT_USER || '',
+    allowedTelegramIds,
+    enabled: true,
+  }];
+}
+
+/**
  * Load all enabled bots from database
  */
 async function loadAllBots(): Promise<void> {
   try {
-    const configs = await TelegramBotConfigService.getAllEnabledBotConfigs();
-    
+    let configs = await TelegramBotConfigService.getAllEnabledBotConfigs();
+
+    // Fallback to env vars when the DB table is empty (legacy single-bot setup)
+    if (configs.length === 0) {
+      configs = envFallbackConfig();
+    }
+
     // Stop bots that are no longer enabled or were removed
-    const currentBotIds = new Set(configs.map(c => c.id));
+    const currentBotIds = new Set(configs.map((c: any) => c.id));
     for (const [botId, _] of runningBots) {
       if (!currentBotIds.has(botId)) {
         await stopBot(botId);
