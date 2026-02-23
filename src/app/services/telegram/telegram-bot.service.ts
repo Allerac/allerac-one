@@ -152,6 +152,15 @@ export class AlleracTelegramBot {
     return text.replace(/[_*`\[]/g, '\\$&');
   }
 
+  /** Send a message, trying Markdown first and falling back to plain text. */
+  private async safeSend(chatId: number, text: string): Promise<TelegramBot.Message> {
+    try {
+      return await this.bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    } catch {
+      return await this.bot.sendMessage(chatId, text);
+    }
+  }
+
   private async saveBotMessage(chatId: number, messageId: number, userId: string, conversationId: string | null) {
     try {
       await pool.query(
@@ -1039,14 +1048,8 @@ export class AlleracTelegramBot {
         const chunks = this.splitMessage(result.response);
         let lastSentMessageId: number | null = null;
         for (const chunk of chunks) {
-          try {
-            const sent = await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
-            lastSentMessageId = sent.message_id;
-          } catch {
-            // Fallback without markdown if parsing fails
-            const sent = await this.bot.sendMessage(chatId, chunk);
-            lastSentMessageId = sent.message_id;
-          }
+          const sent = await this.safeSend(chatId, chunk);
+          lastSentMessageId = sent.message_id;
         }
         // Track the last bot message so reactions can be linked
         if (lastSentMessageId !== null) {
@@ -1119,13 +1122,8 @@ export class AlleracTelegramBot {
       const chunks = this.splitMessage(result.response);
       let lastSentMessageId: number | null = null;
       for (const chunk of chunks) {
-        try {
-          const sent = await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
-          lastSentMessageId = sent.message_id;
-        } catch {
-          const sent = await this.bot.sendMessage(chatId, chunk);
-          lastSentMessageId = sent.message_id;
-        }
+        const sent = await this.safeSend(chatId, chunk);
+        lastSentMessageId = sent.message_id;
       }
       // Track the last bot message so reactions can be linked
       if (lastSentMessageId !== null) {
@@ -1200,13 +1198,8 @@ export class AlleracTelegramBot {
       const chunks = this.splitMessage(result.response);
       let lastSentMessageId: number | null = null;
       for (const chunk of chunks) {
-        try {
-          const sent = await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
-          lastSentMessageId = sent.message_id;
-        } catch {
-          const sent = await this.bot.sendMessage(chatId, chunk);
-          lastSentMessageId = sent.message_id;
-        }
+        const sent = await this.safeSend(chatId, chunk);
+        lastSentMessageId = sent.message_id;
       }
       // Track the last bot message so reactions can be linked
       if (lastSentMessageId !== null) {
