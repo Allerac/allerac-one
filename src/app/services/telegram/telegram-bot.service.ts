@@ -932,9 +932,10 @@ export class AlleracTelegramBot {
 
     // Regular messages
     this.bot.on('message', async (msg) => {
+      try {
       // Skip commands
       if (msg.text?.startsWith('/')) return;
-      
+
       const chatId = msg.chat.id;
       const userId = msg.from?.id;
       if (!userId || !this.isAllowed(userId)) {
@@ -1053,7 +1054,14 @@ export class AlleracTelegramBot {
         }
       } catch (error: any) {
         console.error('[Telegram] Error processing message:', error);
-        await this.bot.sendMessage(chatId, `Error: ${error.message || 'Something went wrong. Try again.'}`);
+        try {
+          await this.bot.sendMessage(chatId, `Error: ${error.message || 'Something went wrong. Try again.'}`);
+        } catch (sendErr) {
+          console.error('[Telegram] Failed to send error message:', sendErr);
+        }
+      }
+      } catch (err) {
+        console.error('[Telegram] Unhandled error in message handler:', err);
       }
     });
   }

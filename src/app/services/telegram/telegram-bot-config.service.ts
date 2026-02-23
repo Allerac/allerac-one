@@ -193,8 +193,10 @@ export class TelegramBotConfigService {
 
     values.push(id, userId);
     
+    fields.push(`updated_at = NOW()`);
+
     const result = await pool.query<DbBotConfig>(
-      `UPDATE telegram_bot_configs 
+      `UPDATE telegram_bot_configs
        SET ${fields.join(', ')}
        WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
        RETURNING *`,
