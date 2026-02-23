@@ -31,3 +31,11 @@ scrape_configs:
       # Extract compose project name
       - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
         target_label: 'project'
+    pipeline_stages:
+      # Extract log level from the log line and set it as a Loki label.
+      # Matches formats like: "... error ...", "... ERROR ...", "[ERROR]", etc.
+      # Grafana uses the 'level' label to colour log lines (red=error, green=info, etc.)
+      - regex:
+          expression: '(?i).*\b(?P<level>error|warn(?:ing)?|info|debug|critical|fatal)\b'
+      - labels:
+          level:
