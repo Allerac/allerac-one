@@ -141,6 +141,11 @@ export class AlleracTelegramBot {
     };
   }
 
+  /** Escape characters that break Telegram Markdown v1 parsing. */
+  private escapeMd(text: string): string {
+    return text.replace(/[_*`\[]/g, '\\$&');
+  }
+
   private splitMessage(text: string): string[] {
     if (text.length <= MAX_TELEGRAM_MESSAGE_LENGTH) {
       return [text];
@@ -394,7 +399,7 @@ export class AlleracTelegramBot {
           const date = new Date(r.updated_at).toLocaleDateString();
           const isActive = r.id === mapping.current_conversation_id ? '▶️ ' : '';
           const idPreview = r.id ? r.id.substring(0, Math.min(8, r.id.length)) : 'unknown';
-          return `${isActive}*${i + 1}.* ${r.title}\n   _${date}_ • \`${idPreview}\``;
+          return `${isActive}*${i + 1}.* ${this.escapeMd(r.title)}\n   _${date}_ • \`${idPreview}\``;
         }).join('\n\n');
 
         await this.bot.sendMessage(chatId, 
@@ -490,8 +495,8 @@ export class AlleracTelegramBot {
           return;
         }
 
-        await this.bot.sendMessage(chatId, 
-          `✅ Switched to: *${convResult.rows[0].title}*\n\n` +
+        await this.bot.sendMessage(chatId,
+          `✅ Switched to: *${this.escapeMd(convResult.rows[0].title)}*\n\n` +
           `Continue your conversation or use \`/new\` to start fresh.`,
           { parse_mode: 'Markdown' }
         );
