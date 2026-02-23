@@ -38,7 +38,13 @@ export class AlleracTelegramBot {
 
   constructor(config: TelegramBotConfig) {
     this.config = config;
-    this.bot = new TelegramBot(config.token, { polling: true });
+    this.bot = new TelegramBot(config.token, {
+      polling: {
+        params: {
+          allowed_updates: ['message', 'edited_message', 'callback_query', 'message_reaction'],
+        },
+      },
+    });
     this.userSettings = new UserSettingsService();
     this.registerHandlers();
   }
@@ -144,6 +150,33 @@ export class AlleracTelegramBot {
   /** Escape characters that break Telegram Markdown v1 parsing. */
   private escapeMd(text: string): string {
     return text.replace(/[_*`\[]/g, '\\$&');
+  }
+
+  private async saveBotMessage(chatId: number, messageId: number, userId: string, conversationId: string | null) {
+    try {
+      await pool.query(
+        `INSERT INTO telegram_bot_messages (chat_id, message_id, user_id, conversation_id)
+         VALUES ($1, $2, $3, $4) ON CONFLICT (chat_id, message_id) DO NOTHING`,
+        [chatId, messageId, userId, conversationId]
+      );
+    } catch (err) {
+      console.error('[Telegram] Failed to save bot message mapping:', err);
+    }
+  }
+
+  private async recordReactionFeedback(userId: string, conversationId: string, emoji: string, sentiment: 1 | -1) {
+    const summary = sentiment === 1
+      ? `User reacted ${emoji} (positive) to this AI response — the response was helpful or well-received.`
+      : `User reacted ${emoji} (negative) to this AI response — the response was unhelpful or unwanted.`;
+    const importance = sentiment === 1 ? 6 : 7;
+
+    await pool.query(
+      `INSERT INTO conversation_summaries
+         (conversation_id, user_id, summary, importance_score, key_topics, emotion, message_count)
+       VALUES ($1, $2, $3, $4, $5, $6, 0)`,
+      [conversationId, userId, summary, importance, ['user_feedback', 'reaction'], sentiment]
+    );
+    console.log(`[Telegram] Recorded ${sentiment > 0 ? 'positive' : 'negative'} reaction feedback for user ${userId}`);
   }
 
   private splitMessage(text: string): string[] {
@@ -645,6 +678,43 @@ export class AlleracTelegramBot {
       }
     });
 
+    // Reaction handler
+    this.bot.on('message_reaction', async (reaction: any) => {
+      try {
+        const chatId: number = reaction.chat.id;
+        const messageId: number = reaction.message_id;
+        const newReactions: any[] = reaction.new_reaction || [];
+        const oldReactions: any[] = reaction.old_reaction || [];
+
+        // Only handle reactions to bot messages we know about
+        const row = await pool.query(
+          'SELECT user_id, conversation_id FROM telegram_bot_messages WHERE chat_id = $1 AND message_id = $2',
+          [chatId, messageId]
+        );
+        if (row.rows.length === 0 || !row.rows[0].conversation_id) return;
+
+        const { user_id, conversation_id } = row.rows[0];
+
+        // Compute which emojis were added vs removed
+        const oldEmojis = new Set(oldReactions.map((r: any) => r.emoji));
+        const added = newReactions.filter((r: any) => !oldEmojis.has(r.emoji));
+
+        const POSITIVE = new Set(['👍', '❤️', '🎉', '🔥', '🥰', '👏', '💯', '🫡']);
+        const NEGATIVE = new Set(['👎', '💩']);
+
+        for (const r of added) {
+          const emoji: string = r.emoji;
+          if (POSITIVE.has(emoji)) {
+            await this.recordReactionFeedback(user_id, conversation_id, emoji, 1);
+          } else if (NEGATIVE.has(emoji)) {
+            await this.recordReactionFeedback(user_id, conversation_id, emoji, -1);
+          }
+        }
+      } catch (err) {
+        console.error('[Telegram] Error processing reaction:', err);
+      }
+    });
+
     // /help command
     this.bot.onText(/\/help/, async (msg) => {
       const chatId = msg.chat.id;
@@ -966,13 +1036,20 @@ export class AlleracTelegramBot {
 
         // Send response (split if too long)
         const chunks = this.splitMessage(result.response);
+        let lastSentMessageId: number | null = null;
         for (const chunk of chunks) {
           try {
-            await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+            const sent = await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+            lastSentMessageId = sent.message_id;
           } catch {
             // Fallback without markdown if parsing fails
-            await this.bot.sendMessage(chatId, chunk);
+            const sent = await this.bot.sendMessage(chatId, chunk);
+            lastSentMessageId = sent.message_id;
           }
+        }
+        // Track the last bot message so reactions can be linked
+        if (lastSentMessageId !== null) {
+          await this.saveBotMessage(chatId, lastSentMessageId, mapping.user_id, result.conversationId);
         }
       } catch (error: any) {
         console.error('[Telegram] Error processing message:', error);
@@ -1032,12 +1109,19 @@ export class AlleracTelegramBot {
 
       // Send response
       const chunks = this.splitMessage(result.response);
+      let lastSentMessageId: number | null = null;
       for (const chunk of chunks) {
         try {
-          await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+          const sent = await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+          lastSentMessageId = sent.message_id;
         } catch {
-          await this.bot.sendMessage(chatId, chunk);
+          const sent = await this.bot.sendMessage(chatId, chunk);
+          lastSentMessageId = sent.message_id;
         }
+      }
+      // Track the last bot message so reactions can be linked
+      if (lastSentMessageId !== null) {
+        await this.saveBotMessage(chatId, lastSentMessageId, mapping.user_id, result.conversationId);
       }
     } catch (error: any) {
       console.error('[Telegram] Error processing photo:', error);
@@ -1106,12 +1190,19 @@ export class AlleracTelegramBot {
 
       // Send response
       const chunks = this.splitMessage(result.response);
+      let lastSentMessageId: number | null = null;
       for (const chunk of chunks) {
         try {
-          await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+          const sent = await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+          lastSentMessageId = sent.message_id;
         } catch {
-          await this.bot.sendMessage(chatId, chunk);
+          const sent = await this.bot.sendMessage(chatId, chunk);
+          lastSentMessageId = sent.message_id;
         }
+      }
+      // Track the last bot message so reactions can be linked
+      if (lastSentMessageId !== null) {
+        await this.saveBotMessage(chatId, lastSentMessageId, mapping.user_id, result.conversationId);
       }
     } catch (error: any) {
       console.error('[Telegram] Error processing document:', error);

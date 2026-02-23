@@ -11,6 +11,7 @@ interface RunningBot {
   id: string;
   name: string;
   instance: AlleracTelegramBot;
+  updatedAt: Date | null;
 }
 
 const runningBots: Map<string, RunningBot> = new Map();
@@ -34,7 +35,8 @@ async function startBot(config: any): Promise<void> {
     runningBots.set(config.id, {
       id: config.id,
       name: config.botName,
-      instance: bot
+      instance: bot,
+      updatedAt: config.updatedAt || null,
     });
 
     console.log(`[Telegram] ✓ Bot "${config.botName}" started successfully`);
@@ -52,9 +54,8 @@ async function stopBot(botId: string): Promise<void> {
 
   try {
     console.log(`[Telegram] Stopping bot: ${bot.name}`);
-    // Note: node-telegram-bot-api doesn't have a clean stop method
-    // The bot will naturally stop responding when we remove it from the map
     runningBots.delete(botId);
+    await bot.instance.stop();
     console.log(`[Telegram] ✓ Bot "${bot.name}" stopped`);
   } catch (error) {
     console.error(`[Telegram] ✗ Error stopping bot "${bot.name}":`, error);
@@ -130,10 +131,17 @@ async function loadAllBots(): Promise<void> {
       }
     }
 
-    // Start new bots or restart existing ones
+    // Start new bots or restart existing ones when config changed
     for (const config of configs) {
       if (runningBots.has(config.id)) {
-        // Bot already running - could check if config changed and restart if needed
+        const running = runningBots.get(config.id)!;
+        const configUpdatedAt = config.updatedAt ? new Date(config.updatedAt) : null;
+        const hasChanged = configUpdatedAt && (!running.updatedAt || configUpdatedAt > running.updatedAt);
+        if (hasChanged) {
+          console.log(`[Telegram] Config changed for bot "${config.botName}", restarting...`);
+          await stopBot(config.id);
+          await startBot(config);
+        }
         continue;
       }
       await startBot(config);
