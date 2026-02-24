@@ -761,7 +761,10 @@ export class AlleracTelegramBot {
     // /help command
     this.bot.onText(/\/help/, async (msg) => {
       const chatId = msg.chat.id;
-      await this.bot.sendMessage(chatId,
+      const userId = msg.from?.id;
+      if (!userId || !this.isAllowed(userId)) return;
+
+      await this.safeSend(chatId,
         `*Allerac One - Commands*\n\n` +
         `/new - Start a new conversation\n` +
         `/conversations - List your conversations\n` +
@@ -776,12 +779,10 @@ export class AlleracTelegramBot {
         `/correct - Correct AI response and memorize\n` +
         `/help - Show this message\n\n` +
         `*Features:*\n` +
-        `📝 Send text messages to chat\n` +
-        `📷 Send photos for AI vision analysis (GPT-4o)\n` +
-        `🖼️ Send image files for analysis\n` +
-        `🎯 Use skills for specialized workflows\n\n` +
-        `💡 _Tip: Use gpt-4o or gpt-4o-mini for image analysis_`,
-        { parse_mode: 'Markdown' }
+        `📝 Text chat\n` +
+        `📷 Image analysis (with GPT-4o)\n` +
+        `🔍 Web search\n` +
+        `🧠 Conversation memory`
       );
     });
 
