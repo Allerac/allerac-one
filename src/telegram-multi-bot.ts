@@ -173,6 +173,11 @@ async function main() {
   console.log('[Telegram] Multi-Bot Manager is running');
 }
 
+// Prevent unhandled rejections from crashing the process
+process.on('unhandledRejection', (err) => {
+  console.error('[Telegram] Unhandled rejection (caught globally):', err);
+});
+
 // Start the manager
 main().catch(error => {
   console.error('[Telegram] Fatal error:', error);

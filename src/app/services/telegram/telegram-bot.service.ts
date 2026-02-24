@@ -46,7 +46,34 @@ export class AlleracTelegramBot {
       },
     });
     this.userSettings = new UserSettingsService();
+    this.patchAsyncHandlers();
     this.registerHandlers();
+  }
+
+  /**
+   * Monkey-patch bot.on and bot.onText so that any async handler that throws
+   * is caught and logged instead of becoming an unhandled promise rejection.
+   * Applied once before registerHandlers() so every handler is covered.
+   */
+  private patchAsyncHandlers() {
+    const origOn = this.bot.on.bind(this.bot);
+    const origOnText = this.bot.onText.bind(this.bot);
+
+    (this.bot as any).on = (event: string, listener: (...args: any[]) => any) =>
+      origOn(event as any, (...args: any[]) => {
+        const r = listener(...args);
+        if (r && typeof r.catch === 'function') {
+          r.catch((err: unknown) => console.error(`[Telegram] Unhandled error in '${event}' handler:`, err));
+        }
+      });
+
+    (this.bot as any).onText = (regexp: RegExp, callback: (...args: any[]) => any) =>
+      origOnText(regexp, (msg: any, match: any) => {
+        const r = callback(msg, match);
+        if (r && typeof r.catch === 'function') {
+          r.catch((err: unknown) => console.error('[Telegram] Unhandled error in onText handler:', err));
+        }
+      });
   }
 
   private isAllowed(userId: number): boolean {
@@ -150,6 +177,13 @@ export class AlleracTelegramBot {
   /** Escape characters that break Telegram Markdown v1 parsing. */
   private escapeMd(text: string): string {
     return text.replace(/[_*`\[]/g, '\\$&');
+  }
+
+  /** Wrap an async handler so errors never become unhandled rejections. */
+  private safe<T extends unknown[]>(fn: (...args: T) => Promise<void>): (...args: T) => void {
+    return (...args: T) => {
+      fn(...args).catch((err) => console.error('[Telegram] Error in handler:', err));
+    };
   }
 
   /** Send a message, trying Markdown first and falling back to plain text. */
