@@ -209,6 +209,19 @@ services:
         limits:
           memory: 256M
 
+  # Portainer - Docker management UI
+  # Cloudflare Tunnel: add public hostname portainer.allerac.ai → http://localhost:9000
+  # in Cloudflare Zero Trust dashboard (Networks > Tunnels > your tunnel > Public Hostnames)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    ports:
+      - "9000:9000"
+
   # Cloudflare Tunnel
   tunnel:
     image: cloudflare/cloudflared:latest
@@ -220,6 +233,7 @@ services:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     depends_on:
       - app
+      - portainer
 
   # Redis - Message broker for notification streams
   redis:
@@ -275,3 +289,4 @@ volumes:
   backups_data:
   executor_workspace:
   redis_data:
+  portainer_data:
