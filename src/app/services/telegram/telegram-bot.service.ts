@@ -80,6 +80,38 @@ export class AlleracTelegramBot {
     return this.config.allowedUsers.length === 0 || this.config.allowedUsers.includes(userId);
   }
 
+  /**
+   * Returns the Allerac user_id for a given Telegram user.
+   * Each unique Telegram user gets their own isolated Allerac account so that
+   * conversations, memories, and corrections are never shared across different
+   * Telegram users who happen to share the same bot.
+   */
+  private async getOrCreateVirtualUser(telegramUserId: number, username?: string): Promise<string> {
+    // Re-use the same Allerac user if this Telegram user already has any mapping
+    const existing = await pool.query(
+      'SELECT user_id FROM telegram_chat_mapping WHERE telegram_user_id = $1 LIMIT 1',
+      [telegramUserId]
+    );
+    if (existing.rows.length > 0) {
+      return existing.rows[0].user_id;
+    }
+
+    // First time this Telegram user talks to the bot – create a dedicated virtual account
+    const email = `telegram_${telegramUserId}@telegram.bot.local`;
+    const displayName = username ? `Telegram: @${username}` : `Telegram User ${telegramUserId}`;
+
+    const result = await pool.query(
+      `INSERT INTO users (email, name)
+       VALUES ($1, $2)
+       ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      [email, displayName]
+    );
+
+    console.log(`[Telegram] Created virtual user ${result.rows[0].id} for Telegram user ${telegramUserId} (@${username ?? 'unknown'})`);
+    return result.rows[0].id;
+  }
+
   private async getOrCreateMapping(chatId: number, userId: number, username?: string) {
     const existing = await pool.query(
       'SELECT * FROM telegram_chat_mapping WHERE telegram_chat_id = $1',
@@ -90,16 +122,19 @@ export class AlleracTelegramBot {
       return existing.rows[0];
     }
 
+    // Each Telegram user gets their own isolated Allerac account
+    const alleracUserId = await this.getOrCreateVirtualUser(userId, username);
+
     // Create new mapping
     await pool.query(
       `INSERT INTO telegram_chat_mapping (telegram_chat_id, user_id, telegram_user_id, telegram_username)
        VALUES ($1, $2, $3, $4)`,
-      [chatId, this.config.defaultUserId, userId, username || null]
+      [chatId, alleracUserId, userId, username || null]
     );
 
     return {
       telegram_chat_id: chatId,
-      user_id: this.config.defaultUserId,
+      user_id: alleracUserId,
       current_conversation_id: null,
       telegram_user_id: userId,
     };
@@ -149,7 +184,24 @@ export class AlleracTelegramBot {
   }
 
   private async getChatConfig(alleracUserId: string, telegramUserId: number, botId?: string): Promise<ChatHandlerConfig> {
-    const settings = await this.userSettings.loadUserSettings(alleracUserId);
+    let settings = await this.userSettings.loadUserSettings(alleracUserId);
+
+    // Virtual Telegram users have no API keys of their own – inherit them from the
+    // bot owner (defaultUserId) so that LLM calls continue to work.
+    if (!settings?.github_token && alleracUserId !== this.config.defaultUserId) {
+      const ownerSettings = await this.userSettings.loadUserSettings(this.config.defaultUserId);
+      if (ownerSettings) {
+        settings = {
+          ...ownerSettings,
+          // Prefer any user-specific overrides (e.g. system_message) if present
+          ...(settings || {}),
+          // Always use the bot owner's API credentials
+          github_token: ownerSettings.github_token,
+          tavily_api_key: ownerSettings.tavily_api_key,
+        };
+      }
+    }
+
     const selectedModel = this.selectedModels.get(telegramUserId);
 
     // Find model config - default to gpt-4o for vision support
@@ -560,10 +612,10 @@ export class AlleracTelegramBot {
         // Update the current conversation
         await this.updateConversationId(chatId, conversationId);
 
-        // Get conversation details
+        // Get conversation details – always verify ownership
         const convResult = await pool.query(
-          'SELECT title FROM chat_conversations WHERE id = $1',
-          [conversationId]
+          'SELECT title FROM chat_conversations WHERE id = $1 AND user_id = $2',
+          [conversationId, mapping.user_id]
         );
 
         if (convResult.rows.length === 0) {
