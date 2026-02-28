@@ -16,6 +16,7 @@ import * as skillActions from '@/app/actions/skills';
 
 import SidebarMobile from './components/layout/SidebarMobile';
 import SidebarDesktop from './components/layout/SidebarDesktop';
+import ChatHeader from './components/chat/ChatHeader';
 import ChatMessages from './components/chat/ChatMessages';
 import ChatInput from './components/chat/ChatInput';
 import MemorySaveModal from './components/memory/MemorySaveModal';
@@ -717,73 +718,38 @@ export default function AdminChat() {
         </div>
 
         {/* Main Chat Area */}
-        <div className={`flex-1 flex flex-col ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
-          }`}>
-          
-          {/* Mobile Menu FAB - Only visible on mobile */}
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className={`lg:hidden fixed z-50 w-12 h-12 rounded-full shadow-lg transition-all flex items-center justify-center ${
-              isDarkMode
-                ? 'bg-gray-800 bg-opacity-90 backdrop-blur-sm text-gray-300 hover:bg-gray-700'
-                : 'bg-white bg-opacity-90 backdrop-blur-sm text-gray-700 hover:bg-gray-100'
-            }`}
-            style={{ top: 'calc(1rem + env(safe-area-inset-top, 0px))', left: 'calc(0.75rem + env(safe-area-inset-left, 0px))' }}
-            title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+        <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
-          {/* Messages Container */}
+          {/* Chat Header - always fixed at top */}
+          <ChatHeader
+            isSidebarOpen={isSidebarOpen}
+            setIsSidebarOpen={setIsSidebarOpen}
+            isDarkMode={isDarkMode}
+            selectedModel={selectedModel}
+            MODELS={MODELS}
+            currentConversationId={currentConversationId}
+            currentConversationHasMemory={currentConversationHasMemory}
+            handleGenerateSummary={handleGenerateSummary}
+            userId={userId}
+            availableSkills={availableSkills}
+            activeSkill={activeSkill}
+            onActivateSkill={handleActivateSkill}
+            onDeactivateSkill={handleDeactivateSkill}
+          />
+
+          {/* Messages Container - scrollable, fills remaining space */}
           <div data-name="messages-container" className={`flex-1 overflow-y-auto ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
             {messages.length === 0 ? (
-              /* Empty State - Gemini Style */
+              /* Empty State */
               <div className="h-full flex flex-col items-center justify-center px-4">
-                <div className="w-full max-w-2xl">
-                  <div className="text-center mb-12">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-6">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                      </svg>
-                    </div>
-                    <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
-                    <h3 className={`text-xl font-medium mb-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
-
-                    {/* Input Box in Empty State */}
-                    <div className="mt-8">
-                      <ChatInput
-                        inputMessage={inputMessage}
-                        setInputMessage={setInputMessage}
-                        handleKeyPress={handleKeyPress}
-                        handleSendMessage={handleSendMessage}
-                        isSending={isSending}
-                        githubToken={githubToken}
-                        isDarkMode={isDarkMode}
-                        setIsDocumentModalOpen={setIsDocumentModalOpen}
-                        imageAttachments={imageAttachments}
-                        onImageSelect={handleImageSelect}
-                        onRemoveImage={removeImage}
-                        fileInputRef={fileInputRef}
-                        availableSkills={availableSkills}
-                        activeSkill={activeSkill}
-                        preSelectedSkill={preSelectedSkill}
-                        onActivateSkill={handleActivateSkill}
-                        onDeactivateSkill={handleDeactivateSkill}
-                        selectedModel={selectedModel}
-                        setSelectedModel={setSelectedModel}
-                        MODELS={MODELS}
-                        githubConfigured={!!githubToken}
-                        ollamaConnected={ollamaConnected}
-                        ollamaModels={ollamaModels}
-                        onDownloadModel={handleDownloadModel}
-                        currentConversationId={currentConversationId}
-                        currentConversationHasMemory={currentConversationHasMemory}
-                        handleGenerateSummary={handleGenerateSummary}
-                      />
-                    </div>
+                <div className="w-full max-w-2xl text-center">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
                   </div>
+                  <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
+                  <h3 className={`text-xl font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
                 </div>
               </div>
             ) : (
@@ -802,49 +768,47 @@ export default function AdminChat() {
             )}
           </div>
 
-          {/* Input Area - Only show when there are messages */}
-          {messages.length > 0 && (
-            <div data-name="input-area-wrapper">
-              <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4">
-                {!githubToken && (
-                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-800">
-                      ⚠️ Please configure your GitHub token in Settings to start chatting
-                    </p>
-                  </div>
-                )}
-                <ChatInput
-                  inputMessage={inputMessage}
-                  setInputMessage={setInputMessage}
-                  handleKeyPress={handleKeyPress}
-                  handleSendMessage={handleSendMessage}
-                  isSending={isSending}
-                  githubToken={githubToken}
-                  isDarkMode={isDarkMode}
-                  setIsDocumentModalOpen={setIsDocumentModalOpen}
-                  imageAttachments={imageAttachments}
-                  onImageSelect={handleImageSelect}
-                  onRemoveImage={removeImage}
-                  fileInputRef={fileInputRef}
-                  availableSkills={availableSkills}
-                  activeSkill={activeSkill}
-                  preSelectedSkill={preSelectedSkill}
-                  onActivateSkill={handleActivateSkill}
-                  onDeactivateSkill={handleDeactivateSkill}
-                  selectedModel={selectedModel}
-                  setSelectedModel={setSelectedModel}
-                  MODELS={MODELS}
-                  githubConfigured={!!githubToken}
-                  ollamaConnected={ollamaConnected}
-                  ollamaModels={ollamaModels}
-                  onDownloadModel={handleDownloadModel}
-                  currentConversationId={currentConversationId}
-                  currentConversationHasMemory={currentConversationHasMemory}
-                  handleGenerateSummary={handleGenerateSummary}
-                />
-              </div>
+          {/* Input Area - always at bottom, never inside the scroll */}
+          <div data-name="input-area-wrapper" className={`flex-shrink-0 border-t ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
+            <div className="max-w-3xl mx-auto px-3 sm:px-4 py-3">
+              {!githubToken && (
+                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    ⚠️ Please configure your GitHub token in Settings to start chatting
+                  </p>
+                </div>
+              )}
+              <ChatInput
+                inputMessage={inputMessage}
+                setInputMessage={setInputMessage}
+                handleKeyPress={handleKeyPress}
+                handleSendMessage={handleSendMessage}
+                isSending={isSending}
+                githubToken={githubToken}
+                isDarkMode={isDarkMode}
+                setIsDocumentModalOpen={setIsDocumentModalOpen}
+                imageAttachments={imageAttachments}
+                onImageSelect={handleImageSelect}
+                onRemoveImage={removeImage}
+                fileInputRef={fileInputRef}
+                availableSkills={availableSkills}
+                activeSkill={activeSkill}
+                preSelectedSkill={preSelectedSkill}
+                onActivateSkill={handleActivateSkill}
+                onDeactivateSkill={handleDeactivateSkill}
+                selectedModel={selectedModel}
+                setSelectedModel={setSelectedModel}
+                MODELS={MODELS}
+                githubConfigured={!!githubToken}
+                ollamaConnected={ollamaConnected}
+                ollamaModels={ollamaModels}
+                onDownloadModel={handleDownloadModel}
+                currentConversationId={currentConversationId}
+                currentConversationHasMemory={currentConversationHasMemory}
+                handleGenerateSummary={handleGenerateSummary}
+              />
             </div>
-          )}
+          </div>
         </div>
       </div>
 

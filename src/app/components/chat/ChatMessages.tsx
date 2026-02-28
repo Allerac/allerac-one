@@ -238,7 +238,10 @@ export default function ChatMessages({
         ))}
         
         
-        {isSending && (
+        {/* Thinking dots — only shown before the assistant's first token arrives.
+            Once the streaming message appears in the array (role === 'assistant'),
+            the icon is already rendered above so we only show the dots inline. */}
+        {isSending && messages[messages.length - 1]?.role !== 'assistant' && (
           <div className="flex gap-0 flex-row">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
               <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
@@ -252,6 +255,14 @@ export default function ChatMessages({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+        {/* Streaming dots shown below the assistant message while tokens arrive */}
+        {isSending && messages[messages.length - 1]?.role === 'assistant' && (
+          <div className="flex items-end gap-1 pb-1 ml-11">
+            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '0ms' }}></div>
+            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '150ms' }}></div>
+            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '300ms' }}></div>
           </div>
         )}
       </div>
