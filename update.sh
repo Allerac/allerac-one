@@ -28,6 +28,20 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
+# Check Docker daemon access
+if ! docker info > /dev/null 2>&1; then
+    echo -e "${RED}Error: Cannot connect to Docker daemon${NC}"
+    echo ""
+    echo "Your user '$(whoami)' does not have permission to use Docker."
+    echo "To fix this, run the following as a user with sudo access:"
+    echo ""
+    echo -e "  ${YELLOW}sudo usermod -aG docker $(whoami)${NC}"
+    echo ""
+    echo "Then log out and log back in for the change to take effect."
+    echo "Verify with: groups $(whoami)"
+    exit 1
+fi
+
 # Step 1: Pull latest changes
 echo -e "${YELLOW}[1/5]${NC} Pulling latest changes from GitHub..."
 git pull origin main || {
