@@ -55,7 +55,7 @@ export default function MemorySettingsModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className={`backdrop-blur-md rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col ${isDarkMode ? 'bg-gray-800/95 border border-gray-700' : 'bg-white/95 border border-gray-200'}`}>
+      <div className={`backdrop-blur-md rounded-lg shadow-xl max-w-2xl w-full max-h-[80dvh] flex flex-col ${isDarkMode ? 'bg-gray-800/95 border border-gray-700' : 'bg-white/95 border border-gray-200'}`}>
         <div className={`p-6 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Memory Settings</h2>
           <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>

@@ -368,7 +368,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
       onClick={handleBackdropClick}
     >
       <div
-        className={`backdrop-blur-md shadow-xl w-full sm:max-w-4xl sm:rounded-lg rounded-t-2xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden ${
+        className={`backdrop-blur-md shadow-xl w-full sm:max-w-4xl sm:rounded-lg rounded-t-2xl max-h-[95dvh] sm:max-h-[90dvh] overflow-hidden ${
           isDarkMode
             ? 'bg-gray-800/95 border-t sm:border border-gray-700'
             : 'bg-white/95 border-t sm:border border-gray-200'

@@ -644,14 +644,14 @@ export default function AdminChat() {
 
   if (isLoading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`min-h-dvh flex items-center justify-center ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
         <div className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className={`h-screen flex flex-col ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+    <div className={`h-dvh flex flex-col ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
 
       {/* Mobile Overlay */}
       {isSidebarOpen && (
@@ -723,11 +723,12 @@ export default function AdminChat() {
           {/* Mobile Menu FAB - Only visible on mobile */}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className={`lg:hidden fixed top-4 left-3 z-50 w-12 h-12 rounded-full shadow-lg transition-all flex items-center justify-center ${
+            className={`lg:hidden fixed z-50 w-12 h-12 rounded-full shadow-lg transition-all flex items-center justify-center ${
               isDarkMode
                 ? 'bg-gray-800 bg-opacity-90 backdrop-blur-sm text-gray-300 hover:bg-gray-700'
                 : 'bg-white bg-opacity-90 backdrop-blur-sm text-gray-700 hover:bg-gray-100'
             }`}
+            style={{ top: 'calc(1rem + env(safe-area-inset-top, 0px))', left: 'calc(0.75rem + env(safe-area-inset-left, 0px))' }}
             title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -19,6 +19,12 @@ export const metadata: Metadata = {
   description: "AI-powered chat assistant",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default async function RootLayout({
   children,
 }: Readonly<{

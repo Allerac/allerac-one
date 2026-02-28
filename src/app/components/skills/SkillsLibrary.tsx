@@ -248,7 +248,7 @@ export default function SkillsLibrary({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className={`backdrop-blur-md rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col ${isDarkMode ? 'bg-gray-800/95 border border-gray-700' : 'bg-white/95 border border-gray-200'}`}>
+      <div className={`backdrop-blur-md rounded-lg shadow-xl max-w-5xl w-full max-h-[90dvh] flex flex-col ${isDarkMode ? 'bg-gray-800/95 border border-gray-700' : 'bg-white/95 border border-gray-200'}`}>
         {/* Header */}
         <div className={`p-6 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div>
