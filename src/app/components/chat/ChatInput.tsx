@@ -102,11 +102,11 @@ export default function ChatInput({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside);
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
     };
   }, []);
 
@@ -124,7 +124,7 @@ export default function ChatInput({
               />
               <button
                 onClick={() => onRemoveImage?.(index)}
-                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
               >
                 ×
               </button>
@@ -147,7 +147,7 @@ export default function ChatInput({
       <textarea
         value={inputMessage}
         onChange={(e) => setInputMessage(e.target.value)}
-        onKeyPress={handleKeyPress}
+        onKeyDown={handleKeyPress}
         placeholder={t('typeMessage')}
         className={`w-full px-4 pt-3 pb-2 focus:outline-none resize-none disabled:opacity-50 bg-transparent ${isDarkMode ? 'text-gray-100 placeholder-gray-400' : 'text-black placeholder-gray-400'}`}
         rows={1}
@@ -166,7 +166,7 @@ export default function ChatInput({
                 const dropdown = document.getElementById('chat-input-attach-dropdown');
                 dropdown?.classList.toggle('hidden');
               }}
-              className={`w-9 h-9 rounded-lg transition-all flex items-center justify-center ${
+              className={`w-11 h-11 rounded-lg transition-all flex items-center justify-center ${
                 isDarkMode
                   ? 'hover:bg-gray-600 text-gray-400'
                   : 'hover:bg-gray-200 text-gray-600'
@@ -230,7 +230,7 @@ export default function ChatInput({
                   const dropdown = document.getElementById('chat-input-skills-dropdown');
                   if (dropdown) dropdown.classList.toggle('hidden');
                 }}
-                className={`px-3 h-9 rounded-lg flex items-center gap-1.5 transition-all text-sm ${
+                className={`px-3 h-11 rounded-lg flex items-center gap-1.5 transition-all text-sm ${
                   currentSkill
                     ? 'bg-purple-500 hover:bg-purple-600 text-white'
                     : isDarkMode
@@ -319,7 +319,7 @@ export default function ChatInput({
             <button
               onClick={handleGenerateSummary}
               disabled={isSending}
-              className={`w-9 h-9 rounded-lg transition-all flex items-center justify-center ${
+              className={`w-11 h-11 rounded-lg transition-all flex items-center justify-center ${
                 isDarkMode
                   ? 'hover:bg-gray-600 text-gray-400'
                   : 'hover:bg-gray-200 text-gray-600'
@@ -351,7 +351,7 @@ export default function ChatInput({
                   const dropdown = document.getElementById('chat-input-model-dropdown');
                   if (dropdown) dropdown.classList.toggle('hidden');
                 }}
-                className={`px-3 h-9 rounded-lg flex items-center gap-1.5 transition-all text-sm ${
+                className={`px-3 h-11 rounded-lg flex items-center gap-1.5 transition-all text-sm ${
                   isDarkMode
                     ? 'hover:bg-gray-600 text-gray-300'
                     : 'hover:bg-gray-200 text-gray-700'
@@ -411,7 +411,7 @@ export default function ChatInput({
           <button
             onClick={handleSendMessage}
             disabled={isSending || (!inputMessage.trim() && imageAttachments.length === 0) || !githubToken}
-            className={`w-9 h-9 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
+            className={`w-11 h-11 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
               (inputMessage.trim() || imageAttachments.length > 0) && !isSending
                 ? 'bg-blue-900 hover:bg-blue-950 text-white'
                 : isDarkMode

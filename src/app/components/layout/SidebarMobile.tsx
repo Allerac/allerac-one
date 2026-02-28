@@ -52,11 +52,11 @@ export default function SidebarMobile({
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [isConfigurationExpanded, setIsConfigurationExpanded] = useState(true);
   return (
-    <div className={`fixed inset-y-0 left-0 z-50 w-[70%] bg-gray-900 text-white flex flex-col border-r border-gray-800 transform transition-transform duration-300 ${
+    <div className={`fixed inset-y-0 left-0 z-50 w-[80%] max-w-xs bg-gray-900 text-white flex flex-col border-r border-gray-800 transform transition-transform duration-300 ${
       isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
     }`}>
       {/* Top Actions - Fixed */}
-      <div className="p-4 border-b border-gray-800">
+      <div className="border-b border-gray-800" style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))', paddingLeft: 'env(safe-area-inset-left, 0px)', paddingRight: '1rem', paddingBottom: '1rem' }}>
         <div className="flex gap-2 ml-16">
           <button
             onClick={toggleTheme}
