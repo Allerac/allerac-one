@@ -2,17 +2,20 @@
   "sidebar": {
     "conversations": "Conversations",
     "noConversations": "No conversations yet",
+    "options": "Options",
     "configuration": "Configuration",
     "apiKeys": "API Keys",
-    "memorySettings": "Memory Settings",
-    "userSettings": "User Settings",
-    "documents": "Documents",
+    "memorySettings": "Consciousness",
+    "documents": "Knowledge",
     "memories": "Memories",
     "skills": "Skills",
-    "scheduledJobs": "Scheduled Jobs",
+    "scheduledJobs": "Tasks",
     "logout": "Logout",
-    "deleteConversation": "Delete conversation",
-    "systemDashboard": "System Dashboard"
+    "deleteConversation": "Delete",
+    "rename": "Rename",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "systemDashboard": "Configuration"
   },
   "login": {
     "welcomeBack": "Welcome Back",
@@ -58,7 +61,12 @@
     "cancel": "Cancel"
   },
   "system": {
-    "title": "System Dashboard",
+    "title": "Configuration",
+    "tabSystem": "System",
+    "tabApiKeys": "API Keys",
+    "saveKeys": "Save Keys",
+    "keysSaved": "Keys saved successfully!",
+    "keysSaveFailed": "Failed to save keys.",
     "lastUpdated": "Last updated",
     "systemInfo": "System Info",
     "hostname": "Hostname",

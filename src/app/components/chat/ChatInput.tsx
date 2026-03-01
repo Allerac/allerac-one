@@ -30,10 +30,6 @@ interface ChatInputProps {
   ollamaConnected?: boolean;
   ollamaModels?: any[];
   onDownloadModel?: (modelName: string) => void;
-  // Memory props
-  currentConversationId?: string | null;
-  currentConversationHasMemory?: boolean;
-  handleGenerateSummary?: () => void;
 }
 
 export default function ChatInput({
@@ -61,17 +57,23 @@ export default function ChatInput({
   ollamaConnected = false,
   ollamaModels = [],
   onDownloadModel,
-  currentConversationId = null,
-  currentConversationHasMemory = false,
-  handleGenerateSummary,
 }: ChatInputProps) {
   const t = useTranslations('chat');
   const currentSkill = activeSkill || preSelectedSkill;
   const dropdownRef = useRef<HTMLDivElement>(null);
   const attachDropdownRef = useRef<HTMLDivElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const currentModel = MODELS.find(m => m.id === selectedModel);
+
+  // Auto-resize textarea as content changes
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [inputMessage]);
 
   // Close dropdowns on ESC or click outside
   useEffect(() => {
@@ -145,11 +147,12 @@ export default function ChatInput({
       
       {/* Line 1: Text input */}
       <textarea
+        ref={textareaRef}
         value={inputMessage}
         onChange={(e) => setInputMessage(e.target.value)}
         onKeyDown={handleKeyPress}
         placeholder={t('typeMessage')}
-        className={`w-full px-4 pt-3 pb-2 focus:outline-none resize-none disabled:opacity-50 bg-transparent ${isDarkMode ? 'text-gray-100 placeholder-gray-400' : 'text-black placeholder-gray-400'}`}
+        className={`w-full px-4 pt-3 pb-2 focus:outline-none resize-none disabled:opacity-50 bg-transparent overflow-y-auto ${isDarkMode ? 'text-gray-100 placeholder-gray-400' : 'text-black placeholder-gray-400'}`}
         rows={1}
         disabled={isSending || !githubToken}
         style={{ minHeight: '48px', maxHeight: '200px', lineHeight: '28px' }}
@@ -222,124 +225,103 @@ export default function ChatInput({
             </div>
           </div>
           
-          {/* Skills dropdown */}
-          {availableSkills.length > 0 && (
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => {
-                  const dropdown = document.getElementById('chat-input-skills-dropdown');
-                  if (dropdown) dropdown.classList.toggle('hidden');
-                }}
-                className={`px-3 h-11 rounded-lg flex items-center gap-1.5 transition-all text-sm ${
-                  currentSkill
-                    ? 'bg-purple-500 hover:bg-purple-600 text-white'
-                    : isDarkMode
-                    ? 'hover:bg-gray-600 text-gray-400'
-                    : 'hover:bg-gray-200 text-gray-600'
-                }`}
-                title={currentSkill ? currentSkill.display_name || currentSkill.name : 'Select Skill'}
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                {currentSkill && <span className="max-w-[100px] truncate">{currentSkill.display_name || currentSkill.name}</span>}
-              </button>
-              
-              <div
-                id="chat-input-skills-dropdown"
-                className={`hidden absolute bottom-full mb-2 left-0 w-64 sm:w-80 max-w-[85vw] rounded-lg shadow-lg z-50 ${
-                  isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
-                }`}
-              >
-                {currentSkill && (
-                  <button
-                    onClick={() => {
-                      onDeactivateSkill?.();
-                      document.getElementById('chat-input-skills-dropdown')?.classList.add('hidden');
-                    }}
-                    className={`w-full px-4 py-3 text-left border-b flex items-center gap-2 ${
-                      isDarkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <span className="text-red-500 font-medium">Deactivate Skill</span>
-                  </button>
-                )}
-                
-                <div className="max-h-96 overflow-y-auto">
-                  {availableSkills.map((skill) => (
-                    <button
-                      key={skill.id}
-                      onClick={() => {
-                        onActivateSkill?.(skill.id);
-                        document.getElementById('chat-input-skills-dropdown')?.classList.add('hidden');
-                      }}
-                      className={`w-full px-4 py-3 text-left border-b transition-colors last:border-b-0 ${
-                        currentSkill?.id === skill.id
-                          ? isDarkMode
-                            ? 'bg-purple-900 border-purple-700'
-                            : 'bg-purple-50 border-purple-200'
-                          : isDarkMode
-                          ? 'border-gray-700 hover:bg-gray-700'
-                          : 'border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`font-medium ${
-                          currentSkill?.id === skill.id
-                            ? 'text-purple-400'
-                            : isDarkMode
-                            ? 'text-gray-200'
-                            : 'text-gray-900'
-                        }`}>
-                          {skill.display_name || skill.name}
-                        </span>
-                        {currentSkill?.id === skill.id && (
-                          <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        )}
-                      </div>
-                      {skill.description && (
-                        <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {skill.description}
-                        </p>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Memory button - show after skills */}
-          {currentConversationId && (
+          {/* Skills dropdown — always visible */}
+          <div className="relative" ref={dropdownRef}>
             <button
-              onClick={handleGenerateSummary}
-              disabled={isSending}
-              className={`w-11 h-11 rounded-lg transition-all flex items-center justify-center ${
-                isDarkMode
+              onClick={() => {
+                const dropdown = document.getElementById('chat-input-skills-dropdown');
+                if (dropdown) dropdown.classList.toggle('hidden');
+              }}
+              className={`px-3 h-11 rounded-lg flex items-center gap-1.5 transition-all text-sm ${
+                currentSkill
+                  ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                  : isDarkMode
                   ? 'hover:bg-gray-600 text-gray-400'
                   : 'hover:bg-gray-200 text-gray-600'
-              } disabled:opacity-50`}
-              title={currentConversationHasMemory
-                ? 'This conversation is already saved in memory'
-                : 'Save this conversation to long-term memory'
-              }
+              }`}
+              title={currentSkill ? currentSkill.display_name || currentSkill.name : 'Select Skill'}
             >
-              {currentConversationHasMemory ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
-              )}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              {currentSkill && <span className="max-w-[100px] truncate">{currentSkill.display_name || currentSkill.name}</span>}
             </button>
-          )}
+
+            <div
+              id="chat-input-skills-dropdown"
+              className={`hidden absolute bottom-full mb-2 left-0 w-64 sm:w-80 max-w-[85vw] rounded-lg shadow-lg z-50 ${
+                isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+              }`}
+            >
+              {availableSkills.length === 0 ? (
+                <div className={`px-4 py-3 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  No skills yet. Create one in the sidebar.
+                </div>
+              ) : (
+                <>
+                  {currentSkill && (
+                    <button
+                      onClick={() => {
+                        onDeactivateSkill?.();
+                        document.getElementById('chat-input-skills-dropdown')?.classList.add('hidden');
+                      }}
+                      className={`w-full px-4 py-3 text-left border-b flex items-center gap-2 ${
+                        isDarkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span className="text-red-500 font-medium">Deactivate Skill</span>
+                    </button>
+                  )}
+
+                  <div className="max-h-96 overflow-y-auto">
+                    {availableSkills.map((skill) => (
+                      <button
+                        key={skill.id}
+                        onClick={() => {
+                          onActivateSkill?.(skill.id);
+                          document.getElementById('chat-input-skills-dropdown')?.classList.add('hidden');
+                        }}
+                        className={`w-full px-4 py-3 text-left border-b transition-colors last:border-b-0 ${
+                          currentSkill?.id === skill.id
+                            ? isDarkMode
+                              ? 'bg-purple-900 border-purple-700'
+                              : 'bg-purple-50 border-purple-200'
+                            : isDarkMode
+                            ? 'border-gray-700 hover:bg-gray-700'
+                            : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`font-medium ${
+                            currentSkill?.id === skill.id
+                              ? 'text-purple-400'
+                              : isDarkMode
+                              ? 'text-gray-200'
+                              : 'text-gray-900'
+                          }`}>
+                            {skill.display_name || skill.name}
+                          </span>
+                          {currentSkill?.id === skill.id && (
+                            <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          )}
+                        </div>
+                        {skill.description && (
+                          <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {skill.description}
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
         
         {/* Right side: Model selector + Send button */}

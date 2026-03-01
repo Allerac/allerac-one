@@ -11,6 +11,18 @@ interface SystemDashboardProps {
   onClose: () => void;
   isDarkMode: boolean;
   userId?: string;
+  initialTab?: 'system' | 'apiKeys';
+  // API Keys props
+  githubToken: string;
+  tavilyApiKey: string;
+  telegramBotToken: string;
+  tokenInput: string;
+  setTokenInput: (v: string) => void;
+  tavilyKeyInput: string;
+  setTavilyKeyInput: (v: string) => void;
+  telegramBotTokenInput: string;
+  setTelegramBotTokenInput: (v: string) => void;
+  onSaveToken: () => Promise<void>;
 }
 
 interface SystemDashboard {
@@ -120,8 +132,25 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`;
 }
 
-export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, userId }: SystemDashboardProps) {
+export default function SystemDashboardModal({
+  isOpen,
+  onClose,
+  isDarkMode,
+  userId,
+  initialTab = 'system',
+  githubToken,
+  tavilyApiKey,
+  telegramBotToken,
+  tokenInput,
+  setTokenInput,
+  tavilyKeyInput,
+  setTavilyKeyInput,
+  telegramBotTokenInput,
+  setTelegramBotTokenInput,
+  onSaveToken,
+}: SystemDashboardProps) {
   const t = useTranslations('system');
+  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys'>(initialTab);
   const [data, setData] = useState<SystemDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +158,8 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [keySaveMessage, setKeySaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Backup state
   const [backups, setBackups] = useState<BackupInfo[]>([]);
@@ -142,6 +173,7 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
 
   useEffect(() => {
     if (isOpen) {
+      setActiveTab(initialTab);
       loadDashboard();
       checkUpdates();
       loadBackups();
@@ -160,6 +192,14 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
       return () => clearTimeout(timer);
     }
   }, [backupMessage]);
+
+  // Auto-dismiss key save message after 3 seconds
+  useEffect(() => {
+    if (keySaveMessage) {
+      const timer = setTimeout(() => setKeySaveMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [keySaveMessage]);
 
   const loadDashboard = async () => {
     try {
@@ -189,28 +229,27 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
   const handleUpdate = async () => {
     setIsUpdating(true);
     setUpdateMessage(null);
-    
+
     try {
       const result = await updateActions.applyUpdate();
       if (result.success) {
-        setUpdateMessage({ 
-          type: 'success', 
-          text: result.message 
+        setUpdateMessage({
+          type: 'success',
+          text: result.message
         });
-        // Refresh status after a delay
         setTimeout(() => {
           checkUpdates();
-        }, 10000); // Check again after 10 seconds
+        }, 10000);
       } else {
-        setUpdateMessage({ 
-          type: 'error', 
-          text: result.message 
+        setUpdateMessage({
+          type: 'error',
+          text: result.message
         });
       }
     } catch (err: any) {
-      setUpdateMessage({ 
-        type: 'error', 
-        text: err.message || 'Failed to apply update' 
+      setUpdateMessage({
+        type: 'error',
+        text: err.message || 'Failed to apply update'
       });
     } finally {
       setIsUpdating(false);
@@ -285,7 +324,6 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
     try {
       const result = await backupActions.downloadBackup(filename);
       if (result.success && result.data) {
-        // Convert base64 to blob and download
         const byteCharacters = atob(result.data);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -317,12 +355,10 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
     setBackupMessage(null);
 
     try {
-      // Read file as base64
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
           const content = e.target?.result as string;
-          // Remove data URL prefix if present
           const base64 = content.includes(',') ? content.split(',')[1] : content;
 
           const result = await backupActions.uploadBackup(base64, file.name);
@@ -348,9 +384,21 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
       setIsImportingBackup(false);
     }
 
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveApiKeys = async () => {
+    setIsSavingKeys(true);
+    setKeySaveMessage(null);
+    try {
+      await onSaveToken();
+      setKeySaveMessage({ type: 'success', text: t('keysSaved') });
+    } catch {
+      setKeySaveMessage({ type: 'error', text: t('keysSaveFailed') });
+    } finally {
+      setIsSavingKeys(false);
     }
   };
 
@@ -361,6 +409,17 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
       onClose();
     }
   };
+
+  const tabClass = (tab: 'system' | 'apiKeys') =>
+    `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+      activeTab === tab
+        ? isDarkMode
+          ? 'border-blue-400 text-blue-400'
+          : 'border-blue-600 text-blue-600'
+        : isDarkMode
+          ? 'border-transparent text-gray-400 hover:text-gray-200'
+          : 'border-transparent text-gray-500 hover:text-gray-800'
+    }`;
 
   return (
     <div
@@ -388,14 +447,14 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
             <div className="min-w-0">
               <h2 className={`text-base sm:text-lg font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
                 {t('title')}
               </h2>
-              {data && (
+              {activeTab === 'system' && data && (
                 <p className={`text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   {new Date(data.timestamp).toLocaleTimeString()}
                 </p>
@@ -403,19 +462,21 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-            <button
-              onClick={loadDashboard}
-              disabled={isLoading}
-              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
-                isDarkMode
-                  ? 'hover:bg-gray-700 text-gray-400'
-                  : 'hover:bg-gray-100 text-gray-500'
-              }`}
-            >
-              <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
+            {activeTab === 'system' && (
+              <button
+                onClick={loadDashboard}
+                disabled={isLoading}
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
+                  isDarkMode
+                    ? 'hover:bg-gray-700 text-gray-400'
+                    : 'hover:bg-gray-100 text-gray-500'
+                }`}
+              >
+                <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            )}
             <button
               onClick={onClose}
               className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
@@ -431,306 +492,407 @@ export default function SystemDashboardModal({ isOpen, onClose, isDarkMode, user
           </div>
         </div>
 
+        {/* Tabs */}
+        <div className={`flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <button className={tabClass('system')} onClick={() => setActiveTab('system')}>
+            {t('tabSystem')}
+          </button>
+          <button className={tabClass('apiKeys')} onClick={() => setActiveTab('apiKeys')}>
+            {t('tabApiKeys')}
+          </button>
+        </div>
+
         {/* Content */}
-        <div className="p-3 sm:p-4 overflow-y-auto max-h-[calc(95vh-60px)] sm:max-h-[calc(90vh-80px)]">
-          {isLoading && !data ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
-            </div>
-          ) : error ? (
-            <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
-              {error}
-            </div>
-          ) : data ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Combined System Card */}
-              <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <h3 className={`text-sm font-medium mb-4 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  {t('systemInfo')}
-                </h3>
+        <div className="p-3 sm:p-4 overflow-y-auto max-h-[calc(95dvh-120px)] sm:max-h-[calc(90dvh-140px)]">
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  {/* Hostname & Platform */}
-                  <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                    <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('hostname')}</div>
-                    <div className={`font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.system.hostname}</div>
-                  </div>
-                  <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                    <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('platform')}</div>
-                    <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.system.platform}</div>
-                  </div>
-                  <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                    <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('uptime')}</div>
-                    <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{formatUptime(data.system.uptime)}</div>
-                  </div>
-                  <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                    <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>CPU</div>
-                    <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.cpu.cores} {t('cores')}</div>
-                  </div>
+          {/* System Tab */}
+          {activeTab === 'system' && (
+            <>
+              {isLoading && !data ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
                 </div>
-
-                {/* Memory bar */}
-                <div className="mt-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('memory')}</span>
-                    <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>
-                      {formatBytes(data.memory.used)} / {formatBytes(data.memory.total)} ({data.memory.usedPercent}%)
-                    </span>
-                  </div>
-                  <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
-                    <div
-                      className={`h-full rounded-full ${
-                        data.memory.usedPercent > 90 ? 'bg-red-500' :
-                        data.memory.usedPercent > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                      }`}
-                      style={{ width: `${data.memory.usedPercent}%` }}
-                    />
-                  </div>
+              ) : error ? (
+                <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
+                  {error}
                 </div>
-
-                {/* Version & Updates */}
-                <div className={`mt-4 pt-4 border-t ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`}>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
-                        Build: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                          {updateStatus?.currentCommit || 'unknown'}
-                        </span>
-                      </span>
-                      {updateStatus?.updateAvailable && (
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-400">
-                          {updateStatus.newCommits.length} {t('updateAvailable')}
-                        </span>
-                      )}
-                      {updateStatus?.error && (
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
-                          {updateStatus.error}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={checkUpdates}
-                        disabled={isCheckingUpdates}
-                        className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-1 ${
-                          isDarkMode
-                            ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
-                            : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                        }`}
-                      >
-                        {isCheckingUpdates ? (
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
-                        ) : (
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        )}
-                        {t('checkNow')}
-                      </button>
-                      {updateStatus?.updateAvailable && (
-                        <button
-                          onClick={handleUpdate}
-                          className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center gap-1"
-                        >
-                          {t('prepareUpdate')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {updateStatus?.updateAvailable && updateStatus.newCommits.length > 0 && (
-                    <div className={`mt-2 space-y-1 max-h-32 overflow-y-auto`}>
-                      {updateStatus.newCommits.map((commit) => (
-                        <div key={commit.sha} className={`text-xs px-2 py-1 rounded flex items-start gap-2 ${isDarkMode ? 'bg-gray-600/50 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-                          <span className={`font-mono flex-shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{commit.shortSha}</span>
-                          <span className="truncate">{commit.message}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {updateMessage && (
-                    <div className={`mt-2 p-2 rounded text-xs break-all ${
-                      updateMessage.type === 'success'
-                        ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-700'
-                        : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {updateMessage.text}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Database */}
-              <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                  </svg>
-                  {t('database')}
-                  <span className={`ml-auto px-2 py-0.5 rounded-full text-xs ${
-                    data.database.connected
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-red-500/20 text-red-400'
-                  }`}>
-                    {data.database.connected ? t('connected') : t('disconnected')}
-                  </span>
-                </h3>
-                {data.database.connected ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-4">
-                    {Object.entries(data.database.tables).map(([table, count]) => (
-                      <div key={table} className={`text-center p-2 sm:p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                        <div className={`text-lg sm:text-2xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
-                          {count.toLocaleString()}
-                        </div>
-                        <div className={`text-[10px] sm:text-xs capitalize truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {table}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className={`text-sm ${isDarkMode ? 'text-red-400' : 'text-red-500'}`}>
-                    {data.database.error || t('notConnected')}
-                  </p>
-                )}
-                {data.database.version && (
-                  <p className={`text-xs mt-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                    {data.database.version}
-                  </p>
-                )}
-              </div>
-
-              {/* Backups */}
-              <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                  <h3 className={`text-sm font-medium flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                    </svg>
-                    {tBackup('title')}
-                    <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>
-                      {backups.length}
-                    </span>
-                  </h3>
-                  <div className="flex gap-2">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept=".sql"
-                      onChange={handleImportBackup}
-                      className="hidden"
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isImportingBackup}
-                      className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 ${
-                        isDarkMode
-                          ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
-                          : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                      } disabled:opacity-50`}
-                    >
-                      {isImportingBackup && (
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
-                      )}
+              ) : data ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Combined System Card */}
+                  <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <h3 className={`text-sm font-medium mb-4 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
-                      <span className="hidden sm:inline">{isImportingBackup ? tBackup('importing') : tBackup('import')}</span>
-                    </button>
-                    <button
-                      onClick={handleCreateBackup}
-                      disabled={isCreatingBackup}
-                      className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
-                    >
-                      {isCreatingBackup && (
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                      )}
-                      <span className="hidden sm:inline">{isCreatingBackup ? tBackup('creating') : tBackup('create')}</span>
-                      <span className="sm:hidden">+</span>
-                    </button>
-                  </div>
-                </div>
+                      {t('systemInfo')}
+                    </h3>
 
-                {backupMessage && (
-                  <div className={`mb-3 p-2 rounded-lg text-sm ${
-                    backupMessage.type === 'success'
-                      ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
-                      : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
-                  }`}>
-                    {backupMessage.text}
-                  </div>
-                )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                        <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('hostname')}</div>
+                        <div className={`font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.system.hostname}</div>
+                      </div>
+                      <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                        <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('platform')}</div>
+                        <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.system.platform}</div>
+                      </div>
+                      <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                        <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('uptime')}</div>
+                        <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{formatUptime(data.system.uptime)}</div>
+                      </div>
+                      <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                        <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>CPU</div>
+                        <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.cpu.cores} {t('cores')}</div>
+                      </div>
+                    </div>
 
-                {backups.length === 0 ? (
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {tBackup('noBackups')}
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {backups.map((backup) => (
-                      <div
-                        key={backup.filename}
-                        className={`p-2.5 sm:p-3 rounded-lg ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}
-                      >
-                        <div className="flex items-start sm:items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                              {backup.filename}
-                            </div>
-                            <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {backup.sizeFormatted} • {backup.createdAtFormatted}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
-                            <button
-                              onClick={() => handleDownloadBackup(backup.filename)}
-                              className={`p-1.5 sm:p-2 rounded transition-colors ${
-                                isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
-                              }`}
-                              title={tBackup('download')}
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    {/* Memory bar */}
+                    <div className="mt-4">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('memory')}</span>
+                        <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>
+                          {formatBytes(data.memory.used)} / {formatBytes(data.memory.total)} ({data.memory.usedPercent}%)
+                        </span>
+                      </div>
+                      <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
+                        <div
+                          className={`h-full rounded-full ${
+                            data.memory.usedPercent > 90 ? 'bg-red-500' :
+                            data.memory.usedPercent > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                          }`}
+                          style={{ width: `${data.memory.usedPercent}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Version & Updates */}
+                    <div className={`mt-4 pt-4 border-t ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
+                          <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
+                            Build: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                              {updateStatus?.currentCommit || 'unknown'}
+                            </span>
+                          </span>
+                          {updateStatus?.updateAvailable && (
+                            <span className="px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-400">
+                              {updateStatus.newCommits.length} {t('updateAvailable')}
+                            </span>
+                          )}
+                          {updateStatus?.error && (
+                            <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
+                              {updateStatus.error}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={checkUpdates}
+                            disabled={isCheckingUpdates}
+                            className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-1 ${
+                              isDarkMode
+                                ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
+                                : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                            }`}
+                          >
+                            {isCheckingUpdates ? (
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
+                            ) : (
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                               </svg>
-                            </button>
+                            )}
+                            {t('checkNow')}
+                          </button>
+                          {updateStatus?.updateAvailable && (
                             <button
-                              onClick={() => handleRestoreBackup(backup.filename)}
-                              disabled={isRestoringBackup === backup.filename}
-                              className={`p-1.5 sm:p-2 rounded transition-colors ${
-                                isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
-                              }`}
-                              title={tBackup('restore')}
+                              onClick={handleUpdate}
+                              className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center gap-1"
                             >
-                              {isRestoringBackup === backup.filename ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                              ) : (
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                              )}
+                              {t('prepareUpdate')}
                             </button>
-                            <button
-                              onClick={() => handleDeleteBackup(backup.filename)}
-                              className={`p-1.5 sm:p-2 rounded transition-colors ${
-                                isDarkMode ? 'hover:bg-red-900/50 text-red-400' : 'hover:bg-red-100 text-red-500'
-                              }`}
-                              title={tBackup('delete')}
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
+                          )}
                         </div>
                       </div>
-                    ))}
+                      {updateStatus?.updateAvailable && updateStatus.newCommits.length > 0 && (
+                        <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                          {updateStatus.newCommits.map((commit) => (
+                            <div key={commit.sha} className={`text-xs px-2 py-1 rounded flex items-start gap-2 ${isDarkMode ? 'bg-gray-600/50 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                              <span className={`font-mono flex-shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{commit.shortSha}</span>
+                              <span className="truncate">{commit.message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {updateMessage && (
+                        <div className={`mt-2 p-2 rounded text-xs break-all ${
+                          updateMessage.type === 'success'
+                            ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-700'
+                            : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {updateMessage.text}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
+
+                  {/* Database */}
+                  <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                      </svg>
+                      {t('database')}
+                      <span className={`ml-auto px-2 py-0.5 rounded-full text-xs ${
+                        data.database.connected
+                          ? 'bg-green-500/20 text-green-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {data.database.connected ? t('connected') : t('disconnected')}
+                      </span>
+                    </h3>
+                    {data.database.connected ? (
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-4">
+                        {Object.entries(data.database.tables).map(([table, count]) => (
+                          <div key={table} className={`text-center p-2 sm:p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
+                            <div className={`text-lg sm:text-2xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                              {count.toLocaleString()}
+                            </div>
+                            <div className={`text-[10px] sm:text-xs capitalize truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              {table}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={`text-sm ${isDarkMode ? 'text-red-400' : 'text-red-500'}`}>
+                        {data.database.error || t('notConnected')}
+                      </p>
+                    )}
+                    {data.database.version && (
+                      <p className={`text-xs mt-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {data.database.version}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Backups */}
+                  <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                      <h3 className={`text-sm font-medium flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                        </svg>
+                        {tBackup('title')}
+                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>
+                          {backups.length}
+                        </span>
+                      </h3>
+                      <div className="flex gap-2">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          accept=".sql"
+                          onChange={handleImportBackup}
+                          className="hidden"
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isImportingBackup}
+                          className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 ${
+                            isDarkMode
+                              ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
+                              : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                          } disabled:opacity-50`}
+                        >
+                          {isImportingBackup && (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
+                          )}
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                          <span className="hidden sm:inline">{isImportingBackup ? tBackup('importing') : tBackup('import')}</span>
+                        </button>
+                        <button
+                          onClick={handleCreateBackup}
+                          disabled={isCreatingBackup}
+                          className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
+                        >
+                          {isCreatingBackup && (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                          )}
+                          <span className="hidden sm:inline">{isCreatingBackup ? tBackup('creating') : tBackup('create')}</span>
+                          <span className="sm:hidden">+</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {backupMessage && (
+                      <div className={`mb-3 p-2 rounded-lg text-sm ${
+                        backupMessage.type === 'success'
+                          ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
+                          : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
+                      }`}>
+                        {backupMessage.text}
+                      </div>
+                    )}
+
+                    {backups.length === 0 ? (
+                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {tBackup('noBackups')}
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {backups.map((backup) => (
+                          <div
+                            key={backup.filename}
+                            className={`p-2.5 sm:p-3 rounded-lg ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}
+                          >
+                            <div className="flex items-start sm:items-center justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                                  {backup.filename}
+                                </div>
+                                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {backup.sizeFormatted} • {backup.createdAtFormatted}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                                <button
+                                  onClick={() => handleDownloadBackup(backup.filename)}
+                                  className={`p-1.5 sm:p-2 rounded transition-colors ${
+                                    isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
+                                  }`}
+                                  title={tBackup('download')}
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleRestoreBackup(backup.filename)}
+                                  disabled={isRestoringBackup === backup.filename}
+                                  className={`p-1.5 sm:p-2 rounded transition-colors ${
+                                    isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
+                                  }`}
+                                  title={tBackup('restore')}
+                                >
+                                  {isRestoringBackup === backup.filename ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                                  ) : (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteBackup(backup.filename)}
+                                  className={`p-1.5 sm:p-2 rounded transition-colors ${
+                                    isDarkMode ? 'hover:bg-red-900/50 text-red-400' : 'hover:bg-red-100 text-red-500'
+                                  }`}
+                                  title={tBackup('delete')}
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {/* API Keys Tab */}
+          {activeTab === 'apiKeys' && (
+            <div className="max-w-lg space-y-5">
+              {/* GitHub Token */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  GitHub Personal Access Token
+                </label>
+                <input
+                  type="password"
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  placeholder={githubToken ? '••••••••' : 'ghp_...'}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+                />
+                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Create a token at{' '}
+                  <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                    github.com/settings/tokens
+                  </a>
+                  {' '}with &quot;models&quot; scope
+                </p>
               </div>
+
+              {/* Tavily */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Tavily API Key <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — web search)</span>
+                </label>
+                <input
+                  type="password"
+                  value={tavilyKeyInput}
+                  onChange={(e) => setTavilyKeyInput(e.target.value)}
+                  placeholder={tavilyApiKey ? '••••••••' : 'tvly-...'}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+                />
+                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Get a free key at{' '}
+                  <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                    tavily.com
+                  </a>
+                </p>
+              </div>
+
+              {/* Telegram */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Telegram Bot Token <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — Telegram access)</span>
+                </label>
+                <input
+                  type="password"
+                  value={telegramBotTokenInput}
+                  onChange={(e) => setTelegramBotTokenInput(e.target.value)}
+                  placeholder={telegramBotToken ? '••••••••' : 'Enter bot token...'}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+                />
+                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Create a bot via{' '}
+                  <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                    @BotFather
+                  </a>
+                  {' '}on Telegram
+                </p>
+              </div>
+
+              {keySaveMessage && (
+                <div className={`p-2.5 rounded-lg text-sm ${
+                  keySaveMessage.type === 'success'
+                    ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
+                    : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
+                }`}>
+                  {keySaveMessage.text}
+                </div>
+              )}
+
+              <button
+                onClick={handleSaveApiKeys}
+                disabled={isSavingKeys || (!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim())}
+                className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+              >
+                {isSavingKeys && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>}
+                {t('saveKeys')}
+              </button>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

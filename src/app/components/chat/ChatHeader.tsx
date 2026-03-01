@@ -2,16 +2,18 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { Model } from '../../types';
 import type { Skill } from '../../services/skills/skills.service';
 
 interface ChatHeaderProps {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
   isDarkMode: boolean;
-  selectedModel: string;
-  MODELS: Model[];
+  toggleTheme: () => void;
+  clearChat: () => void;
+  userName?: string;
+  onOpenUserSettings: () => void;
   currentConversationId: string | null;
+  currentConversationTitle?: string;
   currentConversationHasMemory: boolean;
   handleGenerateSummary: () => void;
   userId?: string | null;
@@ -25,9 +27,12 @@ export default function ChatHeader({
   isSidebarOpen,
   setIsSidebarOpen,
   isDarkMode,
-  selectedModel,
-  MODELS,
+  toggleTheme,
+  clearChat,
+  userName,
+  onOpenUserSettings,
   currentConversationId,
+  currentConversationTitle,
   currentConversationHasMemory,
   handleGenerateSummary,
   userId = null,
@@ -40,7 +45,6 @@ export default function ChatHeader({
   const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false);
   const skillDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (skillDropdownRef.current && !skillDropdownRef.current.contains(event.target as Node)) {
@@ -51,13 +55,14 @@ export default function ChatHeader({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const currentModel = MODELS.find((m: Model) => m.id === selectedModel);
+  const userInitial = userName?.[0]?.toUpperCase() || 'U';
 
   return (
-    <div className={`border-b ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
-      <div className="px-3 sm:px-6 py-4">
+    <div>
+      <div className="px-3 sm:px-6 pb-2" style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
         <div className="flex items-center gap-3">
-          {/* Mobile hamburger button - only visible on small screens */}
+
+          {/* Hamburger — mobile only */}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className={`lg:hidden p-2 rounded-lg transition-colors ${
@@ -72,19 +77,21 @@ export default function ChatHeader({
             </svg>
           </button>
 
-          {/* Static model display */}
-          <div className="flex items-center gap-3 flex-1">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <span className="text-xl">{currentModel?.icon || '🤖'}</span>
-            </div>
-            <div className="text-left">
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                {currentModel?.name || 'AI Assistant'}
-              </h2>
-            </div>
-          </div>
+          {/* Brand / Conversation title */}
+          {currentConversationId && currentConversationTitle ? (
+            <span className={`text-sm font-medium truncate max-w-[40vw] sm:max-w-[260px] ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+              {currentConversationTitle}
+            </span>
+          ) : (
+            <span className={`text-xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+              Allerac
+            </span>
+          )}
 
-          {/* Skill selector dropdown */}
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Skills dropdown — only when conversation exists */}
           {availableSkills.length > 0 && currentConversationId && (
             <div className="relative" ref={skillDropdownRef}>
               <button
@@ -106,15 +113,12 @@ export default function ChatHeader({
                 </span>
                 <svg
                   className={`w-3 h-3 transition-transform ${isSkillDropdownOpen ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
 
-              {/* Skills dropdown */}
               {isSkillDropdownOpen && (
                 <div className={`absolute right-0 mt-2 w-72 rounded-lg shadow-lg z-50 ${
                   isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
@@ -133,9 +137,7 @@ export default function ChatHeader({
                             }
                           }}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                            isDarkMode
-                              ? 'text-red-400 hover:bg-red-500/10'
-                              : 'text-red-600 hover:bg-red-50'
+                            isDarkMode ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'
                           }`}
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -144,7 +146,6 @@ export default function ChatHeader({
                           <span>Deactivate Skill</span>
                         </button>
                       )}
-                      
                       {availableSkills.map((skill) => {
                         const isActive = activeSkill?.id === skill.id;
                         return (
@@ -159,12 +160,8 @@ export default function ChatHeader({
                             disabled={isActive}
                             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
                               isActive
-                                ? isDarkMode
-                                  ? 'bg-purple-500/20 text-purple-400'
-                                  : 'bg-purple-50 text-purple-700'
-                                : isDarkMode
-                                ? 'hover:bg-gray-700 text-gray-300'
-                                : 'hover:bg-gray-50 text-gray-700'
+                                ? isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-50 text-purple-700'
+                                : isDarkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-50 text-gray-700'
                             }`}
                           >
                             <div className="flex-1">
@@ -190,30 +187,70 @@ export default function ChatHeader({
             </div>
           )}
 
+          {/* Memory button — only when conversation exists */}
           {currentConversationId && (
             <button
               onClick={handleGenerateSummary}
-              className={`flex items-center gap-2 px-4 py-2 text-white text-sm rounded-lg transition-colors ${
+              className={`p-2 rounded-lg transition-colors ${
                 currentConversationHasMemory
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-purple-600 hover:bg-purple-700'
+                  ? isDarkMode ? 'text-green-400 hover:bg-gray-700' : 'text-green-600 hover:bg-gray-100'
+                  : isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
               }`}
-              title={currentConversationHasMemory
-                ? 'This conversation is already saved in memory'
-                : 'Save this conversation to long-term memory'
-              }
+              title={currentConversationHasMemory ? 'Saved in memory' : 'Save to memory'}
             >
               {currentConversationHasMemory ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
               )}
             </button>
           )}
+
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            className={`p-2 rounded-lg transition-colors ${
+              isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {isDarkMode ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
+
+          {/* New Chat */}
+          <button
+            onClick={clearChat}
+            className={`p-2 rounded-lg transition-colors ${
+              isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+            title="New Chat"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+
+          {/* User avatar — opens UserSettings modal */}
+          <button
+            onClick={onOpenUserSettings}
+            className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 hover:opacity-90 transition-opacity"
+            title="User settings"
+          >
+            <span className="text-sm font-semibold text-white">{userInitial}</span>
+          </button>
+
         </div>
       </div>
     </div>

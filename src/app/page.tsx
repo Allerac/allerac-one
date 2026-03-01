@@ -20,7 +20,6 @@ import ChatHeader from './components/chat/ChatHeader';
 import ChatMessages from './components/chat/ChatMessages';
 import ChatInput from './components/chat/ChatInput';
 import MemorySaveModal from './components/memory/MemorySaveModal';
-import TokenConfiguration from './components/settings/TokenConfiguration';
 import MemorySettingsModal from './components/memory/MemorySettingsModal';
 import DocumentsModal from './components/documents/DocumentsModal';
 import MemoriesModal from './components/memory/MemoriesModal';
@@ -37,13 +36,13 @@ export default function AdminChat() {
 
   // Modal/event listeners for sidebar configuration actions
   useEffect(() => {
-    const openTokenModal = () => setIsTokenModalOpen(true);
+    const openTokenModal = () => { setSystemDashboardInitialTab('apiKeys'); setIsSystemDashboardOpen(true); };
     const openMemorySettingsModal = () => setIsEditingSettings(true);
     const openUserSettingsModal = () => setIsUserSettingsOpen(true);
     const openDocumentsModal = () => setIsDocumentModalOpen(true);
     const openMemoriesModal = () => setIsMemoryModalOpen(true);
     const openSkillsLibrary = () => setIsSkillsLibraryOpen(true);
-    const openSystemDashboard = () => setIsSystemDashboardOpen(true);
+    const openSystemDashboard = () => { setSystemDashboardInitialTab('system'); setIsSystemDashboardOpen(true); };
     const openScheduledJobsModal = () => setIsScheduledJobsModalOpen(true);
     const onLogout = () => handleLogoutRef.current();
 
@@ -84,7 +83,7 @@ export default function AdminChat() {
   const [githubToken, setGithubToken] = useState('');
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
-  const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'system' | 'apiKeys'>('system');
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [telegramBotTokenInput, setTelegramBotTokenInput] = useState('');
@@ -338,9 +337,10 @@ export default function AdminChat() {
       setGithubToken(savedToken);
       setTavilyApiKey(savedTavilyKey);
 
-      // Show token modal if no GitHub token is configured
+      // Open API Keys config if no GitHub token is configured
       if (!savedToken) {
-        setIsTokenModalOpen(true);
+        setSystemDashboardInitialTab('apiKeys');
+        setIsSystemDashboardOpen(true);
       }
 
       // Load conversations
@@ -501,9 +501,10 @@ export default function AdminChat() {
     setGithubToken(savedToken);
     setTavilyApiKey(savedTavilyKey);
 
-    // Show token modal if no GitHub token is configured
+    // Open API Keys config if no GitHub token is configured
     if (!savedToken) {
-      setIsTokenModalOpen(true);
+      setSystemDashboardInitialTab('apiKeys');
+      setIsSystemDashboardOpen(true);
     }
 
     // Load conversations
@@ -559,9 +560,13 @@ export default function AdminChat() {
       }
 
       // Save to DB
-      await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, newTelegramToken || undefined);
+      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, newTelegramToken || undefined);
 
-      setIsTokenModalOpen(false);
+      if (!result?.success) {
+        alert('Error saving keys to database. Please check server configuration.');
+        return;
+      }
+
     } catch (error) {
       console.error('Error saving API keys:', error);
       alert('Error saving keys. Please try again.');
@@ -638,6 +643,16 @@ export default function AdminChat() {
     if (userId) await loadConversations(userId);
   };
 
+  const handlePinConversation = async (conversationId: string, pinned: boolean) => {
+    await chatActions.pinConversation(conversationId, pinned);
+    if (userId) await loadConversations(userId);
+  };
+
+  const handleRenameConversation = async (conversationId: string, title: string) => {
+    await chatActions.renameConversation(conversationId, title);
+    if (userId) await loadConversations(userId);
+  };
+
   // Show setup wizard for first run
   if (showSetupWizard) {
     return <SetupWizard onComplete={handleSetupComplete} />;
@@ -669,24 +684,16 @@ export default function AdminChat() {
           <SidebarMobile
             isSidebarOpen={isSidebarOpen}
             isDarkMode={isDarkMode}
-            toggleTheme={toggleTheme}
-            clearChat={clearChat}
+            onClose={() => setIsSidebarOpen(false)}
             conversations={conversations}
             currentConversationId={currentConversationId}
             loadConversation={loadConversation}
             deleteConversation={deleteConversation}
+            pinConversation={handlePinConversation}
+            renameConversation={handleRenameConversation}
             MODELS={MODELS}
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
-            setIsTokenModalOpen={setIsTokenModalOpen}
-            setSystemMessageEdit={setSystemMessageEdit}
-            systemMessage={systemMessage}
-            setIsEditingSettings={setIsEditingSettings}
-            setIsDocumentModalOpen={setIsDocumentModalOpen}
-            setIsMemoryModalOpen={setIsMemoryModalOpen}
-            setIsSkillsLibraryOpen={setIsSkillsLibraryOpen}
-            setIsUserSettingsOpen={setIsUserSettingsOpen}
-            handleLogout={handleLogout}
           />
         </div>
 
@@ -696,24 +703,15 @@ export default function AdminChat() {
             isSidebarCollapsed={isSidebarCollapsed}
             setIsSidebarCollapsed={setIsSidebarCollapsed}
             isDarkMode={isDarkMode}
-            toggleTheme={toggleTheme}
-            clearChat={clearChat}
             conversations={conversations}
             currentConversationId={currentConversationId}
             loadConversation={loadConversation}
             deleteConversation={deleteConversation}
+            pinConversation={handlePinConversation}
+            renameConversation={handleRenameConversation}
             MODELS={MODELS}
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
-            setIsTokenModalOpen={setIsTokenModalOpen}
-            setSystemMessageEdit={setSystemMessageEdit}
-            systemMessage={systemMessage}
-            setIsEditingSettings={setIsEditingSettings}
-            setIsDocumentModalOpen={setIsDocumentModalOpen}
-            setIsMemoryModalOpen={setIsMemoryModalOpen}
-            setIsSkillsLibraryOpen={setIsSkillsLibraryOpen}
-            setIsUserSettingsOpen={setIsUserSettingsOpen}
-            handleLogout={handleLogout}
           />
         </div>
 
@@ -725,9 +723,12 @@ export default function AdminChat() {
             isSidebarOpen={isSidebarOpen}
             setIsSidebarOpen={setIsSidebarOpen}
             isDarkMode={isDarkMode}
-            selectedModel={selectedModel}
-            MODELS={MODELS}
+            toggleTheme={toggleTheme}
+            clearChat={clearChat}
+            userName={userName}
+            onOpenUserSettings={() => setIsUserSettingsOpen(true)}
             currentConversationId={currentConversationId}
+            currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
             currentConversationHasMemory={currentConversationHasMemory}
             handleGenerateSummary={handleGenerateSummary}
             userId={userId}
@@ -737,12 +738,11 @@ export default function AdminChat() {
             onDeactivateSkill={handleDeactivateSkill}
           />
 
-          {/* Messages Container - scrollable, fills remaining space */}
-          <div data-name="messages-container" className={`flex-1 overflow-y-auto ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-            {messages.length === 0 ? (
-              /* Empty State */
-              <div className="h-full flex flex-col items-center justify-center px-4">
-                <div className="w-full max-w-2xl text-center">
+          {messages.length === 0 ? (
+            /* Empty State — greeting + input centered in the remaining space */
+            <div className={`flex-1 flex flex-col items-center justify-center px-4 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+              <div className="w-full max-w-2xl">
+                <div className="text-center mb-8">
                   <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-6">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -751,88 +751,91 @@ export default function AdminChat() {
                   <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
                   <h3 className={`text-xl font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
                 </div>
+                {!githubToken && (
+                  <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-800">
+                      ⚠️ Please configure your GitHub token in Settings to start chatting
+                    </p>
+                  </div>
+                )}
+                <ChatInput
+                  inputMessage={inputMessage}
+                  setInputMessage={setInputMessage}
+                  handleKeyPress={handleKeyPress}
+                  handleSendMessage={handleSendMessage}
+                  isSending={isSending}
+                  githubToken={githubToken}
+                  isDarkMode={isDarkMode}
+                  setIsDocumentModalOpen={setIsDocumentModalOpen}
+                  imageAttachments={imageAttachments}
+                  onImageSelect={handleImageSelect}
+                  onRemoveImage={removeImage}
+                  fileInputRef={fileInputRef}
+                  availableSkills={availableSkills}
+                  activeSkill={activeSkill}
+                  preSelectedSkill={preSelectedSkill}
+                  onActivateSkill={handleActivateSkill}
+                  onDeactivateSkill={handleDeactivateSkill}
+                  selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel}
+                  MODELS={MODELS}
+                  githubConfigured={!!githubToken}
+                  ollamaConnected={ollamaConnected}
+                  ollamaModels={ollamaModels}
+                  onDownloadModel={handleDownloadModel}
+                />
               </div>
-            ) : (
-              /* Messages View */
-              <ChatMessages
-                messages={messages}
-                isSending={isSending}
-                selectedModel={selectedModel}
-                MODELS={MODELS}
-                isDarkMode={isDarkMode}
-                currentConversationId={currentConversationId}
-                userId={userId}
-                githubToken={githubToken}
-                messagesEndRef={messagesEndRef}
-              />
-            )}
-          </div>
-
-          {/* Input Area - always at bottom, never inside the scroll */}
-          <div data-name="input-area-wrapper" className={`flex-shrink-0 border-t ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
-            <div className="max-w-3xl mx-auto px-3 sm:px-4 py-3">
-              {!githubToken && (
-                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-800">
-                    ⚠️ Please configure your GitHub token in Settings to start chatting
-                  </p>
-                </div>
-              )}
-              <ChatInput
-                inputMessage={inputMessage}
-                setInputMessage={setInputMessage}
-                handleKeyPress={handleKeyPress}
-                handleSendMessage={handleSendMessage}
-                isSending={isSending}
-                githubToken={githubToken}
-                isDarkMode={isDarkMode}
-                setIsDocumentModalOpen={setIsDocumentModalOpen}
-                imageAttachments={imageAttachments}
-                onImageSelect={handleImageSelect}
-                onRemoveImage={removeImage}
-                fileInputRef={fileInputRef}
-                availableSkills={availableSkills}
-                activeSkill={activeSkill}
-                preSelectedSkill={preSelectedSkill}
-                onActivateSkill={handleActivateSkill}
-                onDeactivateSkill={handleDeactivateSkill}
-                selectedModel={selectedModel}
-                setSelectedModel={setSelectedModel}
-                MODELS={MODELS}
-                githubConfigured={!!githubToken}
-                ollamaConnected={ollamaConnected}
-                ollamaModels={ollamaModels}
-                onDownloadModel={handleDownloadModel}
-                currentConversationId={currentConversationId}
-                currentConversationHasMemory={currentConversationHasMemory}
-                handleGenerateSummary={handleGenerateSummary}
-              />
             </div>
-          </div>
+          ) : (
+            /* Conversation State — messages scroll + input pinned at bottom */
+            <>
+              <div data-name="messages-container" className={`flex-1 overflow-y-auto ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+                <ChatMessages
+                  messages={messages}
+                  isSending={isSending}
+                  selectedModel={selectedModel}
+                  MODELS={MODELS}
+                  isDarkMode={isDarkMode}
+                  currentConversationId={currentConversationId}
+                  userId={userId}
+                  githubToken={githubToken}
+                  messagesEndRef={messagesEndRef}
+                />
+              </div>
+              <div data-name="input-area-wrapper" className={`flex-shrink-0 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+                <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-3" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
+                  <ChatInput
+                    inputMessage={inputMessage}
+                    setInputMessage={setInputMessage}
+                    handleKeyPress={handleKeyPress}
+                    handleSendMessage={handleSendMessage}
+                    isSending={isSending}
+                    githubToken={githubToken}
+                    isDarkMode={isDarkMode}
+                    setIsDocumentModalOpen={setIsDocumentModalOpen}
+                    imageAttachments={imageAttachments}
+                    onImageSelect={handleImageSelect}
+                    onRemoveImage={removeImage}
+                    fileInputRef={fileInputRef}
+                    availableSkills={availableSkills}
+                    activeSkill={activeSkill}
+                    preSelectedSkill={preSelectedSkill}
+                    onActivateSkill={handleActivateSkill}
+                    onDeactivateSkill={handleDeactivateSkill}
+                    selectedModel={selectedModel}
+                    setSelectedModel={setSelectedModel}
+                    MODELS={MODELS}
+                    githubConfigured={!!githubToken}
+                    ollamaConnected={ollamaConnected}
+                    ollamaModels={ollamaModels}
+                    onDownloadModel={handleDownloadModel}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
-
-      {/* Token Configuration Modal */}
-      <TokenConfiguration
-        isOpen={isTokenModalOpen}
-        onClose={() => {
-          setIsTokenModalOpen(false);
-          setTokenInput('');
-          setTavilyKeyInput('');
-          setTelegramBotTokenInput('');
-        }}
-        isDarkMode={isDarkMode}
-        githubToken={githubToken}
-        tavilyApiKey={tavilyApiKey}
-        telegramBotToken={telegramBotToken}
-        tokenInput={tokenInput}
-        setTokenInput={setTokenInput}
-        tavilyKeyInput={tavilyKeyInput}
-        setTavilyKeyInput={setTavilyKeyInput}
-        telegramBotTokenInput={telegramBotTokenInput}
-        setTelegramBotTokenInput={setTelegramBotTokenInput}
-        onSave={handleSaveToken}
-      />
 
       {/* Memory Settings Modal */}
       <MemorySettingsModal
@@ -898,6 +901,7 @@ export default function AdminChat() {
           setIsUserSettingsOpen(false);
           setIsTelegramBotSettingsOpen(true);
         }}
+        onLogout={handleLogout}
       />
 
       {/* Telegram Bot Settings Modal */}
@@ -924,12 +928,23 @@ export default function AdminChat() {
         preventClose={!isAuthenticated}
       />
 
-      {/* System Dashboard */}
+      {/* Configuration Modal (System + API Keys) */}
       <SystemDashboard
         isOpen={isSystemDashboardOpen}
         onClose={() => setIsSystemDashboardOpen(false)}
         isDarkMode={isDarkMode}
         userId={userId || undefined}
+        initialTab={systemDashboardInitialTab}
+        githubToken={githubToken}
+        tavilyApiKey={tavilyApiKey}
+        telegramBotToken={telegramBotToken}
+        tokenInput={tokenInput}
+        setTokenInput={setTokenInput}
+        tavilyKeyInput={tavilyKeyInput}
+        setTavilyKeyInput={setTavilyKeyInput}
+        telegramBotTokenInput={telegramBotTokenInput}
+        setTelegramBotTokenInput={setTelegramBotTokenInput}
+        onSaveToken={handleSaveToken}
       />
     </div>
   );

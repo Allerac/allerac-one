@@ -54,11 +54,11 @@ export default function ChatMessages({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside);
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
     };
   }, [openMenuIdx]);
 
@@ -130,8 +130,20 @@ export default function ChatMessages({
               <div className="w-full">
                 {/* Header: Icon and Menu */}
                 <div className="flex items-start justify-between mb-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
+                  {/* Agent icon — spinning ring while this message is streaming */}
+                  <div className="relative flex-shrink-0 w-8 h-8">
+                    {isSending && index === messages.length - 1 && (
+                      <div
+                        className="absolute -inset-[2px] rounded-full animate-spin"
+                        style={{
+                          background: 'conic-gradient(from 0deg, #60a5fa, #a78bfa, #f472b6, #fb923c, #60a5fa)',
+                          animationDuration: '2s',
+                        }}
+                      />
+                    )}
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
+                    </div>
                   </div>
                   
                   {/* 3-dot menu */}
@@ -198,7 +210,7 @@ export default function ChatMessages({
                 </div>
 
                 {/* Message content */}
-                <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'prose-headings:text-black prose-p:text-black prose-li:text-black prose-strong:text-black prose-code:text-black prose-pre:bg-gray-100 prose-pre:text-black'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
+                <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'text-gray-900 prose-headings:text-gray-900 prose-p:text-gray-900 prose-li:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-pre:bg-gray-100 prose-pre:text-gray-900'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
@@ -217,56 +229,46 @@ export default function ChatMessages({
                   </ReactMarkdown>
                 </div>
 
-                {/* Correct & Memorize modal */}
-                {showCorrectAndMemorize === index && (
-                  <div className="mt-3">
-                    <CorrectAndMemorize
-                      llmResponse={typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant') as string}
-                      conversationId={currentConversationId}
-                      userId={userId}
-                      githubToken={githubToken}
-                      isDarkMode={isDarkMode}
-                      showInput={true}
-                      onOpen={() => {}}
-                      onClose={() => setShowCorrectAndMemorize(null)}
-                    />
-                  </div>
-                )}
               </div>
             )}
           </div>
         ))}
         
         
-        {/* Thinking dots — only shown before the assistant's first token arrives.
-            Once the streaming message appears in the array (role === 'assistant'),
-            the icon is already rendered above so we only show the dots inline. */}
+        {/* Thinking indicator — spinning ring on icon before first token arrives */}
         {isSending && messages[messages.length - 1]?.role !== 'assistant' && (
-          <div className="flex gap-0 flex-row">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+          <div className="relative flex-shrink-0 w-8 h-8">
+            <div
+              className="absolute -inset-[2px] rounded-full animate-spin"
+              style={{
+                background: 'conic-gradient(from 0deg, #60a5fa, #a78bfa, #f472b6, #fb923c, #60a5fa)',
+                animationDuration: '2s',
+              }}
+            />
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
               <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
             </div>
-            <div className="flex-1 ml-3">
-              <div className="py-3">
-                <div className="flex items-end gap-1 pb-1">
-                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '0ms' }}></div>
-                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '150ms' }}></div>
-                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '300ms' }}></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Streaming dots shown below the assistant message while tokens arrive */}
-        {isSending && messages[messages.length - 1]?.role === 'assistant' && (
-          <div className="flex items-end gap-1 pb-1 ml-11">
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '0ms' }}></div>
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '150ms' }}></div>
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`} style={{ animationDelay: '300ms' }}></div>
           </div>
         )}
       </div>
       <div ref={messagesEndRef} />
+
+      {/* Correct & Memorize modal — rendered once outside the loop */}
+      {showCorrectAndMemorize !== null && messages[showCorrectAndMemorize] && (
+        <CorrectAndMemorize
+          isOpen={true}
+          onClose={() => setShowCorrectAndMemorize(null)}
+          llmResponse={
+            typeof messages[showCorrectAndMemorize].content === 'string'
+              ? messages[showCorrectAndMemorize].content as string
+              : renderContent(messages[showCorrectAndMemorize].content, 'assistant') as string
+          }
+          conversationId={currentConversationId}
+          userId={userId}
+          githubToken={githubToken}
+          isDarkMode={isDarkMode}
+        />
+      )}
     </div>
   );
 }

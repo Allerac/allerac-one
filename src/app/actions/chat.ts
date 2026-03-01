@@ -31,3 +31,11 @@ export async function saveMessage(conversationId: string, role: string, content:
 export async function deleteConversation(conversationId: string) {
     return await chatService.deleteConversation(conversationId);
 }
+
+export async function pinConversation(conversationId: string, pinned: boolean) {
+    return await chatService.pinConversation(conversationId, pinned);
+}
+
+export async function renameConversation(conversationId: string, title: string) {
+    return await chatService.renameConversation(conversationId, title);
+}

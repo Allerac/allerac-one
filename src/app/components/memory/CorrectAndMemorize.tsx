@@ -1,243 +1,259 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as memoryActions from '@/app/actions/memory';
 
 interface CorrectAndMemorizeProps {
+  isOpen: boolean;
+  onClose: () => void;
   llmResponse: string;
   conversationId: string | null;
   userId: string | null;
   githubToken: string;
   isDarkMode: boolean;
-  showInput?: boolean;
-  onOpen?: () => void;
-  onClose?: () => void;
 }
 
 export default function CorrectAndMemorize({
+  isOpen,
+  onClose,
   llmResponse,
   conversationId,
   userId,
   githubToken,
   isDarkMode,
-  showInput: showInputProp,
-  onOpen,
-  onClose
 }: CorrectAndMemorizeProps) {
-  const [internalShowInput, setInternalShowInput] = useState(false);
-  const showInput = showInputProp !== undefined ? showInputProp : internalShowInput;
   const [correction, setCorrection] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [emotion, setEmotion] = useState(0);      // -1 = negative, 0 = neutral, 1 = positive
-  const [importance, setImportance] = useState(5); // 1-10 scale: 3 = low, 5 = medium, 8 = high
+  const [emotion, setEmotion] = useState<-1 | 0 | 1>(0);
+  const [importance, setImportance] = useState<'low' | 'medium' | 'high'>('medium');
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setCorrection('');
+      setResult(null);
+      setEmotion(0);
+      setImportance('medium');
+    }
+  }, [isOpen]);
 
   const handleSave = async () => {
-    if (!correction.trim() || !userId || !conversationId) {
-      alert('Please write your correction');
-      return;
-    }
+    if (!correction.trim() || !userId || !conversationId) return;
 
     setIsSaving(true);
-
     try {
-      // Create memory with user correction and emotion
-      const memoryContent = `User preference: When the AI said "${llmResponse.slice(0, 100)}...", the user corrected: "${correction}" (emotion: ${emotion}, importance: ${importance})`;
+      const importanceValue = importance === 'low' ? 1 : importance === 'medium' ? 5 : 10;
+      const memoryContent = `User preference: When the AI said "${llmResponse.slice(0, 100)}...", the user corrected: "${correction}" (emotion: ${emotion}, importance: ${importanceValue})`;
 
-      const result = await memoryActions.saveCorrectionMemory(
+      const res = await memoryActions.saveCorrectionMemory(
         conversationId,
         userId,
         memoryContent,
-        importance,
+        importanceValue,
         emotion
       );
 
-      if (result.success) {
-        setResult({
-          success: true,
-          message: '✓ Correction saved to memory! The AI will remember this in future conversations.'
-        });
+      if (res.success) {
+        setResult({ success: true, message: 'Correction saved to memory! The AI will remember this in future conversations.' });
         setTimeout(() => {
-          if (onClose) onClose();
-          else setInternalShowInput(false);
-          setCorrection('');
-          setResult(null);
-        }, 3000);
+          onClose();
+        }, 2500);
       } else {
-        throw new Error(result.error);
+        throw new Error(res.error);
       }
     } catch (error) {
-      console.error('Error saving correction:', error);
       setResult({
         success: false,
-        message: `Error saving correction: ${error instanceof Error ? error.message : JSON.stringify(error)}`
+        message: `Error saving correction: ${error instanceof Error ? error.message : String(error)}`,
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (!conversationId || !userId || !githubToken) {
-    return null;
-  }
+  if (!isOpen || !conversationId || !userId || !githubToken) return null;
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  const selectClass = `w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none cursor-pointer ${
+    isDarkMode
+      ? 'border-gray-600 bg-gray-700 text-gray-100'
+      : 'border-gray-300 bg-white text-gray-900'
+  }`;
 
   return (
-    <div className="mt-2">
-      {!showInput ? (
-        <button
-          onClick={() => {
-            if (onOpen) onOpen();
-            else setInternalShowInput(true);
-          }}
-          className={`text-xs flex items-center gap-1 ${isDarkMode
-              ? 'text-purple-400 hover:text-purple-300'
-              : 'text-purple-600 hover:text-purple-800'
-            }`}
-          title="Correct and save to memory"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-          Correct & Memorize
-        </button>
-      ) : (
-        <div
-          className={`flex flex-col gap-2 p-3 rounded-lg border max-w-full sm:max-w-md mx-auto ${isDarkMode
-              ? 'bg-purple-900/20 border-purple-800'
-              : 'bg-purple-50 border-purple-200'
-            }`}
-          style={{ minWidth: 0 }}
-        >
-          <label className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
-            }`}>
-            How should it be? (The AI will memorize your preference)
-          </label>
-          <input
-            type="text"
-            value={correction}
-            onChange={(e) => setCorrection(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !isSaving) {
-                handleSave();
-              }
-            }}
-            placeholder="e.g., For me 18°C is warm..."
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 truncate ${isDarkMode
-                ? 'border-gray-600 bg-gray-800 text-gray-100'
-                : 'border-gray-300 bg-white text-gray-900'
-              }`}
-            disabled={isSaving}
-            autoFocus
-            style={{ minWidth: 0 }}
-          />
-          <div
-            className="w-full flex flex-col gap-2 mt-2 sm:flex-row sm:gap-2 sm:justify-end sm:items-center"
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4"
+      onClick={handleBackdropClick}
+    >
+      <div
+        className={`backdrop-blur-md shadow-xl w-full sm:max-w-lg sm:rounded-lg rounded-t-2xl overflow-hidden ${
+          isDarkMode
+            ? 'bg-gray-800/95 border-t sm:border border-gray-700'
+            : 'bg-white/95 border-t sm:border border-gray-200'
+        }`}
+      >
+        {/* Mobile drag indicator */}
+        <div className="flex justify-center pt-2 sm:hidden">
+          <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`} />
+        </div>
+
+        {/* Header */}
+        <div className={`px-4 py-3 sm:p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+            <h2 className={`text-base sm:text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+              Correct & Memorize
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className={`p-1.5 sm:p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
           >
-            {/* Importance slider (1-10 scale: 3=Low, 5=Med, 8=High) */}
-            <div className="flex flex-col items-center px-1 flex-1 min-w-0 sm:items-center sm:justify-center">
-              <input
-                type="range"
-                min={1}
-                max={10}
-                step={1}
-                value={importance}
-                onChange={e => setImportance(Number(e.target.value))}
-                className="w-full max-w-[6rem] sm:w-24 accent-purple-500"
-                disabled={isSaving}
-                title="Importance"
-                style={{ maxWidth: '100%' }}
-              />
-              <div className="flex justify-between w-full text-xs mt-1 select-none">
-                <span className={
-                  importance <= 3
-                    ? (isDarkMode ? 'text-pink-300' : 'text-pink-600')
-                    : 'text-gray-400'
-                }>Low</span>
-                <span className={
-                  importance > 3 && importance < 7
-                    ? (isDarkMode ? 'text-yellow-200' : 'text-yellow-600')
-                    : 'text-gray-400'
-                }>Med</span>
-                <span className={
-                  importance >= 7
-                    ? (isDarkMode ? 'text-green-300' : 'text-green-700')
-                    : 'text-gray-400'
-                }>High</span>
-              </div>
-            </div>
-            {/* Emotion slider */}
-            <div className="flex flex-col items-center px-1 flex-1 min-w-0 sm:items-center sm:justify-center">
-              <input
-                type="range"
-                min={-1}
-                max={1}
-                step={1}
-                value={emotion}
-                onChange={e => setEmotion(Number(e.target.value))}
-                className="w-full max-w-[6rem] sm:w-24 accent-purple-500"
-                disabled={isSaving}
-                title="Emotion"
-                style={{ maxWidth: '100%' }}
-              />
-              <div className="flex justify-between w-full text-xs mt-1 select-none">
-                <span className={emotion === -1 ? (isDarkMode ? 'text-pink-300' : 'text-pink-600') : 'text-gray-400'}>😡</span>
-                <span className={emotion === 0 ? (isDarkMode ? 'text-yellow-200' : 'text-yellow-600') : 'text-gray-400'}>😐</span>
-                <span className={emotion === 1 ? (isDarkMode ? 'text-green-300' : 'text-green-700') : 'text-gray-400'}>🥰</span>
-              </div>
-            </div>
-            <div className="flex flex-row gap-1 mt-2 sm:mt-0 sm:flex-row sm:gap-1 sm:items-center justify-end">
-              <button
-                onClick={handleSave}
-                disabled={isSaving || !correction.trim()}
-                className="w-10 h-10 flex items-center justify-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-transparent border-none shadow-none p-0"
-                style={{ boxShadow: 'none', border: 'none' }}
-                title="Save"
-              >
-                {isSaving ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                  </span>
-                ) : (
-                  <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 sm:p-5 space-y-4">
+          {/* AI response preview */}
+          <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+            <p className={`text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>AI response</p>
+            <p className={`text-sm leading-relaxed line-clamp-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              {llmResponse.slice(0, 200)}{llmResponse.length > 200 ? '…' : ''}
+            </p>
+          </div>
+
+          {/* Correction input */}
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              How should it be?
+              <span className={`ml-1 font-normal text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>The AI will memorize your preference</span>
+            </label>
+            <input
+              type="text"
+              value={correction}
+              onChange={(e) => setCorrection(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !isSaving && correction.trim()) handleSave(); }}
+              placeholder="e.g., For me 18°C is warm..."
+              autoFocus
+              disabled={isSaving}
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                isDarkMode
+                  ? 'border-gray-600 bg-gray-700 text-gray-100 placeholder-gray-500'
+                  : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
+              }`}
+            />
+          </div>
+
+          {/* Dropdowns */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Importance */}
+            <div>
+              <label className={`block text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Importance
+              </label>
+              <div className="relative">
+                <select
+                  value={importance}
+                  onChange={(e) => setImportance(e.target.value as 'low' | 'medium' | 'high')}
+                  disabled={isSaving}
+                  className={selectClass}
+                >
+                  <option value="low">🔵 Low</option>
+                  <option value="medium">🟡 Medium</option>
+                  <option value="high">🔴 High</option>
+                </select>
+                <div className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  if (onClose) onClose();
-                  else setInternalShowInput(false);
-                  setCorrection('');
-                  setResult(null);
-                }}
-                disabled={isSaving}
-                className={`px-2 py-2 text-sm rounded-lg transition-colors ${isDarkMode
-                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                    : 'bg-gray-300 hover:bg-gray-400 text-gray-700'
-                  }`}
-                style={{ minWidth: 0 }}
-              >
-                ✕
-              </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Emotion */}
+            <div>
+              <label className={`block text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Emotion
+              </label>
+              <div className="relative">
+                <select
+                  value={emotion}
+                  onChange={(e) => setEmotion(Number(e.target.value) as -1 | 0 | 1)}
+                  disabled={isSaving}
+                  className={selectClass}
+                >
+                  <option value={-1}>😡 Frustrated</option>
+                  <option value={0}>😐 Neutral</option>
+                  <option value={1}>🥰 Happy</option>
+                </select>
+                <div className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Result message */}
           {result && (
-            <div className={`text-xs mt-1 p-2 rounded ${result.success
-                ? isDarkMode
-                  ? 'bg-green-900/30 text-green-300'
-                  : 'bg-green-100 text-green-800'
-                : isDarkMode
-                  ? 'bg-red-900/30 text-red-300'
-                  : 'bg-red-100 text-red-800'
-              }`}>
+            <div className={`p-3 rounded-lg text-sm ${
+              result.success
+                ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
+                : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
+            }`}>
               {result.message}
             </div>
           )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={handleSave}
+              disabled={isSaving || !correction.trim()}
+              className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isSaving && (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              )}
+              {isSaving ? 'Saving...' : 'Save to Memory'}
+            </button>
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              className={`px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                isDarkMode
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

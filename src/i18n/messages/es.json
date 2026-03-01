@@ -2,16 +2,20 @@
   "sidebar": {
     "conversations": "Conversaciones",
     "noConversations": "Sin conversaciones aún",
-    "configuración": "Configuración",
+    "options": "Opciones",
+    "configuration": "Configuración",
     "apiKeys": "Claves de API",
-    "memorySettings": "Configuración de Memoria",
-    "userSettings": "Configuración de Usuario",
-    "documents": "Documentos",
+    "memorySettings": "Consciousness",
+    "documents": "Conocimiento",
     "memories": "Memorias",
     "skills": "Habilidades",
+    "scheduledJobs": "Tareas",
     "logout": "Cerrar sesión",
-    "deleteConversation": "Eliminar conversación",
-    "systemDashboard": "Panel del Sistema"
+    "deleteConversation": "Eliminar",
+    "rename": "Renombrar",
+    "pin": "Fijar",
+    "unpin": "Desfijar",
+    "systemDashboard": "Configuración"
   },
   "login": {
     "welcomeBack": "Bienvenido de Nuevo",
@@ -57,7 +61,12 @@
     "cancel": "Cancelar"
   },
   "system": {
-    "title": "Panel del Sistema",
+    "title": "Configuración",
+    "tabSystem": "Sistema",
+    "tabApiKeys": "Claves de API",
+    "saveKeys": "Guardar Claves",
+    "keysSaved": "¡Claves guardadas correctamente!",
+    "keysSaveFailed": "Error al guardar las claves.",
     "lastUpdated": "Última actualización",
     "systemInfo": "Info del Sistema",
     "hostname": "Nombre del host",

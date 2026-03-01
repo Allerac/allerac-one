@@ -52,13 +52,26 @@ export class ChatService {
     async loadConversations(userId: string) {
         try {
             const res = await pool.query(
-                'SELECT * FROM chat_conversations WHERE user_id = $1 ORDER BY updated_at DESC',
+                'SELECT * FROM chat_conversations WHERE user_id = $1 ORDER BY pinned DESC, updated_at DESC',
                 [userId]
             );
             return res.rows;
         } catch (error) {
             console.error('Error loading conversations:', error);
             return [];
+        }
+    }
+
+    async pinConversation(conversationId: string, pinned: boolean) {
+        try {
+            await pool.query(
+                'UPDATE chat_conversations SET pinned = $1 WHERE id = $2',
+                [pinned, conversationId]
+            );
+            return { success: true };
+        } catch (error) {
+            console.error('Error pinning conversation:', error);
+            return { success: false, error };
         }
     }
 
@@ -113,6 +126,22 @@ export class ChatService {
             return { success: true };
         } catch (error) {
             console.error('Error saving message:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Rename a conversation
+     */
+    async renameConversation(conversationId: string, title: string) {
+        try {
+            await pool.query(
+                'UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2',
+                [title, conversationId]
+            );
+            return { success: true };
+        } catch (error) {
+            console.error('Error renaming conversation:', error);
             return { success: false, error };
         }
     }

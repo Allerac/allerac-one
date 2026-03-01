@@ -12,6 +12,7 @@ interface UserSettingsModalProps {
   userEmail: string;
   userId: string | null;
   onOpenTelegramSettings?: () => void;
+  onLogout?: () => void;
 }
 
 export default function UserSettingsModal({
@@ -21,7 +22,8 @@ export default function UserSettingsModal({
   userName,
   userEmail,
   userId,
-  onOpenTelegramSettings
+  onOpenTelegramSettings,
+  onLogout
 }: UserSettingsModalProps) {
   const t = useTranslations('userSettings');
   const locale = useLocale();
@@ -73,10 +75,6 @@ export default function UserSettingsModal({
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{userEmail}</p>
           </div>
           <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100'}`}>
-            <p className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('userId')}</p>
-            <p className={`text-sm font-mono ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{userId?.slice(0, 8)}...</p>
-          </div>
-          <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100'}`}>
             <p className={`text-xs font-medium mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('language')}</p>
             <LanguageSelector currentLocale={locale} isDarkMode={isDarkMode} />
           </div>
@@ -106,6 +104,25 @@ export default function UserSettingsModal({
             </button>
           )}
         </div>
+
+        {/* Logout */}
+        {onLogout && (
+          <div className={`p-6 pt-0`}>
+            <button
+              onClick={onLogout}
+              className={`w-full py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                isDarkMode
+                  ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30'
+                  : 'bg-red-50 text-red-600 hover:bg-red-100'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
