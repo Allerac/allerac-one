@@ -731,11 +731,6 @@ export default function AdminChat() {
             currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
             currentConversationHasMemory={currentConversationHasMemory}
             handleGenerateSummary={handleGenerateSummary}
-            userId={userId}
-            availableSkills={availableSkills}
-            activeSkill={activeSkill}
-            onActivateSkill={handleActivateSkill}
-            onDeactivateSkill={handleDeactivateSkill}
           />
 
           {messages.length === 0 ? (
