@@ -118,7 +118,7 @@ export default function CorrectAndMemorize({
               </svg>
             </div>
             <h2 className={`text-base sm:text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-              Correct & Memorize
+              Teach
             </h2>
           </div>
           <button
@@ -153,7 +153,6 @@ export default function CorrectAndMemorize({
               onChange={(e) => setCorrection(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !isSaving && correction.trim()) handleSave(); }}
               placeholder="e.g., For me 18°C is warm..."
-              autoFocus
               disabled={isSaving}
               className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                 isDarkMode

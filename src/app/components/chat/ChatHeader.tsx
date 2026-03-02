@@ -46,7 +46,7 @@ export default function ChatHeader({
                 ? 'hover:bg-gray-700 text-gray-300'
                 : 'hover:bg-gray-100 text-gray-700'
             }`}
-            title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            title={isSidebarOpen ? t('hideSidebar') : t('showSidebar')}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -76,7 +76,7 @@ export default function ChatHeader({
                   ? isDarkMode ? 'text-green-400 hover:bg-gray-700' : 'text-green-600 hover:bg-gray-100'
                   : isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
               }`}
-              title={currentConversationHasMemory ? 'Saved in memory' : 'Save to memory'}
+              title={currentConversationHasMemory ? t('savedInMemory') : t('saveToMemory')}
             >
               {currentConversationHasMemory ? (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
@@ -96,7 +96,7 @@ export default function ChatHeader({
             className={`p-2 rounded-lg transition-colors ${
               isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
             }`}
-            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            title={isDarkMode ? t('switchToLight') : t('switchToDark')}
           >
             {isDarkMode ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -115,7 +115,7 @@ export default function ChatHeader({
             className={`p-2 rounded-lg transition-colors ${
               isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
             }`}
-            title="New Chat"
+            title={t('newChat')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -126,7 +126,7 @@ export default function ChatHeader({
           <button
             onClick={onOpenUserSettings}
             className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 hover:opacity-90 transition-opacity"
-            title="User settings"
+            title={t('userSettings')}
           >
             <span className="text-sm font-semibold text-white">{userInitial}</span>
           </button>

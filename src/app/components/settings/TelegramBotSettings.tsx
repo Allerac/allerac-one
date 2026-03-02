@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   getUserBotConfigs,
   createBotConfig,
@@ -32,11 +33,12 @@ interface TelegramBotSettingsProps {
 }
 
 export default function TelegramBotSettings({ userId, onClose }: TelegramBotSettingsProps) {
+  const t = useTranslations('telegram');
   const [bots, setBots] = useState<BotConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingBot, setEditingBot] = useState<BotConfig | null>(null);
-  
+
   // Form state
   const [formData, setFormData] = useState({
     botName: '',
@@ -65,7 +67,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
 
   const handleTestToken = async () => {
     if (!formData.botToken) {
-      setFormError('Please enter a bot token first');
+      setFormError(t('enterTokenFirst'));
       return;
     }
 
@@ -75,10 +77,10 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
     setTestingToken(false);
 
     if (result.success && result.botInfo) {
-      setFormSuccess(`✅ Token valid! Bot: @${result.botInfo.username}`);
+      setFormSuccess(`✅ ${t('tokenValid', { username: result.botInfo.username })}`);
       setFormData(prev => ({ ...prev, botUsername: result.botInfo!.username }));
     } else {
-      setFormError(result.error || 'Invalid token');
+      setFormError(result.error || t('invalidToken'));
     }
   };
 
@@ -95,7 +97,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
       .filter(id => !isNaN(id));
 
     if (allowedIds.length === 0) {
-      setFormError('Please enter at least one Telegram User ID');
+      setFormError(t('enterAtLeastOneId'));
       setSubmitting(false);
       return;
     }
@@ -121,13 +123,13 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
     setSubmitting(false);
 
     if (result.success) {
-      setFormSuccess(editingBot ? 'Bot updated successfully!' : 'Bot created successfully!');
+      setFormSuccess(editingBot ? t('botUpdated') : t('botCreated'));
       setFormData({ botName: '', botToken: '', botUsername: '', allowedTelegramIds: '' });
       setShowAddForm(false);
       setEditingBot(null);
       loadBots();
     } else {
-      setFormError(result.error || 'Failed to save bot configuration');
+      setFormError(result.error || t('saveFailed'));
     }
   };
 
@@ -152,7 +154,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
   };
 
   const handleDelete = async (botId: string, botName: string) => {
-    if (!confirm(`Are you sure you want to delete "${botName}"? This action cannot be undone.`)) {
+    if (!confirm(t('confirmDelete', { name: botName }))) {
       return;
     }
 
@@ -177,10 +179,10 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
-              Telegram Bot Settings
+              {t('title')}
             </h2>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Manage your personal Telegram bots
+              {t('subtitle')}
             </p>
           </div>
           <button
@@ -197,7 +199,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
           {showAddForm ? (
             <form onSubmit={handleSubmit} className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
               <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-white">
-                {editingBot ? 'Edit Bot' : 'Add New Bot'}
+                {editingBot ? t('editBot') : t('addNewBot')}
               </h3>
 
               {formError && (
@@ -215,7 +217,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Bot Name *
+                    {t('botName')} *
                   </label>
                   <input
                     type="text"
@@ -229,8 +231,8 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Bot Token *
-                    {editingBot && <span className="text-xs ml-2 text-gray-500">(leave masked to keep current)</span>}
+                    {t('botToken')} *
+                    {editingBot && <span className="text-xs ml-2 text-gray-500">{t('leavemasked')}</span>}
                   </label>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
@@ -247,30 +249,30 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                       disabled={testingToken || !formData.botToken}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
-                      {testingToken ? 'Testing...' : 'Test Token'}
+                      {testingToken ? t('testing') : t('testToken')}
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Get token from @BotFather on Telegram
+                    {t('botTokenHint')}
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Bot Username
+                    {t('botUsername')}
                   </label>
                   <input
                     type="text"
                     value={formData.botUsername}
                     onChange={(e) => setFormData({ ...formData, botUsername: e.target.value })}
-                    placeholder="my_bot (auto-filled after testing token)"
+                    placeholder={t('botUsernameHint')}
                     className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Allowed Telegram User IDs *
+                    {t('allowedIds')} *
                   </label>
                   <input
                     type="text"
@@ -281,7 +283,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Comma-separated list. Get your ID from @userinfobot
+                    {t('allowedIdsHint')}
                   </p>
                 </div>
               </div>
@@ -292,14 +294,14 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                   disabled={submitting}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {submitting ? 'Saving...' : editingBot ? 'Update Bot' : 'Create Bot'}
+                  {submitting ? t('saving') : editingBot ? t('updateBot') : t('createBot')}
                 </button>
                 <button
                   type="button"
                   onClick={cancelForm}
                   className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
               </div>
             </form>
@@ -309,17 +311,17 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
               className="w-full mb-4 sm:mb-6 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2"
             >
               <span className="text-xl">+</span>
-              Add New Bot
+              {t('addNewBot')}
             </button>
           )}
 
           {/* Bot List */}
           {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading bots...</div>
+            <div className="text-center py-8 text-gray-500">{t('loadingBots')}</div>
           ) : bots.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p className="text-base sm:text-lg mb-2">No bots configured yet</p>
-              <p className="text-sm">Click "Add New Bot" to get started</p>
+              <p className="text-base sm:text-lg mb-2">{t('noBotsYet')}</p>
+              <p className="text-sm">{t('noBotsHint')}</p>
             </div>
           ) : (
             <div className="space-y-3 sm:space-y-4">
@@ -334,11 +336,11 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                         <span className="truncate">{bot.botName}</span>
                         {bot.enabled ? (
                           <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full whitespace-nowrap">
-                            Active
+                            {t('active')}
                           </span>
                         ) : (
                           <span className="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full whitespace-nowrap">
-                            Inactive
+                            {t('inactive')}
                           </span>
                         )}
                       </h3>
@@ -353,30 +355,30 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                         onClick={() => handleToggle(bot.id)}
                         className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
                       >
-                        {bot.enabled ? 'Disable' : 'Enable'}
+                        {bot.enabled ? t('disable') : t('enable')}
                       </button>
                       <button
                         onClick={() => handleEdit(bot)}
                         className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
                       >
-                        Edit
+                        {t('edit')}
                       </button>
                       <button
                         onClick={() => handleDelete(bot.id, bot.botName)}
                         className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
                       >
-                        Delete
+                        {t('delete')}
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                     <p>
-                      <span className="font-medium">Allowed Users:</span>{' '}
+                      <span className="font-medium">{t('allowedUsers')}:</span>{' '}
                       {bot.allowedTelegramIds.join(', ')}
                     </p>
                     <p>
-                      <span className="font-medium">Created:</span>{' '}
+                      <span className="font-medium">{t('created')}:</span>{' '}
                       {new Date(bot.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -388,15 +390,15 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
           {/* Help Section */}
           <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
-              📱 How to create a Telegram bot:
+              📱 {t('howToCreate')}
             </h4>
             <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-decimal list-inside">
-              <li>Open Telegram and search for <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">@BotFather</code></li>
-              <li>Send <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">/newbot</code> and follow instructions</li>
-              <li>Copy the bot token (looks like: 123456789:ABCdef...)</li>
-              <li>Get your Telegram User ID from <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">@userinfobot</code></li>
-              <li>Paste both here and click "Test Token"</li>
-              <li>After saving, the bot will start automatically</li>
+              <li>{t('howToStep1')}</li>
+              <li>{t('howToStep2')}</li>
+              <li>{t('howToStep3')}</li>
+              <li>{t('howToStep4')}</li>
+              <li>{t('howToStep5')}</li>
+              <li>{t('howToStep6')}</li>
             </ol>
           </div>
         </div>
