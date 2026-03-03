@@ -4,6 +4,14 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as authActions from '@/app/actions/auth';
 
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 interface LoginModalProps {
   isOpen: boolean;
   onClose?: () => void;
@@ -75,10 +83,11 @@ export default function LoginModal({
 
     try {
       let result;
+      const hashedPassword = await hashPassword(password);
       if (activeTab === 'login') {
-        result = await authActions.login(email, password);
+        result = await authActions.login(email, hashedPassword);
       } else {
-        result = await authActions.register(email, password, name || undefined);
+        result = await authActions.register(email, hashedPassword, name || undefined);
       }
 
       if (result.success) {
