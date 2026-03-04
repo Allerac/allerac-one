@@ -31,6 +31,7 @@ const chatService = new ChatService();
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434';
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 
 function encode(data: object): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`);
@@ -51,7 +52,7 @@ export async function POST(request: Request): Promise<Response> {
     message: string;
     conversationId: string | null;
     model: string;
-    provider: 'github' | 'ollama';
+    provider: 'github' | 'ollama' | 'gemini';
     imageAttachments?: Array<{ url: string }>;
     preSelectedSkillId?: string;
   } = body;
@@ -88,6 +89,7 @@ export async function POST(request: Request): Promise<Response> {
         const githubToken = settings?.github_token || '';
         const tavilyApiKey = settings?.tavily_api_key || undefined;
         const systemMessage = settings?.system_message || 'You are a helpful AI assistant.';
+        const googleApiKey = settings?.google_api_key || '';
 
         if (!message && (!imageAttachments || imageAttachments.length === 0)) {
           controller.enqueue(encode({ type: 'error', message: 'Message is required' }));
@@ -95,8 +97,16 @@ export async function POST(request: Request): Promise<Response> {
           return;
         }
 
+        if (provider === 'gemini' && !googleApiKey) {
+          controller.enqueue(encode({ type: 'error', message: 'Google API key is not configured. Please add it in Configuration → API Keys.' }));
+          controller.close();
+          return;
+        }
+
         // Server-side base URL (never goes through client-side proxy)
-        const modelBaseUrl = provider === 'ollama' ? OLLAMA_BASE_URL : GITHUB_BASE_URL;
+        const modelBaseUrl = provider === 'ollama' ? OLLAMA_BASE_URL
+                           : provider === 'gemini' ? GEMINI_BASE_URL
+                           : GITHUB_BASE_URL;
 
         // 4. Create or find conversation
         let convId = inputConversationId ?? null;
@@ -221,7 +231,7 @@ export async function POST(request: Request): Promise<Response> {
           conversationMessages[lastIdx] = { role: 'user', content: contentParts };
         }
 
-        const llmService = new LLMService(provider, modelBaseUrl, { githubToken });
+        const llmService = new LLMService(provider, modelBaseUrl, { githubToken, geminiToken: googleApiKey });
 
         // 10. First LLM call — non-streaming for tool detection
         // Send periodic keepalives during long LLM calls to prevent client timeout

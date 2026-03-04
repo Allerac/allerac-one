@@ -41,21 +41,26 @@ export interface LLMResponse {
   model: string;
 }
 
-type LLMProvider = 'github' | 'ollama';
+type LLMProvider = 'github' | 'ollama' | 'gemini';
 
 export class LLMService {
   private provider: LLMProvider;
   private baseUrl: string;
   private githubToken?: string;
+  private geminiToken?: string;
 
-  constructor(provider: LLMProvider, baseUrl: string, config?: { githubToken?: string }) {
+  constructor(provider: LLMProvider, baseUrl: string, config?: { githubToken?: string; geminiToken?: string }) {
     this.provider = provider;
     this.baseUrl = baseUrl;
     this.githubToken = config?.githubToken;
+    this.geminiToken = config?.geminiToken;
 
     // Validate token if required
     if (provider === 'github' && !this.githubToken) {
       throw new Error('GitHub token is required for github provider');
+    }
+    if (provider === 'gemini' && !this.geminiToken) {
+      throw new Error('Google API key is required for gemini provider');
     }
   }
 
@@ -65,6 +70,8 @@ export class LLMService {
   async chatCompletion(request: LLMRequest): Promise<LLMResponse> {
     if (this.provider === 'github') {
       return this.githubChatCompletion(request);
+    } else if (this.provider === 'gemini') {
+      return this.geminiChatCompletion(request);
     } else {
       return this.ollamaChatCompletion(request);
     }
@@ -77,6 +84,8 @@ export class LLMService {
   async *streamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
     if (this.provider === 'github') {
       yield* this.githubStreamChatCompletion(request);
+    } else if (this.provider === 'gemini') {
+      yield* this.geminiStreamChatCompletion(request);
     } else {
       yield* this.ollamaStreamChatCompletion(request);
     }
@@ -263,6 +272,120 @@ export class LLMService {
   }
 
   /**
+   * Call Gemini API (OpenAI-compatible endpoint)
+   */
+  private async geminiChatCompletion(request: LLMRequest): Promise<LLMResponse> {
+    const startTime = Date.now();
+    let response: Response | undefined;
+    let success = true;
+    let statusCode = 200;
+    let errorMessage: string | undefined;
+
+    try {
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.geminiToken}`,
+        },
+        body: JSON.stringify(request),
+      });
+
+      statusCode = response.status;
+
+      if (!response.ok) {
+        success = false;
+        let errorData: any;
+        try {
+          errorData = await response.json();
+          errorMessage = errorData.error?.message || errorData.message || response.statusText;
+        } catch {
+          errorMessage = await response.text() || response.statusText;
+        }
+
+        await this.logMetrics({
+          model: request.model,
+          provider: 'gemini',
+          responseTime: Date.now() - startTime,
+          success: false,
+          statusCode,
+          errorMessage,
+          errorType: this.getErrorType(statusCode, errorMessage),
+        });
+
+        throw new Error(errorMessage);
+      }
+
+      const data: LLMResponse = await response.json();
+
+      await this.logMetrics({
+        model: request.model,
+        provider: 'gemini',
+        responseTime: Date.now() - startTime,
+        success: true,
+        statusCode: 200,
+        usage: data.usage,
+        hasTools: request.tools && request.tools.length > 0,
+        messageCount: request.messages.length,
+      });
+
+      return data;
+    } catch (error: any) {
+      if (success) {
+        await this.logMetrics({
+          model: request.model,
+          provider: 'gemini',
+          responseTime: Date.now() - startTime,
+          success: false,
+          statusCode: statusCode || 500,
+          errorMessage: error.message,
+          errorType: error.name || 'Error',
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async *geminiStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.geminiToken}`,
+      },
+      body: JSON.stringify({ ...request, stream: true }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || response.statusText);
+    }
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') return;
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) yield content;
+        } catch { /* skip malformed lines */ }
+      }
+    }
+  }
+
+  /**
    * Call Ollama API
    * Uses stream=true internally to avoid headersTimeout on slow responses,
    * but buffers the full response before returning (acts like non-streaming).
@@ -412,7 +535,7 @@ export class LLMService {
     try {
       // Log API call metrics
       await metricActions.logApiCall({
-        api_name: data.provider === 'github' ? 'github-models' : 'ollama',
+        api_name: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : 'ollama',
         endpoint: '/chat/completions',
         method: 'POST',
         response_time_ms: data.responseTime,
@@ -429,13 +552,13 @@ export class LLMService {
 
       // Log token usage if successful
       if (data.success && data.usage) {
-        const estimatedCost = data.provider === 'github'
+        const estimatedCost = (data.provider === 'github' || data.provider === 'gemini')
           ? this.calculateCost(data.model, data.usage)
           : 0; // Ollama is free
 
         await metricActions.logTokenUsage({
           model: data.model,
-          provider: data.provider === 'github' ? 'github-models' : 'ollama',
+          provider: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : 'ollama',
           prompt_tokens: data.usage.prompt_tokens,
           completion_tokens: data.usage.completion_tokens,
           total_tokens: data.usage.total_tokens,
@@ -466,6 +589,7 @@ export class LLMService {
       'gpt-4o-mini': { input: 0.00015, output: 0.0006 }, // $0.15/$0.60 per 1M tokens
       'o1-preview': { input: 0.015, output: 0.06 },    // $15/$60 per 1M tokens
       'o1-mini': { input: 0.003, output: 0.012 },      // $3/$12 per 1M tokens
+      'gemini-2.5-flash': { input: 0.00015, output: 0.00060 }, // $0.15/$0.60 per 1M tokens
     };
 
     const modelPricing = pricing[model] || pricing['gpt-4o']; // Default to gpt-4o pricing

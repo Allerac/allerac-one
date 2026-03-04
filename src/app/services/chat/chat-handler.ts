@@ -18,9 +18,10 @@ import { TOOLS } from '../../tools/tools';
 export interface ChatHandlerConfig {
   userId: string;
   githubToken: string;
+  geminiToken?: string;
   tavilyApiKey?: string;
   selectedModel: string;
-  modelProvider: 'github' | 'ollama';
+  modelProvider: 'github' | 'ollama' | 'gemini';
   modelBaseUrl: string;
   systemMessage: string;
   botId?: string;  // For Telegram bot skill assignment
@@ -55,7 +56,7 @@ export async function handleChatMessage(
   config: ChatHandlerConfig,
   imageAttachments?: ChatImageAttachment[]
 ): Promise<ChatHandlerResult> {
-  const { userId, githubToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId } = config;
+  const { userId, githubToken, geminiToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId } = config;
 
   // 1. Create conversation if needed
   let convId = conversationId;
@@ -214,7 +215,7 @@ export async function handleChatMessage(
   }
 
   // 5. Call LLM
-  const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken });
+  const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken, geminiToken });
 
   let data = await llmService.chatCompletion({
     messages: conversationMessages,

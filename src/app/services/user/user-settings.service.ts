@@ -12,7 +12,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -28,6 +28,7 @@ export class UserSettingsService {
         tavily_api_key: row.tavily_api_key ? safeDecrypt(row.tavily_api_key) : null,
         telegram_bot_token: row.telegram_bot_token ? safeDecrypt(row.telegram_bot_token) : null,
         system_message: row.system_message || null,
+        google_api_key: row.google_api_key ? safeDecrypt(row.google_api_key) : null,
       };
     } catch (error) {
       console.error('Error loading user settings:', error);
@@ -39,12 +40,13 @@ export class UserSettingsService {
    * Save or update user API keys
    * Encrypts sensitive fields before storing
    */
-  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string) {
+  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string) {
     try {
       // Encrypt tokens before storing
       const encryptedGithubToken = githubToken ? encrypt(githubToken) : undefined;
       const encryptedTavilyKey = tavilyApiKey ? encrypt(tavilyApiKey) : undefined;
       const encryptedTelegramToken = telegramBotToken ? encrypt(telegramBotToken) : undefined;
+      const encryptedGoogleKey = googleApiKey ? encrypt(googleApiKey) : undefined;
 
       // Check if settings already exist (query directly to avoid decrypt overhead)
       const existingCheck = await pool.query(
@@ -69,6 +71,10 @@ export class UserSettingsService {
           updateFields.push(`telegram_bot_token = $${paramCount++}`);
           values.push(encryptedTelegramToken);
         }
+        if (encryptedGoogleKey !== undefined) {
+          updateFields.push(`google_api_key = $${paramCount++}`);
+          values.push(encryptedGoogleKey);
+        }
 
         if (updateFields.length > 0) {
           values.push(userId);
@@ -79,9 +85,9 @@ export class UserSettingsService {
         }
       } else {
         await pool.query(
-          `INSERT INTO user_settings (user_id, github_token, tavily_api_key, telegram_bot_token)
-           VALUES ($1, $2, $3, $4)`,
-          [userId, encryptedGithubToken || '', encryptedTavilyKey || '', encryptedTelegramToken || '']
+          `INSERT INTO user_settings (user_id, github_token, tavily_api_key, telegram_bot_token, google_api_key)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [userId, encryptedGithubToken || '', encryptedTavilyKey || '', encryptedTelegramToken || '', encryptedGoogleKey || '']
         );
       }
 

@@ -176,7 +176,10 @@
     "checkNow": "Verificar Ahora",
     "prepareUpdate": "Preparar Actualización",
     "noReleases": "No hay versiones disponibles aún",
-    "updateCheckFailed": "Error al buscar actualizaciones"
+    "updateCheckFailed": "Error al buscar actualizaciones",
+    "googleApiKey": "Google API Key",
+    "googleApiKeyPlaceholder": "AIza...",
+    "googleApiKeyHint": "Obtén tu clave en Google AI Studio (aistudio.google.com)"
   },
   "backup": {
     "title": "Copias de Seguridad",

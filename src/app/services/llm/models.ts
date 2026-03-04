@@ -66,6 +66,15 @@ export const MODELS: Model[] = [
   //   requiresToken: true
   // },
   {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    icon: '✨',
+    description: "Google's fast multimodal model",
+    provider: 'gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    requiresToken: true
+  },
+  {
     id: 'qwen2.5:3b',
     name: 'Qwen 2.5 3B (Local)',
     icon: '🐼',

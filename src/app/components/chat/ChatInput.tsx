@@ -27,6 +27,7 @@ interface ChatInputProps {
   setSelectedModel?: (model: string) => void;
   MODELS?: any[];
   githubConfigured?: boolean;
+  googleConfigured?: boolean;
   ollamaConnected?: boolean;
   ollamaModels?: any[];
   onDownloadModel?: (modelName: string) => void;
@@ -54,6 +55,7 @@ export default function ChatInput({
   setSelectedModel,
   MODELS = [],
   githubConfigured = false,
+  googleConfigured = false,
   ollamaConnected = false,
   ollamaModels = [],
   onDownloadModel,
@@ -66,6 +68,11 @@ export default function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const currentModel = MODELS.find(m => m.id === selectedModel);
+  const currentModelConfig = MODELS.find(m => m.id === selectedModel);
+  const isProviderReady =
+    currentModelConfig?.provider === 'ollama' ? ollamaConnected :
+    currentModelConfig?.provider === 'gemini' ? googleConfigured :
+    githubConfigured;
 
   // Auto-resize textarea as content changes
   useEffect(() => {
@@ -154,7 +161,7 @@ export default function ChatInput({
         placeholder={t('typeMessage')}
         className={`w-full px-4 pt-3 pb-2 focus:outline-none resize-none disabled:opacity-50 bg-transparent overflow-y-auto ${isDarkMode ? 'text-gray-100 placeholder-gray-400' : 'text-black placeholder-gray-400'}`}
         rows={1}
-        disabled={isSending || !githubToken}
+        disabled={isSending || !isProviderReady}
         style={{ minHeight: '48px', maxHeight: '200px', lineHeight: '28px' }}
       />
       
@@ -361,7 +368,11 @@ export default function ChatInput({
                         setSelectedModel?.(model.id);
                         document.getElementById('chat-input-model-dropdown')?.classList.add('hidden');
                       }}
-                      disabled={model.provider === 'ollama' && !ollamaConnected && !model.requiresToken}
+                      disabled={
+                        (model.provider === 'github' && !githubConfigured) ||
+                        (model.provider === 'gemini' && !googleConfigured) ||
+                        (model.provider === 'ollama' && !ollamaConnected)
+                      }
                       className={`w-full px-4 py-3 text-left border-b transition-colors last:border-b-0 disabled:opacity-50 disabled:cursor-not-allowed ${
                         selectedModel === model.id
                           ? isDarkMode
@@ -392,7 +403,7 @@ export default function ChatInput({
           {/* Send button */}
           <button
             onClick={handleSendMessage}
-            disabled={isSending || (!inputMessage.trim() && imageAttachments.length === 0) || !githubToken}
+            disabled={isSending || (!inputMessage.trim() && imageAttachments.length === 0) || !isProviderReady}
             className={`w-11 h-11 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
               (inputMessage.trim() || imageAttachments.length > 0) && !isSending
                 ? 'bg-blue-900 hover:bg-blue-950 text-white'

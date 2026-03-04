@@ -28,7 +28,7 @@ export interface Model {
   name: string;
   icon: string;
   description?: string;
-  provider: 'github' | 'ollama';
+  provider: 'github' | 'ollama' | 'gemini';
   baseUrl?: string;
   requiresToken?: boolean;
 }

@@ -83,10 +83,12 @@ export default function AdminChat() {
   const [githubToken, setGithubToken] = useState('');
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [googleApiKey, setGoogleApiKey] = useState('');
   const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'system' | 'apiKeys'>('system');
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [telegramBotTokenInput, setTelegramBotTokenInput] = useState('');
+  const [googleKeyInput, setGoogleKeyInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
@@ -332,6 +334,7 @@ export default function AdminChat() {
         if (!savedToken && settings.github_token) savedToken = settings.github_token;
         if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
         if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
+        if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
       }
 
       setGithubToken(savedToken);
@@ -496,6 +499,7 @@ export default function AdminChat() {
       if (!savedToken && settings.github_token) savedToken = settings.github_token;
       if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
       if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
+      if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
     }
 
     setGithubToken(savedToken);
@@ -520,6 +524,7 @@ export default function AdminChat() {
     localStorage.removeItem('tavily_api_key');
     setGithubToken('');
     setTavilyApiKey('');
+    setGoogleApiKey('');
     setIsAuthenticated(false);
     setUserId(null);
     setMessages([]);
@@ -539,8 +544,9 @@ export default function AdminChat() {
     const newGithubToken = tokenInput.trim();
     const newTavilyKey = tavilyKeyInput.trim();
     const newTelegramToken = telegramBotTokenInput.trim();
+    const newGoogleKey = googleKeyInput.trim();
 
-    if (!newGithubToken && !newTavilyKey && !newTelegramToken) return;
+    if (!newGithubToken && !newTavilyKey && !newTelegramToken && !newGoogleKey) return;
 
     try {
       // Save to localStorage
@@ -558,9 +564,13 @@ export default function AdminChat() {
         setTelegramBotToken(newTelegramToken);
         setTelegramBotTokenInput('');
       }
+      if (newGoogleKey) {
+        setGoogleApiKey(newGoogleKey);
+        setGoogleKeyInput('');
+      }
 
       // Save to DB
-      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, newTelegramToken || undefined);
+      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, newTelegramToken || undefined, newGoogleKey || undefined);
 
       if (!result?.success) {
         alert('Error saving keys to database. Please check server configuration.');
@@ -775,6 +785,7 @@ export default function AdminChat() {
                   setSelectedModel={setSelectedModel}
                   MODELS={MODELS}
                   githubConfigured={!!githubToken}
+                  googleConfigured={!!googleApiKey}
                   ollamaConnected={ollamaConnected}
                   ollamaModels={ollamaModels}
                   onDownloadModel={handleDownloadModel}
@@ -933,12 +944,15 @@ export default function AdminChat() {
         githubToken={githubToken}
         tavilyApiKey={tavilyApiKey}
         telegramBotToken={telegramBotToken}
+        googleApiKey={googleApiKey}
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}
         tavilyKeyInput={tavilyKeyInput}
         setTavilyKeyInput={setTavilyKeyInput}
         telegramBotTokenInput={telegramBotTokenInput}
         setTelegramBotTokenInput={setTelegramBotTokenInput}
+        googleKeyInput={googleKeyInput}
+        setGoogleKeyInput={setGoogleKeyInput}
         onSaveToken={handleSaveToken}
       />
     </div>
