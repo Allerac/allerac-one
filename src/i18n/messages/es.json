@@ -34,7 +34,13 @@
     "passwordsNoMatch": "Las contraseñas no coinciden",
     "unexpectedError": "Ocurrió un error inesperado. Inténtalo de nuevo.",
     "atLeast8Chars": "Al menos 8 caracteres",
-    "confirmYourPassword": "Confirma tu contraseña"
+    "confirmYourPassword": "Confirma tu contraseña",
+    "securityUpgrade": "Actualización de Seguridad Requerida",
+    "migrationDescription": "Una actualización de seguridad requiere que establezcas una nueva contraseña. Tu cuenta y todos tus datos se conservan, solo necesitas actualizar tu contraseña.",
+    "newPassword": "Nueva Contraseña",
+    "updatingPassword": "Actualizando contraseña...",
+    "setNewPassword": "Establecer Nueva Contraseña",
+    "back": "Volver"
   },
   "chat": {
     "typeMessage": "Escribe tu mensaje...",

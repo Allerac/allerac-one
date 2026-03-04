@@ -37,6 +37,8 @@ export default function LoginModal({
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationEmail, setMigrationEmail] = useState('');
 
   if (!isOpen) return null;
 
@@ -46,6 +48,8 @@ export default function LoginModal({
     setConfirmPassword('');
     setName('');
     setError('');
+    setIsMigrating(false);
+    setMigrationEmail('');
   };
 
   const switchTab = (tab: Tab) => {
@@ -93,6 +97,12 @@ export default function LoginModal({
       if (result.success) {
         onAuthSuccess(result.user);
         resetForm();
+      } else if ('needsMigration' in result && result.needsMigration) {
+        setIsMigrating(true);
+        setMigrationEmail(email);
+        setPassword('');
+        setConfirmPassword('');
+        setError('');
       } else {
         setError(result.error);
       }
@@ -104,11 +114,53 @@ export default function LoginModal({
     }
   };
 
+  const handleMigrationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (password.length < 8) {
+      setError(t('passwordLength'));
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError(t('passwordsNoMatch'));
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const hashedPassword = await hashPassword(password);
+      const result = await authActions.migratePassword(migrationEmail, hashedPassword);
+
+      if (result.success) {
+        onAuthSuccess(result.user);
+        resetForm();
+      } else {
+        setError(result.error);
+      }
+    } catch (err) {
+      setError(t('unexpectedError'));
+      console.error('Migration error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget && !preventClose && onClose) {
       onClose();
     }
   };
+
+  const inputClass = `w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+    isDarkMode
+      ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
+      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+  }`;
+
+  const labelClass = `block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`;
 
   return (
     <div
@@ -129,11 +181,9 @@ export default function LoginModal({
           }`}
         >
           <h2
-            className={`text-xl font-semibold ${
-              isDarkMode ? 'text-gray-100' : 'text-gray-900'
-            }`}
+            className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}
           >
-            {activeTab === 'login' ? t('welcomeBack') : t('createAccount')}
+            {isMigrating ? t('securityUpgrade') : activeTab === 'login' ? t('welcomeBack') : t('createAccount')}
           </h2>
           {!preventClose && onClose && (
             <button
@@ -144,200 +194,229 @@ export default function LoginModal({
                   : 'text-gray-400 hover:text-gray-600'
               }`}
             >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           )}
         </div>
 
-        {/* Tabs */}
-        <div className={`flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <button
-            onClick={() => switchTab('login')}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'login'
-                ? isDarkMode
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-blue-600 border-b-2 border-blue-600'
-                : isDarkMode
-                ? 'text-gray-400 hover:text-gray-300'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t('login')}
-          </button>
-          <button
-            onClick={() => switchTab('register')}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'register'
-                ? isDarkMode
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-blue-600 border-b-2 border-blue-600'
-                : isDarkMode
-                ? 'text-gray-400 hover:text-gray-300'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t('register')}
-          </button>
-        </div>
+        {isMigrating ? (
+          /* Migration form */
+          <form onSubmit={handleMigrationSubmit} className="p-6 space-y-4">
+            <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              {t('migrationDescription')}
+            </p>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div
-              className={`p-3 rounded-lg text-sm ${
-                isDarkMode
-                  ? 'bg-red-900/50 text-red-300 border border-red-700'
-                  : 'bg-red-50 text-red-700 border border-red-200'
-              }`}
-            >
-              {error}
-            </div>
-          )}
-
-          {activeTab === 'register' && (
-            <div>
-              <label
-                className={`block text-sm font-medium mb-1 ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
+            {error && (
+              <div
+                className={`p-3 rounded-lg text-sm ${
+                  isDarkMode
+                    ? 'bg-red-900/50 text-red-300 border border-red-700'
+                    : 'bg-red-50 text-red-700 border border-red-200'
                 }`}
               >
-                {t('nameOptional')}
-              </label>
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className={labelClass}>{t('newPassword')}</label>
               <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t('yourName')}
-                className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  isDarkMode
-                    ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                }`}
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t('atLeast8Chars')}
+                required
+                className={inputClass}
               />
             </div>
-          )}
 
-          <div>
-            <label
-              className={`block text-sm font-medium mb-1 ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}
-            >
-              {t('email')}
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              required
-              className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                isDarkMode
-                  ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-              }`}
-            />
-          </div>
-
-          <div>
-            <label
-              className={`block text-sm font-medium mb-1 ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}
-            >
-              {t('password')}
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('atLeast8Chars')}
-              required
-              className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                isDarkMode
-                  ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-              }`}
-            />
-          </div>
-
-          {activeTab === 'register' && (
             <div>
-              <label
-                className={`block text-sm font-medium mb-1 ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}
-              >
-                {t('confirmPassword')}
-              </label>
+              <label className={labelClass}>{t('confirmPassword')}</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder={t('confirmYourPassword')}
                 required
-                className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  isDarkMode
-                    ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                }`}
+                className={inputClass}
               />
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-              isLoading
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isLoading ? (
-              <span className="flex items-center justify-center">
-                <svg
-                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              {isLoading ? (
+                <span className="flex items-center justify-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  {t('updatingPassword')}
+                </span>
+              ) : (
+                t('setNewPassword')
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setIsMigrating(false); setPassword(''); setConfirmPassword(''); setError(''); }}
+              className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                isDarkMode
+                  ? 'text-gray-400 hover:text-gray-300'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t('back')}
+            </button>
+          </form>
+        ) : (
+          <>
+            {/* Tabs */}
+            <div className={`flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button
+                onClick={() => switchTab('login')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                  activeTab === 'login'
+                    ? isDarkMode
+                      ? 'text-blue-400 border-b-2 border-blue-400'
+                      : 'text-blue-600 border-b-2 border-blue-600'
+                    : isDarkMode
+                    ? 'text-gray-400 hover:text-gray-300'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t('login')}
+              </button>
+              <button
+                onClick={() => switchTab('register')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                  activeTab === 'register'
+                    ? isDarkMode
+                      ? 'text-blue-400 border-b-2 border-blue-400'
+                      : 'text-blue-600 border-b-2 border-blue-600'
+                    : isDarkMode
+                    ? 'text-gray-400 hover:text-gray-300'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t('register')}
+              </button>
+            </div>
+
+            {/* Login / Register form */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {error && (
+                <div
+                  className={`p-3 rounded-lg text-sm ${
+                    isDarkMode
+                      ? 'bg-red-900/50 text-red-300 border border-red-700'
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}
                 >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
+                  {error}
+                </div>
+              )}
+
+              {activeTab === 'register' && (
+                <div>
+                  <label className={labelClass}>{t('nameOptional')}</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('yourName')}
+                    className={inputClass}
                   />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                </div>
+              )}
+
+              <div>
+                <label className={labelClass}>{t('email')}</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  required
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>{t('password')}</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t('atLeast8Chars')}
+                  required
+                  className={inputClass}
+                />
+              </div>
+
+              {activeTab === 'register' && (
+                <div>
+                  <label className={labelClass}>{t('confirmPassword')}</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder={t('confirmYourPassword')}
+                    required
+                    className={inputClass}
                   />
-                </svg>
-                {activeTab === 'login' ? t('loggingIn') : t('creatingAccount')}
-              </span>
-            ) : activeTab === 'login' ? (
-              t('login')
-            ) : (
-              t('createAccount')
-            )}
-          </button>
-        </form>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                  isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center">
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    {activeTab === 'login' ? t('loggingIn') : t('creatingAccount')}
+                  </span>
+                ) : activeTab === 'login' ? (
+                  t('login')
+                ) : (
+                  t('createAccount')
+                )}
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
