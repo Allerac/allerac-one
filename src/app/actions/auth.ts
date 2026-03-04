@@ -49,12 +49,43 @@ export async function register(
 export async function login(
   email: string,
   password: string
-): Promise<{ success: true; user: User } | { success: false; error: string }> {
+): Promise<{ success: true; user: User } | { success: false; needsMigration?: boolean; error: string }> {
   if (!email || !password) {
     return { success: false, error: 'Email and password are required' };
   }
 
   const result = await authService.login(email, password);
+
+  if (!result.success) {
+    return { success: false, needsMigration: result.needsMigration, error: result.error };
+  }
+
+  // Set session cookie
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, result.session.token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    expires: result.session.expiresAt,
+    path: '/',
+  });
+
+  return { success: true, user: result.user };
+}
+
+/**
+ * One-time unauthenticated migration for v1 (plaintext-bcrypt) accounts.
+ * Only succeeds for accounts that still have password_hash_version = 1.
+ */
+export async function migratePassword(
+  email: string,
+  hashedPassword: string
+): Promise<{ success: true; user: User } | { success: false; error: string }> {
+  if (!email || !hashedPassword) {
+    return { success: false, error: 'Email and password are required' };
+  }
+
+  const result = await authService.migratePassword(email, hashedPassword);
 
   if (!result.success) {
     return { success: false, error: result.error };

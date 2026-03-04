@@ -34,7 +34,13 @@
     "passwordsNoMatch": "Passwords do not match",
     "unexpectedError": "An unexpected error occurred. Please try again.",
     "atLeast8Chars": "At least 8 characters",
-    "confirmYourPassword": "Confirm your password"
+    "confirmYourPassword": "Confirm your password",
+    "securityUpgrade": "Security Upgrade Required",
+    "migrationDescription": "A security update requires you to set a new password. Your account and all your data are preserved — only your password needs to be updated.",
+    "newPassword": "New Password",
+    "updatingPassword": "Updating password...",
+    "setNewPassword": "Set New Password",
+    "back": "Back"
   },
   "chat": {
     "typeMessage": "Type your message...",

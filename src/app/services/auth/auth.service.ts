@@ -104,16 +104,20 @@ export class AuthService {
   }
 
   /**
-   * Login a user with email and password
+   * Login a user with email and password (SHA-256 pre-hashed by client)
    */
   async login(
     email: string,
     password: string
-  ): Promise<{ success: true; user: User; session: { token: string; expiresAt: Date } } | { success: false; error: string }> {
+  ): Promise<
+    | { success: true; user: User; session: { token: string; expiresAt: Date } }
+    | { success: false; needsMigration: true; error: string }
+    | { success: false; needsMigration?: false; error: string }
+  > {
     try {
-      // Find user by email (include password_hash for verification)
+      // Find user by email (include password_hash and version for verification)
       const result = await pool.query(
-        'SELECT id, email, name, password_hash, created_at FROM users WHERE email = $1',
+        'SELECT id, email, name, password_hash, password_hash_version, created_at FROM users WHERE email = $1',
         [email.toLowerCase()]
       );
 
@@ -128,7 +132,17 @@ export class AuthService {
         return { success: false, error: 'Invalid email or password' };
       }
 
-      // Verify password
+      // v1 accounts were hashed from plaintext; the client now sends sha256(plaintext)
+      // so a bcrypt.compare would always fail — prompt migration instead.
+      if (row.password_hash_version === 1) {
+        return {
+          success: false,
+          needsMigration: true,
+          error: 'Your account needs a one-time security upgrade. Please set a new password.',
+        };
+      }
+
+      // Verify password (v2: bcrypt of sha256 pre-hash from client)
       const isValid = await this.verifyPassword(password, row.password_hash);
       if (!isValid) {
         return { success: false, error: 'Invalid email or password' };
@@ -148,6 +162,54 @@ export class AuthService {
     } catch (error) {
       console.error('Login error:', error);
       return { success: false, error: 'Login failed' };
+    }
+  }
+
+  /**
+   * Migrate a v1 (plaintext-bcrypt) account to v2 (sha256-bcrypt).
+   * This is an unauthenticated one-time operation — only available for v1 accounts.
+   */
+  async migratePassword(
+    email: string,
+    newHashedPassword: string
+  ): Promise<{ success: true; user: User; session: { token: string; expiresAt: Date } } | { success: false; error: string }> {
+    try {
+      const result = await pool.query(
+        'SELECT id, email, name, password_hash_version, created_at FROM users WHERE email = $1',
+        [email.toLowerCase()]
+      );
+
+      if (result.rows.length === 0) {
+        return { success: false, error: 'Invalid email or password' };
+      }
+
+      const row = result.rows[0];
+
+      // Only allow migration for v1 accounts
+      if (row.password_hash_version !== 1) {
+        return { success: false, error: 'Invalid email or password' };
+      }
+
+      const newHash = await this.hashPassword(newHashedPassword);
+
+      await pool.query(
+        'UPDATE users SET password_hash = $1, password_hash_version = 2 WHERE id = $2',
+        [newHash, row.id]
+      );
+
+      const user: User = {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        created_at: row.created_at,
+      };
+
+      const session = await this.createSession(user.id);
+
+      return { success: true, user, session };
+    } catch (error) {
+      console.error('Password migration error:', error);
+      return { success: false, error: 'Migration failed' };
     }
   }
 
