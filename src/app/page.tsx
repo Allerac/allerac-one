@@ -832,6 +832,7 @@ export default function AdminChat() {
                     setSelectedModel={setSelectedModel}
                     MODELS={MODELS}
                     githubConfigured={!!githubToken}
+                    googleConfigured={!!googleApiKey}
                     ollamaConnected={ollamaConnected}
                     ollamaModels={ollamaModels}
                     onDownloadModel={handleDownloadModel}

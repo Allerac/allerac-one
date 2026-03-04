@@ -233,73 +233,21 @@ export async function POST(request: Request): Promise<Response> {
 
         const llmService = new LLMService(provider, modelBaseUrl, { githubToken, geminiToken: googleApiKey });
 
-        // 10. First LLM call — non-streaming for tool detection
-        // Send periodic keepalives during long LLM calls to prevent client timeout
-        const keepaliveInterval = setInterval(() => {
-          try {
-            controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
-          } catch {
-            clearInterval(keepaliveInterval);
-          }
-        }, 15000); // Every 15 seconds
-
-        console.log('[ChatRoute] Starting first LLM call (tool detection)...');
-        let data = await llmService.chatCompletion({
-          messages: conversationMessages,
-          model: modelId,
-          temperature: 0.7,
-          max_tokens: 2000,
-          tools: TOOLS,
-          tool_choice: 'auto',
-        });
-        console.log('[ChatRoute] First LLM call completed');
-        clearInterval(keepaliveInterval);
-        let assistantMessage = data.choices[0].message;
-
-        // 11. Tool loop — non-streaming until no more tool calls
-        while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-          conversationMessages.push(assistantMessage);
-
-          for (const toolCall of assistantMessage.tool_calls) {
-            const toolName = toolCall.function.name;
-            const toolCallId = toolCall.id || `call_${toolName}_${Date.now()}`;
-            const rawArgs = toolCall.function.arguments;
-            const toolArgs = rawArgs == null
-              ? {}
-              : typeof rawArgs === 'object'
-                ? rawArgs
-                : (() => { try { return JSON.parse(rawArgs); } catch { return {}; } })();
-
-            controller.enqueue(encode({ type: 'tool_call', name: toolName, args: toolArgs }));
-
+        // Gemini goes straight to streaming — skip tool detection to avoid hangs
+        // with the OpenAI-compatible endpoint's tool_choice handling.
+        if (provider !== 'gemini') {
+          // 10. First LLM call — non-streaming for tool detection
+          // Send periodic keepalives during long LLM calls to prevent client timeout
+          const keepaliveInterval = setInterval(() => {
             try {
-              let toolResult: any;
-              if (toolName === 'search_web' && tavilyApiKey) {
-                const searchTool = new SearchWebTool(tavilyApiKey);
-                toolResult = await searchTool.execute(toolArgs.query);
-              } else if (toolName === 'execute_shell') {
-                const shellTool = new ShellTool();
-                toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
-              } else {
-                toolResult = { error: `Tool ${toolName} not available` };
-              }
-              controller.enqueue(encode({ type: 'tool_result', name: toolName, success: true }));
-              conversationMessages.push({
-                role: 'tool',
-                tool_call_id: toolCallId,
-                content: JSON.stringify(toolResult),
-              });
-            } catch (error: any) {
-              controller.enqueue(encode({ type: 'tool_result', name: toolName, success: false }));
-              conversationMessages.push({
-                role: 'tool',
-                tool_call_id: toolCallId,
-                content: JSON.stringify({ error: error.message }),
-              });
+              controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
+            } catch {
+              clearInterval(keepaliveInterval);
             }
-          }
+          }, 15000); // Every 15 seconds
 
-          data = await llmService.chatCompletion({
+          console.log('[ChatRoute] Starting first LLM call (tool detection)...');
+          let data = await llmService.chatCompletion({
             messages: conversationMessages,
             model: modelId,
             temperature: 0.7,
@@ -307,7 +255,63 @@ export async function POST(request: Request): Promise<Response> {
             tools: TOOLS,
             tool_choice: 'auto',
           });
-          assistantMessage = data.choices[0].message;
+          console.log('[ChatRoute] First LLM call completed');
+          clearInterval(keepaliveInterval);
+          let assistantMessage = data.choices[0].message;
+
+          // 11. Tool loop — non-streaming until no more tool calls
+          while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+            conversationMessages.push(assistantMessage);
+
+            for (const toolCall of assistantMessage.tool_calls) {
+              const toolName = toolCall.function.name;
+              const toolCallId = toolCall.id || `call_${toolName}_${Date.now()}`;
+              const rawArgs = toolCall.function.arguments;
+              const toolArgs = rawArgs == null
+                ? {}
+                : typeof rawArgs === 'object'
+                  ? rawArgs
+                  : (() => { try { return JSON.parse(rawArgs); } catch { return {}; } })();
+
+              controller.enqueue(encode({ type: 'tool_call', name: toolName, args: toolArgs }));
+
+              try {
+                let toolResult: any;
+                if (toolName === 'search_web' && tavilyApiKey) {
+                  const searchTool = new SearchWebTool(tavilyApiKey);
+                  toolResult = await searchTool.execute(toolArgs.query);
+                } else if (toolName === 'execute_shell') {
+                  const shellTool = new ShellTool();
+                  toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
+                } else {
+                  toolResult = { error: `Tool ${toolName} not available` };
+                }
+                controller.enqueue(encode({ type: 'tool_result', name: toolName, success: true }));
+                conversationMessages.push({
+                  role: 'tool',
+                  tool_call_id: toolCallId,
+                  content: JSON.stringify(toolResult),
+                });
+              } catch (error: any) {
+                controller.enqueue(encode({ type: 'tool_result', name: toolName, success: false }));
+                conversationMessages.push({
+                  role: 'tool',
+                  tool_call_id: toolCallId,
+                  content: JSON.stringify({ error: error.message }),
+                });
+              }
+            }
+
+            data = await llmService.chatCompletion({
+              messages: conversationMessages,
+              model: modelId,
+              temperature: 0.7,
+              max_tokens: 2000,
+              tools: TOOLS,
+              tool_choice: 'auto',
+            });
+            assistantMessage = data.choices[0].message;
+          }
         }
 
         // 12. Final LLM call — streaming for the user-facing response
@@ -328,7 +332,7 @@ export async function POST(request: Request): Promise<Response> {
         // Track skill usage
         if (activeSkill) {
           try {
-            await skillsService.completeSkillUsage(convId, true, undefined, assistantMessage.tool_calls?.length || 0);
+            await skillsService.completeSkillUsage(convId, true, undefined, 0);
           } catch (e) {
             console.error('[ChatRoute] Skill usage tracking failed:', e);
           }
