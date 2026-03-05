@@ -1,20 +1,25 @@
-# Allerac One - Local Installation
-# For running your own private AI agent at home
+# Allerac One - Local Hardware Line
+# For self-hosted AI on your own hardware (Allerac Lite, Home, Pro)
 #
 # Usage:
 #   docker compose -f docker-compose.local.yml up -d
 #
-# With Ollama (recommended for full local AI):
+# With Ollama (required for local AI):
 #   docker compose -f docker-compose.local.yml --profile ollama up -d
 #
-# With Telegram bot:
-#   docker compose -f docker-compose.local.yml --profile telegram up -d
+# With notifications (Redis + Notifier + Telegram):
+#   docker compose -f docker-compose.local.yml --profile notifications up -d
 #
 # With monitoring (optional):
 #   docker compose -f docker-compose.local.yml --profile monitoring up -d
 #
-# Full stack:
-#   docker compose -f docker-compose.local.yml --profile ollama --profile telegram --profile monitoring up -d
+# Full stack (all profiles):
+#   docker compose -f docker-compose.local.yml --profile ollama --profile notifications --profile monitoring up -d
+#
+# Hardware tier model presets (set OLLAMA_MODELS in .env):
+#   Allerac Lite:  OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b
+#   Allerac Home:  OLLAMA_MODELS=qwen2.5:14b,mistral:7b,deepseek-r1:8b
+#   Allerac Pro:   OLLAMA_MODELS=llama3.3:70b,qwen2.5:14b,command-r:35b
 
 services:
   # ============================================
@@ -33,7 +38,7 @@ services:
       - ./src/database/init.sql:/docker-entrypoint-initdb.d/init.sql
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d allerac"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-allerac}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -66,8 +71,8 @@ services:
     restart: unless-stopped
     environment:
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
-      # Mount point exposed to the agent as its working directory
       - DEFAULT_CWD=/workspace
+      - ALLERAC_PRODUCT_LINE=local
     volumes:
       # Give the agent access to the host home directory
       # Change HOST_WORKSPACE in .env to restrict or expand the scope
@@ -100,16 +105,27 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-allerac}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_API_URL=http://localhost:${APP_PORT:-8080}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - BACKUP_DIR=/app/backups
       # Optional external APIs (not required for local use)
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       # Executor service for shell tool
       - EXECUTOR_URL=http://executor:3001
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+      # Tells update.sh which compose file to use (local vs cloud)
+      - ALLERAC_PRODUCT_LINE=local
     ports:
       - "${APP_PORT:-8080}:8080"
+    volumes:
+      - backups_data:/app/backups
+      - ./update.sh:/app/update.sh:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -124,7 +140,7 @@ services:
           memory: 1G
 
   # ============================================
-  # OLLAMA - Local LLM (Optional but recommended)
+  # OLLAMA - Local LLM (required for local AI)
   # ============================================
 
   ollama:
@@ -137,7 +153,12 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
-    # GPU support (uncomment for NVIDIA GPU)
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # GPU support for Allerac Pro with NVIDIA eGPU:
+    # Uncomment the deploy block below, then run:
+    #   docker compose -f docker-compose.local.yml --profile ollama up -d
+    # Requires: nvidia-container-toolkit installed on the host
     # deploy:
     #   resources:
     #     reservations:
@@ -145,8 +166,6 @@ services:
     #         - driver: nvidia
     #           count: all
     #           capabilities: [gpu]
-    environment:
-      - OLLAMA_HOST=0.0.0.0
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -154,7 +173,11 @@ services:
       retries: 5
       start_period: 30s
 
-  # Model downloader - runs once to download default model
+  # Model downloader - runs once to pull models for your hardware tier
+  # Set OLLAMA_MODELS in .env as a comma-separated list:
+  #   Allerac Lite:  OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b
+  #   Allerac Home:  OLLAMA_MODELS=qwen2.5:14b,mistral:7b,deepseek-r1:8b
+  #   Allerac Pro:   OLLAMA_MODELS=llama3.3:70b,qwen2.5:14b,command-r:35b
   ollama-setup:
     image: ollama/ollama:latest
     container_name: allerac-ollama-setup
@@ -167,22 +190,80 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=ollama:11434
+      # Comma-separated list of models to pull (defaults to Allerac Lite preset)
+      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Checking for models..."
-        if ! ollama list | grep -q "${DEFAULT_MODEL:-llama3.2}"; then
-          echo "Downloading ${DEFAULT_MODEL:-llama3.2}..."
-          ollama pull ${DEFAULT_MODEL:-llama3.2}
-        else
-          echo "Model ${DEFAULT_MODEL:-llama3.2} already exists"
-        fi
-        echo "Setup complete!"
+        echo "Pulling models: ${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}"
+        echo "$OLLAMA_MODELS" | tr ',' '\n' | while read model; do
+          model=$(echo "$model" | tr -d ' ')
+          [ -z "$model" ] && continue
+          if ollama list | grep -q "^$model"; then
+            echo "Model $model already present, skipping."
+          else
+            echo "Pulling $model..."
+            ollama pull "$model"
+          fi
+        done
+        echo "Model setup complete!"
     restart: "no"
 
   # ============================================
-  # TELEGRAM BOT (Optional)
+  # NOTIFICATIONS - Redis + Notifier + Telegram (Optional)
   # ============================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: allerac-redis
+    restart: unless-stopped
+    profiles:
+      - notifications
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  notifier:
+    build:
+      context: ./infra/notifier
+      dockerfile: Dockerfile
+    container_name: allerac-notifier
+    restart: unless-stopped
+    profiles:
+      - notifications
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
+      - REDIS_URL=redis://redis:6379
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   telegram-bot:
     build:
@@ -191,17 +272,28 @@ services:
     container_name: allerac-telegram
     restart: unless-stopped
     profiles:
-      - telegram
+      - notifications
+    volumes:
+      - ./telegram-bots.json:/app/telegram-bots.json:ro
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:-}
+      # Legacy env vars (for backward compatibility with single-bot mode)
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
       - TELEGRAM_DEFAULT_USER=${TELEGRAM_DEFAULT_USER:-}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # Executor service for shell tool
+      - EXECUTOR_URL=http://executor:3001
+      - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       migrations:
         condition: service_completed_successfully
+      executor:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -281,6 +373,10 @@ volumes:
     name: allerac_db_data
   ollama_data:
     name: allerac_ollama_data
+  backups_data:
+    name: allerac_backups_data
+  redis_data:
+    name: allerac_redis_data
   prometheus_data:
     name: allerac_prometheus_data
   grafana_data:

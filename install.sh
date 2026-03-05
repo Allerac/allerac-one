@@ -1,100 +1,62 @@
 #!/bin/bash
 #
-# Allerac One - Private AI Agent Installation Script
-# ==================================================
-#
-# This script installs everything needed to run your own private AI agent.
+# Allerac One - Local Hardware Line Installer
+# ===========================================
+# For Allerac Lite, Home, and Pro hardware
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/Allerac/allerac-one/main/install.sh | bash
-#
-# Or download and run:
-#   chmod +x install.sh
+#   curl -sSL https://get.allerac.com/install | bash
 #   ./install.sh
 #
-# Options:
-#   --no-ollama     Skip Ollama installation (use external LLM)
-#   --no-monitoring Skip monitoring stack (Grafana/Prometheus)
-#   --with-telegram Enable Telegram bot integration
-#   --model <name>  Specify LLM model (default: llama3.2)
-#   --help          Show this help message
+# Non-interactive (CI/scripted):
+#   HARDWARE_TIER=lite ./install.sh
+#   HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
+#
+# Tiers:
+#   lite   → N100, 16GB  → qwen2.5:7b + deepseek-r1:1.5b
+#   home   → i5/R5, 32GB → qwen2.5:14b + mistral:7b + deepseek-r1:8b
+#   pro    → i7/R7, 64GB → llama3.3:70b + qwen2.5:14b + command-r:35b
+#   custom → You choose the models
 #
 
 set -e
 
-# Colors for output
+# ============================================
+# Colors
+# ============================================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+BOLD='\033[1m'
+NC='\033[0m'
 
-# Configuration
+# ============================================
+# Configuration (overridable via env)
+# ============================================
 REPO_URL="https://github.com/Allerac/allerac-one.git"
-INSTALL_DIR="$HOME/allerac-one"
-DEFAULT_MODEL="llama3.2"
-INSTALL_OLLAMA=true
-INSTALL_MONITORING=false
-INSTALL_TELEGRAM=false
+INSTALL_DIR="${INSTALL_DIR:-$HOME/allerac-one}"
+HARDWARE_TIER="${HARDWARE_TIER:-}"
+OLLAMA_MODELS="${OLLAMA_MODELS:-}"
+ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
+ENABLE_MONITORING="${ENABLE_MONITORING:-false}"
+RECONFIGURE="${RECONFIGURE:-false}"
 USE_SUDO=""
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --no-ollama)
-            INSTALL_OLLAMA=false
-            shift
-            ;;
-        --no-monitoring)
-            INSTALL_MONITORING=false
-            shift
-            ;;
-        --with-monitoring)
-            INSTALL_MONITORING=true
-            shift
-            ;;
-        --with-telegram)
-            INSTALL_TELEGRAM=true
-            shift
-            ;;
-        --model)
-            DEFAULT_MODEL="$2"
-            shift 2
-            ;;
-        --help)
-            head -20 "$0" | tail -18
-            exit 0
-            ;;
-        *)
-            echo -e "${RED}Unknown option: $1${NC}"
-            exit 1
-            ;;
-    esac
-done
+# ============================================
+# Logging
+# ============================================
+log_info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
+log_step()    { echo -e "\n${BOLD}$1${NC}"; }
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+command_exists() { command -v "$1" >/dev/null 2>&1; }
 
-log_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Detect OS
+# ============================================
+# OS Detection
+# ============================================
 detect_os() {
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/debian_version ]; then
@@ -107,310 +69,423 @@ detect_os() {
     elif [[ "$OSTYPE" == "darwin"* ]]; then
         OS="macos"
     else
-        log_error "Unsupported operating system: $OSTYPE"
+        log_error "Unsupported OS: $OSTYPE"
         exit 1
     fi
     log_info "Detected OS: $OS"
 }
 
-# Install Docker on Debian/Ubuntu
+# ============================================
+# System Requirements
+# ============================================
+check_requirements() {
+    log_step "Checking system requirements..."
+
+    if [[ "$OS" == "linux" || "$OS" == "debian" ]]; then
+        TOTAL_RAM_GB=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
+    elif [[ "$OS" == "macos" ]]; then
+        TOTAL_RAM_GB=$(( $(sysctl -n hw.memsize) / 1024 / 1024 / 1024 ))
+    fi
+
+    if [ "${TOTAL_RAM_GB:-0}" -lt 8 ]; then
+        log_warn "Only ${TOTAL_RAM_GB}GB RAM detected. Minimum 16GB recommended."
+    else
+        log_success "RAM: ${TOTAL_RAM_GB}GB"
+    fi
+
+    AVAILABLE_SPACE=$(df -BG "$HOME" | tail -1 | awk '{print $4}' | sed 's/G//')
+    if [ "${AVAILABLE_SPACE:-0}" -lt 20 ]; then
+        log_error "Need at least 20GB free disk space (found ${AVAILABLE_SPACE}GB)."
+        exit 1
+    fi
+    log_success "Disk: ${AVAILABLE_SPACE}GB available"
+
+    if ! command_exists git; then
+        log_info "Installing git..."
+        [[ "$OS" == "debian" ]] && sudo apt-get update -qq && sudo apt-get install -y git
+        [[ "$OS" == "macos" ]]  && xcode-select --install 2>/dev/null || true
+    fi
+    log_success "Git: installed"
+}
+
+# ============================================
+# Swap (Linux only, helps small devices)
+# ============================================
+setup_swap() {
+    [[ "$OS" != "linux" && "$OS" != "debian" ]] && return
+
+    SWAP_GB=$(free -g | awk '/Swap/ {print $2}')
+    if [ "${SWAP_GB:-0}" -lt 4 ]; then
+        log_info "Low swap (${SWAP_GB}GB). Creating 4GB swap file for model loading..."
+        if [ ! -f /swapfile ]; then
+            sudo fallocate -l 4G /swapfile
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+            sudo swapon /swapfile
+            echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab > /dev/null
+            log_success "4GB swap created"
+        else
+            log_info "Swap file already exists"
+        fi
+    fi
+}
+
+# ============================================
+# Docker
+# ============================================
 install_docker_debian() {
-    log_info "Installing Docker for Debian/Ubuntu..."
-
-    sudo apt-get update
+    log_info "Installing Docker..."
+    sudo apt-get update -qq
     sudo apt-get install -y ca-certificates curl gnupg
-
     sudo install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    sudo apt-get update
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+        | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt-get update -qq
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-    # Add current user to docker group
     sudo usermod -aG docker "$USER"
-
-    # Start and enable Docker service
     sudo systemctl start docker
     sudo systemctl enable docker
-
-    log_success "Docker installed successfully"
+    log_success "Docker installed"
 }
 
-# Install Docker on macOS
 install_docker_macos() {
     log_info "Installing Docker for macOS..."
-
-    if ! command_exists brew; then
-        log_info "Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    fi
-
+    command_exists brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     brew install --cask docker
-
-    log_warn "Please start Docker Desktop manually, then re-run this script"
+    log_warn "Please start Docker Desktop, then re-run this script."
     exit 0
 }
 
-# Install Docker
 install_docker() {
     if command_exists docker; then
-        log_success "Docker is already installed"
+        log_success "Docker already installed"
         return
     fi
-
-    log_info "Docker not found, installing..."
-
     case $OS in
-        debian)
-            install_docker_debian
-            ;;
-        macos)
-            install_docker_macos
-            ;;
-        *)
-            log_error "Please install Docker manually: https://docs.docker.com/engine/install/"
-            exit 1
-            ;;
+        debian) install_docker_debian ;;
+        macos)  install_docker_macos  ;;
+        *)      log_error "Install Docker manually: https://docs.docker.com/engine/install/"; exit 1 ;;
     esac
 }
 
-# Check Docker is running
 check_docker_running() {
-    # Try without sudo first
     if docker info >/dev/null 2>&1; then
         log_success "Docker is running"
         USE_SUDO=""
-        return
-    fi
-
-    # Try with sudo (for fresh installs before re-login)
-    if sudo docker info >/dev/null 2>&1; then
+    elif sudo docker info >/dev/null 2>&1; then
         log_warn "Docker requires sudo (re-login to use without sudo)"
         USE_SUDO="sudo"
-        return
-    fi
-
-    # Docker not running, try to start it
-    log_info "Starting Docker service..."
-    sudo systemctl start docker
-    sleep 3
-
-    if sudo docker info >/dev/null 2>&1; then
-        log_success "Docker started successfully"
-        USE_SUDO="sudo"
-        return
-    fi
-
-    log_error "Docker is not running. Please start Docker and try again."
-    exit 1
-}
-
-# Clone or update repository
-setup_repository() {
-    if [ -d "$INSTALL_DIR" ]; then
-        log_info "Updating existing installation..."
-        cd "$INSTALL_DIR"
-        git pull origin main
     else
-        log_info "Cloning Allerac One repository..."
-        git clone "$REPO_URL" "$INSTALL_DIR"
-        cd "$INSTALL_DIR"
+        log_info "Starting Docker..."
+        sudo systemctl start docker
+        sleep 3
+        sudo docker info >/dev/null 2>&1 && USE_SUDO="sudo" || { log_error "Docker is not running."; exit 1; }
     fi
-    log_success "Repository ready at $INSTALL_DIR"
 }
 
-# Setup environment file
+# ============================================
+# Repository
+# ============================================
+setup_repository() {
+    log_step "Setting up repository..."
+    if [ -d "$INSTALL_DIR/.git" ]; then
+        log_info "Updating existing installation at $INSTALL_DIR..."
+        git -C "$INSTALL_DIR" pull origin main
+    else
+        log_info "Cloning into $INSTALL_DIR..."
+        git clone "$REPO_URL" "$INSTALL_DIR"
+    fi
+    log_success "Repository ready"
+}
+
+# ============================================
+# Hardware Tier Selection (interactive)
+# ============================================
+select_hardware_tier() {
+    # Already set via env var (non-interactive mode)
+    if [ -n "$HARDWARE_TIER" ] && [ -n "$OLLAMA_MODELS" ]; then
+        log_info "Hardware tier: $HARDWARE_TIER (models: $OLLAMA_MODELS)"
+        return
+    fi
+    if [ -n "$HARDWARE_TIER" ]; then
+        case "$HARDWARE_TIER" in
+            lite)   OLLAMA_MODELS="qwen2.5:7b,deepseek-r1:1.5b" ;;
+            home)   OLLAMA_MODELS="qwen2.5:14b,mistral:7b,deepseek-r1:8b" ;;
+            pro)    OLLAMA_MODELS="llama3.3:70b,qwen2.5:14b,command-r:35b" ;;
+            custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen2.5:7b}" ;;
+        esac
+        log_info "Hardware tier: $HARDWARE_TIER (models: $OLLAMA_MODELS)"
+        return
+    fi
+
+    echo ""
+    echo -e "${BOLD}Which Allerac hardware are you setting up?${NC}"
+    echo ""
+    echo -e "  ${BOLD}1) Allerac Lite${NC}   — N100 · 16GB RAM"
+    echo -e "     Models: qwen2.5:7b + deepseek-r1:1.5b  (~10GB download)"
+    echo ""
+    echo -e "  ${BOLD}2) Allerac Home${NC}   — i5/Ryzen 5 · 32GB RAM"
+    echo -e "     Models: qwen2.5:14b + mistral:7b + deepseek-r1:8b  (~30GB download)"
+    echo ""
+    echo -e "  ${BOLD}3) Allerac Pro${NC}    — i7/Ryzen 7 · 64GB RAM (optional GPU)"
+    echo -e "     Models: llama3.3:70b + qwen2.5:14b + command-r:35b  (~80GB download)"
+    echo ""
+    echo -e "  ${BOLD}4) Custom${NC}         — Choose your own models"
+    echo ""
+
+    while true; do
+        read -rp "  Select [1-4]: " TIER_CHOICE
+        case "$TIER_CHOICE" in
+            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen2.5:7b,deepseek-r1:1.5b";                  break ;;
+            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen2.5:14b,mistral:7b,deepseek-r1:8b";         break ;;
+            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="llama3.3:70b,qwen2.5:14b,command-r:35b";        break ;;
+            4) HARDWARE_TIER="custom"
+               read -rp "  Enter models (comma-separated, e.g. qwen2.5:7b,mistral:7b): " OLLAMA_MODELS
+               [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen2.5:7b"
+               break ;;
+            *) echo "  Please select 1, 2, 3, or 4." ;;
+        esac
+    done
+
+    echo ""
+    log_success "Tier: Allerac ${HARDWARE_TIER^}  |  Models: $OLLAMA_MODELS"
+}
+
+# ============================================
+# Feature Selection (interactive)
+# ============================================
+configure_features() {
+    # Already set via env vars (non-interactive mode)
+    if [ "$ENABLE_NOTIFICATIONS" != "false" ] || [ "$ENABLE_MONITORING" != "false" ]; then
+        return
+    fi
+
+    echo ""
+    echo -e "${BOLD}Optional features:${NC}"
+    echo ""
+
+    read -rp "  Enable notifications? (Telegram bot + Redis) [y/N]: " OPT_NOTIF
+    [[ "$OPT_NOTIF" =~ ^[Yy]$ ]] && ENABLE_NOTIFICATIONS=true || ENABLE_NOTIFICATIONS=false
+
+    read -rp "  Enable monitoring? (Grafana + Prometheus)   [y/N]: " OPT_MON
+    [[ "$OPT_MON" =~ ^[Yy]$ ]] && ENABLE_MONITORING=true || ENABLE_MONITORING=false
+
+    echo ""
+}
+
+# ============================================
+# Environment Configuration
+# ============================================
+generate_secret() {
+    # Prefer openssl, fallback to /dev/urandom
+    if command_exists openssl; then
+        openssl rand -hex 32
+    else
+        cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 64 | head -n 1
+    fi
+}
+
 setup_environment() {
     cd "$INSTALL_DIR"
 
-    if [ -f .env ]; then
-        log_info ".env file already exists, keeping it"
-    else
-        log_info "Creating .env configuration..."
-        cp .env.local.example .env
-
-        # Generate encryption key
-        ENCRYPTION_KEY=$(openssl rand -base64 32)
-        sed -i.bak "s|ENCRYPTION_KEY=CHANGE_ME_GENERATE_A_SECURE_KEY|ENCRYPTION_KEY=$ENCRYPTION_KEY|g" .env
-        rm -f .env.bak
-
-        # Set default model
-        sed -i.bak "s|DEFAULT_MODEL=llama3.2|DEFAULT_MODEL=$DEFAULT_MODEL|g" .env
-        rm -f .env.bak
-
-        log_success "Environment configured"
+    if [ -f .env ] && [ "$RECONFIGURE" != "true" ]; then
+        log_info ".env already exists — keeping it. Run with RECONFIGURE=true to overwrite."
+        return
     fi
+
+    log_step "Generating configuration..."
+
+    ENC_KEY=$(generate_secret)
+    TG_ENC_KEY=$(generate_secret)
+    EXEC_SECRET=$(generate_secret | cut -c1-32)
+
+    TELEGRAM_SECTION=""
+    if [ "$ENABLE_NOTIFICATIONS" = "true" ]; then
+        echo ""
+        echo -e "  ${BOLD}Telegram bot setup (optional — press Enter to skip):${NC}"
+        read -rp "  Telegram bot token (from @BotFather): " TG_TOKEN
+        read -rp "  Allowed Telegram user IDs (comma-separated, or Enter for all): " TG_USERS
+
+        TELEGRAM_SECTION="
+# --------------------------------------------
+# Telegram Bot
+# Get token from @BotFather on Telegram
+# --------------------------------------------
+TELEGRAM_BOT_TOKEN=${TG_TOKEN}
+TELEGRAM_ALLOWED_USERS=${TG_USERS}
+TELEGRAM_DEFAULT_USER=
+NOTIFIER_LLM_MODEL=qwen2.5:3b"
+    fi
+
+    cat > .env <<EOF
+# ============================================
+# Allerac One - Local Hardware Line
+# Generated: $(date)
+# Hardware tier: ${HARDWARE_TIER}
+# ============================================
+
+# --------------------------------------------
+# REQUIRED: Security keys (auto-generated)
+# Never share or commit these values.
+# --------------------------------------------
+ENCRYPTION_KEY=${ENC_KEY}
+TELEGRAM_TOKEN_ENCRYPTION_KEY=${TG_ENC_KEY}
+EXECUTOR_SECRET=${EXEC_SECRET}
+
+# --------------------------------------------
+# Ollama models for this hardware tier
+# Lite:   qwen2.5:7b,deepseek-r1:1.5b
+# Home:   qwen2.5:14b,mistral:7b,deepseek-r1:8b
+# Pro:    llama3.3:70b,qwen2.5:14b,command-r:35b
+# --------------------------------------------
+OLLAMA_MODELS=${OLLAMA_MODELS}
+
+# Ollama API endpoint (containerized Ollama, default for local hardware)
+OLLAMA_BASE_URL=http://ollama:11434
+
+# --------------------------------------------
+# Database (no changes needed for local use)
+# --------------------------------------------
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=allerac
+
+# --------------------------------------------
+# Application
+# --------------------------------------------
+APP_PORT=8080
+OLLAMA_PORT=11434
+
+# Working directory exposed to the AI agent (your home directory by default)
+# Change this to restrict the agent's file system access, e.g. /home/user/workspace
+HOST_WORKSPACE=/home
+
+# --------------------------------------------
+# Monitoring (used with --profile monitoring)
+# --------------------------------------------
+GRAFANA_USER=admin
+GRAFANA_PASSWORD=admin
+GRAFANA_PORT=3001
+
+# --------------------------------------------
+# External APIs (optional — local AI works without them)
+# --------------------------------------------
+# Web search via Tavily (https://tavily.com)
+TAVILY_API_KEY=
+
+# GitHub Models API (cloud LLM fallback — users can also set this in the app UI)
+GITHUB_TOKEN=
+${TELEGRAM_SECTION}
+EOF
+
+    chmod 600 .env
+    log_success "Configuration written to .env"
+    log_info  "Keys generated: ENCRYPTION_KEY, TELEGRAM_TOKEN_ENCRYPTION_KEY, EXECUTOR_SECRET"
 }
 
-# Build and start services
+# ============================================
+# Start Services
+# ============================================
 start_services() {
     cd "$INSTALL_DIR"
 
-    log_info "Building and starting services (this may take a few minutes)..."
+    log_step "Starting Allerac One..."
 
-    # Build the profiles string
-    PROFILES=""
-    if [ "$INSTALL_OLLAMA" = true ]; then
-        PROFILES="$PROFILES --profile ollama"
-    fi
-    if [ "$INSTALL_MONITORING" = true ]; then
-        PROFILES="$PROFILES --profile monitoring"
-    fi
-    if [ "$INSTALL_TELEGRAM" = true ]; then
-        PROFILES="$PROFILES --profile telegram"
-    fi
+    PROFILES="--profile ollama"
+    [ "$ENABLE_NOTIFICATIONS" = "true" ] && PROFILES="$PROFILES --profile notifications"
+    [ "$ENABLE_MONITORING" = "true" ]    && PROFILES="$PROFILES --profile monitoring"
 
-    # Pull images first
-    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES pull
-
-    # Set build info (commit hash and date)
     export COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Build the app
-    $USE_SUDO COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE docker compose -f docker-compose.local.yml $PROFILES build
+    log_info "Pulling base images..."
+    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES pull --quiet
 
-    # Start services
+    log_info "Building application..."
+    $USE_SUDO COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
+        docker compose -f docker-compose.local.yml $PROFILES build
+
+    log_info "Starting containers..."
     $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES up -d
 
     log_success "Services started"
 }
 
-# Wait for services to be ready
-wait_for_services() {
-    log_info "Waiting for services to be ready..."
+# ============================================
+# Wait for app to be ready
+# ============================================
+wait_for_app() {
+    log_info "Waiting for app to be ready..."
+    APP_PORT_NUM=$(grep "^APP_PORT=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "8080")
 
-    # Wait for the app
-    for i in {1..90}; do
-        if curl -s http://localhost:8080 >/dev/null 2>&1; then
-            log_success "Application is ready!"
+    for i in $(seq 1 60); do
+        if curl -s "http://localhost:${APP_PORT_NUM}" >/dev/null 2>&1; then
+            log_success "App is ready!"
             return
         fi
-        echo -n "."
-        sleep 2
+        printf "."
+        sleep 3
     done
-
-    log_warn "Services may still be starting. Check with: $USE_SUDO docker compose -f docker-compose.local.yml logs"
+    echo ""
+    log_warn "App may still be starting. Check: docker compose -f docker-compose.local.yml logs -f"
 }
 
-# Print success message
+# ============================================
+# Success Message
+# ============================================
 print_success() {
-    # Determine docker command prefix
-    DOCKER_CMD="docker"
+    APP_PORT_NUM=$(grep "^APP_PORT=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "8080")
+    DOCKER_CMD="${USE_SUDO:+sudo }docker"
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║   Allerac One — Installation Complete!   ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  Product:   ${BOLD}Allerac ${HARDWARE_TIER^}${NC}"
+    echo -e "  Models:    ${OLLAMA_MODELS}"
+    echo ""
+    echo -e "  Open your browser:  ${BLUE}http://localhost:${APP_PORT_NUM}${NC}"
+    echo ""
+
+    if [ "$ENABLE_MONITORING" = "true" ]; then
+        GRAFANA_PORT_NUM=$(grep "^GRAFANA_PORT=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "3001")
+        echo -e "  Monitoring:  ${BLUE}http://localhost:${GRAFANA_PORT_NUM}${NC}  (admin / see GRAFANA_PASSWORD in .env)"
+        echo ""
+    fi
+
+    if [ "$HARDWARE_TIER" = "pro" ]; then
+        echo -e "  ${YELLOW}GPU (Allerac Pro):${NC} To enable NVIDIA GPU acceleration,"
+        echo -e "  install nvidia-container-toolkit and uncomment the 'deploy'"
+        echo -e "  block in the 'ollama' service in docker-compose.local.yml."
+        echo ""
+    fi
+
+    echo -e "  Installation directory: ${YELLOW}${INSTALL_DIR}${NC}"
+    echo ""
+    echo -e "  Useful commands:"
+    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml logs -f${NC}    # logs"
+    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml down${NC}        # stop"
+    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml up -d${NC}       # start"
+    echo -e "    ${YELLOW}./update.sh${NC}                                            # update"
+    echo ""
+
     if [ -n "$USE_SUDO" ]; then
-        DOCKER_CMD="sudo docker"
-    fi
-
-    echo ""
-    echo -e "${GREEN}============================================${NC}"
-    echo -e "${GREEN}   Allerac One - Installation Complete!    ${NC}"
-    echo -e "${GREEN}============================================${NC}"
-    echo ""
-    echo -e "Access your private AI agent at:"
-    echo -e "  ${BLUE}http://localhost:8080${NC}"
-    echo ""
-    if [ "$INSTALL_TELEGRAM" = true ]; then
-        echo -e "Telegram bot: ${GREEN}Running${NC}"
-        echo -e "  Configure TELEGRAM_BOT_TOKEN in .env"
+        echo -e "  ${YELLOW}Note: Log out and back in to use Docker without sudo.${NC}"
         echo ""
-    fi
-    if [ "$INSTALL_MONITORING" = true ]; then
-        echo -e "Monitoring dashboard:"
-        echo -e "  ${BLUE}http://localhost:3001${NC} (admin/admin)"
-        echo ""
-    fi
-    echo -e "Installation directory: ${YELLOW}$INSTALL_DIR${NC}"
-    echo ""
-    echo -e "Useful commands:"
-    echo -e "  ${YELLOW}cd $INSTALL_DIR${NC}"
-    echo -e "  ${YELLOW}$DOCKER_CMD compose -f docker-compose.local.yml logs -f${NC}  # View logs"
-    echo -e "  ${YELLOW}$DOCKER_CMD compose -f docker-compose.local.yml down${NC}     # Stop services"
-    echo -e "  ${YELLOW}$DOCKER_CMD compose -f docker-compose.local.yml up -d${NC}    # Start services"
-    echo ""
-    if [ "$INSTALL_OLLAMA" = true ]; then
-        echo -e "To download additional AI models:"
-        echo -e "  ${YELLOW}$DOCKER_CMD exec -it allerac-ollama ollama pull mistral${NC}"
-        echo -e "  ${YELLOW}$DOCKER_CMD exec -it allerac-ollama ollama pull llama3.1${NC}"
-        echo ""
-    fi
-    if [ -n "$USE_SUDO" ]; then
-        echo -e "${YELLOW}Note: Log out and back in to use docker without sudo${NC}"
-        echo ""
-    fi
-    echo -e "Documentation: ${BLUE}https://github.com/Allerac/allerac-one/blob/main/docs/local-setup.md${NC}"
-    echo ""
-}
-
-# Check system requirements
-check_requirements() {
-    log_info "Checking system requirements..."
-
-    # Check RAM
-    if [[ "$OS" == "linux" || "$OS" == "debian" ]]; then
-        TOTAL_RAM=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-        TOTAL_RAM_GB=$((TOTAL_RAM / 1024 / 1024))
-    elif [[ "$OS" == "macos" ]]; then
-        TOTAL_RAM_GB=$(($(sysctl -n hw.memsize) / 1024 / 1024 / 1024))
-    fi
-
-    if [ "$TOTAL_RAM_GB" -lt 8 ]; then
-        log_warn "System has ${TOTAL_RAM_GB}GB RAM. Recommended: 16GB+ for optimal performance"
-    else
-        log_success "System has ${TOTAL_RAM_GB}GB RAM"
-    fi
-
-    # Check disk space
-    AVAILABLE_SPACE=$(df -BG "$HOME" | tail -1 | awk '{print $4}' | sed 's/G//')
-    if [ "$AVAILABLE_SPACE" -lt 20 ]; then
-        log_error "Insufficient disk space. Need at least 20GB free."
-        exit 1
-    fi
-    log_success "Disk space: ${AVAILABLE_SPACE}GB available"
-
-    # Check git
-    if ! command_exists git; then
-        log_info "Installing git..."
-        if [[ "$OS" == "debian" ]]; then
-            sudo apt-get update && sudo apt-get install -y git
-        elif [[ "$OS" == "macos" ]]; then
-            xcode-select --install 2>/dev/null || true
-        fi
-    fi
-    log_success "Git is installed"
-}
-
-# Setup swap if needed (Linux only)
-setup_swap() {
-    if [[ "$OS" != "linux" && "$OS" != "debian" ]]; then
-        return
-    fi
-
-    SWAP_SIZE=$(free -g | grep Swap | awk '{print $2}')
-    if [ "$SWAP_SIZE" -lt 4 ]; then
-        log_warn "Low swap space detected (${SWAP_SIZE}GB). Creating 4GB swap file..."
-
-        if [ -f /swapfile ]; then
-            log_info "Swap file already exists"
-        else
-            sudo fallocate -l 4G /swapfile
-            sudo chmod 600 /swapfile
-            sudo mkswap /swapfile
-            sudo swapon /swapfile
-            echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-            log_success "4GB swap file created"
-        fi
     fi
 }
 
-# Main installation flow
+# ============================================
+# Main
+# ============================================
 main() {
     echo ""
-    echo -e "${BLUE}============================================${NC}"
-    echo -e "${BLUE}   Allerac One - Private AI Agent Setup    ${NC}"
-    echo -e "${BLUE}============================================${NC}"
+    echo -e "${BLUE}╔══════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║   Allerac One — Local Hardware Setup     ║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════╝${NC}"
     echo ""
 
     detect_os
@@ -419,11 +494,12 @@ main() {
     install_docker
     check_docker_running
     setup_repository
+    select_hardware_tier
+    configure_features
     setup_environment
     start_services
-    wait_for_services
+    wait_for_app
     print_success
 }
 
-# Run main function
 main

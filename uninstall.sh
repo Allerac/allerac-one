@@ -33,6 +33,7 @@ if [ "$DELETE_DATA" = true ]; then
     echo -e "${RED}WARNING: This will delete ALL data including:${NC}"
     echo "  - Database (conversations, memories, users)"
     echo "  - Ollama models"
+    echo "  - Backups"
     echo "  - Monitoring data"
     echo ""
 fi
@@ -47,13 +48,17 @@ fi
 echo ""
 echo -e "${YELLOW}Stopping services...${NC}"
 cd "$INSTALL_DIR" 2>/dev/null || true
-docker compose -f docker-compose.local.yml --profile ollama --profile monitoring down 2>/dev/null || true
+docker compose -f docker-compose.local.yml \
+    --profile ollama --profile notifications --profile monitoring \
+    down 2>/dev/null || true
 
 # Remove volumes if requested
 if [ "$DELETE_DATA" = true ]; then
     echo -e "${YELLOW}Removing data volumes...${NC}"
     docker volume rm allerac_db_data 2>/dev/null || true
     docker volume rm allerac_ollama_data 2>/dev/null || true
+    docker volume rm allerac_backups_data 2>/dev/null || true
+    docker volume rm allerac_redis_data 2>/dev/null || true
     docker volume rm allerac_prometheus_data 2>/dev/null || true
     docker volume rm allerac_grafana_data 2>/dev/null || true
 fi

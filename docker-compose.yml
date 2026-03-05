@@ -1,3 +1,20 @@
+# Allerac One - Cloud Services Line
+# Managed deployment for allerac.cloud (Starter, Personal, Pro)
+#
+# Required environment variables (must be set — startup fails without them):
+#   ENCRYPTION_KEY                - AES key for encrypting user tokens at rest
+#   TELEGRAM_TOKEN_ENCRYPTION_KEY - AES key for encrypting Telegram bot tokens
+#   TUNNEL_TOKEN                  - Cloudflare Tunnel token (Zero Trust dashboard)
+#   GRAFANA_PASSWORD              - Grafana admin password
+#
+# Optional:
+#   GITHUB_TOKEN        - GitHub Models API token (primary LLM; users can also set their own)
+#   TAVILY_API_KEY      - Web search API key
+#   EXECUTOR_SECRET     - Secret for executor service auth
+#   OLLAMA_BASE_URL     - Ollama on host for notifier LLM (default: host.docker.internal:11434)
+#   NOTIFIER_LLM_MODEL  - Model for notifier (default: qwen2.5:3b)
+#   TELEGRAM_BOT_TOKEN  - Legacy single-bot token
+
 services:
   migrations:
     image: postgres:16-alpine
@@ -22,6 +39,7 @@ services:
     environment:
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
       - DEFAULT_CWD=/workspace
+      - ALLERAC_PRODUCT_LINE=cloud
     volumes:
       - executor_workspace:/workspace
       # Docker socket for self-update (docker compose build/up)
@@ -51,20 +69,26 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
-      - TAVILY_API_KEY=${TAVILY_API_KEY}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - NEXT_PUBLIC_API_URL=http://localhost:3000
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
-      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:-default-key-change-in-production!!}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=allerac
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      # Required: startup fails if not set
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:?TELEGRAM_TOKEN_ENCRYPTION_KEY is required}
+      # Primary LLM: GitHub Models API (users configure their own token in settings)
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # Ollama: connects to host instance (optional fallback for local models)
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - BACKUP_DIR=/app/backups
       # Executor service for shell tool
       - EXECUTOR_URL=http://executor:3001
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+      # Tells update.sh which compose file to use (local vs cloud)
+      - ALLERAC_PRODUCT_LINE=cloud
     ports:
       - "8080:8080"
     volumes:
@@ -85,8 +109,7 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=allerac
-    ports:
-      - "5432:5432"
+    # Port NOT exposed externally — DB is internal only in cloud
     volumes:
       - ./src/database/init.sql:/docker-entrypoint-initdb.d/init.sql
       - db_data:/var/lib/postgresql/data
@@ -96,7 +119,10 @@ services:
       timeout: 5s
       retries: 5
 
+  # ============================================
   # Monitoring Stack
+  # ============================================
+
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
@@ -137,7 +163,8 @@ services:
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      # Required: startup fails if not set
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD is required}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -150,7 +177,7 @@ services:
       - prometheus
       - loki
 
-  # Loki - Log aggregation system
+  # Loki - Log aggregation
   loki:
     image: grafana/loki:latest
     container_name: loki
@@ -162,6 +189,10 @@ services:
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   # Promtail - Log shipping agent
   promtail:
@@ -187,9 +218,12 @@ services:
       - ./telegram-bots.json:/app/telegram-bots.json:ro
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
+      # Primary LLM: GitHub Models API
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-in-production}
-      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:-default-key-change-in-production!!}
+      # Required: startup fails if not set
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:?TELEGRAM_TOKEN_ENCRYPTION_KEY is required}
       # Legacy env vars (for backward compatibility with single-bot mode)
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
@@ -210,8 +244,7 @@ services:
           memory: 256M
 
   # Portainer - Docker management UI
-  # Cloudflare Tunnel: add public hostname portainer.allerac.ai → http://localhost:9000
-  # in Cloudflare Zero Trust dashboard (Networks > Tunnels > your tunnel > Public Hostnames)
+  # Cloudflare Zero Trust: add public hostname portainer.allerac.ai → http://localhost:9000
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
@@ -222,7 +255,7 @@ services:
     ports:
       - "9000:9000"
 
-  # Cloudflare Tunnel
+  # Cloudflare Tunnel - Required for public access
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: allerac-tunnel
@@ -230,7 +263,8 @@ services:
     command: tunnel run
     network_mode: host
     environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      # Required: get token from Cloudflare Zero Trust dashboard (Networks > Tunnels)
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:?TUNNEL_TOKEN is required}
     depends_on:
       - app
       - portainer
@@ -258,6 +292,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
       - REDIS_URL=redis://redis:6379
+      # Ollama on host as LLM backend for notifications
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
