@@ -36,16 +36,16 @@ docker compose -f docker-compose.local.yml up -d
 ### T-L2: Ollama profile — Allerac Lite preset
 
 ```bash
-OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b \
+OLLAMA_MODELS=qwen3.5:4b \
   docker compose -f docker-compose.local.yml up -d
 ```
 
 | # | Check | Expected |
 |---|-------|----------|
-| 1 | `docker logs allerac-ollama-setup` | "Pulling qwen2.5:7b..." and "Pulling deepseek-r1:1.5b..." then "Model setup complete!" |
+| 1 | `docker logs allerac-ollama-setup` | "Pulling qwen3.5:4b..." and "Pulling ..." then "Model setup complete!" |
 | 2 | `docker exec allerac-ollama ollama list` | Both models present |
-| 3 | Model selector in UI | `qwen2.5:7b` and `deepseek-r1:1.5b` visible |
-| 4 | Chat with `qwen2.5:7b` | Response streams back |
+| 3 | Model selector in UI | `qwen3.5:4b` and `` visible |
+| 4 | Chat with `qwen3.5:4b` | Response streams back |
 | 5 | Re-run `ollama-setup` container | "already present, skipping." for both models |
 
 ---
@@ -53,14 +53,14 @@ OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b \
 ### T-L3: Ollama profile — Allerac Home preset
 
 ```bash
-OLLAMA_MODELS=qwen2.5:14b,mistral:7b,deepseek-r1:8b \
+OLLAMA_MODELS=qwen3.5:4b \
   docker compose -f docker-compose.local.yml up -d
 ```
 
 | # | Check | Expected |
 |---|-------|----------|
-| 1 | `docker logs allerac-ollama-setup` | All 3 models pulled |
-| 2 | `docker exec allerac-ollama ollama list` | 3 models present |
+| 1 | `docker logs allerac-ollama-setup` | Both models pulled |
+| 2 | `docker exec allerac-ollama ollama list` | 2 models present |
 | 3 | Chat with each model | All respond correctly |
 
 ---
@@ -68,7 +68,7 @@ OLLAMA_MODELS=qwen2.5:14b,mistral:7b,deepseek-r1:8b \
 ### T-L4: Ollama profile — Allerac Pro preset (GPU)
 
 ```bash
-OLLAMA_MODELS=llama3.3:70b,qwen2.5:14b,command-r:35b \
+OLLAMA_MODELS=qwen3.5:4b \
   docker compose -f docker-compose.local.yml up -d
 ```
 
@@ -76,8 +76,8 @@ OLLAMA_MODELS=llama3.3:70b,qwen2.5:14b,command-r:35b \
 |---|-------|----------|
 | 1 | Before GPU: `docker logs allerac-ollama` | No CUDA errors (CPU inference) |
 | 2 | Enable GPU: uncomment `deploy` block in `ollama` service, restart | `nvidia-smi` inside container shows GPU |
-| 3 | `docker logs allerac-ollama-setup` | All 3 models pulled |
-| 4 | Chat with `llama3.3:70b` | Response returns; inference faster than CPU |
+| 3 | `docker logs allerac-ollama-setup` | Both models pulled |
+| 4 | Chat with `qwen3.5:4b` | Response returns; inference faster than CPU with GPU |
 
 ---
 

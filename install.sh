@@ -13,9 +13,9 @@
 #   HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
 #
 # Tiers:
-#   lite   → N100, 16GB  → qwen2.5:7b + deepseek-r1:1.5b
-#   home   → i5/R5, 32GB → qwen2.5:14b + mistral:7b + deepseek-r1:8b
-#   pro    → i7/R7, 64GB → llama3.3:70b + qwen2.5:14b + command-r:35b
+#   lite   → N100, 16GB  → qwen3.5:4b + 
+#   home   → i5/R5, 32GB → qwen3.5:4b + 
+#   pro    → i7/R7, 64GB → qwen3.5:4b + 
 #   custom → You choose the models
 #
 
@@ -211,10 +211,10 @@ select_hardware_tier() {
     fi
     if [ -n "$HARDWARE_TIER" ]; then
         case "$HARDWARE_TIER" in
-            lite)   OLLAMA_MODELS="qwen2.5:7b,deepseek-r1:1.5b" ;;
-            home)   OLLAMA_MODELS="qwen2.5:14b,mistral:7b,deepseek-r1:8b" ;;
-            pro)    OLLAMA_MODELS="llama3.3:70b,qwen2.5:14b,command-r:35b" ;;
-            custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen2.5:7b}" ;;
+            lite)   OLLAMA_MODELS="qwen3.5:4b" ;;
+            home)   OLLAMA_MODELS="qwen3.5:4b" ;;
+            pro)    OLLAMA_MODELS="qwen3.5:4b" ;;
+            custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen3.5:4b}" ;;
         esac
         log_info "Hardware tier: $HARDWARE_TIER (models: $OLLAMA_MODELS)"
         return
@@ -224,13 +224,13 @@ select_hardware_tier() {
     echo -e "${BOLD}Which Allerac hardware are you setting up?${NC}"
     echo ""
     echo -e "  ${BOLD}1) Allerac Lite${NC}   — N100 · 16GB RAM"
-    echo -e "     Models: qwen2.5:7b + deepseek-r1:1.5b  (~10GB download)"
+    echo -e "     Models: qwen3.5:4b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}2) Allerac Home${NC}   — i5/Ryzen 5 · 32GB RAM"
-    echo -e "     Models: qwen2.5:14b + mistral:7b + deepseek-r1:8b  (~30GB download)"
+    echo -e "     Models: qwen3.5:4b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}3) Allerac Pro${NC}    — i7/Ryzen 7 · 64GB RAM (optional GPU)"
-    echo -e "     Models: llama3.3:70b + qwen2.5:14b + command-r:35b  (~80GB download)"
+    echo -e "     Models: qwen3.5:4b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}4) Custom${NC}         — Choose your own models"
     echo ""
@@ -238,12 +238,12 @@ select_hardware_tier() {
     while true; do
         read -rp "  Select [1-4]: " TIER_CHOICE
         case "$TIER_CHOICE" in
-            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen2.5:7b,deepseek-r1:1.5b";                  break ;;
-            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen2.5:14b,mistral:7b,deepseek-r1:8b";         break ;;
-            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="llama3.3:70b,qwen2.5:14b,command-r:35b";        break ;;
+            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen3.5:4b"; break ;;
+            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen3.5:4b"; break ;;
+            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="qwen3.5:4b"; break ;;
             4) HARDWARE_TIER="custom"
-               read -rp "  Enter models (comma-separated, e.g. qwen2.5:7b,mistral:7b): " OLLAMA_MODELS
-               [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen2.5:7b"
+               read -rp "  Enter models (comma-separated, e.g. qwen3.5:4b): " OLLAMA_MODELS
+               [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen3.5:4b"
                break ;;
             *) echo "  Please select 1, 2, 3, or 4." ;;
         esac
@@ -316,7 +316,7 @@ setup_environment() {
 TELEGRAM_BOT_TOKEN=${TG_TOKEN}
 TELEGRAM_ALLOWED_USERS=${TG_USERS}
 TELEGRAM_DEFAULT_USER=
-NOTIFIER_LLM_MODEL=qwen2.5:3b"
+NOTIFIER_LLM_MODEL=qwen3.5:4b"
     fi
 
     cat > .env <<EOF
@@ -336,9 +336,7 @@ EXECUTOR_SECRET=${EXEC_SECRET}
 
 # --------------------------------------------
 # Ollama models for this hardware tier
-# Lite:   qwen2.5:7b,deepseek-r1:1.5b
-# Home:   qwen2.5:14b,mistral:7b,deepseek-r1:8b
-# Pro:    llama3.3:70b,qwen2.5:14b,command-r:35b
+# All tiers: qwen3.5:4b (custom = user-defined)
 # --------------------------------------------
 OLLAMA_MODELS=${OLLAMA_MODELS}
 
@@ -410,6 +408,40 @@ start_services() {
     $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES up -d
 
     log_success "Services started"
+}
+
+# ============================================
+# Follow model download in real time
+# ============================================
+follow_model_download() {
+    log_step "Downloading AI models..."
+    echo -e "  ${YELLOW}${OLLAMA_MODELS}${NC}"
+    echo -e "  This may take several minutes depending on your connection."
+    echo ""
+
+    # Wait for the setup container to appear (up to 60s, Ollama healthcheck takes ~30s)
+    local waited=0
+    while ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^allerac-ollama-setup$"; do
+        if [ $waited -ge 60 ]; then
+            log_warn "ollama-setup container not found. Models may still be downloading."
+            log_info "Check progress: docker logs -f allerac-ollama-setup"
+            return
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    # Follow logs — exits automatically when the container stops
+    docker logs -f allerac-ollama-setup 2>/dev/null || true
+    echo ""
+
+    local exit_code
+    exit_code=$(docker inspect allerac-ollama-setup --format='{{.State.ExitCode}}' 2>/dev/null || echo "0")
+    if [ "$exit_code" = "0" ]; then
+        log_success "Models ready"
+    else
+        log_warn "Model download may have failed (exit $exit_code). Check: docker logs allerac-ollama-setup"
+    fi
 }
 
 # ============================================
@@ -497,6 +529,7 @@ main() {
     configure_features
     setup_environment
     start_services
+    follow_model_download
     wait_for_app
     print_success
 }

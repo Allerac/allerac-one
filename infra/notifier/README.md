@@ -118,7 +118,7 @@ The same event will be received independently by each consumer group.
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/allerac` | PostgreSQL connection string |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint (or any compatible API) |
-| `NOTIFIER_LLM_MODEL` | `qwen2.5:3b` | LLM model to use |
+| `NOTIFIER_LLM_MODEL` | `qwen3.5:4b` | LLM model to use |
 | `TELEGRAM_BOT_TOKEN` | _(required for Telegram)_ | Telegram bot token |
 
 ---

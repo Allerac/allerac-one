@@ -14,9 +14,9 @@
 #   docker compose -f docker-compose.local.yml --profile notifications --profile monitoring up -d
 #
 # Hardware tier model presets (set OLLAMA_MODELS in .env):
-#   Allerac Lite:  OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b
-#   Allerac Home:  OLLAMA_MODELS=qwen2.5:14b,mistral:7b,deepseek-r1:8b
-#   Allerac Pro:   OLLAMA_MODELS=llama3.3:70b,qwen2.5:14b,command-r:35b
+#   Allerac Lite:  OLLAMA_MODELS=qwen3.5:4b
+#   Allerac Home:  OLLAMA_MODELS=qwen3.5:4b
+#   Allerac Pro:   OLLAMA_MODELS=qwen3.5:4b
 
 services:
   # ============================================
@@ -169,9 +169,9 @@ services:
 
   # Model downloader - runs once to pull models for your hardware tier
   # Set OLLAMA_MODELS in .env as a comma-separated list:
-  #   Allerac Lite:  OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b
-  #   Allerac Home:  OLLAMA_MODELS=qwen2.5:14b,mistral:7b,deepseek-r1:8b
-  #   Allerac Pro:   OLLAMA_MODELS=llama3.3:70b,qwen2.5:14b,command-r:35b
+  #   Allerac Lite:  OLLAMA_MODELS=qwen3.5:4b
+  #   Allerac Home:  OLLAMA_MODELS=qwen3.5:4b
+  #   Allerac Pro:   OLLAMA_MODELS=qwen3.5:4b
   ollama-setup:
     image: ollama/ollama:latest
     container_name: allerac-ollama-setup
@@ -183,12 +183,12 @@ services:
     environment:
       - OLLAMA_HOST=ollama:11434
       # Comma-separated list of models to pull (defaults to Allerac Lite preset)
-      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}
+      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen3.5:4b}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Pulling models: ${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}"
-        echo "${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}" | tr ',' '\n' | while read model; do
+        echo "Pulling models: ${OLLAMA_MODELS:-qwen3.5:4b}"
+        echo "${OLLAMA_MODELS:-qwen3.5:4b}" | tr ',' '\n' | while read model; do
           model=$$(echo "$$model" | tr -d ' ')
           [ -z "$$model" ] && continue
           if ollama list | grep -q "^$$model"; then
@@ -235,7 +235,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
       - REDIS_URL=redis://redis:6379
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
+      - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen3.5:4b}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"

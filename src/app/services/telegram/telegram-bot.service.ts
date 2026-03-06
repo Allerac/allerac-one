@@ -417,7 +417,7 @@ export class AlleracTelegramBot {
       await this.bot.sendMessage(chatId,
         `*Available Models:*\n\n${modelList}\n\n` +
         `Usage: \`/model model-id\`\n` +
-        `Example: \`/model qwen2.5:7b\``,
+        `Example: \`/model qwen3.5:4b\``,
         { parse_mode: 'Markdown' }
       );
     });
@@ -1188,7 +1188,7 @@ export class AlleracTelegramBot {
       if (model && !model.id.includes('gpt-4o') && !model.id.includes('gpt-4-turbo')) {
         await this.bot.sendMessage(chatId, 
           '⚠️ Current model does not support image analysis.\n\n' +
-          'Use `/model gpt-4o` or `/model gpt-4o-mini` for vision capabilities.'
+          'Use `/model gpt-4o` for vision capabilities.'
         );
         return;
       }
@@ -1264,7 +1264,7 @@ export class AlleracTelegramBot {
       if (model && !model.id.includes('gpt-4o') && !model.id.includes('gpt-4-turbo')) {
         await this.bot.sendMessage(chatId, 
           '⚠️ Current model does not support image analysis.\n\n' +
-          'Use `/model gpt-4o` or `/model gpt-4o-mini` for vision capabilities.'
+          'Use `/model gpt-4o` for vision capabilities.'
         );
         return;
       }
