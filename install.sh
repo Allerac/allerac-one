@@ -404,8 +404,7 @@ start_services() {
     $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES pull --quiet
 
     log_info "Building application..."
-    $USE_SUDO COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
-        docker compose -f docker-compose.local.yml $PROFILES build
+    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES build
 
     log_info "Starting containers..."
     $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES up -d

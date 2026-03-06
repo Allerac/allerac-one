@@ -259,7 +259,7 @@ start_services() {
     $USE_SUDO docker compose pull --quiet
 
     log_info "Building application..."
-    $USE_SUDO COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE docker compose build
+    $USE_SUDO docker compose build
 
     log_info "Starting containers..."
     $USE_SUDO docker compose up -d
