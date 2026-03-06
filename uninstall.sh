@@ -81,7 +81,7 @@ echo -e "${BOLD}[1/4] Stopping containers...${NC}"
 if [ -d "$INSTALL_DIR" ]; then
     cd "$INSTALL_DIR"
     if docker compose -f docker-compose.local.yml \
-        --profile ollama --profile notifications --profile monitoring \
+        --profile notifications --profile monitoring \
         down 2>/dev/null; then
         log_ok "Containers stopped and removed"
     else
@@ -187,7 +187,7 @@ echo ""
 
 case "$MODE" in
     "")
-        echo -e "  To start again:  ${YELLOW}cd $INSTALL_DIR && docker compose -f docker-compose.local.yml --profile ollama up -d${NC}"
+        echo -e "  To start again:  ${YELLOW}cd $INSTALL_DIR && docker compose -f docker-compose.local.yml up -d${NC}"
         echo -e "  To reinstall:    ${YELLOW}./install.sh${NC}"
         ;;
     --clean)

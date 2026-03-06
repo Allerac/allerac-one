@@ -11,9 +11,11 @@
 #   GITHUB_TOKEN        - GitHub Models API token (primary LLM; users can also set their own)
 #   TAVILY_API_KEY      - Web search API key
 #   EXECUTOR_SECRET     - Secret for executor service auth
-#   OLLAMA_BASE_URL     - Ollama on host for notifier LLM (default: host.docker.internal:11434)
+#   OLLAMA_MODELS       - Comma-separated models to download (used with --profile ollama)
 #   NOTIFIER_LLM_MODEL  - Model for notifier (default: qwen2.5:3b)
 #   TELEGRAM_BOT_TOKEN  - Legacy single-bot token
+#
+# Ollama runs by default on the server (privacy-first, no inference data leaves the machine).
 
 services:
   migrations:
@@ -79,8 +81,8 @@ services:
       - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:?TELEGRAM_TOKEN_ENCRYPTION_KEY is required}
       # Primary LLM: GitHub Models API (users configure their own token in settings)
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      # Ollama: connects to host instance (optional fallback for local models)
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # Ollama: containerized (--profile ollama) or host fallback
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - NEXT_PUBLIC_API_URL=http://localhost:3000
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - BACKUP_DIR=/app/backups
@@ -118,6 +120,62 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # ============================================
+  # Ollama - Local LLM (always on, privacy-first)
+  # Inference stays on the server — no data leaves the machine.
+  # ============================================
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: allerac-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # GPU support (uncomment for NVIDIA GPU on the cloud server):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
+  ollama-setup:
+    image: ollama/ollama:latest
+    container_name: allerac-ollama-setup
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=ollama:11434
+      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Pulling models: ${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}"
+        echo "${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}" | tr ',' '\n' | while read model; do
+          model=$$(echo "$$model" | tr -d ' ')
+          [ -z "$$model" ] && continue
+          if ollama list | grep -q "^$$model"; then
+            echo "Model $$model already present, skipping."
+          else
+            echo "Pulling $$model..."
+            ollama pull "$$model"
+          fi
+        done
+        echo "Model setup complete!"
+    restart: "no"
 
   # ============================================
   # Monitoring Stack
@@ -220,7 +278,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
       # Primary LLM: GitHub Models API
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       # Required: startup fails if not set
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:?TELEGRAM_TOKEN_ENCRYPTION_KEY is required}
@@ -292,8 +350,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
       - REDIS_URL=redis://redis:6379
-      # Ollama on host as LLM backend for notifications
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # Ollama: containerized (--profile ollama) or host fallback
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
     extra_hosts:
@@ -318,6 +376,7 @@ services:
 
 volumes:
   db_data:
+  ollama_data:
   prometheus_data:
   grafana_data:
   loki_data:

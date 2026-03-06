@@ -393,7 +393,7 @@ start_services() {
 
     log_step "Starting Allerac One..."
 
-    PROFILES="--profile ollama"
+    PROFILES=""
     [ "$ENABLE_NOTIFICATIONS" = "true" ] && PROFILES="$PROFILES --profile notifications"
     [ "$ENABLE_MONITORING" = "true" ]    && PROFILES="$PROFILES --profile monitoring"
 

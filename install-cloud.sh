@@ -174,6 +174,15 @@ setup_environment() {
     [ -n "$GITHUB_TOKEN" ] && log_success "GitHub token set" || log_info "GitHub token skipped (users can set it in the app)"
 
     echo ""
+    echo -e "  ${BOLD}Ollama models${NC} (runs locally on the server — no inference data leaves)"
+    OLLAMA_MODELS="${OLLAMA_MODELS:-}"
+    if [ -z "$OLLAMA_MODELS" ]; then
+        read -rp "  Models to download (Enter for default: qwen2.5:7b,deepseek-r1:1.5b): " OLLAMA_MODELS
+        [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen2.5:7b,deepseek-r1:1.5b"
+    fi
+    log_success "Ollama models: $OLLAMA_MODELS"
+
+    echo ""
     echo -e "  ${BOLD}Tavily API key${NC} (optional — for web search tool)"
     TAVILY_API_KEY="${TAVILY_API_KEY:-}"
     if [ -z "$TAVILY_API_KEY" ]; then
@@ -216,10 +225,10 @@ GRAFANA_PASSWORD=${GRAFANA_PASSWORD}
 # --------------------------------------------
 # LLM Providers
 # GitHub Models API is the primary cloud LLM.
-# Ollama on host (optional) is used by the notifier.
+# Ollama runs containerized when --profile ollama is active.
 # --------------------------------------------
 GITHUB_TOKEN=${GITHUB_TOKEN}
-OLLAMA_BASE_URL=http://host.docker.internal:11434
+OLLAMA_MODELS=${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}
 NOTIFIER_LLM_MODEL=qwen2.5:3b
 
 # --------------------------------------------

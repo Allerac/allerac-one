@@ -42,7 +42,6 @@ detect_product_line() {
         COMPOSE_FILE="docker-compose.local.yml"
         # Re-activate the same profiles that are currently running
         RUNNING_PROFILES=""
-        docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-ollama"    && RUNNING_PROFILES="$RUNNING_PROFILES --profile ollama"
         docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-notifier"  && RUNNING_PROFILES="$RUNNING_PROFILES --profile notifications"
         docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-prometheus" && RUNNING_PROFILES="$RUNNING_PROFILES --profile monitoring"
         COMPOSE_FLAGS="$RUNNING_PROFILES"
@@ -71,6 +70,7 @@ verify_deployment() {
         docker ps --format '{{.Names}}' | grep -q "grafana"          && echo -e "${GREEN}✓ Grafana is running${NC}"        || echo -e "${YELLOW}⚠ Grafana is not running${NC}"
         docker ps --format '{{.Names}}' | grep -q "loki"             && echo -e "${GREEN}✓ Loki is running${NC}"           || echo -e "${YELLOW}⚠ Loki is not running${NC}"
         docker ps --format '{{.Names}}' | grep -q "allerac-notifier" && echo -e "${GREEN}✓ Notifier is running${NC}"       || echo -e "${YELLOW}⚠ Notifier is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -q "allerac-ollama"   && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
     else
         # Local-specific services (only check if they were running before)
         docker ps --format '{{.Names}}' | grep -q "allerac-ollama"   && echo -e "${GREEN}✓ Ollama is running${NC}"         || true

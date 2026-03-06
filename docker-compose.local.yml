@@ -4,9 +4,6 @@
 # Usage:
 #   docker compose -f docker-compose.local.yml up -d
 #
-# With Ollama (required for local AI):
-#   docker compose -f docker-compose.local.yml --profile ollama up -d
-#
 # With notifications (Redis + Notifier + Telegram):
 #   docker compose -f docker-compose.local.yml --profile notifications up -d
 #
@@ -14,7 +11,7 @@
 #   docker compose -f docker-compose.local.yml --profile monitoring up -d
 #
 # Full stack (all profiles):
-#   docker compose -f docker-compose.local.yml --profile ollama --profile notifications --profile monitoring up -d
+#   docker compose -f docker-compose.local.yml --profile notifications --profile monitoring up -d
 #
 # Hardware tier model presets (set OLLAMA_MODELS in .env):
 #   Allerac Lite:  OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b
@@ -147,8 +144,6 @@ services:
     image: ollama/ollama:latest
     container_name: allerac-ollama
     restart: unless-stopped
-    profiles:
-      - ollama
     volumes:
       - ollama_data:/root/.ollama
     ports:
@@ -156,8 +151,7 @@ services:
     environment:
       - OLLAMA_HOST=0.0.0.0
     # GPU support for Allerac Pro with NVIDIA eGPU:
-    # Uncomment the deploy block below, then run:
-    #   docker compose -f docker-compose.local.yml --profile ollama up -d
+    # Uncomment the deploy block below and restart.
     # Requires: nvidia-container-toolkit installed on the host
     # deploy:
     #   resources:
@@ -181,8 +175,6 @@ services:
   ollama-setup:
     image: ollama/ollama:latest
     container_name: allerac-ollama-setup
-    profiles:
-      - ollama
     depends_on:
       ollama:
         condition: service_healthy

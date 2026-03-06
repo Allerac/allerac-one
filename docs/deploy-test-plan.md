@@ -37,7 +37,7 @@ docker compose -f docker-compose.local.yml up -d
 
 ```bash
 OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b \
-  docker compose -f docker-compose.local.yml --profile ollama up -d
+  docker compose -f docker-compose.local.yml up -d
 ```
 
 | # | Check | Expected |
@@ -54,7 +54,7 @@ OLLAMA_MODELS=qwen2.5:7b,deepseek-r1:1.5b \
 
 ```bash
 OLLAMA_MODELS=qwen2.5:14b,mistral:7b,deepseek-r1:8b \
-  docker compose -f docker-compose.local.yml --profile ollama up -d
+  docker compose -f docker-compose.local.yml up -d
 ```
 
 | # | Check | Expected |
@@ -69,7 +69,7 @@ OLLAMA_MODELS=qwen2.5:14b,mistral:7b,deepseek-r1:8b \
 
 ```bash
 OLLAMA_MODELS=llama3.3:70b,qwen2.5:14b,command-r:35b \
-  docker compose -f docker-compose.local.yml --profile ollama up -d
+  docker compose -f docker-compose.local.yml up -d
 ```
 
 | # | Check | Expected |
@@ -117,7 +117,7 @@ docker compose -f docker-compose.local.yml --profile monitoring up -d
 
 ```bash
 docker compose -f docker-compose.local.yml \
-  --profile ollama --profile notifications --profile monitoring up -d
+  --profile notifications --profile monitoring up -d
 ```
 
 | # | Check | Expected |
@@ -144,7 +144,7 @@ docker compose -f docker-compose.local.yml \
 
 ```bash
 # Block outbound internet on the host, then:
-docker compose -f docker-compose.local.yml --profile ollama up -d
+docker compose -f docker-compose.local.yml up -d
 ```
 
 | # | Check | Expected |

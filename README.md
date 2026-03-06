@@ -71,7 +71,7 @@ HARDWARE_TIER=pro ENABLE_MONITORING=true ENABLE_NOTIFICATIONS=true ./install.sh
 # Add Telegram bot + notifications
 docker compose -f docker-compose.local.yml --profile notifications up -d
 
-# Add monitoring
+# Add monitoring (Grafana + Prometheus)
 docker compose -f docker-compose.local.yml --profile monitoring up -d
 ```
 
