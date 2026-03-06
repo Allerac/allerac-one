@@ -177,8 +177,8 @@ setup_environment() {
     echo -e "  ${BOLD}Ollama models${NC} (runs locally on the server — no inference data leaves)"
     OLLAMA_MODELS="${OLLAMA_MODELS:-}"
     if [ -z "$OLLAMA_MODELS" ]; then
-        read -rp "  Models to download (Enter for default: qwen3.5:4b): " OLLAMA_MODELS
-        [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen3.5:4b"
+        read -rp "  Models to download (Enter for default: qwen3.5:2b,qwen3.5:0.8b): " OLLAMA_MODELS
+        [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"
     fi
     log_success "Ollama models: $OLLAMA_MODELS"
 
@@ -228,8 +228,8 @@ GRAFANA_PASSWORD=${GRAFANA_PASSWORD}
 # Ollama runs containerized when --profile ollama is active.
 # --------------------------------------------
 GITHUB_TOKEN=${GITHUB_TOKEN}
-OLLAMA_MODELS=${OLLAMA_MODELS:-qwen3.5:4b}
-NOTIFIER_LLM_MODEL=qwen3.5:4b
+OLLAMA_MODELS=${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}
+NOTIFIER_LLM_MODEL=qwen3.5:2b,qwen3.5:0.8b
 
 # --------------------------------------------
 # External APIs

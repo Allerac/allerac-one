@@ -417,7 +417,7 @@ export class AlleracTelegramBot {
       await this.bot.sendMessage(chatId,
         `*Available Models:*\n\n${modelList}\n\n` +
         `Usage: \`/model model-id\`\n` +
-        `Example: \`/model qwen3.5:4b\``,
+        `Example: \`/model qwen3.5:2b,qwen3.5:0.8b\``,
         { parse_mode: 'Markdown' }
       );
     });

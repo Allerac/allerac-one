@@ -30,10 +30,19 @@ export const MODELS: Model[] = [
     requiresToken: true
   },
   {
-    id: 'qwen3.5:4b',
-    name: 'Qwen 3.5 4B (Local)',
+    id: 'qwen3.5:2b',
+    name: 'Qwen 3.5 2B (Local)',
     icon: '🐼',
-    description: 'Fast & efficient local model',
+    description: 'Fast local model, balanced quality',
+    provider: 'ollama',
+    baseUrl: '/api/ollama',
+    requiresToken: false
+  },
+  {
+    id: 'qwen3.5:0.8b',
+    name: 'Qwen 3.5 0.8B (Local)',
+    icon: '🐼',
+    description: 'Ultra-lightweight local model, maximum speed',
     provider: 'ollama',
     baseUrl: '/api/ollama',
     requiresToken: false

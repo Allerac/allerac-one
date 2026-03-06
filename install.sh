@@ -13,9 +13,9 @@
 #   HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
 #
 # Tiers:
-#   lite   → N100, 16GB  → qwen3.5:4b + 
-#   home   → i5/R5, 32GB → qwen3.5:4b + 
-#   pro    → i7/R7, 64GB → qwen3.5:4b + 
+#   lite   → N100, 16GB  → qwen3.5:2b,qwen3.5:0.8b + 
+#   home   → i5/R5, 32GB → qwen3.5:2b,qwen3.5:0.8b + 
+#   pro    → i7/R7, 64GB → qwen3.5:2b,qwen3.5:0.8b + 
 #   custom → You choose the models
 #
 
@@ -211,10 +211,10 @@ select_hardware_tier() {
     fi
     if [ -n "$HARDWARE_TIER" ]; then
         case "$HARDWARE_TIER" in
-            lite)   OLLAMA_MODELS="qwen3.5:4b" ;;
-            home)   OLLAMA_MODELS="qwen3.5:4b" ;;
-            pro)    OLLAMA_MODELS="qwen3.5:4b" ;;
-            custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen3.5:4b}" ;;
+            lite)   OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b" ;;
+            home)   OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b" ;;
+            pro)    OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b" ;;
+            custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}" ;;
         esac
         log_info "Hardware tier: $HARDWARE_TIER (models: $OLLAMA_MODELS)"
         return
@@ -224,13 +224,13 @@ select_hardware_tier() {
     echo -e "${BOLD}Which Allerac hardware are you setting up?${NC}"
     echo ""
     echo -e "  ${BOLD}1) Allerac Lite${NC}   — N100 · 16GB RAM"
-    echo -e "     Models: qwen3.5:4b +   (~3.3GB download)"
+    echo -e "     Models: qwen3.5:2b,qwen3.5:0.8b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}2) Allerac Home${NC}   — i5/Ryzen 5 · 32GB RAM"
-    echo -e "     Models: qwen3.5:4b +   (~3.3GB download)"
+    echo -e "     Models: qwen3.5:2b,qwen3.5:0.8b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}3) Allerac Pro${NC}    — i7/Ryzen 7 · 64GB RAM (optional GPU)"
-    echo -e "     Models: qwen3.5:4b +   (~3.3GB download)"
+    echo -e "     Models: qwen3.5:2b,qwen3.5:0.8b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}4) Custom${NC}         — Choose your own models"
     echo ""
@@ -238,12 +238,12 @@ select_hardware_tier() {
     while true; do
         read -rp "  Select [1-4]: " TIER_CHOICE
         case "$TIER_CHOICE" in
-            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen3.5:4b"; break ;;
-            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen3.5:4b"; break ;;
-            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="qwen3.5:4b"; break ;;
+            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"; break ;;
+            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"; break ;;
+            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"; break ;;
             4) HARDWARE_TIER="custom"
-               read -rp "  Enter models (comma-separated, e.g. qwen3.5:4b): " OLLAMA_MODELS
-               [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen3.5:4b"
+               read -rp "  Enter models (comma-separated, e.g. qwen3.5:2b,qwen3.5:0.8b): " OLLAMA_MODELS
+               [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"
                break ;;
             *) echo "  Please select 1, 2, 3, or 4." ;;
         esac
@@ -316,7 +316,7 @@ setup_environment() {
 TELEGRAM_BOT_TOKEN=${TG_TOKEN}
 TELEGRAM_ALLOWED_USERS=${TG_USERS}
 TELEGRAM_DEFAULT_USER=
-NOTIFIER_LLM_MODEL=qwen3.5:4b"
+NOTIFIER_LLM_MODEL=qwen3.5:2b,qwen3.5:0.8b"
     fi
 
     cat > .env <<EOF
@@ -336,7 +336,7 @@ EXECUTOR_SECRET=${EXEC_SECRET}
 
 # --------------------------------------------
 # Ollama models for this hardware tier
-# All tiers: qwen3.5:4b (custom = user-defined)
+# All tiers: qwen3.5:2b,qwen3.5:0.8b (custom = user-defined)
 # --------------------------------------------
 OLLAMA_MODELS=${OLLAMA_MODELS}
 
