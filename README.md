@@ -1,282 +1,190 @@
-# Allerac-One
+# Allerac One
 
-An AI-powered chat application with authentication, multi-provider LLM support, document processing, vector search, conversation memory, and web search capabilities.
+Private-first AI agent. Runs on your own hardware or on the cloud. No subscriptions, no telemetry, no lock-in.
 
-## Features
+---
 
-- 🔐 **Authentication** - Supabase Auth with email/password login
-- 🤖 **Multi-Provider LLM** - Support for GitHub Models and Ollama (local models)
-- ⚙️ **Configuration-Driven** - Easy model management via UI, auto-detects provider
-- 📄 **Document Upload** - Upload and process PDF documents with vector embeddings
-- 🔍 **Vector Search** - Semantic search across uploaded documents using pgvector
-- 💾 **Conversation Memory** - Automatic context retention with Supabase
-- 🌐 **Web Search** - Integrated Tavily web search tool with caching
-- 📊 **Metrics & Monitoring** - Track LLM usage and performance
-- 🎨 **Modern UI** - Built with Next.js 16, TypeScript, and Tailwind CSS v4
+## Two ways to run it
 
-## Tech Stack
+### Local Hardware Line
+Self-hosted on your own machine — Allerac Lite, Home, or Pro.
+Runs fully offline with local AI models via Ollama.
 
-- **Framework**: Next.js 16.1.1 (App Router, Turbopack)
-- **Language**: TypeScript 5.x
-- **Styling**: Tailwind CSS v4
-- **Authentication**: Supabase Auth
-- **Database**: Supabase (PostgreSQL + pgvector)
-- **LLM Providers**: 
-  - GitHub Models API (gpt-4o, gpt-4o-mini)
-  - Ollama (deepseek-r1:8b, llama, mistral, etc.)
-- **Document Processing**: pdf-parse, pdfjs-dist
-- **Markdown Rendering**: react-markdown with remark-gfm
+### Cloud Services Line
+Managed deployment on a server — allerac.cloud (Starter, Personal, Pro).
+Uses GitHub Models API as the primary LLM, with Cloudflare Tunnel for public access.
 
-## Getting Started
+---
 
-### Prerequisites
+## Local Hardware Line
 
-- Node.js 18+ 
-- npm or yarn
-- Supabase account
-- **For GitHub Models**: GitHub Personal Access Token (configured via UI)
-- **For Ollama**: Ollama installed locally ([Download](https://ollama.ai))
-- Tavily API key (optional, for web search - configured via UI)
+### Requirements
 
-### Installation
+- Linux (Debian/Ubuntu recommended) or macOS
+- 16 GB RAM minimum (32 GB+ recommended)
+- 20 GB free disk space
+- Docker (installed automatically if missing)
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/allerac-one.git
-   cd allerac-one
-   ```
+### Install
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   
-   Create a `.env.local` file in the root directory:
-   
-   ```bash
-   # Required - Supabase
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   
-   # Optional - Ollama (if using local models)
-   OLLAMA_BASE_URL=http://localhost:11434
-   
-   # Optional - Tavily (if using web search, can also be set in UI)
-   TAVILY_API_KEY=your_tavily_api_key
-   ```
-
-4. **Set up Supabase authentication**
-   
-   Follow the instructions in [AUTHENTICATION.md](AUTHENTICATION.md) to configure email/password authentication.
-
-5. **Set up Supabase database**
-   
-   Run the SQL migration files in the `database/` folder in your Supabase SQL editor, in order:
-   
-   ```sql
-   01_create_chat_tables.sql
-   02_create_documents_tables.sql
-   03_create_memory_tables.sql
-   04_create_tavily_cache_table.sql
-   05_create_user_settings_table.sql
-   06_setup_metrics_supabase.sql
-   ```
-
-6. **Set up Ollama (optional, for local models)**
-   
-   Install Ollama from [ollama.ai](https://ollama.ai), then pull a model:
-   ```bash
-   ollama pull deepseek-r1:8b
-   # or
-   ollama pull llama3.2
-   ```
-
-7. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Project Structure
-
-```
-allerac-one/
-├── app/
-│   ├── page.tsx                 # Main chat interface (root /)
-│   ├── types.ts                 # TypeScript interfaces
-│   ├── clients/
-│   │   └── supabase.ts          # Supabase client initialization
-│   ├── services/                # Core services
-│   │   ├── models.ts            # LLM model configurations
-│   │   ├── llm.service.ts       # Unified LLM client (GitHub + Ollama)
-│   │   ├── supabase.service.ts  # Database operations
-│   │   ├── conversation-memory.service.ts
-│   │   ├── document.service.ts
-│   │   ├── embedding.service.ts
-│   │   ├── vector-search.service.ts
-│   │   ├── cache.service.ts     # Query caching
-│   │   ├── metrics.service.ts   # LLM usage tracking
-│   │   └── user-settings.service.ts
-│   ├── tools/                   # Function calling tools
-│   │   ├── tools.ts             # Tool definitions
-│   │   └── search-web.tool.ts   # Tavily web search
-│   └── components/
-│       └── DocumentUpload.tsx
-├── database/                    # Supabase SQL migrations
-├── .github/
-│   └── copilot-instructions.md  # AI assistant instructions
-└── .env.local                   # Environment variables
+```bash
+git clone https://github.com/Allerac/allerac-one.git
+cd allerac-one
+./install.sh
 ```
 
-## Usage
+The installer will ask you two questions:
 
-### First Time Setup
+**1. Which hardware tier?**
 
-1. **Create an account** - Use email/password to sign up
-2. **Configure tokens** (Settings → API Keys):
-   - Add your GitHub token for GitHub Models
-   - Add Tavily API key for web search (optional)
-3. **Select a model** from the dropdown (GitHub Models or Ollama)
+| Tier | Hardware | Models downloaded |
+|------|----------|-------------------|
+| Allerac Lite | N100 · 16 GB | qwen2.5:7b + deepseek-r1:1.5b |
+| Allerac Home | i5/Ryzen 5 · 32 GB | qwen2.5:14b + mistral:7b + deepseek-r1:8b |
+| Allerac Pro | i7/Ryzen 7 · 64 GB | llama3.3:70b + qwen2.5:14b + command-r:35b |
+| Custom | Any | You choose |
 
-### Chat Interface
+**2. Optional features?**
 
-The chat interface at `/` (root) allows you to:
+- **Notifications** — Telegram bot + Redis + Notifier
+- **Monitoring** — Grafana + Prometheus
 
-- Have conversations with AI models
-- Upload PDF documents for context-aware responses
-- Use web search for up-to-date information
-- View conversation history
-- Switch between different LLM models
-- Toggle dark/light mode
+All security keys are generated automatically. The `.env` file is written for you.
 
-### Adding New Models
+Once done, open your browser at `http://localhost:8080`.
 
-To add a new LLM model, edit `app/services/models.ts`:
+---
 
-```typescript
-export const MODELS: Model[] = [
-  {
-    id: 'model-name',
-    name: 'Display Name',
-    provider: 'github' | 'ollama',
-    baseUrl: 'https://api.url',
-    requiresToken: true | false
-  },
-  // ... existing models
-];
+### Non-interactive install (scripted/CI)
+
+```bash
+HARDWARE_TIER=lite ./install.sh
+HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
+HARDWARE_TIER=pro ENABLE_MONITORING=true ENABLE_NOTIFICATIONS=true ./install.sh
 ```
 
-The LLMService automatically detects the provider - no code changes needed!
+---
 
-## Configuration
+### Add features after install
 
-### Model Selection
+```bash
+# Add Telegram bot + notifications
+docker compose -f docker-compose.local.yml --profile notifications up -d
 
-The application supports multiple LLM providers through a unified configuration system:
+# Add monitoring
+docker compose -f docker-compose.local.yml --profile monitoring up -d
+```
 
-**Available Models:**
-- **gpt-4o** - GitHub Models (latest GPT-4 Omni)
-- **gpt-4o-mini** - GitHub Models (faster, cost-effective)
-- **deepseek-r1:8b** - Ollama (local reasoning model)
-- *Add more models in `app/services/models.ts`*
+---
 
-**Switching Models:**
-- Select from the model dropdown in the UI
-- Provider is auto-detected based on model configuration
-- Tokens are stored in localStorage (configured via UI)
+### Update
 
-### API Keys Configuration
+```bash
+./update.sh
+```
 
-API keys can be configured in two ways:
+Pulls the latest changes, rebuilds the app, and restarts containers.
+Your data is never touched during updates.
 
-1. **Via UI** (Recommended):
-   - Click Settings → API Keys
-   - Enter your tokens (stored in localStorage)
+---
 
-2. **Via Environment**:
-   - Add to `.env.local` as fallback
-   - UI configuration takes precedence
+### Uninstall
 
-### Database Tables
+```bash
+# Stop containers only (keeps data, images, .env)
+./uninstall.sh
 
-The application uses the following Supabase tables:
-- `chat_messages` - Conversation history
-- `documents` - Uploaded document metadata
-- `document_embeddings` - Vector embeddings for semantic search (pgvector)
-- `conversation_memory` - Long-term conversation context
-- `tavily_cache` - Cached web search results
-- `user_settings` - User preferences and API keys
-- `llm_metrics` - LLM usage tracking and monitoring
+# Stop + remove Docker images (forces fresh rebuild on next install)
+./uninstall.sh --clean
 
-## Environment Variables Reference
+# Full clean slate — removes everything including data and .env
+./uninstall.sh --all
+```
+
+---
+
+## Cloud Services Line
+
+### Requirements
+
+- Linux server with Docker and Docker Compose
+- Cloudflare Tunnel token ([Zero Trust dashboard](https://one.dash.cloudflare.com) → Networks → Tunnels)
+- Domain configured in Cloudflare
+
+### Install
+
+```bash
+git clone https://github.com/Allerac/allerac-one.git
+cd allerac-one
+./install-cloud.sh
+```
+
+The installer will prompt for:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Your Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Your Supabase anonymous key |
-| `OLLAMA_BASE_URL` | No | Ollama API URL (default: http://localhost:11434) |
-| `TAVILY_API_KEY` | No | Tavily API key for web search (can also be set in UI) |
+| `TUNNEL_TOKEN` | Yes | Cloudflare Tunnel token |
+| `GRAFANA_PASSWORD` | Yes | Grafana admin password |
+| `GITHUB_TOKEN` | No | GitHub Models API token (users can also set their own in the app) |
+| `TAVILY_API_KEY` | No | Web search API key |
+| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token |
 
-**Note**: GitHub tokens are configured via UI and stored in localStorage, not environment variables.
+Encryption keys are generated automatically.
 
-## Development
+Once deployed:
 
-### Build for Production
+| Service | URL |
+|---------|-----|
+| App | `http://localhost:8080` (+ your public hostname via Cloudflare) |
+| Grafana | `http://localhost:3001` |
+| Portainer | `http://localhost:9000` |
+
+---
+
+### Update
 
 ```bash
-npm run build
-npm start
+./update.sh
 ```
 
-### Linting
+---
 
-```bash
-npm run lint
-```
+## Configuration reference
+
+Your settings live in `.env`. The installer creates this file for you.
+If you need to edit it manually, the annotated templates are:
+
+- `.env.local.example` — Local Hardware Line
+- `.env.cloud.example` — Cloud Services Line
+
+Key variables:
+
+| Variable | Description |
+|----------|-------------|
+| `ENCRYPTION_KEY` | AES key for encrypting API tokens stored in the database |
+| `OLLAMA_MODELS` | Comma-separated list of models to download on first run |
+| `OLLAMA_BASE_URL` | Ollama API endpoint |
+| `TELEGRAM_TOKEN_ENCRYPTION_KEY` | AES key for Telegram bot tokens |
+| `HOST_WORKSPACE` | Directory the AI agent can access on your machine (local only) |
+
+---
+
+## Daily use
+
+After first login, go to **Settings** to:
+
+- Add your GitHub token (for cloud models like GPT-4o and Mistral Large)
+- Add a Tavily API key (for web search)
+- Configure Telegram bots
+
+The app works fully offline with local Ollama models — no external accounts required.
+
+---
 
 ## Documentation
 
-- [AUTHENTICATION.md](AUTHENTICATION.md) - Supabase authentication setup
-- [LLM_SETUP.md](LLM_SETUP.md) - LLM provider configuration guide
-- [.github/copilot-instructions.md](.github/copilot-instructions.md) - Project guidelines for AI assistants
-
-## Architecture
-
-**Configuration-Driven Design:**
-- Models defined in `app/services/models.ts`
-- Provider auto-detection (no hardcoded conditionals)
-- UI-first token management with localStorage
-- Fallback to environment variables
-
-**Key Services:**
-- `LLMService` - Unified interface for GitHub Models + Ollama
-- `SupabaseService` - Database operations with RLS
-- `ConversationMemoryService` - Automatic context retention
-- `VectorSearchService` - Semantic search via pgvector
-- `MetricsService` - LLM usage tracking
-
-## Learn More
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Supabase Documentation](https://supabase.com/docs)
-- [GitHub Models](https://github.com/marketplace/models)
-- [Ollama Documentation](https://ollama.ai/docs)
-- [Tavily API](https://tavily.com)
-
-## Deploy on Vercel
-
-The easiest way to deploy is using the [Vercel Platform](https://vercel.com/new):
-
-1. Push your code to GitHub
-2. Import your repository in Vercel
-3. Add environment variables:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `OLLAMA_BASE_URL` (if using Ollama)
-   - `TAVILY_API_KEY` (optional)
-4. Deploy!
-
-Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [`docs/architecture.md`](docs/architecture.md) — System design and data flow
+- [`docs/security.md`](docs/security.md) — Security model
+- [`docs/local-setup.md`](docs/local-setup.md) — Manual setup guide
+- [`docs/deploy-test-plan.md`](docs/deploy-test-plan.md) — Deploy test checklists
+- [`docs/database-backup-restore.md`](docs/database-backup-restore.md) — Backup and restore
