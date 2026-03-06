@@ -196,14 +196,14 @@ services:
     command:
       - |
         echo "Pulling models: ${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}"
-        echo "$OLLAMA_MODELS" | tr ',' '\n' | while read model; do
-          model=$(echo "$model" | tr -d ' ')
-          [ -z "$model" ] && continue
-          if ollama list | grep -q "^$model"; then
-            echo "Model $model already present, skipping."
+        echo "${OLLAMA_MODELS:-qwen2.5:7b,deepseek-r1:1.5b}" | tr ',' '\n' | while read model; do
+          model=$$(echo "$$model" | tr -d ' ')
+          [ -z "$$model" ] && continue
+          if ollama list | grep -q "^$$model"; then
+            echo "Model $$model already present, skipping."
           else
-            echo "Pulling $model..."
-            ollama pull "$model"
+            echo "Pulling $$model..."
+            ollama pull "$$model"
           fi
         done
         echo "Model setup complete!"
