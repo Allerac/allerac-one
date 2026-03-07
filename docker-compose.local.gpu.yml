@@ -1,0 +1,17 @@
+# Allerac One - GPU Override (Local Hardware Line)
+# ================================================
+# Applied automatically by install.sh when an NVIDIA GPU is detected.
+#
+# Manual usage:
+#   docker compose -f docker-compose.local.yml -f docker-compose.local.gpu.yml up -d
+#
+# Requirements:
+#   nvidia-container-toolkit installed on the host
+#   (install.sh handles this automatically)
+
+services:
+  ollama:
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility

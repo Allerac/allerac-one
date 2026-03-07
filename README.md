@@ -39,9 +39,9 @@ The installer will ask you two questions:
 
 | Tier | Hardware | Models downloaded |
 |------|----------|-------------------|
-| Allerac Lite | N100 · 16 GB | qwen3.5:2b,qwen3.5:0.8b +  |
-| Allerac Home | i5/Ryzen 5 · 32 GB | qwen3.5:2b,qwen3.5:0.8b +  |
-| Allerac Pro | i7/Ryzen 7 · 64 GB | qwen3.5:2b,qwen3.5:0.8b +  |
+| Allerac Lite | N100 · 16 GB | qwen2.5:3b +  |
+| Allerac Home | i5/Ryzen 5 · 32 GB | qwen2.5:3b +  |
+| Allerac Pro | i7/Ryzen 7 · 64 GB | qwen2.5:3b +  |
 | Custom | Any | You choose |
 
 **2. Optional features?**

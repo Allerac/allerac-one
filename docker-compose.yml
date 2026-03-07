@@ -12,7 +12,7 @@
 #   TAVILY_API_KEY      - Web search API key
 #   EXECUTOR_SECRET     - Secret for executor service auth
 #   OLLAMA_MODELS       - Comma-separated models to download (used with --profile ollama)
-#   NOTIFIER_LLM_MODEL  - Model for notifier (default: qwen3.5:2b,qwen3.5:0.8b)
+#   NOTIFIER_LLM_MODEL  - Model for notifier (default: qwen2.5:3b)
 #   TELEGRAM_BOT_TOKEN  - Legacy single-bot token
 #
 # Ollama runs by default on the server (privacy-first, no inference data leaves the machine).
@@ -134,6 +134,7 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
+    mem_limit: ${OLLAMA_MEM_LIMIT:-8g}
     # GPU support (uncomment for NVIDIA GPU on the cloud server):
     # deploy:
     #   resources:
@@ -159,12 +160,12 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=ollama:11434
-      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}
+      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen2.5:3b}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Pulling models: ${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}"
-        echo "${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}" | tr ',' '\n' | while read model; do
+        echo "Pulling models: ${OLLAMA_MODELS:-qwen2.5:3b}"
+        echo "${OLLAMA_MODELS:-qwen2.5:3b}" | tr ',' '\n' | while read model; do
           model=$$(echo "$$model" | tr -d ' ')
           [ -z "$$model" ] && continue
           if ollama list | grep -q "^$$model"; then
@@ -352,7 +353,7 @@ services:
       - REDIS_URL=redis://redis:6379
       # Ollama: containerized (--profile ollama) or host fallback
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen3.5:2b,qwen3.5:0.8b}
+      - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"

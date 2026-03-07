@@ -40,11 +40,15 @@ detect_product_line() {
         COMPOSE_FLAGS=""
     else
         COMPOSE_FILE="docker-compose.local.yml"
+        # Re-activate GPU override if enabled
+        GPU_FLAG=""
+        ENABLE_GPU=$(grep "^ENABLE_GPU=" .env 2>/dev/null | cut -d= -f2 || echo "false")
+        [ "$ENABLE_GPU" = "true" ] && GPU_FLAG="-f docker-compose.local.gpu.yml"
         # Re-activate the same profiles that are currently running
         RUNNING_PROFILES=""
         docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-notifier"  && RUNNING_PROFILES="$RUNNING_PROFILES --profile notifications"
         docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-prometheus" && RUNNING_PROFILES="$RUNNING_PROFILES --profile monitoring"
-        COMPOSE_FLAGS="$RUNNING_PROFILES"
+        COMPOSE_FLAGS="$GPU_FLAG $RUNNING_PROFILES"
     fi
 }
 

@@ -14,9 +14,9 @@
 #   docker compose -f docker-compose.local.yml --profile notifications --profile monitoring up -d
 #
 # Hardware tier model presets (set OLLAMA_MODELS in .env):
-#   Allerac Lite:  OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b
-#   Allerac Home:  OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b
-#   Allerac Pro:   OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b
+#   Allerac Lite:  OLLAMA_MODELS=qwen2.5:3b
+#   Allerac Home:  OLLAMA_MODELS=qwen2.5:3b
+#   Allerac Pro:   OLLAMA_MODELS=qwen2.5:3b
 
 services:
   # ============================================
@@ -150,16 +150,9 @@ services:
       - "${OLLAMA_PORT:-11434}:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
-    # GPU support for Allerac Pro with NVIDIA eGPU:
-    # Uncomment the deploy block below and restart.
-    # Requires: nvidia-container-toolkit installed on the host
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    mem_limit: ${OLLAMA_MEM_LIMIT:-10g}
+    # GPU support is handled via docker-compose.local.gpu.yml override.
+    # install.sh enables it automatically when an NVIDIA GPU is detected.
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -169,9 +162,9 @@ services:
 
   # Model downloader - runs once to pull models for your hardware tier
   # Set OLLAMA_MODELS in .env as a comma-separated list:
-  #   Allerac Lite:  OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b
-  #   Allerac Home:  OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b
-  #   Allerac Pro:   OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b
+  #   Allerac Lite:  OLLAMA_MODELS=qwen2.5:3b
+  #   Allerac Home:  OLLAMA_MODELS=qwen2.5:3b
+  #   Allerac Pro:   OLLAMA_MODELS=qwen2.5:3b
   ollama-setup:
     image: ollama/ollama:latest
     container_name: allerac-ollama-setup
@@ -183,12 +176,12 @@ services:
     environment:
       - OLLAMA_HOST=ollama:11434
       # Comma-separated list of models to pull (defaults to Allerac Lite preset)
-      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}
+      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen2.5:3b}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Pulling models: ${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}"
-        echo "${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}" | tr ',' '\n' | while read model; do
+        echo "Pulling models: ${OLLAMA_MODELS:-qwen2.5:3b}"
+        echo "${OLLAMA_MODELS:-qwen2.5:3b}" | tr ',' '\n' | while read model; do
           model=$$(echo "$$model" | tr -d ' ')
           [ -z "$$model" ] && continue
           if ollama list | grep -q "^$$model"; then
@@ -235,7 +228,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
       - REDIS_URL=redis://redis:6379
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen3.5:2b,qwen3.5:0.8b}
+      - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -348,7 +341,8 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      # Only mount Prometheus datasource — Loki not available in local stack
+      - ./infra/monitoring/grafana/provisioning/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml
       - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     ports:

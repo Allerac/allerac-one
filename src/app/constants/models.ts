@@ -8,6 +8,5 @@ export const GITHUB_MODELS = [
 
 // Available Ollama Models (that we support)
 export const SUPPORTED_OLLAMA_MODELS = [
-  { id: 'qwen3.5:2b', name: 'Qwen 3.5 2B', icon: '🐼', description: 'Fast, balanced quality', size: '2.7 GB' },
-  { id: 'qwen3.5:0.8b', name: 'Qwen 3.5 0.8B', icon: '🐼', description: 'Ultra-lightweight, maximum speed', size: '1.0 GB' },
+  { id: 'qwen2.5:3b', name: 'Qwen 2.5 3B', icon: '🐼', description: 'Fast & efficient', size: '2 GB' },
 ];

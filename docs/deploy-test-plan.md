@@ -36,16 +36,16 @@ docker compose -f docker-compose.local.yml up -d
 ### T-L2: Ollama profile — Allerac Lite preset
 
 ```bash
-OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b \
+OLLAMA_MODELS=qwen2.5:3b \
   docker compose -f docker-compose.local.yml up -d
 ```
 
 | # | Check | Expected |
 |---|-------|----------|
-| 1 | `docker logs allerac-ollama-setup` | "Pulling qwen3.5:2b,qwen3.5:0.8b..." and "Pulling ..." then "Model setup complete!" |
+| 1 | `docker logs allerac-ollama-setup` | "Pulling qwen2.5:3b..." and "Pulling ..." then "Model setup complete!" |
 | 2 | `docker exec allerac-ollama ollama list` | Both models present |
-| 3 | Model selector in UI | `qwen3.5:2b,qwen3.5:0.8b` and `` visible |
-| 4 | Chat with `qwen3.5:2b,qwen3.5:0.8b` | Response streams back |
+| 3 | Model selector in UI | `qwen2.5:3b` and `` visible |
+| 4 | Chat with `qwen2.5:3b` | Response streams back |
 | 5 | Re-run `ollama-setup` container | "already present, skipping." for both models |
 
 ---
@@ -53,7 +53,7 @@ OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b \
 ### T-L3: Ollama profile — Allerac Home preset
 
 ```bash
-OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b \
+OLLAMA_MODELS=qwen2.5:3b \
   docker compose -f docker-compose.local.yml up -d
 ```
 
@@ -68,7 +68,7 @@ OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b \
 ### T-L4: Ollama profile — Allerac Pro preset (GPU)
 
 ```bash
-OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b \
+OLLAMA_MODELS=qwen2.5:3b \
   docker compose -f docker-compose.local.yml up -d
 ```
 
@@ -77,7 +77,7 @@ OLLAMA_MODELS=qwen3.5:2b,qwen3.5:0.8b \
 | 1 | Before GPU: `docker logs allerac-ollama` | No CUDA errors (CPU inference) |
 | 2 | Enable GPU: uncomment `deploy` block in `ollama` service, restart | `nvidia-smi` inside container shows GPU |
 | 3 | `docker logs allerac-ollama-setup` | Both models pulled |
-| 4 | Chat with `qwen3.5:2b,qwen3.5:0.8b` | Response returns; inference faster than CPU with GPU |
+| 4 | Chat with `qwen2.5:3b` | Response returns; inference faster than CPU with GPU |
 
 ---
 

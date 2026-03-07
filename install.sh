@@ -13,13 +13,15 @@
 #   HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
 #
 # Tiers:
-#   lite   → N100, 16GB  → qwen3.5:2b,qwen3.5:0.8b + 
-#   home   → i5/R5, 32GB → qwen3.5:2b,qwen3.5:0.8b + 
-#   pro    → i7/R7, 64GB → qwen3.5:2b,qwen3.5:0.8b + 
+#   lite   → N100, 16GB  → qwen2.5:3b + 
+#   home   → i5/R5, 32GB → qwen2.5:3b + 
+#   pro    → i7/R7, 64GB → qwen2.5:3b + 
 #   custom → You choose the models
 #
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ============================================
 # Colors
@@ -40,8 +42,10 @@ HARDWARE_TIER="${HARDWARE_TIER:-}"
 OLLAMA_MODELS="${OLLAMA_MODELS:-}"
 ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
 ENABLE_MONITORING="${ENABLE_MONITORING:-false}"
+ENABLE_GPU="${ENABLE_GPU:-}"
 RECONFIGURE="${RECONFIGURE:-false}"
 USE_SUDO=""
+GPU_COMPOSE_FLAG=""
 
 # ============================================
 # Logging
@@ -170,6 +174,71 @@ install_docker() {
     esac
 }
 
+check_docker_conflicts() {
+    # ── Docker Desktop ──────────────────────────────────────────────────────
+    if systemctl --user is-active docker-desktop >/dev/null 2>&1 || \
+       [ -S "$HOME/.docker/desktop/docker.sock" ]; then
+        echo ""
+        echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║  Docker Desktop detected — not supported by Allerac One      ║${NC}"
+        echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "  Docker Desktop runs containers inside a VM, which prevents GPU"
+        echo -e "  acceleration and adds unnecessary overhead."
+        echo ""
+        echo -e "  ${BOLD}Please switch to Docker Engine (CE):${NC}"
+        echo -e "    https://docs.docker.com/engine/install/ubuntu/"
+        echo ""
+        echo -e "  Quick steps:"
+        echo -e "    ${YELLOW}systemctl --user stop docker-desktop${NC}"
+        echo -e "    ${YELLOW}sudo apt-get remove docker-desktop${NC}"
+        echo -e "    ${YELLOW}# Then install Docker Engine and re-run this script${NC}"
+        echo ""
+        exit 1
+    fi
+
+    # ── Snap-installed Docker ───────────────────────────────────────────────
+    if snap list 2>/dev/null | grep -q "^docker "; then
+        echo ""
+        log_error "Docker is installed via snap — not supported by Allerac One."
+        echo ""
+        echo -e "  Snap Docker has permission restrictions that prevent GPU access"
+        echo -e "  and volume mounts from working correctly."
+        echo ""
+        echo -e "  ${BOLD}Please remove it and install Docker Engine:${NC}"
+        echo -e "    ${YELLOW}sudo snap remove docker${NC}"
+        echo -e "    ${YELLOW}# Then install Docker Engine and re-run this script${NC}"
+        echo -e "    ${YELLOW}# https://docs.docker.com/engine/install/ubuntu/${NC}"
+        echo ""
+        exit 1
+    fi
+
+    # ── Snap-installed Ollama ───────────────────────────────────────────────
+    if snap list 2>/dev/null | grep -q "^ollama "; then
+        echo ""
+        log_warn "Ollama is installed via snap and may conflict on port 11434."
+        echo ""
+        echo -e "  Allerac One runs Ollama in a container. The snap version will"
+        echo -e "  block the container from binding to port 11434."
+        echo ""
+        read -rp "  Stop and disable snap Ollama now? [Y/n]: " OPT_SNAP_OLLAMA
+        if [[ ! "$OPT_SNAP_OLLAMA" =~ ^[Nn]$ ]]; then
+            sudo snap stop ollama 2>/dev/null || true
+            sudo snap disable ollama 2>/dev/null || true
+            log_success "Snap Ollama disabled"
+        else
+            log_warn "Skipped — you may hit port conflicts on 11434."
+        fi
+    fi
+
+    # ── Stale Docker Desktop credentials ───────────────────────────────────
+    if [ -f "$HOME/.docker/config.json" ] && grep -q "docker-credential-desktop" "$HOME/.docker/config.json" 2>/dev/null; then
+        log_info "Removing stale Docker Desktop credentials config..."
+        sed -i '/"credsStore".*desktop/d' "$HOME/.docker/config.json"
+        log_success "Credentials config cleaned"
+    fi
+}
+
 check_docker_running() {
     if docker info >/dev/null 2>&1; then
         log_success "Docker is running"
@@ -183,6 +252,67 @@ check_docker_running() {
         sleep 3
         sudo docker info >/dev/null 2>&1 && USE_SUDO="sudo" || { log_error "Docker is not running."; exit 1; }
     fi
+}
+
+# ============================================
+# GPU Detection (Linux + NVIDIA only)
+# ============================================
+install_nvidia_toolkit() {
+    log_info "Installing nvidia-container-toolkit..."
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+        | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+        | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+        | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list > /dev/null
+    sudo apt-get update -qq
+    sudo apt-get install -y nvidia-container-toolkit
+    sudo nvidia-ctk runtime configure --runtime=docker
+    sudo systemctl restart docker
+    log_success "nvidia-container-toolkit installed"
+}
+
+detect_gpu() {
+    # Only on Linux — macOS and others skip
+    [[ "$OS" != "linux" && "$OS" != "debian" ]] && ENABLE_GPU="false" && return
+
+    # Already set via env var (non-interactive / CI)
+    if [ -n "$ENABLE_GPU" ]; then
+        [ "$ENABLE_GPU" = "true" ] && GPU_COMPOSE_FLAG="-f ${SCRIPT_DIR}/docker-compose.local.gpu.yml"
+        return
+    fi
+
+    # No nvidia-smi → no GPU
+    if ! command_exists nvidia-smi; then
+        ENABLE_GPU="false"
+        return
+    fi
+
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "NVIDIA GPU")
+    echo ""
+    log_success "NVIDIA GPU detected: ${GPU_NAME}"
+
+    # Check if toolkit is already installed
+    if command_exists nvidia-container-cli; then
+        log_success "nvidia-container-toolkit already installed"
+        ENABLE_GPU="true"
+        GPU_COMPOSE_FLAG="-f ${SCRIPT_DIR}/docker-compose.local.gpu.yml"
+        log_info "GPU acceleration will be enabled for Ollama"
+        return
+    fi
+
+    # Toolkit not installed — ask user
+    echo ""
+    read -rp "  Enable GPU acceleration for Ollama? (recommended) [Y/n]: " OPT_GPU
+    if [[ "$OPT_GPU" =~ ^[Nn]$ ]]; then
+        ENABLE_GPU="false"
+        log_info "GPU acceleration skipped"
+        return
+    fi
+
+    install_nvidia_toolkit
+    ENABLE_GPU="true"
+    GPU_COMPOSE_FLAG="-f ${SCRIPT_DIR}/docker-compose.local.gpu.yml"
+    log_success "GPU acceleration enabled"
 }
 
 # ============================================
@@ -211,10 +341,10 @@ select_hardware_tier() {
     fi
     if [ -n "$HARDWARE_TIER" ]; then
         case "$HARDWARE_TIER" in
-            lite)   OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b" ;;
-            home)   OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b" ;;
-            pro)    OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b" ;;
-            custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen3.5:2b,qwen3.5:0.8b}" ;;
+            lite)   OLLAMA_MODELS="qwen2.5:3b" ;;
+            home)   OLLAMA_MODELS="qwen2.5:3b" ;;
+            pro)    OLLAMA_MODELS="qwen2.5:3b" ;;
+            custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen2.5:3b}" ;;
         esac
         log_info "Hardware tier: $HARDWARE_TIER (models: $OLLAMA_MODELS)"
         return
@@ -224,13 +354,13 @@ select_hardware_tier() {
     echo -e "${BOLD}Which Allerac hardware are you setting up?${NC}"
     echo ""
     echo -e "  ${BOLD}1) Allerac Lite${NC}   — N100 · 16GB RAM"
-    echo -e "     Models: qwen3.5:2b,qwen3.5:0.8b +   (~3.3GB download)"
+    echo -e "     Models: qwen2.5:3b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}2) Allerac Home${NC}   — i5/Ryzen 5 · 32GB RAM"
-    echo -e "     Models: qwen3.5:2b,qwen3.5:0.8b +   (~3.3GB download)"
+    echo -e "     Models: qwen2.5:3b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}3) Allerac Pro${NC}    — i7/Ryzen 7 · 64GB RAM (optional GPU)"
-    echo -e "     Models: qwen3.5:2b,qwen3.5:0.8b +   (~3.3GB download)"
+    echo -e "     Models: qwen2.5:3b +   (~3.3GB download)"
     echo ""
     echo -e "  ${BOLD}4) Custom${NC}         — Choose your own models"
     echo ""
@@ -238,12 +368,12 @@ select_hardware_tier() {
     while true; do
         read -rp "  Select [1-4]: " TIER_CHOICE
         case "$TIER_CHOICE" in
-            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"; break ;;
-            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"; break ;;
-            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"; break ;;
+            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen2.5:3b"; break ;;
+            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen2.5:3b"; break ;;
+            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="qwen2.5:3b"; break ;;
             4) HARDWARE_TIER="custom"
-               read -rp "  Enter models (comma-separated, e.g. qwen3.5:2b,qwen3.5:0.8b): " OLLAMA_MODELS
-               [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen3.5:2b,qwen3.5:0.8b"
+               read -rp "  Enter models (comma-separated, e.g. qwen2.5:3b): " OLLAMA_MODELS
+               [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen2.5:3b"
                break ;;
             *) echo "  Please select 1, 2, 3, or 4." ;;
         esac
@@ -316,7 +446,7 @@ setup_environment() {
 TELEGRAM_BOT_TOKEN=${TG_TOKEN}
 TELEGRAM_ALLOWED_USERS=${TG_USERS}
 TELEGRAM_DEFAULT_USER=
-NOTIFIER_LLM_MODEL=qwen3.5:2b,qwen3.5:0.8b"
+NOTIFIER_LLM_MODEL=qwen2.5:3b"
     fi
 
     cat > .env <<EOF
@@ -336,7 +466,7 @@ EXECUTOR_SECRET=${EXEC_SECRET}
 
 # --------------------------------------------
 # Ollama models for this hardware tier
-# All tiers: qwen3.5:2b,qwen3.5:0.8b (custom = user-defined)
+# All tiers: qwen2.5:3b (custom = user-defined)
 # --------------------------------------------
 OLLAMA_MODELS=${OLLAMA_MODELS}
 
@@ -359,6 +489,11 @@ OLLAMA_PORT=11434
 # Working directory exposed to the AI agent (your home directory by default)
 # Change this to restrict the agent's file system access, e.g. /home/user/workspace
 HOST_WORKSPACE=/home
+
+# --------------------------------------------
+# GPU acceleration (auto-detected by install.sh)
+# --------------------------------------------
+ENABLE_GPU=${ENABLE_GPU}
 
 # --------------------------------------------
 # Monitoring (used with --profile monitoring)
@@ -399,13 +534,13 @@ start_services() {
     export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     log_info "Pulling base images..."
-    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES pull --quiet
+    $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES pull --quiet
 
     log_info "Building application..."
-    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES build
+    $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES build
 
     log_info "Starting containers..."
-    $USE_SUDO docker compose -f docker-compose.local.yml $PROFILES up -d
+    $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES up -d
 
     log_success "Services started"
 }
@@ -477,6 +612,7 @@ print_success() {
     echo ""
     echo -e "  Product:   ${BOLD}Allerac ${HARDWARE_TIER^}${NC}"
     echo -e "  Models:    ${OLLAMA_MODELS}"
+    [ "$ENABLE_GPU" = "true" ] && echo -e "  GPU:       ${GREEN}enabled (NVIDIA)${NC}" || echo -e "  GPU:       CPU only"
     echo ""
     echo -e "  Open your browser:  ${BLUE}http://localhost:${APP_PORT_NUM}${NC}"
     echo ""
@@ -484,13 +620,6 @@ print_success() {
     if [ "$ENABLE_MONITORING" = "true" ]; then
         GRAFANA_PORT_NUM=$(grep "^GRAFANA_PORT=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "3001")
         echo -e "  Monitoring:  ${BLUE}http://localhost:${GRAFANA_PORT_NUM}${NC}  (admin / see GRAFANA_PASSWORD in .env)"
-        echo ""
-    fi
-
-    if [ "$HARDWARE_TIER" = "pro" ]; then
-        echo -e "  ${YELLOW}GPU (Allerac Pro):${NC} To enable NVIDIA GPU acceleration,"
-        echo -e "  install nvidia-container-toolkit and uncomment the 'deploy'"
-        echo -e "  block in the 'ollama' service in docker-compose.local.yml."
         echo ""
     fi
 
@@ -522,8 +651,10 @@ main() {
     detect_os
     check_requirements
     setup_swap
+    check_docker_conflicts
     install_docker
     check_docker_running
+    detect_gpu
     setup_repository
     select_hardware_tier
     configure_features
