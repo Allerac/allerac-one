@@ -18,7 +18,20 @@ interface ChatMessagesProps {
 }
 
 import React, { useState, useEffect, useRef } from 'react';
-// ...existing code...
+
+function extractThinking(content: string): { thinking: string; isComplete: boolean; displayContent: string } | null {
+  if (typeof content !== 'string') return null;
+  // Complete block
+  const match = content.match(/^<think>([\s\S]*?)<\/think>\s*/);
+  if (match) {
+    return { thinking: match[1].trim(), isComplete: true, displayContent: content.slice(match[0].length) };
+  }
+  // Incomplete block (still streaming)
+  if (content.startsWith('<think>') && !content.includes('</think>')) {
+    return { thinking: content.slice(7).trim(), isComplete: false, displayContent: '' };
+  }
+  return null;
+}
 
 export default function ChatMessages({
   messages,
@@ -34,6 +47,7 @@ export default function ChatMessages({
   // Controla qual mensagem tem o menu aberto (índice)
   const [openMenuIdx, setOpenMenuIdx] = useState<number | null>(null);
   const [showCorrectAndMemorize, setShowCorrectAndMemorize] = useState<number | null>(null);
+  const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set());
   const menuRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
 
   // Live elapsed timer while the model is responding
@@ -227,24 +241,81 @@ export default function ChatMessages({
                 </div>
 
                 {/* Message content */}
-                <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'text-gray-900 prose-headings:text-gray-900 prose-p:text-gray-900 prose-li:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-pre:bg-gray-100 prose-pre:text-gray-900'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      a: ({ node, ...props }) => (
-                        <a
-                          {...props}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
-                        />
-                      ),
-                      hr: () => null,
-                    }}
-                  >
-                    {typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant')}
-                  </ReactMarkdown>
-                </div>
+                {(() => {
+                  const rawContent = typeof message.content === 'string'
+                    ? message.content
+                    : renderContent(message.content, 'assistant') as string;
+                  const thinkResult = extractThinking(rawContent);
+                  const displayContent = thinkResult ? thinkResult.displayContent : rawContent;
+                  const isThinkingExpanded = expandedThinking.has(index) || (thinkResult != null && !thinkResult.isComplete);
+
+                  return (
+                    <>
+                      {thinkResult && (
+                        <div className={`mb-3 rounded-lg border text-xs ${
+                          isDarkMode ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
+                        }`}>
+                          <button
+                            onClick={() => setExpandedThinking(prev => {
+                              const next = new Set(prev);
+                              if (next.has(index)) next.delete(index);
+                              else next.add(index);
+                              return next;
+                            })}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors rounded-lg ${
+                              isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                            </svg>
+                            <span className="font-medium">
+                              {thinkResult.isComplete ? 'Reasoning' : (
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
+                                  Thinking…
+                                </span>
+                              )}
+                            </span>
+                            {thinkResult.isComplete && (
+                              <svg
+                                className={`w-3 h-3 ml-auto transition-transform ${isThinkingExpanded ? 'rotate-180' : ''}`}
+                                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </button>
+                          {isThinkingExpanded && thinkResult.thinking && (
+                            <div className={`px-3 pb-3 text-xs leading-relaxed whitespace-pre-wrap font-mono border-t ${
+                              isDarkMode ? 'border-gray-700 text-gray-500' : 'border-gray-200 text-gray-400'
+                            }`}>
+                              <div className="pt-2">{thinkResult.thinking}</div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'text-gray-900 prose-headings:text-gray-900 prose-p:text-gray-900 prose-li:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-pre:bg-gray-100 prose-pre:text-gray-900'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            a: ({ node, ...props }) => (
+                              <a
+                                {...props}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
+                              />
+                            ),
+                            hr: () => null,
+                          }}
+                        >
+                          {displayContent}
+                        </ReactMarkdown>
+                      </div>
+                    </>
+                  );
+                })()}
 
                 {/* Response time */}
                 {(() => {

@@ -14,9 +14,9 @@
 #   docker compose -f docker-compose.local.yml --profile notifications --profile monitoring up -d
 #
 # Hardware tier model presets (set OLLAMA_MODELS in .env):
-#   Allerac Lite:  OLLAMA_MODELS=qwen2.5:3b
-#   Allerac Home:  OLLAMA_MODELS=qwen2.5:3b
-#   Allerac Pro:   OLLAMA_MODELS=qwen2.5:3b
+#   Allerac Lite:  OLLAMA_MODELS=qwen2.5:3b,deepseek-r1:1.5b
+#   Allerac Home:  OLLAMA_MODELS=qwen2.5:3b,deepseek-r1:7b
+#   Allerac Pro:   OLLAMA_MODELS=qwen2.5:3b,deepseek-r1:7b
 
 services:
   # ============================================
@@ -167,9 +167,9 @@ services:
 
   # Model downloader - runs once to pull models for your hardware tier
   # Set OLLAMA_MODELS in .env as a comma-separated list:
-  #   Allerac Lite:  OLLAMA_MODELS=qwen2.5:3b
-  #   Allerac Home:  OLLAMA_MODELS=qwen2.5:3b
-  #   Allerac Pro:   OLLAMA_MODELS=qwen2.5:3b
+  #   Allerac Lite:  OLLAMA_MODELS=qwen2.5:3b,deepseek-r1:1.5b
+  #   Allerac Home:  OLLAMA_MODELS=qwen2.5:3b,deepseek-r1:7b
+  #   Allerac Pro:   OLLAMA_MODELS=qwen2.5:3b,deepseek-r1:7b
   ollama-setup:
     image: ollama/ollama:latest
     container_name: allerac-ollama-setup

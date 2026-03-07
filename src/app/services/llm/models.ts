@@ -38,4 +38,22 @@ export const MODELS: Model[] = [
     baseUrl: '/api/ollama',
     requiresToken: false
   },
+  {
+    id: 'deepseek-r1:1.5b',
+    name: 'DeepSeek R1 1.5B (Local)',
+    icon: '🧠',
+    description: 'Reasoning model with thinking — lightweight',
+    provider: 'ollama',
+    baseUrl: '/api/ollama',
+    requiresToken: false
+  },
+  {
+    id: 'deepseek-r1:7b',
+    name: 'DeepSeek R1 7B (Local)',
+    icon: '🧠',
+    description: 'Reasoning model with thinking',
+    provider: 'ollama',
+    baseUrl: '/api/ollama',
+    requiresToken: false
+  },
 ];

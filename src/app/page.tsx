@@ -84,7 +84,7 @@ export default function AdminChat() {
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
-  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'system' | 'apiKeys'>('system');
+  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'system' | 'apiKeys' | 'benchmark'>('system');
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [telegramBotTokenInput, setTelegramBotTokenInput] = useState('');
@@ -955,6 +955,8 @@ export default function AdminChat() {
         googleKeyInput={googleKeyInput}
         setGoogleKeyInput={setGoogleKeyInput}
         onSaveToken={handleSaveToken}
+        MODELS={MODELS}
+        selectedModel={selectedModel}
       />
     </div>
   );

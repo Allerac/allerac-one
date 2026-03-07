@@ -5,13 +5,17 @@ import { useTranslations } from 'next-intl';
 import * as systemActions from '@/app/actions/system';
 import * as updateActions from '@/app/actions/updates';
 import * as backupActions from '@/app/actions/backup';
+import BenchmarkPanel from './BenchmarkPanel';
+import { Model } from '@/app/types';
 
 interface SystemDashboardProps {
   isOpen: boolean;
   onClose: () => void;
   isDarkMode: boolean;
   userId?: string;
-  initialTab?: 'system' | 'apiKeys';
+  initialTab?: 'system' | 'apiKeys' | 'benchmark';
+  MODELS?: Model[];
+  selectedModel?: string;
   // API Keys props
   githubToken: string;
   tavilyApiKey: string;
@@ -154,9 +158,11 @@ export default function SystemDashboardModal({
   googleKeyInput,
   setGoogleKeyInput,
   onSaveToken,
+  MODELS = [],
+  selectedModel = '',
 }: SystemDashboardProps) {
   const t = useTranslations('system');
-  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'benchmark'>(initialTab ?? 'system');
   const [data, setData] = useState<SystemDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -416,7 +422,7 @@ export default function SystemDashboardModal({
     }
   };
 
-  const tabClass = (tab: 'system' | 'apiKeys') =>
+  const tabClass = (tab: 'system' | 'apiKeys' | 'benchmark') =>
     `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
       activeTab === tab
         ? isDarkMode
@@ -505,6 +511,9 @@ export default function SystemDashboardModal({
           </button>
           <button className={tabClass('apiKeys')} onClick={() => setActiveTab('apiKeys')}>
             {t('tabApiKeys')}
+          </button>
+          <button className={tabClass('benchmark')} onClick={() => setActiveTab('benchmark')}>
+            Benchmark
           </button>
         </div>
 
@@ -915,6 +924,16 @@ export default function SystemDashboardModal({
                 {t('saveKeys')}
               </button>
             </div>
+          )}
+
+          {/* Benchmark Tab */}
+          {activeTab === 'benchmark' && (
+            <BenchmarkPanel
+              isDarkMode={isDarkMode}
+              userId={userId}
+              MODELS={MODELS}
+              selectedModel={selectedModel}
+            />
           )}
         </div>
       </div>
