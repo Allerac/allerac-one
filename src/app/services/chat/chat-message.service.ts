@@ -55,6 +55,8 @@ export class ChatMessageService {
       { role: 'assistant', content: '', timestamp: new Date() } as Message,
     ]);
 
+    const requestStartTime = Date.now();
+
     try {
       // 3. Encode images to base64 data URLs for the server
       let encodedImages: Array<{ url: string }> | undefined;
@@ -131,6 +133,17 @@ export class ChatMessageService {
           } else if (event.type === 'done') {
             const newConvId: string = event.conversationId;
             const wasNew = !this.config.currentConversationId;
+            const elapsed = Date.now() - requestStartTime;
+
+            // Stamp the response time on the completed assistant message
+            this.config.setMessages(prev => {
+              const msgs = [...prev];
+              const last = msgs[msgs.length - 1];
+              if (last && last.role === 'assistant') {
+                msgs[msgs.length - 1] = { ...last, responseTime: elapsed };
+              }
+              return msgs;
+            });
 
             this.config.setCurrentConversationId(newConvId);
 

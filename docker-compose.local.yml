@@ -150,6 +150,11 @@ services:
       - "${OLLAMA_PORT:-11434}:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
+      # Keep model loaded in RAM for 1h — avoids expensive reload on every request
+      - OLLAMA_KEEP_ALIVE=1h
+      # Limit CPU threads to avoid fully saturating the CPU (leaves headroom for OS)
+      # N100 has 4 cores — using 3 keeps the system responsive
+      - OLLAMA_NUM_THREAD=${OLLAMA_NUM_THREAD:-3}
     mem_limit: ${OLLAMA_MEM_LIMIT:-10g}
     # GPU support is handled via docker-compose.local.gpu.yml override.
     # install.sh enables it automatically when an NVIDIA GPU is detected.

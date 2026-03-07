@@ -13,6 +13,7 @@ export interface Message {
   content: string | MessageContentPart[];
   timestamp: Date;
   tool_call_id?: string;
+  responseTime?: number; // ms — only set on completed assistant messages
 }
 
 export interface Conversation {

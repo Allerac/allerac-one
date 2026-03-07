@@ -36,6 +36,23 @@ export default function ChatMessages({
   const [showCorrectAndMemorize, setShowCorrectAndMemorize] = useState<number | null>(null);
   const menuRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
 
+  // Live elapsed timer while the model is responding
+  const [liveElapsed, setLiveElapsed] = useState(0);
+  const sendStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isSending) {
+      sendStartRef.current = Date.now();
+      setLiveElapsed(0);
+      const interval = setInterval(() => {
+        setLiveElapsed(Date.now() - (sendStartRef.current ?? Date.now()));
+      }, 100);
+      return () => clearInterval(interval);
+    } else {
+      sendStartRef.current = null;
+    }
+  }, [isSending]);
+
   // Close menu on ESC or click outside
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -228,6 +245,19 @@ export default function ChatMessages({
                     {typeof message.content === 'string' ? message.content : renderContent(message.content, 'assistant')}
                   </ReactMarkdown>
                 </div>
+
+                {/* Response time */}
+                {(() => {
+                  const isStreaming = isSending && index === messages.length - 1;
+                  const ms = isStreaming ? liveElapsed : message.responseTime;
+                  if (!ms) return null;
+                  const s = (ms / 1000).toFixed(1);
+                  return (
+                    <div className={`mt-2 text-xs ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {isStreaming ? `${s}s...` : `${s}s`}
+                    </div>
+                  );
+                })()}
 
               </div>
             )}
