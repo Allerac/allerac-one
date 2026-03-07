@@ -213,6 +213,24 @@ check_docker_conflicts() {
         exit 1
     fi
 
+    # ── Natively-installed Ollama (systemd service) ─────────────────────────
+    if systemctl is-active ollama >/dev/null 2>&1; then
+        echo ""
+        log_warn "Ollama is running as a native systemd service (port 11434)."
+        echo ""
+        echo -e "  Allerac One runs Ollama in a container. The native service will"
+        echo -e "  block the container from binding to port 11434."
+        echo ""
+        read -rp "  Stop and disable native Ollama service now? [Y/n]: " OPT_NATIVE_OLLAMA
+        if [[ ! "$OPT_NATIVE_OLLAMA" =~ ^[Nn]$ ]]; then
+            sudo systemctl stop ollama
+            sudo systemctl disable ollama
+            log_success "Native Ollama service stopped and disabled"
+        else
+            log_warn "Skipped — you may hit port conflicts on 11434."
+        fi
+    fi
+
     # ── Snap-installed Ollama ───────────────────────────────────────────────
     if snap list 2>/dev/null | grep -q "^ollama "; then
         echo ""
@@ -225,10 +243,32 @@ check_docker_conflicts() {
         if [[ ! "$OPT_SNAP_OLLAMA" =~ ^[Nn]$ ]]; then
             sudo snap stop ollama 2>/dev/null || true
             sudo snap disable ollama 2>/dev/null || true
+            # Also stop the systemd service unit that snap creates
+            sudo systemctl stop snap.ollama.ollama.service 2>/dev/null || true
+            sudo systemctl disable snap.ollama.ollama.service 2>/dev/null || true
+            # Wait for port 11434 to be released (up to 15s)
+            local waited=0
+            while ss -tlnp 2>/dev/null | grep -q ':11434 '; do
+                if [ $waited -ge 15 ]; then
+                    log_warn "Port 11434 still in use after 15s — continuing anyway."
+                    break
+                fi
+                sleep 1
+                waited=$((waited + 1))
+            done
             log_success "Snap Ollama disabled"
         else
             log_warn "Skipped — you may hit port conflicts on 11434."
         fi
+    fi
+
+    # ── Port 11434 in use by something else ────────────────────────────────
+    if ss -tlnp 2>/dev/null | grep -q ':11434 '; then
+        local port_owner
+        port_owner=$(ss -tlnp 2>/dev/null | grep ':11434 ' | grep -oP '(?<=")[^"]+(?=")' | head -1 || echo "unknown process")
+        log_warn "Port 11434 is still in use by: ${port_owner}"
+        echo -e "  The Ollama container may fail to bind to this port."
+        echo -e "  To fix: kill the process using port 11434 and re-run this script."
     fi
 
     # ── Stale Docker Desktop credentials ───────────────────────────────────
@@ -543,6 +583,16 @@ start_services() {
     $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES up -d
 
     log_success "Services started"
+
+    # If Ollama container exited due to port conflict, try restarting once
+    sleep 3
+    local ollama_status
+    ollama_status=$($USE_SUDO docker inspect allerac-ollama --format='{{.State.Status}}' 2>/dev/null || echo "missing")
+    if [ "$ollama_status" = "exited" ]; then
+        log_warn "Ollama container exited — attempting restart (possible port conflict resolved)..."
+        $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES up -d ollama
+        sleep 5
+    fi
 }
 
 # ============================================

@@ -87,7 +87,7 @@ export async function POST(request: Request): Promise<Response> {
         // 2. Load user settings (API keys stay server-side)
         const settings = await userSettingsService.loadUserSettings(userId);
         const githubToken = settings?.github_token || '';
-        const tavilyApiKey = settings?.tavily_api_key || undefined;
+        const tavilyApiKey = settings?.tavily_api_key || process.env.TAVILY_API_KEY || undefined;
         const systemMessage = settings?.system_message || 'You are a helpful AI assistant.';
         const googleApiKey = settings?.google_api_key || '';
 

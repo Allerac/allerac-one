@@ -397,21 +397,23 @@ export class LLMService {
     let errorMessage: string | undefined;
 
     try {
+      const ollamaBody = {
+        model: request.model,
+        messages: request.messages,
+        stream: true,  // Use streaming to send headers immediately
+        tools: request.tools,
+        options: {
+          temperature: request.temperature,
+          num_predict: request.max_tokens,
+        },
+      };
+      console.log('[Ollama] Sending tools:', JSON.stringify(request.tools?.map(t => t.function?.name)));
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: request.model,
-          messages: request.messages,
-          stream: true,  // Use streaming to send headers immediately
-          tools: request.tools,
-          options: {
-            temperature: request.temperature,
-            num_predict: request.max_tokens,
-          },
-        }),
+        body: JSON.stringify(ollamaBody),
         signal: AbortSignal.timeout(600000),
       });
 
@@ -435,11 +437,15 @@ export class LLMService {
         throw new Error(errorMessage);
       }
 
-      // Read the stream and reconstruct the final response
+      // Read the stream and reconstruct the final response.
+      // Tool calls come in intermediate chunks (done: false); the final chunk
+      // (done: true) only contains usage stats and no message content.
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       let finalData: any = null;
+      let messageContent = '';
+      let messageToolCalls: any[] | undefined;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -452,6 +458,12 @@ export class LLMService {
           if (!trimmed) continue;
           try {
             const parsed = JSON.parse(trimmed);
+            if (parsed.message?.content) {
+              messageContent += parsed.message.content;
+            }
+            if (parsed.message?.tool_calls) {
+              messageToolCalls = parsed.message.tool_calls;
+            }
             if (parsed.done) {
               finalData = parsed;
             }
@@ -463,6 +475,9 @@ export class LLMService {
         throw new Error('No final response from Ollama stream');
       }
 
+      console.log('[Ollama] tool_calls received:', JSON.stringify(messageToolCalls));
+      console.log('[Ollama] finish_reason:', finalData.done_reason);
+
       const data = finalData;
 
       // Convert Ollama response to standard format
@@ -470,8 +485,8 @@ export class LLMService {
         choices: [{
           message: {
             role: 'assistant',
-            content: data.message?.content || '',
-            tool_calls: data.message?.tool_calls,
+            content: messageContent,
+            tool_calls: messageToolCalls,
           },
           finish_reason: data.done_reason || (data.done ? 'stop' : 'length'),
         }],
