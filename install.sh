@@ -13,7 +13,7 @@
 #   HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
 #
 # Tiers:
-#   lite   → N100, 16GB  → qwen2.5:3b + deepseek-r1:1.5b
+#   lite   → N100, 16GB  → qwen2.5:3b + deepseek-r1:7b
 #   home   → i5/R5, 32GB → qwen2.5:3b + deepseek-r1:7b
 #   pro    → i7/R7, 64GB → qwen2.5:3b + deepseek-r1:7b
 #   custom → You choose the models
@@ -381,7 +381,7 @@ select_hardware_tier() {
     fi
     if [ -n "$HARDWARE_TIER" ]; then
         case "$HARDWARE_TIER" in
-            lite)   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:1.5b" ;;
+            lite)   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b" ;;
             home)   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b" ;;
             pro)    OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b" ;;
             custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen2.5:3b}" ;;
@@ -394,7 +394,7 @@ select_hardware_tier() {
     echo -e "${BOLD}Which Allerac hardware are you setting up?${NC}"
     echo ""
     echo -e "  ${BOLD}1) Allerac Lite${NC}   — N100 · 16GB RAM"
-    echo -e "     Models: qwen2.5:3b + deepseek-r1:1.5b   (~4.4GB download)"
+    echo -e "     Models: qwen2.5:3b + deepseek-r1:7b     (~7GB download)"
     echo ""
     echo -e "  ${BOLD}2) Allerac Home${NC}   — i5/Ryzen 5 · 32GB RAM"
     echo -e "     Models: qwen2.5:3b + deepseek-r1:7b     (~7GB download)"
@@ -408,11 +408,11 @@ select_hardware_tier() {
     while true; do
         read -rp "  Select [1-4]: " TIER_CHOICE
         case "$TIER_CHOICE" in
-            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:1.5b"; break ;;
+            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b"; break ;;
             2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b"; break ;;
             3) HARDWARE_TIER="pro";    OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b"; break ;;
             4) HARDWARE_TIER="custom"
-               read -rp "  Enter models (comma-separated, e.g. qwen2.5:3b,deepseek-r1:1.5b): " OLLAMA_MODELS
+               read -rp "  Enter models (comma-separated, e.g. qwen2.5:3b,deepseek-r1:7b): " OLLAMA_MODELS
                [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen2.5:3b"
                break ;;
             *) echo "  Please select 1, 2, 3, or 4." ;;
@@ -506,7 +506,7 @@ EXECUTOR_SECRET=${EXEC_SECRET}
 
 # --------------------------------------------
 # Ollama models for this hardware tier
-# lite: qwen2.5:3b + deepseek-r1:1.5b | home/pro: qwen2.5:3b + deepseek-r1:7b | custom = user-defined
+# lite/home/pro: qwen2.5:3b + deepseek-r1:7b | custom = user-defined
 # --------------------------------------------
 OLLAMA_MODELS=${OLLAMA_MODELS}
 

@@ -826,24 +826,20 @@ export default function SystemDashboardModal({
           {/* API Keys Tab */}
           {activeTab === 'apiKeys' && (
             <div className="max-w-lg space-y-5">
-              {/* GitHub Token */}
+              {/* Allerac API Key */}
               <div>
                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  GitHub Personal Access Token
+                  Allerac API Key
                 </label>
                 <input
                   type="password"
                   value={tokenInput}
                   onChange={(e) => setTokenInput(e.target.value)}
-                  placeholder={githubToken ? '••••••••' : 'ghp_...'}
+                  placeholder={githubToken ? '••••••••' : 'Enter your Allerac API key...'}
                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
                 />
                 <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Create a token at{' '}
-                  <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                    github.com/settings/tokens
-                  </a>
-                  {' '}with &quot;models&quot; scope
+                  Your API key unlocks Pro models (GPT-4o, Ministral, Gemini). Contact Allerac to get yours.
                 </p>
               </div>
 
