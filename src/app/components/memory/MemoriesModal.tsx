@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import ConversationMemoriesView from '../memory/ConversationMemoriesView';
 
 interface MemoriesModalProps {
@@ -18,6 +19,8 @@ export default function MemoriesModal({
   userId,
   githubToken,
 }: MemoriesModalProps) {
+  const t = useTranslations('memoriesModal');
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -36,9 +39,9 @@ export default function MemoriesModal({
       <div className={`backdrop-blur-md rounded-lg shadow-xl max-w-3xl w-full max-h-[85dvh] flex flex-col ${isDarkMode ? 'bg-gray-800/95 border border-gray-700' : 'bg-white/95 border border-gray-200'}`}>
         <div className={`p-6 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div>
-            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Conversation Memories</h2>
+            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('title')}</h2>
             <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              AI-generated summaries of your past conversations. These help maintain context across chats.
+              {t('description')}
             </p>
           </div>
           <button

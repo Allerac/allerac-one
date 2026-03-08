@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import * as memoryActions from '@/app/actions/memory';
 
 interface CorrectAndMemorizeProps {
@@ -22,6 +23,7 @@ export default function CorrectAndMemorize({
   githubToken,
   isDarkMode,
 }: CorrectAndMemorizeProps) {
+  const t = useTranslations('teach');
   const [correction, setCorrection] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -118,7 +120,7 @@ export default function CorrectAndMemorize({
               </svg>
             </div>
             <h2 className={`text-base sm:text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-              Teach
+              {t('title')}
             </h2>
           </div>
           <button
@@ -135,7 +137,7 @@ export default function CorrectAndMemorize({
         <div className="p-4 sm:p-5 space-y-4">
           {/* AI response preview */}
           <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-            <p className={`text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>AI response</p>
+            <p className={`text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('aiResponse')}</p>
             <p className={`text-sm leading-relaxed line-clamp-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               {llmResponse.slice(0, 200)}{llmResponse.length > 200 ? '…' : ''}
             </p>
@@ -144,15 +146,15 @@ export default function CorrectAndMemorize({
           {/* Correction input */}
           <div>
             <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              How should it be?
-              <span className={`ml-1 font-normal text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>The AI will memorize your preference</span>
+              {t('howShouldBe')}
+              <span className={`ml-1 font-normal text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{t('aiWillMemorize')}</span>
             </label>
             <input
               type="text"
               value={correction}
               onChange={(e) => setCorrection(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !isSaving && correction.trim()) handleSave(); }}
-              placeholder="e.g., For me 18°C is warm..."
+              placeholder={t('placeholder')}
               disabled={isSaving}
               className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                 isDarkMode
@@ -167,7 +169,7 @@ export default function CorrectAndMemorize({
             {/* Importance */}
             <div>
               <label className={`block text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                Importance
+                {t('importance')}
               </label>
               <div className="relative">
                 <select
@@ -176,9 +178,9 @@ export default function CorrectAndMemorize({
                   disabled={isSaving}
                   className={selectClass}
                 >
-                  <option value="low">🔵 Low</option>
-                  <option value="medium">🟡 Medium</option>
-                  <option value="high">🔴 High</option>
+                  <option value="low">{t('low')}</option>
+                  <option value="medium">{t('medium')}</option>
+                  <option value="high">{t('high')}</option>
                 </select>
                 <div className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -191,7 +193,7 @@ export default function CorrectAndMemorize({
             {/* Emotion */}
             <div>
               <label className={`block text-xs font-medium mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                Emotion
+                {t('emotion')}
               </label>
               <div className="relative">
                 <select
@@ -200,9 +202,9 @@ export default function CorrectAndMemorize({
                   disabled={isSaving}
                   className={selectClass}
                 >
-                  <option value={-1}>😡 Frustrated</option>
-                  <option value={0}>😐 Neutral</option>
-                  <option value={1}>🥰 Happy</option>
+                  <option value={-1}>{t('frustrated')}</option>
+                  <option value={0}>{t('neutral')}</option>
+                  <option value={1}>{t('happy')}</option>
                 </select>
                 <div className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -237,7 +239,7 @@ export default function CorrectAndMemorize({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               )}
-              {isSaving ? 'Saving...' : 'Save to Memory'}
+              {isSaving ? t('saving') : t('saveToMemory')}
             </button>
             <button
               onClick={onClose}
@@ -248,7 +250,7 @@ export default function CorrectAndMemorize({
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
               }`}
             >
-              Cancel
+              {t('cancel')}
             </button>
           </div>
         </div>

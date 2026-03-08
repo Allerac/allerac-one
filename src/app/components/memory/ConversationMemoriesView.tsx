@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import * as memoryActions from '@/app/actions/memory';
 
 interface ConversationMemoriesViewProps {
@@ -14,6 +15,7 @@ export default function ConversationMemoriesView({
   userId,
   isDarkMode
 }: ConversationMemoriesViewProps) {
+  const t = useTranslations('memoriesModal');
   const [memories, setMemories] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,7 +69,7 @@ export default function ConversationMemoriesView({
   };
 
   if (isLoading) {
-    return <div className="text-center text-gray-500 py-8">Loading memories...</div>;
+    return <div className="text-center text-gray-500 py-8">{t('loading')}</div>;
   }
 
   return (
@@ -75,19 +77,19 @@ export default function ConversationMemoriesView({
       {/* Stats */}
       {stats && (
         <div className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-blue-50 border-blue-200'} border rounded-lg p-4`}>
-          <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-blue-900'} mb-2`}>Memory Statistics</h3>
+          <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-blue-900'} mb-2`}>{t('statsTitle')}</h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
               <p className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} font-medium`}>{stats.totalSummaries}</p>
-              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>Conversations</p>
+              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>{t('conversations')}</p>
             </div>
             <div>
               <p className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} font-medium`}>{stats.totalMessages}</p>
-              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>Messages</p>
+              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>{t('messages')}</p>
             </div>
             <div>
               <p className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} font-medium`}>{stats.averageImportance}/10</p>
-              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>Avg Importance</p>
+              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>{t('avgImportance')}</p>
             </div>
           </div>
         </div>
@@ -96,8 +98,8 @@ export default function ConversationMemoriesView({
       {/* Memories List */}
       {memories.length === 0 ? (
         <div className={`text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} py-8`}>
-          <p>No conversation memories yet.</p>
-          <p className="text-sm mt-2">Have at least 4 messages in a conversation, then switch to a new one to create a summary.</p>
+          <p>{t('empty')}</p>
+          <p className="text-sm mt-2">{t('emptyHint')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -117,14 +119,14 @@ export default function ConversationMemoriesView({
                       })}
                     </span>
                     <span className={`text-xs px-2 py-0.5 ${isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'} rounded`}>
-                      Importance: {memory.importance_score}/10
+                      {t('importance')}: {memory.importance_score}/10
                     </span>
                     <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {memory.message_count} messages
+                      {memory.message_count} {t('messages').toLowerCase()}
                     </span>
                     {memory.emotion && (
                       <span className={`text-xs px-2 py-0.5 ${isDarkMode ? 'bg-pink-900/30 text-pink-300' : 'bg-pink-100 text-pink-700'} rounded`}>
-                        Emotion: {memory.emotion}
+                        {t('emotion')}: {memory.emotion}
                       </span>
                     )}
                   </div>
@@ -145,7 +147,7 @@ export default function ConversationMemoriesView({
                 <button
                   onClick={() => handleDeleteClick(memory.id, memory.summary)}
                   className="text-gray-400 hover:text-red-600 transition-colors"
-                  title="Delete memory"
+                  title={t('deleteTitle')}
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -170,10 +172,10 @@ export default function ConversationMemoriesView({
                 </div>
                 <div className="flex-1">
                   <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'} mb-2`}>
-                    Delete Memory?
+                    {t('deleteConfirmTitle')}
                   </h3>
                   <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-3`}>
-                    Are you sure you want to delete this memory? This action cannot be undone.
+                    {t('deleteConfirmText')}
                   </p>
                   <div className={`p-3 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'} border rounded-lg`}>
                     <p className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-700'} line-clamp-3`}>
@@ -192,7 +194,7 @@ export default function ConversationMemoriesView({
                   disabled={isDeleting}
                   className={`px-4 py-2 ${isDarkMode ? 'text-gray-200 bg-gray-700 hover:bg-gray-600' : 'text-gray-700 bg-gray-100 hover:bg-gray-200'} rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   onClick={handleDeleteConfirm}
@@ -202,14 +204,14 @@ export default function ConversationMemoriesView({
                   {isDeleting ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Deleting...</span>
+                      <span>{t('deleting')}</span>
                     </>
                   ) : (
                     <>
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
-                      <span>Delete</span>
+                      <span>{t('delete')}</span>
                     </>
                   )}
                 </button>

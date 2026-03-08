@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { 
   getAllSkills, 
   createSkill, 
@@ -36,6 +37,7 @@ export default function SkillsLibrary({
   userId,
   onSkillCreated,
 }: SkillsLibraryProps) {
+  const t = useTranslations('skillsLibrary');
   const [activeTab, setActiveTab] = useState<Tab>('library');
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(false);
@@ -105,7 +107,7 @@ export default function SkillsLibrary({
       }
       setSkillStats(stats);
     } catch (err) {
-      setError('Failed to load skills');
+      setError(t('errorLoad'));
       console.error('Error loading skills:', err);
     } finally {
       setLoading(false);
@@ -114,7 +116,7 @@ export default function SkillsLibrary({
 
   const handleCreateSkill = async () => {
     if (!formData.name || !formData.displayName || !formData.systemPrompt) {
-      setError('Name, display name, and system prompt are required');
+      setError(t('errorRequired'));
       return;
     }
 
@@ -143,7 +145,7 @@ export default function SkillsLibrary({
           console.log('[SkillsLibrary] Skill assigned successfully!');
         } catch (err) {
           console.error('Failed to assign skill to bot:', err);
-          setError('Skill created but failed to assign to Telegram bot');
+          setError(t('errorTelegramAssign'));
         }
       }
       
@@ -166,7 +168,7 @@ export default function SkillsLibrary({
         onSkillCreated();
       }
     } catch (err) {
-      setError('Failed to create skill');
+      setError(t('errorCreate'));
       console.error('Error creating skill:', err);
     } finally {
       setLoading(false);
@@ -192,7 +194,7 @@ export default function SkillsLibrary({
       setSelectedSkill(null);
       setActiveTab('library');
     } catch (err) {
-      setError('Failed to update skill');
+      setError(t('errorUpdate'));
       console.error('Error updating skill:', err);
     } finally {
       setLoading(false);
@@ -200,7 +202,7 @@ export default function SkillsLibrary({
   };
 
   const handleDeleteSkill = async (skillId: string) => {
-    if (!confirm('Are you sure you want to delete this skill?')) return;
+    if (!confirm(t('confirmDelete'))) return;
     if (!userId) return;
 
     setLoading(true);
@@ -212,7 +214,7 @@ export default function SkillsLibrary({
         setSelectedSkill(null);
       }
     } catch (err) {
-      setError('Failed to delete skill');
+      setError(t('errorDelete'));
       console.error('Error deleting skill:', err);
     } finally {
       setLoading(false);
@@ -253,10 +255,10 @@ export default function SkillsLibrary({
         <div className={`p-6 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div>
             <h2 className={`text-2xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-              ⚡ Skills Library
+              {t('title')}
             </h2>
             <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Manage AI skills - specialized behaviors and capabilities for your assistants
+              {t('description')}
             </p>
           </div>
           <button
@@ -283,7 +285,7 @@ export default function SkillsLibrary({
                   : 'text-gray-600 hover:text-gray-800'
             }`}
           >
-            📚 Library
+            {t('tabLibrary')}
           </button>
           <button
             onClick={() => {
@@ -309,7 +311,7 @@ export default function SkillsLibrary({
                   : 'text-gray-600 hover:text-gray-800'
             }`}
           >
-            ➕ Create New
+            {t('tabCreate')}
           </button>
           {selectedSkill && (
             <button
@@ -324,7 +326,7 @@ export default function SkillsLibrary({
                     : 'text-gray-600 hover:text-gray-800'
               }`}
             >
-              ✏️ Edit
+              {t('tabEdit')}
             </button>
           )}
         </div>
@@ -342,12 +344,12 @@ export default function SkillsLibrary({
             <div className="space-y-4">
               {loading && skills.length === 0 ? (
                 <div className={`text-center py-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Loading skills...
+                  {t('loading')}
                 </div>
               ) : skills.length === 0 ? (
                 <div className={`text-center py-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  <p className="text-lg mb-2">No skills available yet</p>
-                  <p className="text-sm">Create your first skill to get started!</p>
+                  <p className="text-lg mb-2">{t('empty')}</p>
+                  <p className="text-sm">{t('emptyHint')}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -372,12 +374,12 @@ export default function SkillsLibrary({
                           </div>
                           <div className="flex gap-2">
                             {skill.verified && (
-                              <span className="text-blue-500" title="Verified">
+                              <span className="text-blue-500" title={t('verified')}>
                                 ✓
                               </span>
                             )}
                             {skill.shared && (
-                              <span className="text-green-500" title="Shared">
+                              <span className="text-green-500" title={t('shared')}>
                                 🌐
                               </span>
                             )}
@@ -398,7 +400,7 @@ export default function SkillsLibrary({
                         
                         {stats && (
                           <div className={`flex gap-4 text-xs pt-3 border-t ${isDarkMode ? 'border-gray-600 text-gray-400' : 'border-gray-200 text-gray-600'}`}>
-                            <span>📊 {stats.count} uses</span>
+                            <span>📊 {stats.count} {t('uses')}</span>
                             {stats.avgRating > 0 && <span>⭐ {stats.avgRating.toFixed(1)}</span>}
                           </div>
                         )}
@@ -410,7 +412,7 @@ export default function SkillsLibrary({
                               className={`text-xs px-3 py-1 rounded ${isDarkMode ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
                               disabled={loading}
                             >
-                              Delete
+                              {t('delete')}
                             </button>
                           </div>
                         )}
@@ -427,71 +429,71 @@ export default function SkillsLibrary({
             <div className="max-w-2xl mx-auto space-y-4">
               <div>
                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Display Name *
+                  {t('fieldDisplayName')}
                 </label>
                 <input
                   type="text"
                   value={formData.displayName}
                   onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
                   className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-                  placeholder="Personal Assistant"
+                  placeholder={t('placeholderDisplayName')}
                 />
               </div>
 
               <div>
                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Skill ID * <span className="text-xs text-gray-500">(lowercase, no spaces)</span>
+                  {t('fieldSkillId')} <span className="text-xs text-gray-500">{t('fieldSkillIdHint')}</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-                  placeholder="personal-assistant"
+                  placeholder={t('placeholderSkillId')}
                 />
               </div>
 
               <div>
                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Description
+                  {t('fieldDescription')}
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={2}
                   className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-                  placeholder="Brief description of what this skill does"
+                  placeholder={t('placeholderDescription')}
                 />
               </div>
 
               <div>
                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  System Prompt *
+                  {t('fieldSystemPrompt')}
                 </label>
                 <textarea
                   value={formData.systemPrompt}
                   onChange={(e) => setFormData({ ...formData, systemPrompt: e.target.value })}
                   rows={8}
                   className={`w-full px-3 py-2 rounded-lg border font-mono text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-                  placeholder="You are a helpful personal assistant..."
+                  placeholder={t('placeholderSystemPrompt')}
                 />
               </div>
 
               <div>
                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Category
+                  {t('fieldCategory')}
                 </label>
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className={`w-full px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                 >
-                  <option value="">None</option>
-                  <option value="assistant">Assistant</option>
-                  <option value="code">Code</option>
-                  <option value="research">Research</option>
-                  <option value="creative">Creative</option>
-                  <option value="education">Education</option>
+                  <option value="">{t('categoryNone')}</option>
+                  <option value="assistant">{t('categoryAssistant')}</option>
+                  <option value="code">{t('categoryCode')}</option>
+                  <option value="research">{t('categoryResearch')}</option>
+                  <option value="creative">{t('categoryCreative')}</option>
+                  <option value="education">{t('categoryEducation')}</option>
                 </select>
               </div>
 
@@ -504,7 +506,7 @@ export default function SkillsLibrary({
                   className="rounded"
                 />
                 <label htmlFor="shared" className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Share this skill publicly
+                  {t('sharePublic')}
                 </label>
               </div>
 
@@ -518,7 +520,7 @@ export default function SkillsLibrary({
                     className="rounded"
                   />
                   <label htmlFor="assignToTelegram" className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Assign to Telegram bot (available in /skills)
+                    {t('assignTelegram')}
                   </label>
                 </div>
               )}
@@ -533,7 +535,7 @@ export default function SkillsLibrary({
                       : 'bg-blue-500 hover:bg-blue-600 text-white'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  {loading ? 'Saving...' : activeTab === 'create' ? 'Create Skill' : 'Update Skill'}
+                  {loading ? t('saving') : activeTab === 'create' ? t('create') : t('update')}
                 </button>
                 <button
                   onClick={() => {
@@ -546,7 +548,7 @@ export default function SkillsLibrary({
                       : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                   }`}
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
               </div>
             </div>

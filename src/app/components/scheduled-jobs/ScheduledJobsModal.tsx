@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { ScheduledJob } from '../../types';
 import {
   getScheduledJobs,
@@ -150,7 +151,7 @@ interface FormData {
   cronExpr: string;
 }
 
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+// Days will be provided by translations
 
 const defaultForm: FormData = {
   name: '',
@@ -177,6 +178,8 @@ interface Props {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId }: Props) {
+  const t = useTranslations('scheduledJobs');
+  const DAYS = t.raw('days') as string[];
   const [activeTab, setActiveTab] = useState<Tab>('list');
   const [jobs, setJobs] = useState<ScheduledJob[]>([]);
   const [selectedJob, setSelectedJob] = useState<ScheduledJob | null>(null);
@@ -216,7 +219,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
     const res = await getScheduledJobs(userId);
     setLoading(false);
     if (res.success) setJobs(res.data ?? []);
-    else setError(res.error ?? 'Failed to load jobs');
+    else setError(res.error ?? t('errors.loadFailed'));
   };
 
   const openCreate = () => {
@@ -249,15 +252,15 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
 
   const handleDelete = async (jobId: string) => {
     if (!userId) return;
-    if (!confirm('Delete this job?')) return;
+    if (!confirm(t('confirm.delete'))) return;
     setLoading(true);
     const res = await deleteScheduledJob(jobId, userId);
     setLoading(false);
     if (res.success) {
-      setSuccess('Job deleted');
+      setSuccess(t('success.deleted'));
       await loadJobs();
     } else {
-      setError(res.error ?? 'Failed to delete');
+      setError(res.error ?? t('errors.deleteFailed'));
     }
   };
 
@@ -272,9 +275,9 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
   const handleSave = async () => {
     if (!userId) return;
 
-    if (!formData.name.trim()) { setError('Name is required'); return; }
-    if (!formData.prompt.trim()) { setError('Prompt is required'); return; }
-    if (formData.channels.length === 0) { setError('At least one channel is required'); return; }
+    if (!formData.name.trim()) { setError(t('errors.nameRequired')); return; }
+    if (!formData.prompt.trim()) { setError(t('errors.promptRequired')); return; }
+    if (formData.channels.length === 0) { setError(t('errors.channelRequired')); return; }
 
     const cron = derivedCron.trim();
 
@@ -291,11 +294,11 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
       });
       setLoading(false);
       if (res.success) {
-        setSuccess('Job created');
+        setSuccess(t('success.created'));
         await loadJobs();
         setActiveTab('list');
       } else {
-        setError(res.error ?? 'Failed to create job');
+        setError(res.error ?? t('errors.createFailed'));
       }
     } else if (activeTab === 'edit' && selectedJob) {
       const res = await updateScheduledJob(selectedJob.id, userId, {
@@ -307,11 +310,11 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
       });
       setLoading(false);
       if (res.success) {
-        setSuccess('Job updated');
+        setSuccess(t('success.updated'));
         await loadJobs();
         setActiveTab('list');
       } else {
-        setError(res.error ?? 'Failed to update job');
+        setError(res.error ?? t('errors.updateFailed'));
       }
     }
   };
@@ -352,10 +355,10 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
               <svg className="inline-block mr-2 h-6 w-6 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Scheduled Jobs
+              {t('title')}
             </h2>
             <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Automate prompts on a schedule. Results are delivered to your configured channels.
+              {t('description')}
             </p>
           </div>
           <button onClick={onClose} className={`transition-colors ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}>
@@ -368,13 +371,13 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
         {/* Tabs */}
         <div className={`flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <button onClick={() => setActiveTab('list')} className={tabCls(activeTab === 'list')}>
-            Jobs
+            {t('tabs.list')}
           </button>
           <button onClick={openCreate} className={tabCls(activeTab === 'create')}>
-            + New Job
+            {t('newJob')}
           </button>
           {activeTab === 'edit' && (
-            <button className={tabCls(true)}>Edit</button>
+            <button className={tabCls(true)}>{t('tabs.edit')}</button>
           )}
         </div>
 
@@ -396,14 +399,14 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
           {activeTab === 'list' && (
             <div className="space-y-3">
               {loading && jobs.length === 0 ? (
-                <p className={`text-center py-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading...</p>
+                <p className={`text-center py-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('loading')}</p>
               ) : jobs.length === 0 ? (
                 <div className={`text-center py-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   <svg className="mx-auto h-12 w-12 mb-4 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-lg mb-2">No scheduled jobs yet</p>
-                  <p className="text-sm">Click &quot;+ New Job&quot; to get started.</p>
+                  <p className="text-lg mb-2">{t('noJobs')}</p>
+                  <p className="text-sm">{t('noJobsHint')}</p>
                 </div>
               ) : (
                 jobs.map(job => (
@@ -420,7 +423,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                         className={`mt-0.5 flex-shrink-0 w-10 h-6 rounded-full transition-colors relative ${
                           job.enabled ? 'bg-blue-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
                         }`}
-                        title={job.enabled ? 'Disable' : 'Enable'}
+                        title={job.enabled ? t('toggleDisable') : t('toggleEnable')}
                       >
                         <span
                           className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
@@ -447,7 +450,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                         <p className={`text-xs mt-1 font-mono ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{job.cronExpr}</p>
                         <p className={`text-xs mt-1 truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{job.prompt}</p>
                         <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                          Last run: {job.lastRunAt ? new Date(job.lastRunAt).toLocaleString() : 'Never'}
+                          {t('lastRun')}: {job.lastRunAt ? new Date(job.lastRunAt).toLocaleString() : t('never')}
                         </p>
                       </div>
 
@@ -459,7 +462,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                             isDarkMode ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                           }`}
                         >
-                          Edit
+                          {t('actions.edit')}
                         </button>
                         <button
                           onClick={() => handleDelete(job.id)}
@@ -468,7 +471,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                           }`}
                           disabled={loading}
                         >
-                          Delete
+                          {t('actions.delete')}
                         </button>
                       </div>
                     </div>
@@ -483,31 +486,31 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
             <div className="max-w-2xl mx-auto space-y-5">
               {/* Name */}
               <div>
-                <label className={labelCls}>Name *</label>
+                <label className={labelCls}>{t('fields.name')}</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
                   className={inputCls}
-                  placeholder="Daily digest"
+                  placeholder={t('placeholderName')}
                 />
               </div>
 
               {/* Prompt */}
               <div>
-                <label className={labelCls}>Prompt *</label>
+                <label className={labelCls}>{t('fields.prompt')}</label>
                 <textarea
                   value={formData.prompt}
                   onChange={e => setFormData(p => ({ ...p, prompt: e.target.value }))}
                   rows={4}
                   className={inputCls}
-                  placeholder="Summarise the latest AI news and send it to me."
+                  placeholder={t('placeholderPrompt')}
                 />
               </div>
 
               {/* Channels */}
               <div>
-                <label className={labelCls}>Channels *</label>
+                <label className={labelCls}>{t('fields.channels')}</label>
                 <div className="flex gap-4 flex-wrap">
                   {['telegram'].map(ch => (
                     <label key={ch} className="flex items-center gap-2 cursor-pointer">
@@ -538,13 +541,13 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                   />
                 </button>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {formData.enabled ? 'Enabled' : 'Disabled'}
+                  {formData.enabled ? t('enabledLabel') : t('disabledLabel')}
                 </span>
               </div>
 
               {/* Frequency */}
               <div className={`p-4 rounded-lg border ${isDarkMode ? 'bg-gray-700/30 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
-                <label className={labelCls}>Frequency</label>
+                <label className={labelCls}>{t('fields.frequency')}</label>
 
                 {/* Preset selector */}
                 <select
@@ -552,37 +555,37 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                   onChange={e => setFormData(p => ({ ...p, preset: e.target.value as Preset }))}
                   className={`${inputCls} mb-3`}
                 >
-                  <option value="hourly">Every hour</option>
-                  <option value="daily">Every day at…</option>
-                  <option value="weekly">Every week on…</option>
-                  <option value="monthly">Every month on day…</option>
-                  <option value="custom">Custom (cron)</option>
+                  <option value="hourly">{t('presets.hourly')}</option>
+                  <option value="daily">{t('presets.daily')}</option>
+                  <option value="weekly">{t('presets.weekly')}</option>
+                  <option value="monthly">{t('presets.monthly')}</option>
+                  <option value="custom">{t('presets.custom')}</option>
                 </select>
 
                 {/* Preset-specific controls */}
                 {formData.preset === 'daily' && (
                   <div className="flex gap-2 items-center mb-3">
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>at</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeAt')}</span>
                     <input
                       type="number" min="0" max="23"
                       value={formData.hour}
                       onChange={e => setFormData(p => ({ ...p, hour: e.target.value }))}
                       className={`w-20 px-2 py-1 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>h</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeH')}</span>
                     <input
                       type="number" min="0" max="59"
                       value={formData.minute}
                       onChange={e => setFormData(p => ({ ...p, minute: e.target.value }))}
                       className={`w-20 px-2 py-1 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>min</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeMin')}</span>
                   </div>
                 )}
 
                 {formData.preset === 'weekly' && (
                   <div className="flex gap-2 items-center flex-wrap mb-3">
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>on</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeOn')}</span>
                     <select
                       value={formData.weekday}
                       onChange={e => setFormData(p => ({ ...p, weekday: e.target.value }))}
@@ -590,45 +593,45 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                     >
                       {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
                     </select>
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>at</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeAt')}</span>
                     <input type="number" min="0" max="23" value={formData.hour}
                       onChange={e => setFormData(p => ({ ...p, hour: e.target.value }))}
                       className={`w-20 px-2 py-1 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>h</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeH')}</span>
                     <input type="number" min="0" max="59" value={formData.minute}
                       onChange={e => setFormData(p => ({ ...p, minute: e.target.value }))}
                       className={`w-20 px-2 py-1 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>min</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeMin')}</span>
                   </div>
                 )}
 
                 {formData.preset === 'monthly' && (
                   <div className="flex gap-2 items-center flex-wrap mb-3">
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>on day</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeOnDay')}</span>
                     <input type="number" min="1" max="28" value={formData.monthDay}
                       onChange={e => setFormData(p => ({ ...p, monthDay: e.target.value }))}
                       className={`w-20 px-2 py-1 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>at</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeAt')}</span>
                     <input type="number" min="0" max="23" value={formData.hour}
                       onChange={e => setFormData(p => ({ ...p, hour: e.target.value }))}
                       className={`w-20 px-2 py-1 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>h</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeH')}</span>
                     <input type="number" min="0" max="59" value={formData.minute}
                       onChange={e => setFormData(p => ({ ...p, minute: e.target.value }))}
                       className={`w-20 px-2 py-1 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
                     />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>min</span>
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('timeMin')}</span>
                   </div>
                 )}
 
                 {/* Cron expression preview (editable only for custom) */}
                 <div>
                   <label className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Cron expression
+                    {t('cronPreview')}
                   </label>
                   {formData.preset === 'custom' ? (
                     <input
@@ -648,7 +651,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                 {/* Next runs */}
                 {nextRuns.length > 0 && (
                   <div className="mt-3">
-                    <p className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Next 3 runs</p>
+                    <p className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('nextRuns')}</p>
                     <ul className="space-y-0.5">
                       {nextRuns.map((r, i) => (
                         <li key={i} className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{r}</li>
@@ -665,7 +668,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                   disabled={loading}
                   className="px-6 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Saving…' : activeTab === 'create' ? 'Create Job' : 'Save Changes'}
+                  {loading ? t('saving') : activeTab === 'create' ? t('createJob') : t('saveChanges')}
                 </button>
                 <button
                   onClick={() => { setActiveTab('list'); setError(null); setSuccess(null); }}
@@ -673,7 +676,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                     isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                   }`}
                 >
-                  Cancel
+                  {t('actions.cancel')}
                 </button>
               </div>
             </div>

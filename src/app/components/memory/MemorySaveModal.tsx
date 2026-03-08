@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 
 interface MemorySaveModalProps {
   isOpen: boolean;
@@ -23,6 +24,8 @@ export default function MemorySaveModal({
   result,
   isDarkMode 
 }: MemorySaveModalProps) {
+  const t = useTranslations('memorySave');
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen && !loading) {
@@ -42,7 +45,7 @@ export default function MemorySaveModal({
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className={`text-2xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-              {loading ? 'Saving to Memory...' : result?.success ? 'Saved Successfully!' : 'Unable to Save'}
+              {loading ? t('saving') : result?.success ? t('saved') : t('error')}
             </h2>
             {!loading && (
               <button
@@ -60,7 +63,7 @@ export default function MemorySaveModal({
             <div className="flex flex-col items-center justify-center py-12">
               <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mb-4"></div>
               <p className={`text-center ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Analyzing conversation and generating memory...
+                {t('analyzing')}
               </p>
             </div>
           )}
@@ -79,20 +82,20 @@ export default function MemorySaveModal({
                   {result.importance !== undefined && (
                     <div className={`p-4 border rounded-lg ${isDarkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className={`font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Importance Score:</span>
+                        <span className={`font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('importanceScore')}</span>
                         <span className="px-3 py-1 bg-blue-600 text-white rounded-lg font-bold">
                           {result.importance}/10
                         </span>
                       </div>
                       <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        This score helps prioritize which memories to recall in future conversations.
+                        {t('importanceHint')}
                       </p>
                     </div>
                   )}
 
                   {result.topics && result.topics.length > 0 && (
                     <div className={`p-4 border rounded-lg ${isDarkMode ? 'bg-purple-900/20 border-purple-800' : 'bg-purple-50 border-purple-200'}`}>
-                      <h3 className={`font-semibold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Key Topics:</h3>
+                      <h3 className={`font-semibold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('keyTopics')}</h3>
                       <div className="flex flex-wrap gap-2">
                         {result.topics.map((topic, idx) => (
                           <span
@@ -108,7 +111,7 @@ export default function MemorySaveModal({
 
                   {result.summary && (
                     <div className={`p-4 border rounded-lg ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
-                      <h3 className={`font-semibold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Memory Summary:</h3>
+                      <h3 className={`font-semibold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('summary')}</h3>
                       <p className={`leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{result.summary}</p>
                     </div>
                   )}
@@ -118,7 +121,7 @@ export default function MemorySaveModal({
                       onClick={onClose}
                       className="w-full px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors"
                     >
-                      Close
+                      {t('close')}
                     </button>
                   </div>
                 </>
@@ -136,7 +139,7 @@ export default function MemorySaveModal({
                       onClick={onClose}
                       className={`w-full px-6 py-3 font-semibold rounded-lg transition-colors ${isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-600 text-white hover:bg-gray-700'}`}
                     >
-                      Close
+                      {t('close')}
                     </button>
                   </div>
                 </>
