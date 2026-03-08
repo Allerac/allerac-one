@@ -32,6 +32,8 @@ export interface Model {
   provider: 'github' | 'ollama' | 'gemini';
   baseUrl?: string;
   requiresToken?: boolean;
+  category: 'Fast' | 'Thinking' | 'Pro';
+  shortName: string;
 }
 
 export interface MemorySaveResult {

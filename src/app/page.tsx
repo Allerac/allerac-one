@@ -89,7 +89,7 @@ export default function AdminChat() {
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [telegramBotTokenInput, setTelegramBotTokenInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [selectedModel, setSelectedModel] = useState('qwen2.5:3b');
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
   const [isEditingSettings, setIsEditingSettings] = useState(false);
@@ -187,10 +187,12 @@ export default function AdminChat() {
   }, []);
 
   // Polling for new messages (when conversation is active)
+  // Skips when: sending, tab is hidden, or user is actively typing
   useEffect(() => {
     if (!currentConversationId || isSending) return;
 
     const pollMessages = async () => {
+      if (document.hidden || inputMessage.trim().length > 0) return;
       try {
         const data = await chatActions.loadMessages(currentConversationId);
         const loadedMessages = data?.map((msg: any) => ({
@@ -210,10 +212,10 @@ export default function AdminChat() {
       }
     };
 
-    // Poll every 3 seconds
-    const interval = setInterval(pollMessages, 3000);
+    // Poll every 20 seconds — frequent enough for Telegram sync, not disruptive while typing
+    const interval = setInterval(pollMessages, 20000);
     return () => clearInterval(interval);
-  }, [currentConversationId, messages.length, isSending]);
+  }, [currentConversationId, messages.length, isSending, inputMessage]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

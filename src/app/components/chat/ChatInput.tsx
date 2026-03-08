@@ -68,7 +68,15 @@ export default function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const currentModel = MODELS.find(m => m.id === selectedModel);
-  const currentModelConfig = MODELS.find(m => m.id === selectedModel);
+  const currentModelConfig = currentModel;
+
+  const CATEGORY_ORDER = ['Fast', 'Thinking', 'Pro'] as const;
+  const CATEGORY_ICONS: Record<string, string> = { Fast: '⚡', Thinking: '🧠', Pro: '✨' };
+
+  const modelsByCategory = CATEGORY_ORDER.reduce<Record<string, typeof MODELS>>((acc, cat) => {
+    acc[cat] = MODELS.filter(m => m.category === cat);
+    return acc;
+  }, {});
   const isProviderReady =
     currentModelConfig?.provider === 'ollama' ? ollamaConnected :
     currentModelConfig?.provider === 'gemini' ? googleConfigured :
@@ -347,7 +355,11 @@ export default function ChatInput({
                 }`}
                 title={currentModel?.name || 'Select Model'}
               >
-                <span className="max-w-32 truncate">{currentModel?.name || 'Model'}</span>
+                <span className="max-w-40 truncate">
+                  {currentModel
+                    ? `${CATEGORY_ICONS[currentModel.category]} ${currentModel.category} · ${currentModel.shortName}`
+                    : 'Model'}
+                </span>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -361,40 +373,63 @@ export default function ChatInput({
                 }`}
               >
                 <div className="max-h-96 overflow-y-auto">
-                  {MODELS.map((model) => (
-                    <button
-                      key={model.id}
-                      onClick={() => {
-                        setSelectedModel?.(model.id);
-                        document.getElementById('chat-input-model-dropdown')?.classList.add('hidden');
-                      }}
-                      disabled={
-                        (model.provider === 'github' && !githubConfigured) ||
-                        (model.provider === 'gemini' && !googleConfigured) ||
-                        (model.provider === 'ollama' && !ollamaConnected)
-                      }
-                      className={`w-full px-4 py-3 text-left border-b transition-colors last:border-b-0 disabled:opacity-50 disabled:cursor-not-allowed ${
-                        selectedModel === model.id
-                          ? isDarkMode
-                            ? 'bg-blue-900 border-blue-700'
-                            : 'bg-blue-50 border-blue-200'
-                          : isDarkMode
-                          ? 'border-gray-700 hover:bg-gray-700'
-                          : 'border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`font-medium ${selectedModel === model.id ? 'text-blue-400' : isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                          {model.name}
-                        </span>
-                        {selectedModel === model.id && (
-                          <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        )}
+                  {CATEGORY_ORDER.map((category) => {
+                    const models = modelsByCategory[category];
+                    if (!models || models.length === 0) return null;
+                    return (
+                      <div key={category}>
+                        <div className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-gray-500 bg-gray-900' : 'text-gray-400 bg-gray-50'}`}>
+                          {CATEGORY_ICONS[category]} {category}
+                        </div>
+                        {models.map((model) => {
+                          const isDisabled =
+                            (model.provider === 'github' && !githubConfigured) ||
+                            (model.provider === 'gemini' && !googleConfigured) ||
+                            (model.provider === 'ollama' && !ollamaConnected);
+                          return (
+                            <button
+                              key={model.id}
+                              onClick={() => {
+                                setSelectedModel?.(model.id);
+                                document.getElementById('chat-input-model-dropdown')?.classList.add('hidden');
+                              }}
+                              disabled={isDisabled}
+                              className={`w-full pl-6 pr-4 py-2.5 text-left border-b transition-colors last:border-b-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                selectedModel === model.id
+                                  ? isDarkMode
+                                    ? 'bg-blue-900 border-blue-700'
+                                    : 'bg-blue-50 border-blue-200'
+                                  : isDarkMode
+                                  ? 'border-gray-700 hover:bg-gray-700'
+                                  : 'border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span>{model.icon}</span>
+                                  <div className="min-w-0">
+                                    <span className={`font-medium block ${selectedModel === model.id ? 'text-blue-400' : isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                      {model.shortName}
+                                    </span>
+                                    {model.description && (
+                                      <span className={`text-xs truncate block ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                                        {model.description}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                {selectedModel === model.id && (
+                                  <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

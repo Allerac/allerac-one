@@ -131,22 +131,40 @@ export class LLMService {
   }
 
   private async *ollamaStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
+    const body = {
+      model: request.model,
+      messages: request.messages,
+      stream: true,
+      tools: request.tools,
+      options: {
+        temperature: request.temperature,
+        num_predict: request.max_tokens,
+      },
+    };
+
+    let response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: request.model,
-        messages: request.messages,
-        stream: true,
-        tools: request.tools,
-        options: {
-          temperature: request.temperature,
-          num_predict: request.max_tokens,
-        },
-      }),
+      body: JSON.stringify(body),
       // Ollama streaming can take a long time — allow up to 10 minutes
       signal: AbortSignal.timeout(600000),
     });
+
+    // If model doesn't support tools, retry without them
+    if (!response.ok && request.tools?.length) {
+      const text = await response.text();
+      if (text.includes('does not support tools')) {
+        console.log('[Ollama] Model does not support tools, retrying without tools');
+        response = await fetch(`${this.baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...body, tools: undefined }),
+          signal: AbortSignal.timeout(600000),
+        });
+      } else {
+        throw new Error(text || response.statusText);
+      }
+    }
 
     if (!response.ok) {
       const text = await response.text();
@@ -408,7 +426,7 @@ export class LLMService {
         },
       };
       console.log('[Ollama] Sending tools:', JSON.stringify(request.tools?.map(t => t.function?.name)));
-      const response = await fetch(`${this.baseUrl}/api/chat`, {
+      let response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -416,6 +434,34 @@ export class LLMService {
         body: JSON.stringify(ollamaBody),
         signal: AbortSignal.timeout(600000),
       });
+
+      // If model doesn't support tools, retry without them
+      if (!response.ok && request.tools?.length) {
+        const errorText = await response.text();
+        if (errorText.includes('does not support tools')) {
+          console.log('[Ollama] Model does not support tools, retrying without tools');
+          response = await fetch(`${this.baseUrl}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...ollamaBody, tools: undefined }),
+            signal: AbortSignal.timeout(600000),
+          });
+        } else {
+          statusCode = response.status;
+          success = false;
+          errorMessage = errorText || response.statusText;
+          await this.logMetrics({
+            model: request.model,
+            provider: 'ollama',
+            responseTime: Date.now() - startTime,
+            success: false,
+            statusCode,
+            errorMessage,
+            errorType: this.getErrorType(statusCode, errorMessage),
+          });
+          throw new Error(errorMessage);
+        }
+      }
 
       statusCode = response.status;
 
