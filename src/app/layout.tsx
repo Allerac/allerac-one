@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Allerac One",
-  description: "AI-powered chat assistant",
+  description: "Private-first AI agent platform. Self-hosted, local LLM, memory & RAG.",
 };
 
 export const viewport = {
