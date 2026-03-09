@@ -398,13 +398,12 @@ services:
     environment:
       # Required: generate with: openssl rand -hex 32
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
-      # Email notifications via Resend (https://resend.com)
-      - RESEND_API_KEY=${RESEND_API_KEY:-}
-      - DEPLOY_NOTIFY_EMAIL=${DEPLOY_NOTIFY_EMAIL:-}
-      - FROM_EMAIL=${FROM_EMAIL:-deploy@allerac.ai}
+      # Telegram deploy notifications (create bot via @BotFather)
+      - TELEGRAM_DEPLOY_BOT_TOKEN=${TELEGRAM_DEPLOY_BOT_TOKEN:-}
+      - TELEGRAM_DEPLOY_CHAT_ID=${TELEGRAM_DEPLOY_CHAT_ID:-}
       # Git authentication for git pull inside container
       - GITHUB_DEPLOY_TOKEN=${GITHUB_DEPLOY_TOKEN:-}
-      # Human-readable name shown in deploy emails
+      # Human-readable name shown in deploy notifications
       - DEPLOY_VM_NAME=${DEPLOY_VM_NAME:-allerac-vm}
     deploy:
       resources:
