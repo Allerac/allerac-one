@@ -1,12 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <!-- Dark rounded-square container -->
   <rect width="512" height="512" rx="96" fill="#0d0d0d"/>
-  <!-- "A" lettermark — white strokes -->
-  <path d="M100 432 L256 88 L412 432"
-        stroke="#ffffff" stroke-width="64"
+
+  <!-- "A" lettermark — white -->
+  <path d="M64 430 L180 80 L296 430"
+        stroke="#ffffff" stroke-width="56"
         stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Crossbar — brand green accent -->
-  <line x1="168" y1="282" x2="344" y2="282"
-        stroke="#39d353" stroke-width="58"
+  <!-- A crossbar — brand green -->
+  <line x1="114" y1="280" x2="246" y2="280"
+        stroke="#39d353" stroke-width="50"
         stroke-linecap="round"/>
+
+  <!-- "LL" from Allerac — two upright strokes, visually echoing "AI" — white -->
+  <line x1="370" y1="110" x2="370" y2="430"
+        stroke="#ffffff" stroke-width="44"
+        stroke-linecap="round"/>
+  <line x1="450" y1="110" x2="450" y2="430"
+        stroke="#ffffff" stroke-width="44"
+        stroke-linecap="round"/>
+
+  <!-- Online / active indicator — top-right corner -->
+  <circle cx="460" cy="56" r="30" fill="#39d353"/>
 </svg>

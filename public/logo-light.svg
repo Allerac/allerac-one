@@ -1,12 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" fill="none">
   <!-- Icon mark (200×200) — always dark container -->
   <rect width="200" height="200" rx="38" fill="#0d0d0d"/>
-  <path d="M39 169 L100 34 L161 169"
-        stroke="#ffffff" stroke-width="25"
+  <path d="M25 168 L70 31 L115 168"
+        stroke="#ffffff" stroke-width="22"
         stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="66" y1="110" x2="134" y2="110"
-        stroke="#39d353" stroke-width="23"
+  <line x1="44" y1="109" x2="96" y2="109"
+        stroke="#39d353" stroke-width="20"
         stroke-linecap="round"/>
+  <line x1="145" y1="43" x2="145" y2="168"
+        stroke="#ffffff" stroke-width="17"
+        stroke-linecap="round"/>
+  <line x1="176" y1="43" x2="176" y2="168"
+        stroke="#ffffff" stroke-width="17"
+        stroke-linecap="round"/>
+  <circle cx="179" cy="22" r="12" fill="#39d353"/>
+
   <!-- Wordmark — dark text for light backgrounds -->
   <text x="232" y="100"
         font-family="'Geist', 'Inter', system-ui, -apple-system, sans-serif"
