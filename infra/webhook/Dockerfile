@@ -1,7 +1,7 @@
 FROM alpine:3.19
 
 # Runtime tools: git (pull), docker-cli (compose commands), curl + jq (Resend API), envsubst (config template)
-RUN apk add --no-cache bash curl git docker-cli jq gettext
+RUN apk add --no-cache bash curl git docker-cli jq gettext gcompat
 
 # Docker Compose v2
 RUN curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64" \
