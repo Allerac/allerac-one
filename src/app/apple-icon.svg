@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Full-bleed for iOS — iOS applies its own corner mask -->
+  <rect width="512" height="512" fill="#0d0d0d"/>
+  <!-- Crossbar — green (drawn first, white A on top) -->
+  <line x1="168" y1="282" x2="344" y2="282"
+        stroke="#39d353" stroke-width="58"
+        stroke-linecap="round"/>
+  <!-- "A" lettermark — white -->
+  <path d="M100 432 L256 88 L412 432"
+        stroke="#ffffff" stroke-width="64"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
