@@ -247,7 +247,7 @@ export default function ChatInput({
                 const dropdown = document.getElementById('chat-input-skills-dropdown');
                 if (dropdown) dropdown.classList.toggle('hidden');
               }}
-              className={`px-3 h-11 rounded-lg flex items-center gap-1.5 transition-all text-sm ${
+              className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
                 currentSkill
                   ? 'bg-purple-500 hover:bg-purple-600 text-white'
                   : isDarkMode
@@ -259,7 +259,6 @@ export default function ChatInput({
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              {currentSkill && <span className="max-w-[100px] truncate">{currentSkill.display_name || currentSkill.name}</span>}
             </button>
 
             <div
