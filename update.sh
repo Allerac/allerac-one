@@ -118,8 +118,17 @@ echo "   Date:   $BUILD_DATE"
 echo -e "${GREEN}✓ Build info ready${NC}"
 echo ""
 
-# Step 3: Run database migrations
-echo -e "${YELLOW}[3/6]${NC} Running database migrations..."
+# Step 3: Ensure named data volumes exist (safe to run on every update)
+# These are declared as external in docker-compose.yml so they must exist before `up`.
+echo -e "${YELLOW}[3/7]${NC} Ensuring data volumes exist..."
+docker volume create allerac_db_data      > /dev/null 2>&1 || true
+docker volume create allerac_ollama_data  > /dev/null 2>&1 || true
+docker volume create allerac_backups_data > /dev/null 2>&1 || true
+echo -e "${GREEN}✓ Volumes ready${NC}"
+echo ""
+
+# Step 4: Run database migrations
+echo -e "${YELLOW}[4/7]${NC} Running database migrations..."
 docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up --force-recreate migrations || {
     echo -e "${RED}Failed to run migrations${NC}"
     exit 1
@@ -127,8 +136,8 @@ docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up --force-recreate migrations 
 echo -e "${GREEN}✓ Migrations complete${NC}"
 echo ""
 
-# Step 4: Rebuild app images
-echo -e "${YELLOW}[4/6]${NC} Rebuilding application images..."
+# Step 5: Rebuild app images
+echo -e "${YELLOW}[5/7]${NC} Rebuilding application images..."
 if [ "$PRODUCT_LINE" = "cloud" ]; then
     docker compose -f "$COMPOSE_FILE" build --no-cache app telegram-bot notifier
 else
@@ -141,8 +150,8 @@ fi
 echo -e "${GREEN}✓ Images rebuilt${NC}"
 echo ""
 
-# Step 5: Restart services
-echo -e "${YELLOW}[5/6]${NC} Restarting services..."
+# Step 6: Restart services
+echo -e "${YELLOW}[6/7]${NC} Restarting services..."
 COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
     docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up -d || {
     echo -e "${RED}Failed to restart services${NC}"
@@ -151,8 +160,8 @@ COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
 echo -e "${GREEN}✓ Services restarted${NC}"
 echo ""
 
-# Step 6: Verify — wait up to 30s for the app to be ready
-echo -e "${YELLOW}[6/6]${NC} Verifying deployment..."
+# Step 7: Verify — wait up to 30s for the app to be ready
+echo -e "${YELLOW}[7/7]${NC} Verifying deployment..."
 WAIT=0
 until docker ps --format '{{.Names}}' | grep -q "allerac-app" || [ $WAIT -ge 30 ]; do
     sleep 2

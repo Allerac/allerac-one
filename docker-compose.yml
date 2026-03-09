@@ -22,6 +22,7 @@ name: allerac
 services:
   migrations:
     image: postgres:16-alpine
+    container_name: allerac-migrations
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_USER=postgres
@@ -70,6 +71,7 @@ services:
       args:
         COMMIT_HASH: ${COMMIT_HASH:-unknown}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+    container_name: allerac-app
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/allerac
@@ -108,6 +110,7 @@ services:
 
   db:
     image: pgvector/pgvector:pg16
+    container_name: allerac-db
     restart: unless-stopped
     environment:
       - POSTGRES_USER=postgres
@@ -186,7 +189,7 @@ services:
 
   node-exporter:
     image: prom/node-exporter:latest
-    container_name: node-exporter
+    container_name: allerac-node-exporter
     restart: unless-stopped
     volumes:
       - /proc:/host/proc:ro
@@ -202,7 +205,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: prometheus
+    container_name: allerac-prometheus
     restart: unless-stopped
     volumes:
       - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -220,7 +223,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana
+    container_name: allerac-grafana
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=admin
@@ -241,7 +244,7 @@ services:
   # Loki - Log aggregation
   loki:
     image: grafana/loki:latest
-    container_name: loki
+    container_name: allerac-loki
     restart: unless-stopped
     user: "0"  # Run as root to avoid permission issues with volumes
     volumes:
@@ -258,7 +261,7 @@ services:
   # Promtail - Log shipping agent
   promtail:
     image: grafana/promtail:latest
-    container_name: promtail
+    container_name: allerac-promtail
     restart: unless-stopped
     volumes:
       - ./infra/monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml
@@ -308,7 +311,7 @@ services:
   # Cloudflare Zero Trust: add public hostname portainer.allerac.ai → http://localhost:9000
   portainer:
     image: portainer/portainer-ce:latest
-    container_name: portainer
+    container_name: allerac-portainer
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -410,12 +413,21 @@ services:
           memory: 128M
 
 volumes:
+  # Data volumes declared as external with fixed names so they survive
+  # project renames and are never accidentally re-created empty.
   db_data:
+    external: true
+    name: allerac_db_data
   ollama_data:
+    external: true
+    name: allerac_ollama_data
+  backups_data:
+    external: true
+    name: allerac_backups_data
+  # Ephemeral / monitoring volumes — auto-created per project
   prometheus_data:
   grafana_data:
   loki_data:
-  backups_data:
   executor_workspace:
   redis_data:
   portainer_data:
