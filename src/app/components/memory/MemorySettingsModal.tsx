@@ -83,7 +83,7 @@ export default function MemorySettingsModal({
           <button
             onClick={handleSave}
             disabled={!systemMessageEdit.trim()}
-            className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {t('save')}
           </button>

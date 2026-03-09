@@ -182,7 +182,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       <div className="bg-gray-800/90 backdrop-blur-lg rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
         {/* Header */}
         <div className="p-8 text-center border-b border-gray-700">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center mx-auto mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
@@ -503,7 +503,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
 
               <button
                 onClick={handleFinish}
-                className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-brand-600 to-brand-600 hover:from-brand-700 hover:to-brand-700 text-white transition-all transform hover:scale-105"
+                className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-brand-500 to-brand-700 hover:from-brand-600 hover:to-brand-800 text-white transition-all transform hover:scale-105"
               >
                 {t('finish')}
               </button>

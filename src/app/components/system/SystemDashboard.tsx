@@ -457,7 +457,7 @@ export default function SystemDashboardModal({
           }`}
         >
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -622,7 +622,7 @@ export default function SystemDashboardModal({
                           {updateStatus?.updateAvailable && (
                             <button
                               onClick={handleUpdate}
-                              className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs bg-brand-600 hover:bg-brand-700 text-white transition-colors flex items-center justify-center gap-1"
+                              className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs bg-brand-900 hover:bg-brand-800 text-white transition-colors flex items-center justify-center gap-1"
                             >
                               {t('prepareUpdate')}
                             </button>
@@ -731,7 +731,7 @@ export default function SystemDashboardModal({
                         <button
                           onClick={handleCreateBackup}
                           disabled={isCreatingBackup}
-                          className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
+                          className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm bg-brand-900 hover:bg-brand-800 text-white transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
                         >
                           {isCreatingBackup && (
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
@@ -914,7 +914,7 @@ export default function SystemDashboardModal({
               <button
                 onClick={handleSaveApiKeys}
                 disabled={isSavingKeys || (!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim() && !googleKeyInput.trim())}
-                className="px-5 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+                className="px-5 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
               >
                 {isSavingKeys && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>}
                 {t('saveKeys')}

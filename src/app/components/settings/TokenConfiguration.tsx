@@ -121,7 +121,7 @@ export default function TokenConfiguration({
             <button
               onClick={onSave}
               disabled={!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim()}
-              className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Save Keys
             </button>

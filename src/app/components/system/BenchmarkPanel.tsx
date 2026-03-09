@@ -208,7 +208,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               isRunning
                 ? 'bg-brand-800 text-brand-300 cursor-not-allowed'
-                : 'bg-brand-600 hover:bg-brand-700 text-white'
+                : 'bg-brand-900 hover:bg-brand-800 text-white'
             }`}
           >
             {isRunning ? (

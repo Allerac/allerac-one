@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { AlleracIcon } from '../ui/AlleracIcon';
 
 interface ChatHeaderProps {
   isSidebarOpen: boolean;
@@ -60,11 +61,9 @@ export default function ChatHeader({
             </span>
           ) : (
             <div className="flex items-center gap-2">
-              <svg width="28" height="28" viewBox="0 0 512 512" fill="none" className="flex-shrink-0">
-                <rect width="512" height="512" rx="96" fill="#0d0d0d"/>
-                <line x1="168" y1="282" x2="344" y2="282" stroke="#39d353" strokeWidth="58" strokeLinecap="round"/>
-                <path d="M100 432 L256 88 L412 432" stroke="white" strokeWidth="64" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)' }}>
+                <AlleracIcon size={20} />
+              </div>
               <span className={`text-xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
                 Allerac
               </span>
@@ -132,7 +131,8 @@ export default function ChatHeader({
           {/* User avatar — opens UserSettings modal */}
           <button
             onClick={onOpenUserSettings}
-            className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0 hover:opacity-90 transition-opacity"
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-90 transition-opacity"
+            style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)' }}
             title={t('userSettings')}
           >
             <span className="text-sm font-semibold text-white">{userInitial}</span>

@@ -119,7 +119,7 @@ export default function MemorySaveModal({
                   <div className="pt-4">
                     <button
                       onClick={onClose}
-                      className="w-full px-6 py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-colors"
+                      className="w-full px-6 py-3 bg-brand-900 text-white font-semibold rounded-lg hover:bg-brand-800 transition-colors"
                     >
                       {t('close')}
                     </button>

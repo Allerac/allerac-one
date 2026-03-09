@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, Model, MessageContentPart } from '../../types';
 import CorrectAndMemorize from '../memory/CorrectAndMemorize';
+import { AlleracIcon } from '../ui/AlleracIcon';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -165,18 +166,20 @@ export default function ChatMessages({
                   <div className="relative flex-shrink-0 w-8 h-8">
                     {isSending && index === messages.length - 1 && (
                       <div
-                        className="absolute -inset-[2px] rounded-full animate-spin"
+                        className="absolute rounded-full animate-spin"
                         style={{
-                          background: 'conic-gradient(from 0deg, #60a5fa, #a78bfa, #f472b6, #fb923c, #60a5fa)',
+                          inset: '-2px',
+                          background: 'conic-gradient(from 0deg, transparent, #39d353 40%, #4ade80 60%, transparent)',
                           animationDuration: '2s',
                         }}
                       />
                     )}
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center">
-                      <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
+                    <div className="w-full h-full rounded-full flex items-center justify-center"
+                         style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)', position: 'relative', zIndex: 1 }}>
+                      <AlleracIcon size={18} />
                     </div>
                   </div>
-                  
+
                   {/* 3-dot menu */}
                   <div className="relative" ref={el => { menuRefs.current[index] = el; }}>
                     <button
@@ -340,14 +343,16 @@ export default function ChatMessages({
         {isSending && messages[messages.length - 1]?.role !== 'assistant' && (
           <div className="relative flex-shrink-0 w-8 h-8">
             <div
-              className="absolute -inset-[2px] rounded-full animate-spin"
+              className="absolute rounded-full animate-spin"
               style={{
-                background: 'conic-gradient(from 0deg, #60a5fa, #a78bfa, #f472b6, #fb923c, #60a5fa)',
+                inset: '-2px',
+                background: 'conic-gradient(from 0deg, transparent, #39d353 40%, #4ade80 60%, transparent)',
                 animationDuration: '2s',
               }}
             />
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center">
-              <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
+            <div className="w-full h-full rounded-full flex items-center justify-center"
+                 style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)', position: 'relative', zIndex: 1 }}>
+              <AlleracIcon size={18} />
             </div>
           </div>
         )}

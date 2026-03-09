@@ -666,7 +666,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                 <button
                   onClick={handleSave}
                   disabled={loading}
-                  className="px-6 py-2 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 rounded-lg font-medium bg-brand-900 hover:bg-brand-800 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? t('saving') : activeTab === 'create' ? t('createJob') : t('saveChanges')}
                 </button>

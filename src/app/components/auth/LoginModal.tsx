@@ -248,7 +248,7 @@ export default function LoginModal({
               type="submit"
               disabled={isLoading}
               className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 text-white'
+                isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-900 hover:bg-brand-800 text-white'
               }`}
             >
               {isLoading ? (
@@ -388,7 +388,7 @@ export default function LoginModal({
                 type="submit"
                 disabled={isLoading}
                 className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                  isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 text-white'
+                  isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-900 hover:bg-brand-800 text-white'
                 }`}
               >
                 {isLoading ? (

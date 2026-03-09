@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef } from 'react';
+import { AlleracIcon } from '../ui/AlleracIcon';
 
 interface ChatInputProps {
   inputMessage: string;
@@ -247,13 +248,7 @@ export default function ChatInput({
                 const dropdown = document.getElementById('chat-input-skills-dropdown');
                 if (dropdown) dropdown.classList.toggle('hidden');
               }}
-              className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
-                currentSkill
-                  ? 'bg-brand-500 hover:bg-brand-600 text-white'
-                  : isDarkMode
-                  ? 'hover:bg-gray-600 text-gray-400'
-                  : 'hover:bg-gray-200 text-gray-600'
-              }`}
+              className="w-11 h-11 rounded-lg flex items-center justify-center transition-all text-white bg-brand-900 hover:bg-brand-800"
               title={currentSkill ? currentSkill.display_name || currentSkill.name : t('selectSkill')}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -405,7 +400,9 @@ export default function ChatInput({
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <span>{model.icon}</span>
+                                  <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)' }}>
+                                    <AlleracIcon size={16} />
+                                  </div>
                                   <div className="min-w-0">
                                     <span className={`font-medium block ${selectedModel === model.id ? 'text-brand-400' : isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
                                       {model.shortName}

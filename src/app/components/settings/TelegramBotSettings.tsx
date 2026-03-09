@@ -247,7 +247,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                       type="button"
                       onClick={handleTestToken}
                       disabled={testingToken || !formData.botToken}
-                      className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      className="px-4 py-2 bg-brand-900 text-white rounded-lg hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {testingToken ? t('testing') : t('testToken')}
                     </button>
@@ -292,7 +292,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-brand-900 text-white rounded-lg hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? t('saving') : editingBot ? t('updateBot') : t('createBot')}
                 </button>
@@ -308,7 +308,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
           ) : (
             <button
               onClick={() => setShowAddForm(true)}
-              className="w-full mb-4 sm:mb-6 px-4 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium flex items-center justify-center gap-2"
+              className="w-full mb-4 sm:mb-6 px-4 py-3 bg-brand-900 text-white rounded-lg hover:bg-brand-800 font-medium flex items-center justify-center gap-2"
             >
               <span className="text-xl">+</span>
               {t('addNewBot')}

@@ -68,7 +68,7 @@ export default function UserSettingsModal({
         </div>
         <div className="p-6 space-y-6">
           <div className="flex flex-col items-center">
-            <div className="w-20 h-20 rounded-full bg-brand-600 flex items-center justify-center mb-3">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mb-3" style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)' }}>
               <span className="text-white text-2xl font-semibold">{getInitials(userEmail)}</span>
             </div>
             <h3 className={`text-lg font-medium ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{userName}</h3>
@@ -85,8 +85,8 @@ export default function UserSettingsModal({
               onClick={onOpenTelegramSettings}
               className={`w-full p-4 rounded-lg transition-colors flex items-center justify-between ${
                 isDarkMode 
-                  ? 'bg-brand-600 hover:bg-brand-700 text-white' 
-                  : 'bg-brand-500 hover:bg-brand-600 text-white'
+                  ? 'bg-brand-900 hover:bg-brand-800 text-white' 
+                  : 'bg-brand-900 hover:bg-brand-800 text-white'
               }`}
             >
               <div className="flex items-center gap-3">
