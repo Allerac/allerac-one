@@ -17,6 +17,8 @@
 #
 # Ollama runs by default on the server (privacy-first, no inference data leaves the machine).
 
+name: allerac
+
 services:
   migrations:
     image: postgres:16-alpine
@@ -370,6 +372,38 @@ services:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ============================================
+  # Webhook — Auto-deploy on git push
+  # GitHub → Settings → Webhooks → <tunnel>/hooks/deploy
+  # ============================================
+  webhook:
+    build:
+      context: ./infra/webhook
+      dockerfile: Dockerfile
+    container_name: allerac-webhook
+    restart: unless-stopped
+    ports:
+      - "9999:9000"
+    volumes:
+      - ./infra/webhook:/etc/webhook:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${COMPOSE_DIR:-.}:/project
+    environment:
+      # Required: generate with: openssl rand -hex 32
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      # Email notifications via Resend (https://resend.com)
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - DEPLOY_NOTIFY_EMAIL=${DEPLOY_NOTIFY_EMAIL:-}
+      - FROM_EMAIL=${FROM_EMAIL:-deploy@allerac.ai}
+      # Git authentication for git pull inside container
+      - GITHUB_DEPLOY_TOKEN=${GITHUB_DEPLOY_TOKEN:-}
+      # Human-readable name shown in deploy emails
+      - DEPLOY_VM_NAME=${DEPLOY_VM_NAME:-allerac-vm}
     deploy:
       resources:
         limits:

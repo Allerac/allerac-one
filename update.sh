@@ -151,8 +151,13 @@ COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
 echo -e "${GREEN}✓ Services restarted${NC}"
 echo ""
 
-# Step 6: Verify
-sleep 3
+# Step 6: Verify — wait up to 30s for the app to be ready
+echo -e "${YELLOW}[6/6]${NC} Verifying deployment..."
+WAIT=0
+until docker ps --format '{{.Names}}' | grep -q "allerac-app" || [ $WAIT -ge 30 ]; do
+    sleep 2
+    WAIT=$((WAIT + 2))
+done
 verify_deployment
 
 echo ""
