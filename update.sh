@@ -150,23 +150,19 @@ fi
 echo -e "${GREEN}✓ Images rebuilt${NC}"
 echo ""
 
-# Step 6: Remove any containers with conflicting names from other projects.
-# This happens when the compose project name changes (e.g. allerac-one → allerac).
-# Only removes containers whose com.docker.compose.project label != "allerac".
+# Step 6: Remove containers from other projects that would conflict.
+# Catches both name conflicts (explicit container_name) and port conflicts
+# from old non-prefixed monitoring containers (loki, grafana, prometheus, etc.).
 echo -e "${YELLOW}[6/8]${NC} Cleaning up orphan containers..."
-NAMED_CONTAINERS="allerac-app allerac-db allerac-migrations allerac-executor \
-  allerac-ollama allerac-ollama-setup allerac-telegram allerac-notifier \
-  allerac-tunnel allerac-redis allerac-webhook allerac-portainer \
-  allerac-node-exporter allerac-prometheus allerac-grafana allerac-loki allerac-promtail"
-for c in $NAMED_CONTAINERS; do
-    if docker inspect "$c" > /dev/null 2>&1; then
-        proj=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$c" 2>/dev/null || echo "")
-        if [ "$proj" != "allerac" ]; then
-            echo "  Removing orphan: $c (project: ${proj:-unknown})"
-            docker rm -f "$c" > /dev/null 2>&1 || true
-        fi
-    fi
-done
+OLD_CONTAINERS=$(docker ps -a \
+    --filter "label=com.docker.compose.project=allerac-one" \
+    --format "{{.Names}}" 2>/dev/null)
+if [ -n "$OLD_CONTAINERS" ]; then
+    echo "$OLD_CONTAINERS" | while read -r c; do
+        echo "  Removing allerac-one container: $c"
+        docker rm -f "$c" > /dev/null 2>&1 || true
+    done
+fi
 echo -e "${GREEN}✓ Cleanup done${NC}"
 echo ""
 

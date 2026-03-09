@@ -13,9 +13,9 @@
 #   HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
 #
 # Tiers:
-#   lite   → N100, 16GB  → qwen2.5:3b + deepseek-r1:7b
-#   home   → i5/R5, 32GB → qwen2.5:3b + deepseek-r1:7b
-#   pro    → i7/R7, 64GB → qwen2.5:3b + deepseek-r1:7b
+#   lite   → N100, 16GB  → qwen2.5:3b
+#   home   → i5/R5, 32GB → qwen2.5:3b
+#   pro    → i7/R7, 64GB → qwen2.5:3b
 #   custom → You choose the models
 #
 
@@ -381,9 +381,9 @@ select_hardware_tier() {
     fi
     if [ -n "$HARDWARE_TIER" ]; then
         case "$HARDWARE_TIER" in
-            lite)   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b" ;;
-            home)   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b" ;;
-            pro)    OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b" ;;
+            lite)   OLLAMA_MODELS="qwen2.5:3b" ;;
+            home)   OLLAMA_MODELS="qwen2.5:3b" ;;
+            pro)    OLLAMA_MODELS="qwen2.5:3b" ;;
             custom) OLLAMA_MODELS="${OLLAMA_MODELS:-qwen2.5:3b}" ;;
         esac
         log_info "Hardware tier: $HARDWARE_TIER (models: $OLLAMA_MODELS)"
@@ -394,13 +394,13 @@ select_hardware_tier() {
     echo -e "${BOLD}Which Allerac hardware are you setting up?${NC}"
     echo ""
     echo -e "  ${BOLD}1) Allerac Lite${NC}   — N100 · 16GB RAM"
-    echo -e "     Models: qwen2.5:3b + deepseek-r1:7b     (~7GB download)"
+    echo -e "     Models: qwen2.5:3b                      (~2GB download)"
     echo ""
     echo -e "  ${BOLD}2) Allerac Home${NC}   — i5/Ryzen 5 · 32GB RAM"
-    echo -e "     Models: qwen2.5:3b + deepseek-r1:7b     (~7GB download)"
+    echo -e "     Models: qwen2.5:3b                      (~2GB download)"
     echo ""
     echo -e "  ${BOLD}3) Allerac Pro${NC}    — i7/Ryzen 7 · 64GB RAM (optional GPU)"
-    echo -e "     Models: qwen2.5:3b + deepseek-r1:7b     (~7GB download)"
+    echo -e "     Models: qwen2.5:3b                      (~2GB download)"
     echo ""
     echo -e "  ${BOLD}4) Custom${NC}         — Choose your own models"
     echo ""
@@ -408,9 +408,9 @@ select_hardware_tier() {
     while true; do
         read -rp "  Select [1-4]: " TIER_CHOICE
         case "$TIER_CHOICE" in
-            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b"; break ;;
-            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b"; break ;;
-            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="qwen2.5:3b,deepseek-r1:7b"; break ;;
+            1) HARDWARE_TIER="lite";   OLLAMA_MODELS="qwen2.5:3b"; break ;;
+            2) HARDWARE_TIER="home";   OLLAMA_MODELS="qwen2.5:3b"; break ;;
+            3) HARDWARE_TIER="pro";    OLLAMA_MODELS="qwen2.5:3b"; break ;;
             4) HARDWARE_TIER="custom"
                read -rp "  Enter models (comma-separated, e.g. qwen2.5:3b,deepseek-r1:7b): " OLLAMA_MODELS
                [ -z "$OLLAMA_MODELS" ] && OLLAMA_MODELS="qwen2.5:3b"
@@ -506,7 +506,7 @@ EXECUTOR_SECRET=${EXEC_SECRET}
 
 # --------------------------------------------
 # Ollama models for this hardware tier
-# lite/home/pro: qwen2.5:3b + deepseek-r1:7b | custom = user-defined
+# lite/home/pro: qwen2.5:3b | custom = user-defined
 # --------------------------------------------
 OLLAMA_MODELS=${OLLAMA_MODELS}
 
