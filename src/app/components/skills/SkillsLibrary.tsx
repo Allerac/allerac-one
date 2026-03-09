@@ -278,8 +278,8 @@ export default function SkillsLibrary({
             className={`px-6 py-3 font-medium transition-colors ${
               activeTab === 'library'
                 ? isDarkMode
-                  ? 'border-b-2 border-blue-500 text-blue-400'
-                  : 'border-b-2 border-blue-600 text-blue-600'
+                  ? 'border-b-2 border-brand-500 text-brand-400'
+                  : 'border-b-2 border-brand-600 text-brand-600'
                 : isDarkMode
                   ? 'text-gray-400 hover:text-gray-300'
                   : 'text-gray-600 hover:text-gray-800'
@@ -304,8 +304,8 @@ export default function SkillsLibrary({
             className={`px-6 py-3 font-medium transition-colors ${
               activeTab === 'create'
                 ? isDarkMode
-                  ? 'border-b-2 border-blue-500 text-blue-400'
-                  : 'border-b-2 border-blue-600 text-blue-600'
+                  ? 'border-b-2 border-brand-500 text-brand-400'
+                  : 'border-b-2 border-brand-600 text-brand-600'
                 : isDarkMode
                   ? 'text-gray-400 hover:text-gray-300'
                   : 'text-gray-600 hover:text-gray-800'
@@ -319,8 +319,8 @@ export default function SkillsLibrary({
               className={`px-6 py-3 font-medium transition-colors ${
                 activeTab === 'edit'
                   ? isDarkMode
-                    ? 'border-b-2 border-blue-500 text-blue-400'
-                    : 'border-b-2 border-blue-600 text-blue-600'
+                    ? 'border-b-2 border-brand-500 text-brand-400'
+                    : 'border-b-2 border-brand-600 text-brand-600'
                   : isDarkMode
                     ? 'text-gray-400 hover:text-gray-300'
                     : 'text-gray-600 hover:text-gray-800'
@@ -374,7 +374,7 @@ export default function SkillsLibrary({
                           </div>
                           <div className="flex gap-2">
                             {skill.verified && (
-                              <span className="text-blue-500" title={t('verified')}>
+                              <span className="text-brand-500" title={t('verified')}>
                                 ✓
                               </span>
                             )}
@@ -386,7 +386,7 @@ export default function SkillsLibrary({
                             {skill.user_id === userId && (
                               <button
                                 onClick={() => handleEditSkill(skill)}
-                                className={`text-sm ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                                className={`text-sm ${isDarkMode ? 'text-brand-400 hover:text-brand-300' : 'text-brand-600 hover:text-brand-700'}`}
                               >
                                 ✏️
                               </button>
@@ -531,8 +531,8 @@ export default function SkillsLibrary({
                   disabled={loading}
                   className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                     isDarkMode
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      ? 'bg-brand-600 hover:bg-brand-700 text-white'
+                      : 'bg-brand-500 hover:bg-brand-600 text-white'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {loading ? t('saving') : activeTab === 'create' ? t('create') : t('update')}

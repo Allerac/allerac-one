@@ -189,7 +189,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
               value={benchModel}
               onChange={e => setBenchModel(e.target.value)}
               disabled={isRunning}
-              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${
                 isDarkMode
                   ? 'bg-gray-900 border-gray-600 text-gray-100'
                   : 'bg-white border-gray-300 text-gray-900'
@@ -207,13 +207,13 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
             disabled={isRunning}
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               isRunning
-                ? 'bg-blue-800 text-blue-300 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                ? 'bg-brand-800 text-brand-300 cursor-not-allowed'
+                : 'bg-brand-600 hover:bg-brand-700 text-white'
             }`}
           >
             {isRunning ? (
               <span className="flex items-center gap-2">
-                <span className="w-3 h-3 border-2 border-blue-300 border-t-transparent rounded-full animate-spin" />
+                <span className="w-3 h-3 border-2 border-brand-300 border-t-transparent rounded-full animate-spin" />
                 {isWarmingUp ? 'Warming up…' : `Test ${currentTestIdx + 1}/${TESTS.length}…`}
               </span>
             ) : '▶ Run Benchmark'}
@@ -224,8 +224,8 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
           4 standardized prompts · measures TTFT, total time, and tokens/s · results saved for comparison
         </p>
         {isRunning && (
-          <div className={`mt-3 flex items-center gap-2 text-xs text-blue-400`}>
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block" />
+          <div className={`mt-3 flex items-center gap-2 text-xs text-brand-400`}>
+            <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse inline-block" />
             {isWarmingUp
               ? 'Warming up model (loading into memory)…'
               : `Running test ${currentTestIdx + 1} of ${TESTS.length} — ${TESTS[currentTestIdx]?.label}`}
@@ -260,7 +260,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
                           : <span className={`text-xs ${textMuted}`}>—</span>
                       )}
                       {state.status === 'running' && (
-                        <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin inline-block" />
+                        <span className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin inline-block" />
                       )}
                       {state.status === 'done' && <span className="text-green-500 text-sm">✓</span>}
                       {state.status === 'error' && <span className="text-red-500 text-sm">✗</span>}
@@ -328,7 +328,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
                   <span className={`font-medium ${textPrimary}`}>
                     {MODELS.find(m => m.id === run.model)?.icon || '🤖'} {run.model}
                     {runIdx === 0 && lastRunId === run.run_id && (
-                      <span className="ml-2 text-blue-400">· latest</span>
+                      <span className="ml-2 text-brand-400">· latest</span>
                     )}
                   </span>
                   <div className="flex items-center gap-3">
@@ -337,7 +337,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
                     </span>
                     <button
                       onClick={() => copyRunResults(run)}
-                      className={`flex items-center gap-1 transition-colors ${copiedRunId === run.run_id ? 'text-green-400' : `${textMuted} hover:text-blue-400`}`}
+                      className={`flex items-center gap-1 transition-colors ${copiedRunId === run.run_id ? 'text-green-400' : `${textMuted} hover:text-brand-400`}`}
                       title="Copy results"
                     >
                       {copiedRunId === run.run_id ? (

@@ -60,7 +60,7 @@ export default function TokenConfiguration({
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               placeholder={githubToken ? '••••••••' : 'Enter your Allerac API key...'}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
             />
             <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               Your API key unlocks Pro models (GPT-4o, Ministral, Gemini). Contact Allerac to get yours.
@@ -76,7 +76,7 @@ export default function TokenConfiguration({
               value={tavilyKeyInput}
               onChange={(e) => setTavilyKeyInput(e.target.value)}
               placeholder={tavilyApiKey ? '••••••••' : 'tvly-...'}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
             />
             <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               Get a free API key at{' '}
@@ -84,7 +84,7 @@ export default function TokenConfiguration({
                 href="https://app.tavily.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
+                className="text-brand-600 hover:underline"
               >
                 tavily.com
               </a>
@@ -101,7 +101,7 @@ export default function TokenConfiguration({
               value={telegramBotTokenInput}
               onChange={(e) => setTelegramBotTokenInput(e.target.value)}
               placeholder={telegramBotToken ? '••••••••' : 'Enter bot token...'}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
             />
             <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               Create a bot via{' '}
@@ -109,7 +109,7 @@ export default function TokenConfiguration({
                 href="https://t.me/BotFather"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
+                className="text-brand-600 hover:underline"
               >
                 @BotFather
               </a>
@@ -121,7 +121,7 @@ export default function TokenConfiguration({
             <button
               onClick={onSave}
               disabled={!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim()}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Save Keys
             </button>

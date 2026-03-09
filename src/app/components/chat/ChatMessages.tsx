@@ -119,7 +119,7 @@ export default function ChatMessages({
                   key={idx}
                   src={img.image_url?.url}
                   alt={`Uploaded ${idx + 1}`}
-                  className="max-w-xs rounded-lg border-2 border-blue-500/30"
+                  className="max-w-xs rounded-lg border-2 border-brand-500/30"
                   style={{ maxHeight: '200px' }}
                 />
               ))}
@@ -172,7 +172,7 @@ export default function ChatMessages({
                         }}
                       />
                     )}
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center">
                       <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
                     </div>
                   </div>
@@ -272,7 +272,7 @@ export default function ChatMessages({
                             <span className="font-medium">
                               {thinkResult.isComplete ? 'Reasoning' : (
                                 <span className="flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse inline-block" />
                                   Thinking…
                                 </span>
                               )}
@@ -295,7 +295,7 @@ export default function ChatMessages({
                           )}
                         </div>
                       )}
-                      <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'text-gray-900 prose-headings:text-gray-900 prose-p:text-gray-900 prose-li:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-pre:bg-gray-100 prose-pre:text-gray-900'} prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
+                      <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'text-gray-900 prose-headings:text-gray-900 prose-p:text-gray-900 prose-li:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-pre:bg-gray-100 prose-pre:text-gray-900'} prose-a:text-brand-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -304,7 +304,7 @@ export default function ChatMessages({
                                 {...props}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
+                                className="text-brand-600 hover:text-brand-800 hover:underline font-medium transition-colors"
                               />
                             ),
                             hr: () => null,
@@ -346,7 +346,7 @@ export default function ChatMessages({
                 animationDuration: '2s',
               }}
             />
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center">
               <span className="text-sm">{MODELS.find((m: Model) => m.id === selectedModel)?.icon || '🤖'}</span>
             </div>
           </div>

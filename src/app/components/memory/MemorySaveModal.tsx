@@ -61,7 +61,7 @@ export default function MemorySaveModal({
 
           {loading && (
             <div className="flex flex-col items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mb-4"></div>
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-brand-600 mb-4"></div>
               <p className={`text-center ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                 {t('analyzing')}
               </p>
@@ -80,10 +80,10 @@ export default function MemorySaveModal({
                   </div>
 
                   {result.importance !== undefined && (
-                    <div className={`p-4 border rounded-lg ${isDarkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
+                    <div className={`p-4 border rounded-lg ${isDarkMode ? 'bg-brand-900/20 border-brand-800' : 'bg-brand-50 border-brand-200'}`}>
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('importanceScore')}</span>
-                        <span className="px-3 py-1 bg-blue-600 text-white rounded-lg font-bold">
+                        <span className="px-3 py-1 bg-brand-600 text-white rounded-lg font-bold">
                           {result.importance}/10
                         </span>
                       </div>
@@ -94,13 +94,13 @@ export default function MemorySaveModal({
                   )}
 
                   {result.topics && result.topics.length > 0 && (
-                    <div className={`p-4 border rounded-lg ${isDarkMode ? 'bg-purple-900/20 border-purple-800' : 'bg-purple-50 border-purple-200'}`}>
+                    <div className={`p-4 border rounded-lg ${isDarkMode ? 'bg-brand-900/20 border-brand-800' : 'bg-brand-50 border-brand-200'}`}>
                       <h3 className={`font-semibold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('keyTopics')}</h3>
                       <div className="flex flex-wrap gap-2">
                         {result.topics.map((topic, idx) => (
                           <span
                             key={idx}
-                            className="px-3 py-1 bg-purple-600 text-white rounded-lg text-sm"
+                            className="px-3 py-1 bg-brand-600 text-white rounded-lg text-sm"
                           >
                             {topic}
                           </span>
@@ -119,7 +119,7 @@ export default function MemorySaveModal({
                   <div className="pt-4">
                     <button
                       onClick={onClose}
-                      className="w-full px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors"
+                      className="w-full px-6 py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-colors"
                     >
                       {t('close')}
                     </button>

@@ -178,11 +178,11 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-brand-900 to-brand-900 flex items-center justify-center p-4">
       <div className="bg-gray-800/90 backdrop-blur-lg rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
         {/* Header */}
         <div className="p-8 text-center border-b border-gray-700">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center mx-auto mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
@@ -199,7 +199,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                     currentStep >= step.number
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-brand-600 text-white'
                       : 'bg-gray-700 text-gray-400'
                   }`}
                 >
@@ -214,7 +214,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                 {index < steps.length - 1 && (
                   <div
                     className={`w-12 md:w-24 h-1 mx-2 rounded ${
-                      currentStep > step.number ? 'bg-blue-600' : 'bg-gray-700'
+                      currentStep > step.number ? 'bg-brand-600' : 'bg-gray-700'
                     }`}
                   />
                 )}
@@ -248,7 +248,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={tLogin('yourName')}
-                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -262,7 +262,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@example.com"
                   required
-                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -276,7 +276,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={tLogin('atLeast8Chars')}
                   required
-                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -290,14 +290,14 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder={tLogin('confirmYourPassword')}
                   required
-                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
               <button
                 onClick={handleStep1Submit}
                 disabled={isLoading}
-                className="w-full py-3 px-4 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                className="w-full py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
                 {isLoading ? t('creating') : t('next')}
               </button>
@@ -323,14 +323,14 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                     onClick={() => setSelectedLanguage(lang.code)}
                     className={`w-full p-4 rounded-lg border flex items-center gap-4 transition-colors ${
                       selectedLanguage === lang.code
-                        ? 'border-blue-500 bg-blue-500/20 text-white'
+                        ? 'border-brand-500 bg-brand-500/20 text-white'
                         : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
                     }`}
                   >
                     <span className="text-2xl">{lang.flag}</span>
                     <span className="font-medium">{lang.label}</span>
                     {selectedLanguage === lang.code && (
-                      <svg className="w-5 h-5 ml-auto text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-5 h-5 ml-auto text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     )}
@@ -348,7 +348,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                 <button
                   onClick={handleStep2Submit}
                   disabled={isLoading}
-                  className="flex-1 py-3 px-4 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:bg-gray-600"
+                  className="flex-1 py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600"
                 >
                   {t('next')}
                 </button>
@@ -366,7 +366,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
 
               {isCheckingConnection ? (
                 <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-500 mx-auto"></div>
                   <p className="text-gray-400 mt-4">{t('checkingConnection')}</p>
                 </div>
               ) : !ollamaConnected ? (
@@ -405,7 +405,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                           }}
                           className={`w-full p-4 rounded-lg border flex items-center justify-between transition-colors ${
                             selectedModel === model.name
-                              ? 'border-blue-500 bg-blue-500/20 text-white'
+                              ? 'border-brand-500 bg-brand-500/20 text-white'
                               : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
                           }`}
                         >
@@ -479,7 +479,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                 </button>
                 <button
                   onClick={handleStep3Submit}
-                  className="flex-1 py-3 px-4 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                  className="flex-1 py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors"
                 >
                   {t('next')}
                 </button>
@@ -503,7 +503,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
 
               <button
                 onClick={handleFinish}
-                className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white transition-all transform hover:scale-105"
+                className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-brand-600 to-brand-600 hover:from-brand-700 hover:to-brand-700 text-white transition-all transform hover:scale-105"
               >
                 {t('finish')}
               </button>

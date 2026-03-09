@@ -137,7 +137,7 @@ export default function ChatInput({
               <img 
                 src={img.preview} 
                 alt={`Preview ${index + 1}`}
-                className="w-20 h-20 object-cover rounded border-2 border-blue-500"
+                className="w-20 h-20 object-cover rounded border-2 border-brand-500"
               />
               <button
                 onClick={() => onRemoveImage?.(index)}
@@ -249,7 +249,7 @@ export default function ChatInput({
               }}
               className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
                 currentSkill
-                  ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                  ? 'bg-brand-500 hover:bg-brand-600 text-white'
                   : isDarkMode
                   ? 'hover:bg-gray-600 text-gray-400'
                   : 'hover:bg-gray-200 text-gray-600'
@@ -301,8 +301,8 @@ export default function ChatInput({
                         className={`w-full px-4 py-3 text-left border-b transition-colors last:border-b-0 ${
                           currentSkill?.id === skill.id
                             ? isDarkMode
-                              ? 'bg-purple-900 border-purple-700'
-                              : 'bg-purple-50 border-purple-200'
+                              ? 'bg-brand-900 border-brand-700'
+                              : 'bg-brand-50 border-brand-200'
                             : isDarkMode
                             ? 'border-gray-700 hover:bg-gray-700'
                             : 'border-gray-200 hover:bg-gray-50'
@@ -311,7 +311,7 @@ export default function ChatInput({
                         <div className="flex items-center justify-between mb-1">
                           <span className={`font-medium ${
                             currentSkill?.id === skill.id
-                              ? 'text-purple-400'
+                              ? 'text-brand-400'
                               : isDarkMode
                               ? 'text-gray-200'
                               : 'text-gray-900'
@@ -319,7 +319,7 @@ export default function ChatInput({
                             {skill.display_name || skill.name}
                           </span>
                           {currentSkill?.id === skill.id && (
-                            <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="w-5 h-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           )}
@@ -396,8 +396,8 @@ export default function ChatInput({
                               className={`w-full pl-6 pr-4 py-2.5 text-left border-b transition-colors last:border-b-0 disabled:opacity-50 disabled:cursor-not-allowed ${
                                 selectedModel === model.id
                                   ? isDarkMode
-                                    ? 'bg-blue-900 border-blue-700'
-                                    : 'bg-blue-50 border-blue-200'
+                                    ? 'bg-brand-900 border-brand-700'
+                                    : 'bg-brand-50 border-brand-200'
                                   : isDarkMode
                                   ? 'border-gray-700 hover:bg-gray-700'
                                   : 'border-gray-200 hover:bg-gray-50'
@@ -407,7 +407,7 @@ export default function ChatInput({
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span>{model.icon}</span>
                                   <div className="min-w-0">
-                                    <span className={`font-medium block ${selectedModel === model.id ? 'text-blue-400' : isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                    <span className={`font-medium block ${selectedModel === model.id ? 'text-brand-400' : isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
                                       {model.shortName}
                                     </span>
                                     {model.description && (
@@ -418,7 +418,7 @@ export default function ChatInput({
                                   </div>
                                 </div>
                                 {selectedModel === model.id && (
-                                  <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="w-4 h-4 text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                   </svg>
                                 )}
@@ -440,7 +440,7 @@ export default function ChatInput({
             disabled={isSending || (!inputMessage.trim() && imageAttachments.length === 0) || !isProviderReady}
             className={`w-11 h-11 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
               (inputMessage.trim() || imageAttachments.length > 0) && !isSending
-                ? 'bg-blue-900 hover:bg-blue-950 text-white'
+                ? 'bg-brand-900 hover:bg-brand-950 text-white'
                 : isDarkMode
                 ? 'bg-gray-600 text-gray-400'
                 : 'bg-gray-300 text-gray-500'

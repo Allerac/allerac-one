@@ -335,7 +335,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
   const tabCls = (active: boolean) =>
     `px-6 py-3 font-medium transition-colors ${
       active
-        ? isDarkMode ? 'border-b-2 border-blue-500 text-blue-400' : 'border-b-2 border-blue-600 text-blue-600'
+        ? isDarkMode ? 'border-b-2 border-brand-500 text-brand-400' : 'border-b-2 border-brand-600 text-brand-600'
         : isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-800'
     }`;
 
@@ -421,7 +421,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                       <button
                         onClick={() => handleToggle(job)}
                         className={`mt-0.5 flex-shrink-0 w-10 h-6 rounded-full transition-colors relative ${
-                          job.enabled ? 'bg-blue-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
+                          job.enabled ? 'bg-brand-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
                         }`}
                         title={job.enabled ? t('toggleDisable') : t('toggleEnable')}
                       >
@@ -440,7 +440,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                             <span
                               key={ch}
                               className={`text-xs px-2 py-0.5 rounded-full ${
-                                isDarkMode ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-100 text-blue-700'
+                                isDarkMode ? 'bg-brand-900/40 text-brand-300' : 'bg-brand-100 text-brand-700'
                               }`}
                             >
                               {ch}
@@ -531,7 +531,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                 <button
                   onClick={() => setFormData(p => ({ ...p, enabled: !p.enabled }))}
                   className={`w-10 h-6 rounded-full transition-colors relative ${
-                    formData.enabled ? 'bg-blue-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
+                    formData.enabled ? 'bg-brand-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
                   }`}
                 >
                   <span
@@ -666,7 +666,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                 <button
                   onClick={handleSave}
                   disabled={loading}
-                  className="px-6 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? t('saving') : activeTab === 'create' ? t('createJob') : t('saveChanges')}
                 </button>

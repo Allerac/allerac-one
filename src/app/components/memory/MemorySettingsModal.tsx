@@ -72,7 +72,7 @@ export default function MemorySettingsModal({
               onChange={(e) => setSystemMessageEdit(e.target.value)}
               placeholder={t('placeholder')}
               rows={12}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100 placeholder-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100 placeholder-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
             />
             <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               {t('privacy')}
@@ -83,7 +83,7 @@ export default function MemorySettingsModal({
           <button
             onClick={handleSave}
             disabled={!systemMessageEdit.trim()}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {t('save')}
           </button>

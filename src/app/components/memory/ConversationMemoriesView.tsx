@@ -76,20 +76,20 @@ export default function ConversationMemoriesView({
     <div className="space-y-4">
       {/* Stats */}
       {stats && (
-        <div className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-blue-50 border-blue-200'} border rounded-lg p-4`}>
-          <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-blue-900'} mb-2`}>{t('statsTitle')}</h3>
+        <div className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-brand-50 border-brand-200'} border rounded-lg p-4`}>
+          <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-brand-900'} mb-2`}>{t('statsTitle')}</h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
-              <p className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} font-medium`}>{stats.totalSummaries}</p>
-              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>{t('conversations')}</p>
+              <p className={`${isDarkMode ? 'text-brand-400' : 'text-brand-600'} font-medium`}>{stats.totalSummaries}</p>
+              <p className={isDarkMode ? 'text-gray-400' : 'text-brand-700'}>{t('conversations')}</p>
             </div>
             <div>
-              <p className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} font-medium`}>{stats.totalMessages}</p>
-              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>{t('messages')}</p>
+              <p className={`${isDarkMode ? 'text-brand-400' : 'text-brand-600'} font-medium`}>{stats.totalMessages}</p>
+              <p className={isDarkMode ? 'text-gray-400' : 'text-brand-700'}>{t('messages')}</p>
             </div>
             <div>
-              <p className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} font-medium`}>{stats.averageImportance}/10</p>
-              <p className={isDarkMode ? 'text-gray-400' : 'text-blue-700'}>{t('avgImportance')}</p>
+              <p className={`${isDarkMode ? 'text-brand-400' : 'text-brand-600'} font-medium`}>{stats.averageImportance}/10</p>
+              <p className={isDarkMode ? 'text-gray-400' : 'text-brand-700'}>{t('avgImportance')}</p>
             </div>
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function ConversationMemoriesView({
           {memories.map((memory) => (
             <div
               key={memory.id}
-              className={`${isDarkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-blue-300'} border rounded-lg p-4 transition-colors`}
+              className={`${isDarkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-brand-300'} border rounded-lg p-4 transition-colors`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
@@ -118,14 +118,14 @@ export default function ConversationMemoriesView({
                         year: 'numeric',
                       })}
                     </span>
-                    <span className={`text-xs px-2 py-0.5 ${isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'} rounded`}>
+                    <span className={`text-xs px-2 py-0.5 ${isDarkMode ? 'bg-brand-900/30 text-brand-400' : 'bg-brand-100 text-brand-700'} rounded`}>
                       {t('importance')}: {memory.importance_score}/10
                     </span>
                     <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                       {memory.message_count} {t('messages').toLowerCase()}
                     </span>
                     {memory.emotion && (
-                      <span className={`text-xs px-2 py-0.5 ${isDarkMode ? 'bg-pink-900/30 text-pink-300' : 'bg-pink-100 text-pink-700'} rounded`}>
+                      <span className={`text-xs px-2 py-0.5 ${isDarkMode ? 'bg-brand-900/30 text-brand-300' : 'bg-brand-100 text-brand-700'} rounded`}>
                         {t('emotion')}: {memory.emotion}
                       </span>
                     )}

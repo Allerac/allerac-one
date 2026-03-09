@@ -115,7 +115,7 @@ export default function SidebarContent({
                         if (e.key === 'Escape') setRenamingId(null);
                       }}
                       onBlur={() => handleRenameSubmit(conv.id)}
-                      className="flex-1 px-3 py-2 text-sm rounded-lg bg-gray-700 text-gray-100 border border-gray-500 focus:border-purple-500 focus:outline-none min-w-0"
+                      className="flex-1 px-3 py-2 text-sm rounded-lg bg-gray-700 text-gray-100 border border-gray-500 focus:border-brand-500 focus:outline-none min-w-0"
                     />
                   ) : (
                     <>

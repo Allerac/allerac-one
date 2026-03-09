@@ -225,7 +225,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     onChange={(e) => setFormData({ ...formData, botName: e.target.value })}
                     placeholder="My Telegram Bot"
                     required
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white"
                   />
                 </div>
 
@@ -241,13 +241,13 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                       onChange={(e) => setFormData({ ...formData, botToken: e.target.value })}
                       placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
                       required={!editingBot}
-                      className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white font-mono text-sm"
+                      className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white font-mono text-sm"
                     />
                     <button
                       type="button"
                       onClick={handleTestToken}
                       disabled={testingToken || !formData.botToken}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {testingToken ? t('testing') : t('testToken')}
                     </button>
@@ -266,7 +266,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     value={formData.botUsername}
                     onChange={(e) => setFormData({ ...formData, botUsername: e.target.value })}
                     placeholder={t('botUsernameHint')}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white"
                   />
                 </div>
 
@@ -280,7 +280,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     onChange={(e) => setFormData({ ...formData, allowedTelegramIds: e.target.value })}
                     placeholder="123456789, 987654321"
                     required
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t('allowedIdsHint')}
@@ -292,7 +292,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? t('saving') : editingBot ? t('updateBot') : t('createBot')}
                 </button>
@@ -308,7 +308,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
           ) : (
             <button
               onClick={() => setShowAddForm(true)}
-              className="w-full mb-4 sm:mb-6 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2"
+              className="w-full mb-4 sm:mb-6 px-4 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium flex items-center justify-center gap-2"
             >
               <span className="text-xl">+</span>
               {t('addNewBot')}
@@ -353,7 +353,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                       <button
                         onClick={() => handleToggle(bot.id)}
-                        className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                        className="px-3 py-1 text-sm bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded hover:bg-brand-200 dark:hover:bg-brand-900/50"
                       >
                         {bot.enabled ? t('disable') : t('enable')}
                       </button>
@@ -388,11 +388,11 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
           )}
 
           {/* Help Section */}
-          <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
+          <div className="mt-8 p-4 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg">
+            <h4 className="font-semibold text-brand-900 dark:text-brand-300 mb-2">
               📱 {t('howToCreate')}
             </h4>
-            <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-decimal list-inside">
+            <ol className="text-sm text-brand-800 dark:text-brand-300 space-y-1 list-decimal list-inside">
               <li>{t('howToStep1')}</li>
               <li>{t('howToStep2')}</li>
               <li>{t('howToStep3')}</li>

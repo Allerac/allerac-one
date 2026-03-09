@@ -238,7 +238,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
         className={`
           border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer
           ${isDragging
-            ? (isDarkMode ? 'border-blue-400 bg-blue-900/20' : 'border-blue-500 bg-blue-50')
+            ? (isDarkMode ? 'border-brand-400 bg-brand-900/20' : 'border-brand-500 bg-brand-50')
             : (isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-300 hover:border-gray-400')
           }
           ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
@@ -298,7 +298,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
                 <div className="flex items-center gap-2 ml-4">
                   {/* Status Indicator */}
                   {doc.status === 'processing' && (
-                    <span className="flex items-center gap-1 text-xs text-blue-600">
+                    <span className="flex items-center gap-1 text-xs text-brand-600">
                       <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />

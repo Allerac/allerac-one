@@ -154,7 +154,7 @@ export default function LoginModal({
     }
   };
 
-  const inputClass = `w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+  const inputClass = `w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-brand-500 ${
     isDarkMode
       ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
@@ -248,7 +248,7 @@ export default function LoginModal({
               type="submit"
               disabled={isLoading}
               className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 text-white'
               }`}
             >
               {isLoading ? (
@@ -294,8 +294,8 @@ export default function LoginModal({
                 className={`flex-1 py-3 text-sm font-medium transition-colors ${
                   activeTab === 'login'
                     ? isDarkMode
-                      ? 'text-blue-400 border-b-2 border-blue-400'
-                      : 'text-blue-600 border-b-2 border-blue-600'
+                      ? 'text-brand-400 border-b-2 border-brand-400'
+                      : 'text-brand-600 border-b-2 border-brand-600'
                     : isDarkMode
                     ? 'text-gray-400 hover:text-gray-300'
                     : 'text-gray-500 hover:text-gray-700'
@@ -308,8 +308,8 @@ export default function LoginModal({
                 className={`flex-1 py-3 text-sm font-medium transition-colors ${
                   activeTab === 'register'
                     ? isDarkMode
-                      ? 'text-blue-400 border-b-2 border-blue-400'
-                      : 'text-blue-600 border-b-2 border-blue-600'
+                      ? 'text-brand-400 border-b-2 border-brand-400'
+                      : 'text-brand-600 border-b-2 border-brand-600'
                     : isDarkMode
                     ? 'text-gray-400 hover:text-gray-300'
                     : 'text-gray-500 hover:text-gray-700'
@@ -388,7 +388,7 @@ export default function LoginModal({
                 type="submit"
                 disabled={isLoading}
                 className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                  isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700 text-white'
                 }`}
               >
                 {isLoading ? (
