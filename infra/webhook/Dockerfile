@@ -9,13 +9,15 @@ RUN curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/dock
   && chmod +x /usr/local/bin/docker-compose
 
 # webhook binary (adnanh/webhook)
-# tar.gz contains a top-level dir (webhook-linux-amd64/webhook) — strip it
 ARG WEBHOOK_VERSION=2.8.1
 RUN curl -fsSL "https://github.com/adnanh/webhook/releases/download/${WEBHOOK_VERSION}/webhook-linux-amd64.tar.gz" \
     -o /tmp/webhook.tar.gz \
-  && tar -xzf /tmp/webhook.tar.gz --strip-components=1 -C /usr/local/bin \
-  && chmod +x /usr/local/bin/webhook \
-  && rm /tmp/webhook.tar.gz
+  && tar -xzf /tmp/webhook.tar.gz -C /tmp \
+  && BIN=$(find /tmp -type f -name webhook | head -1) \
+  && [ -n "$BIN" ] || { echo "ERROR: webhook binary not found in tar"; exit 1; } \
+  && install -m 755 "$BIN" /usr/local/bin/webhook \
+  && rm -rf /tmp/webhook* \
+  && webhook --version
 
 EXPOSE 9000
 
