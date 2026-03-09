@@ -104,13 +104,13 @@ if [ ! -f "$COMPOSE_FILE" ]; then
 fi
 
 # Step 1: Pull latest changes
-echo -e "${YELLOW}[1/6]${NC} Pulling latest changes from GitHub..."
+echo -e "${YELLOW}[1/8]${NC} Pulling latest changes from GitHub..."
 git pull origin main || { echo -e "${RED}Failed to pull changes${NC}"; exit 1; }
 echo -e "${GREEN}✓ Changes pulled${NC}"
 echo ""
 
 # Step 2: Generate build info
-echo -e "${YELLOW}[2/6]${NC} Generating build information..."
+echo -e "${YELLOW}[2/8]${NC} Generating build information..."
 export COMMIT_HASH=$(git rev-parse HEAD)
 export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 echo "   Commit: ${COMMIT_HASH:0:7}"
@@ -120,7 +120,7 @@ echo ""
 
 # Step 3: Ensure named data volumes exist (safe to run on every update)
 # These are declared as external in docker-compose.yml so they must exist before `up`.
-echo -e "${YELLOW}[3/7]${NC} Ensuring data volumes exist..."
+echo -e "${YELLOW}[3/8]${NC} Ensuring data volumes exist..."
 docker volume create allerac_db_data      > /dev/null 2>&1 || true
 docker volume create allerac_ollama_data  > /dev/null 2>&1 || true
 docker volume create allerac_backups_data > /dev/null 2>&1 || true
@@ -128,7 +128,7 @@ echo -e "${GREEN}✓ Volumes ready${NC}"
 echo ""
 
 # Step 4: Run database migrations
-echo -e "${YELLOW}[4/7]${NC} Running database migrations..."
+echo -e "${YELLOW}[4/8]${NC} Running database migrations..."
 docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up --force-recreate migrations || {
     echo -e "${RED}Failed to run migrations${NC}"
     exit 1
@@ -137,7 +137,7 @@ echo -e "${GREEN}✓ Migrations complete${NC}"
 echo ""
 
 # Step 5: Rebuild app images
-echo -e "${YELLOW}[5/7]${NC} Rebuilding application images..."
+echo -e "${YELLOW}[5/8]${NC} Rebuilding application images..."
 if [ "$PRODUCT_LINE" = "cloud" ]; then
     docker compose -f "$COMPOSE_FILE" build --no-cache app telegram-bot notifier
 else
@@ -150,8 +150,28 @@ fi
 echo -e "${GREEN}✓ Images rebuilt${NC}"
 echo ""
 
-# Step 6: Restart services
-echo -e "${YELLOW}[6/7]${NC} Restarting services..."
+# Step 6: Remove any containers with conflicting names from other projects.
+# This happens when the compose project name changes (e.g. allerac-one → allerac).
+# Only removes containers whose com.docker.compose.project label != "allerac".
+echo -e "${YELLOW}[6/8]${NC} Cleaning up orphan containers..."
+NAMED_CONTAINERS="allerac-app allerac-db allerac-migrations allerac-executor \
+  allerac-ollama allerac-ollama-setup allerac-telegram allerac-notifier \
+  allerac-tunnel allerac-redis allerac-webhook allerac-portainer \
+  allerac-node-exporter allerac-prometheus allerac-grafana allerac-loki allerac-promtail"
+for c in $NAMED_CONTAINERS; do
+    if docker inspect "$c" > /dev/null 2>&1; then
+        proj=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$c" 2>/dev/null || echo "")
+        if [ "$proj" != "allerac" ]; then
+            echo "  Removing orphan: $c (project: ${proj:-unknown})"
+            docker rm -f "$c" > /dev/null 2>&1 || true
+        fi
+    fi
+done
+echo -e "${GREEN}✓ Cleanup done${NC}"
+echo ""
+
+# Step 7: Restart services
+echo -e "${YELLOW}[7/8]${NC} Restarting services..."
 COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
     docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up -d || {
     echo -e "${RED}Failed to restart services${NC}"
@@ -160,8 +180,8 @@ COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
 echo -e "${GREEN}✓ Services restarted${NC}"
 echo ""
 
-# Step 7: Verify — wait up to 30s for the app to be ready
-echo -e "${YELLOW}[7/7]${NC} Verifying deployment..."
+# Step 8: Verify — wait up to 30s for the app to be ready
+echo -e "${YELLOW}[8/8]${NC} Verifying deployment..."
 WAIT=0
 until docker ps --format '{{.Names}}' | grep -q "allerac-app" || [ $WAIT -ge 30 ]; do
     sleep 2
