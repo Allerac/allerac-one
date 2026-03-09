@@ -331,7 +331,6 @@ services:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN:?TUNNEL_TOKEN is required}
     depends_on:
       - app
-      - portainer
 
   # Redis - Message broker for notification streams
   redis:
