@@ -23,20 +23,24 @@ async function getHealthUser(userId: string): Promise<HealthUser> {
   return { id: user.id, email: user.email, name: user.name || user.email };
 }
 
+function b64url(buf: Buffer): string {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
 function createHealthToken(user: HealthUser): string {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const header = b64url(Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
   const now = Math.floor(Date.now() / 1000);
-  const payload = Buffer.from(JSON.stringify({
+  const payload = b64url(Buffer.from(JSON.stringify({
     iss: 'allerac-one',
     sub: user.id,
     email: user.email,
     name: user.name,
     iat: now,
     exp: now + 600,
-  })).toString('base64url');
-  const signature = createHmac('sha256', HEALTH_API_SECRET_KEY)
-    .update(`${header}.${payload}`)
-    .digest('base64url');
+  })));
+  const signature = b64url(
+    createHmac('sha256', HEALTH_API_SECRET_KEY).update(`${header}.${payload}`).digest()
+  );
   return `${header}.${payload}.${signature}`;
 }
 

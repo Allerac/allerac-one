@@ -64,21 +64,26 @@ export class HealthTool {
     return Boolean(this.secretKey);
   }
 
+  /** Encode a Buffer as base64url (compatible with all Node.js versions). */
+  private b64url(buf: Buffer): string {
+    return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+
   /** Generate a short-lived HS256 JWT for the health API. */
   private createToken(user: HealthUser): string {
-    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const header = this.b64url(Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
     const now = Math.floor(Date.now() / 1000);
-    const payload = Buffer.from(JSON.stringify({
+    const payload = this.b64url(Buffer.from(JSON.stringify({
       iss: 'allerac-one',
       sub: user.id,
       email: user.email,
       name: user.name,
       iat: now,
       exp: now + 600, // 10 minutes
-    })).toString('base64url');
-    const signature = createHmac('sha256', this.secretKey)
-      .update(`${header}.${payload}`)
-      .digest('base64url');
+    })));
+    const signature = this.b64url(
+      createHmac('sha256', this.secretKey).update(`${header}.${payload}`).digest()
+    );
     return `${header}.${payload}.${signature}`;
   }
 
