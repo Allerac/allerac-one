@@ -6,7 +6,9 @@ import pool from '@/app/clients/db';
 const HEALTH_API_URL = (process.env.HEALTH_API_URL || 'http://allerac-health-backend:8000').replace(/\/$/, '');
 const HEALTH_API_SECRET_KEY = process.env.HEALTH_API_SECRET_KEY || '';
 
-export const isHealthConfigured = Boolean(HEALTH_API_SECRET_KEY);
+export async function isHealthConfigured(): Promise<boolean> {
+  return Boolean(HEALTH_API_SECRET_KEY);
+}
 
 interface HealthUser {
   id: string;
@@ -58,7 +60,7 @@ async function healthFetch(user: HealthUser, method: string, path: string, body?
 // ─── Garmin actions ───────────────────────────────────────────────────────────
 
 export async function getGarminStatus(userId: string) {
-  if (!isHealthConfigured) return { is_connected: false, not_configured: true };
+  if (!HEALTH_API_SECRET_KEY) return { is_connected: false, not_configured: true };
   try {
     const user = await getHealthUser(userId);
     return await healthFetch(user, 'GET', '/api/v1/garmin/status');
