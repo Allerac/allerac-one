@@ -6,6 +6,7 @@ import * as systemActions from '@/app/actions/system';
 import * as updateActions from '@/app/actions/updates';
 import * as backupActions from '@/app/actions/backup';
 import BenchmarkPanel from './BenchmarkPanel';
+import GarminSettings from '../settings/GarminSettings';
 import { Model } from '@/app/types';
 
 interface SystemDashboardProps {
@@ -900,6 +901,9 @@ export default function SystemDashboardModal({
                   {t('googleApiKeyHint')}
                 </p>
               </div>
+
+              {/* Garmin Connect */}
+              <GarminSettings userId={userId} isDarkMode={isDarkMode} />
 
               {keySaveMessage && (
                 <div className={`p-2.5 rounded-lg text-sm ${

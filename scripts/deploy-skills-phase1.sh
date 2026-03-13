@@ -34,6 +34,7 @@ docker compose exec -T db psql -U postgres -d allerac -f /database/migrations/00
 # 6. Seed skills
 echo "🌱 Seeding initial skills..."
 docker compose exec -T db psql -U postgres -d allerac -f /database/seed-data/004_seed_skills.sql
+docker compose exec -T db psql -U postgres -d allerac -f /database/seed-data/005_seed_health_skill.sql
 
 # 7. Start all services
 echo "🚀 Starting all services..."

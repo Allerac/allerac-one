@@ -22,6 +22,7 @@ import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { SearchWebTool } from '@/app/tools/search-web.tool';
 import { ShellTool } from '@/app/tools/shell.tool';
+import { HealthTool } from '@/app/tools/health.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { TOOLS } from '@/app/tools/tools';
 
@@ -283,6 +284,18 @@ export async function POST(request: Request): Promise<Response> {
                 } else if (toolName === 'execute_shell') {
                   const shellTool = new ShellTool();
                   toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
+                } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status'].includes(toolName)) {
+                  const healthTool = new HealthTool();
+                  const healthUser = { id: userId, email: user.email, name: user.name || user.email };
+                  if (toolName === 'get_health_summary') {
+                    toolResult = await healthTool.getSummary(healthUser, toolArgs.period || 'week');
+                  } else if (toolName === 'get_health_metrics') {
+                    toolResult = await healthTool.getMetrics(healthUser, toolArgs.start_date, toolArgs.end_date);
+                  } else if (toolName === 'get_daily_snapshot') {
+                    toolResult = await healthTool.getDailySnapshot(healthUser, toolArgs.date);
+                  } else {
+                    toolResult = await healthTool.getGarminStatus(healthUser);
+                  }
                 } else {
                   toolResult = { error: `Tool ${toolName} not available` };
                 }
