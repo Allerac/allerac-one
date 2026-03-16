@@ -98,6 +98,13 @@ services:
       # allerac-health integration (optional)
       - HEALTH_API_URL=${HEALTH_API_URL:-http://allerac-health-backend:8000}
       - HEALTH_API_SECRET_KEY=${HEALTH_API_SECRET_KEY:-}
+      # OIDC Identity Provider (optional — enables SSO for allerac-health and future apps)
+      - OIDC_ISSUER=${OIDC_ISSUER:-https://chat.allerac.ai/api/oidc}
+      - OIDC_JWKS_JSON=${OIDC_JWKS_JSON:-}
+      - OIDC_COOKIE_SECRET=${OIDC_COOKIE_SECRET:-}
+      - OIDC_CLIENT_SECRET_HEALTH=${OIDC_CLIENT_SECRET_HEALTH:-}
+      - OIDC_CLIENT_SECRET_CRAWLER=${OIDC_CLIENT_SECRET_CRAWLER:-}
+      - HEALTH_REDIRECT_URI=${HEALTH_REDIRECT_URI:-https://health.allerac.ai/api/auth/callback/allerac-one}
     ports:
       - "8080:8080"
     volumes:
