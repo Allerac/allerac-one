@@ -95,6 +95,9 @@ services:
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
       # Tells update.sh which compose file to use (local vs cloud)
       - ALLERAC_PRODUCT_LINE=cloud
+      # allerac-health integration (optional)
+      - HEALTH_API_URL=${HEALTH_API_URL:-http://allerac-health-backend:8000}
+      - HEALTH_API_SECRET_KEY=${HEALTH_API_SECRET_KEY:-}
     ports:
       - "8080:8080"
     volumes:
@@ -102,6 +105,9 @@ services:
       - ./update.sh:/app/update.sh:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - allerac
     depends_on:
       migrations:
         condition: service_completed_successfully
@@ -409,6 +415,12 @@ services:
       resources:
         limits:
           memory: 128M
+
+networks:
+  default: {}
+  allerac:
+    name: allerac
+    external: true
 
 volumes:
   # Data volumes declared as external with fixed names so they survive
