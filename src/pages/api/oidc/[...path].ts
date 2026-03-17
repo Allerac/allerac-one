@@ -11,9 +11,11 @@
  *   POST /api/oidc/token/revocation
  *
  * IMPORTANT: bodyParser must be disabled — oidc-provider parses request bodies itself.
- * IMPORTANT: do NOT strip the /api/oidc prefix from req.url — oidc-provider uses the
- * issuer URL pathname as its mount path and needs the full path for correct routing
- * and for generating correct endpoint URLs in the discovery document.
+ *
+ * Mount path detection: oidc-provider derives mountPath by comparing req.originalUrl
+ * (full path) against req.url (stripped path). We preserve the original URL in
+ * req.originalUrl before stripping /api/oidc so oidc-provider can compute
+ * mountPath = '/api/oidc' and generate correct endpoint URLs in the discovery document.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -29,9 +31,13 @@ export const config = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const provider = await getProvider();
-    // Do NOT strip the /api/oidc prefix — oidc-provider derives its mount path
-    // from the issuer URL pathname (/api/oidc) and uses it for both routing
-    // and generating correct endpoint URLs in the discovery document.
+    // Preserve the full path in originalUrl so oidc-provider can derive
+    // mountPath = '/api/oidc' for correct endpoint URL generation.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (req as any).originalUrl = req.url;
+    // Strip the Next.js route prefix so oidc-provider can match its routes
+    // (registered at root: /auth, /token, /.well-known/openid-configuration, etc.)
+    req.url = req.url?.replace(/^\/api\/oidc/, '') || '/';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return provider.callback()(req as any, res as any);
   } catch (err) {
