@@ -143,6 +143,12 @@ export async function getProvider() {
 
     cookies: {
       keys: [cookieSecret],
+      // Set path:'/' so interaction cookies are sent to all routes on the domain.
+      // By default oidc-provider scopes the interaction cookie to the interaction
+      // URL path, which prevents our /api/auth/oidc/:uid/sso handler from
+      // receiving it (different path prefix).
+      short: { path: '/' },
+      long:  { path: '/' },
     },
 
     features: {
