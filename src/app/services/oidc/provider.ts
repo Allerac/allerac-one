@@ -157,11 +157,13 @@ export async function getProvider() {
       required: () => false,
       methods: ['S256'],
     },
-
-    // Trust x-forwarded-* headers from Cloudflare so the provider uses
-    // the correct scheme/host when generating endpoint URLs.
-    proxy: true,
   });
+
+  // proxy: true is NOT read from the config object by the Provider constructor —
+  // it must be set directly on the instance after construction.
+  // This tells oidc-provider's internal Koa app to trust x-forwarded-proto/host
+  // headers from Cloudflare so endpoint URLs use https.
+  _provider.proxy = true;
 
   return _provider;
 }
