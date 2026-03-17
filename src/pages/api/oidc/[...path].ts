@@ -11,6 +11,9 @@
  *   POST /api/oidc/token/revocation
  *
  * IMPORTANT: bodyParser must be disabled — oidc-provider parses request bodies itself.
+ * IMPORTANT: do NOT strip the /api/oidc prefix from req.url — oidc-provider uses the
+ * issuer URL pathname as its mount path and needs the full path for correct routing
+ * and for generating correct endpoint URLs in the discovery document.
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -26,9 +29,9 @@ export const config = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const provider = await getProvider();
-    // Strip the Next.js route prefix so oidc-provider sees paths relative
-    // to its own mount point (e.g. /api/oidc/token → /token).
-    req.url = req.url?.replace(/^\/api\/oidc/, '') || '/';
+    // Do NOT strip the /api/oidc prefix — oidc-provider derives its mount path
+    // from the issuer URL pathname (/api/oidc) and uses it for both routing
+    // and generating correct endpoint URLs in the discovery document.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return provider.callback()(req as any, res as any);
   } catch (err) {
