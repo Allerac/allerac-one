@@ -141,22 +141,15 @@ export const getServerSideProps: GetServerSideProps<Props> = async ({ req, res, 
     );
 
     // SSO shortcut: if the user is already logged into allerac-one,
-    // complete the interaction silently — no login form is shown.
+    // delegate to the /sso API route which calls interactionFinished with
+    // full response control (calling it here in getServerSideProps causes
+    // a redirect loop because Next.js also tries to write to the response).
     const sessionToken = req.cookies?.session_token;
     if (sessionToken) {
       const authService = new AuthService();
       const user = await authService.validateSession(sessionToken);
       if (user) {
-        await provider.interactionFinished(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          req as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          res as any,
-          { login: { accountId: user.id } },
-          { mergeWithLastSubmission: false },
-        );
-        // Response already sent (redirect). Return empty props — page won't render.
-        return { props: {} };
+        return { redirect: { destination: `/api/auth/oidc/${uid}/sso`, permanent: false } };
       }
     }
 
