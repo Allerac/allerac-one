@@ -157,6 +157,10 @@ export async function getProvider() {
       required: () => false,
       methods: ['S256'],
     },
+
+    // Trust x-forwarded-* headers from Cloudflare so the provider uses
+    // the correct scheme/host when generating endpoint URLs.
+    proxy: true,
   });
 
   return _provider;
