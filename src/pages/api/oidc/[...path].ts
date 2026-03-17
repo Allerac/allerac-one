@@ -26,6 +26,9 @@ export const config = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const provider = await getProvider();
+    // Strip the Next.js route prefix so oidc-provider sees paths relative
+    // to its own mount point (e.g. /api/oidc/token → /token).
+    req.url = req.url?.replace(/^\/api\/oidc/, '') || '/';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return provider.callback()(req as any, res as any);
   } catch (err) {
