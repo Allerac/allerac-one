@@ -110,6 +110,7 @@ if [[ "$MODE" == "--clean" || "$MODE" == "--all" ]]; then
     # Remove locally built images (app, telegram-bot, notifier, executor)
     for IMAGE in \
         "allerac-one-app" \
+        "allerac-one-health-worker" \
         "allerac-one-telegram-bot" \
         "allerac-one-notifier" \
         "allerac-one-executor" \

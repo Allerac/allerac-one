@@ -77,9 +77,10 @@ verify_deployment() {
         docker ps --format '{{.Names}}' | grep -q "allerac-ollama"   && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
     else
         # Local-specific services (only check if they were running before)
-        docker ps --format '{{.Names}}' | grep -q "allerac-ollama"   && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
-        docker ps --format '{{.Names}}' | grep -q "allerac-notifier" && echo -e "${GREEN}✓ Notifier is running${NC}"       || true
-        docker ps --format '{{.Names}}' | grep -q "allerac-grafana"  && echo -e "${GREEN}✓ Grafana is running${NC}"        || true
+        docker ps --format '{{.Names}}' | grep -q "allerac-ollama"        && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
+        docker ps --format '{{.Names}}' | grep -q "allerac-health-worker" && echo -e "${GREEN}✓ Health worker is running${NC}"  || echo -e "${YELLOW}⚠ Health worker is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -q "allerac-notifier"      && echo -e "${GREEN}✓ Notifier is running${NC}"       || true
+        docker ps --format '{{.Names}}' | grep -q "allerac-grafana"       && echo -e "${GREEN}✓ Grafana is running${NC}"        || true
     fi
 }
 
@@ -142,7 +143,7 @@ if [ "$PRODUCT_LINE" = "cloud" ]; then
     docker compose -f "$COMPOSE_FILE" build --no-cache app telegram-bot notifier
 else
     # Only rebuild images that exist in this deployment
-    BUILD_TARGETS="app"
+    BUILD_TARGETS="app health-worker"
     docker ps --format '{{.Names}}' | grep -q "allerac-telegram" && BUILD_TARGETS="$BUILD_TARGETS telegram-bot"
     docker ps --format '{{.Names}}' | grep -q "allerac-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
     docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS build --no-cache $BUILD_TARGETS

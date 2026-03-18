@@ -151,8 +151,6 @@ services:
       dockerfile: Dockerfile
     container_name: allerac-health-worker
     restart: unless-stopped
-    profiles:
-      - health
     environment:
       - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
       - PORT=8001

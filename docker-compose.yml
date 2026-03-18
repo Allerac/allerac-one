@@ -64,6 +64,26 @@ services:
         limits:
           memory: 256M
 
+  health-worker:
+    build:
+      context: ./services/health-worker
+      dockerfile: Dockerfile
+    container_name: allerac-health-worker
+    restart: unless-stopped
+    environment:
+      - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
+      - PORT=8001
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
   app:
     build:
       context: .
@@ -95,16 +115,14 @@ services:
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
       # Tells update.sh which compose file to use (local vs cloud)
       - ALLERAC_PRODUCT_LINE=cloud
-      # allerac-health integration (optional)
-      - HEALTH_API_URL=${HEALTH_API_URL:-http://allerac-health-backend:8000}
-      - HEALTH_API_SECRET_KEY=${HEALTH_API_SECRET_KEY:-}
-      # OIDC Identity Provider (optional — enables SSO for allerac-health and future apps)
+      # Health worker (Garmin sync)
+      - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
+      - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
+      # OIDC Identity Provider (optional)
       - OIDC_ISSUER=${OIDC_ISSUER:-https://chat.allerac.ai/api/oidc}
       - OIDC_JWKS_JSON=${OIDC_JWKS_JSON:-}
       - OIDC_COOKIE_SECRET=${OIDC_COOKIE_SECRET:-}
-      - OIDC_CLIENT_SECRET_HEALTH=${OIDC_CLIENT_SECRET_HEALTH:-}
       - OIDC_CLIENT_SECRET_CRAWLER=${OIDC_CLIENT_SECRET_CRAWLER:-}
-      - HEALTH_REDIRECT_URI=${HEALTH_REDIRECT_URI:-https://health.allerac.ai/api/auth/callback/allerac-one}
     ports:
       - "8080:8080"
     volumes:

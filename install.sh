@@ -470,6 +470,7 @@ setup_environment() {
     ENC_KEY=$(generate_secret)
     TG_ENC_KEY=$(generate_secret)
     EXEC_SECRET=$(generate_secret | cut -c1-32)
+    HEALTH_WORKER_SECRET=$(generate_secret | cut -c1-32)
 
     TELEGRAM_SECTION=""
     if [ "$ENABLE_NOTIFICATIONS" = "true" ]; then
@@ -503,6 +504,7 @@ NOTIFIER_LLM_MODEL=qwen2.5:3b"
 ENCRYPTION_KEY=${ENC_KEY}
 TELEGRAM_TOKEN_ENCRYPTION_KEY=${TG_ENC_KEY}
 EXECUTOR_SECRET=${EXEC_SECRET}
+HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET}
 
 # --------------------------------------------
 # Ollama models for this hardware tier
@@ -555,7 +557,7 @@ EOF
 
     chmod 600 .env
     log_success "Configuration written to .env"
-    log_info  "Keys generated: ENCRYPTION_KEY, TELEGRAM_TOKEN_ENCRYPTION_KEY, EXECUTOR_SECRET"
+    log_info  "Keys generated: ENCRYPTION_KEY, TELEGRAM_TOKEN_ENCRYPTION_KEY, EXECUTOR_SECRET, HEALTH_WORKER_SECRET"
 }
 
 # ============================================
@@ -577,7 +579,7 @@ start_services() {
     $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES pull --quiet
 
     log_info "Building application..."
-    $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES build
+    $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES build app health-worker
 
     log_info "Starting containers..."
     $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES up -d
