@@ -164,6 +164,14 @@ if [ -n "$OLD_CONTAINERS" ]; then
         docker rm -f "$c" > /dev/null 2>&1 || true
     done
 fi
+# Also remove known allerac containers by name in case they exist from a
+# previous install with a different compose project label (e.g. profile changes).
+for KNOWN in allerac-health-worker; do
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${KNOWN}$"; then
+        echo "  Removing leftover container: $KNOWN"
+        docker rm -f "$KNOWN" > /dev/null 2>&1 || true
+    fi
+done
 echo -e "${GREEN}✓ Cleanup done${NC}"
 echo ""
 
