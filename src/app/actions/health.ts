@@ -5,6 +5,7 @@ import pool from '@/app/clients/db';
 
 const HEALTH_API_URL = (process.env.HEALTH_API_URL || 'http://allerac-health-backend:8000').replace(/\/$/, '');
 const HEALTH_API_SECRET_KEY = process.env.HEALTH_API_SECRET_KEY || '';
+const HEALTH_APP_URL = (process.env.HEALTH_APP_URL || 'https://health.allerac.ai').replace(/\/$/, '');
 
 export async function isHealthConfigured(): Promise<boolean> {
   return Boolean(HEALTH_API_SECRET_KEY);
@@ -59,6 +60,19 @@ async function healthFetch(user: HealthUser, method: string, path: string, body?
     throw new Error(`Health API ${res.status}: ${text}`);
   }
   return res.json();
+}
+
+// ─── SSO ──────────────────────────────────────────────────────────────────────
+
+export async function getHealthSSOUrl(userId: string): Promise<string | null> {
+  if (!HEALTH_API_SECRET_KEY) return null;
+  try {
+    const user = await getHealthUser(userId);
+    const token = createHealthToken(user);
+    return `${HEALTH_APP_URL}/auth/sso?t=${token}`;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Garmin actions ───────────────────────────────────────────────────────────

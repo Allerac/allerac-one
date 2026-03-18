@@ -113,18 +113,38 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
   const label = `block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`;
   const hint  = `text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`;
 
+  async function openHealthApp() {
+    if (!userId) return;
+    const url = await healthActions.getHealthSSOUrl(userId);
+    if (url) window.location.href = url;
+  }
+
   return (
     <div className={`p-4 rounded-lg border ${isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xl">⌚</span>
-        <div>
-          <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-            Garmin Connect
-          </h3>
-          <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Sync your health data to use the Health Assistant
-          </p>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">⌚</span>
+          <div>
+            <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+              Garmin Connect
+            </h3>
+            <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Sync your health data to use the Health Assistant
+            </p>
+          </div>
         </div>
+        {userId && (
+          <button
+            onClick={openHealthApp}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              isDarkMode
+                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+            }`}
+          >
+            Open Health ↗
+          </button>
+        )}
       </div>
 
       {message && (
