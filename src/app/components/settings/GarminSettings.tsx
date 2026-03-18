@@ -116,7 +116,7 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
   async function openHealthApp() {
     if (!userId) return;
     const url = await healthActions.getHealthSSOUrl(userId);
-    if (url) window.location.href = url;
+    if (url) window.open(url, '_blank');
   }
 
   return (
