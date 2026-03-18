@@ -118,6 +118,9 @@ services:
       # Executor service for shell tool
       - EXECUTOR_URL=http://executor:3001
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+      # Health worker (Garmin sync) — only active with --profile health
+      - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
+      - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
       # Tells update.sh which compose file to use (local vs cloud)
       - ALLERAC_PRODUCT_LINE=local
     ports:
@@ -137,6 +140,32 @@ services:
       resources:
         limits:
           memory: 1G
+
+  # ============================================
+  # HEALTH WORKER - Garmin sync (optional)
+  # ============================================
+
+  health-worker:
+    build:
+      context: ./services/health-worker
+      dockerfile: Dockerfile
+    container_name: allerac-health-worker
+    restart: unless-stopped
+    profiles:
+      - health
+    environment:
+      - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
+      - PORT=8001
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   # ============================================
   # OLLAMA - Local LLM (required for local AI)

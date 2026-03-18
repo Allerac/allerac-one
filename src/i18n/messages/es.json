@@ -15,7 +15,30 @@
     "rename": "Renombrar",
     "pin": "Fijar",
     "unpin": "Desfijar",
-    "systemDashboard": "Configuración"
+    "systemDashboard": "Configuración",
+    "health": "Salud"
+  },
+  "health": {
+    "title": "Salud",
+    "lastSync": "Último sync",
+    "syncNow": "Sincronizar",
+    "syncing": "Sincronizando...",
+    "syncSuccess": "Sincronizados {records} días de datos.",
+    "connectPrompt": "Conecta tu cuenta Garmin para ver tus datos de salud.",
+    "noData": "Sin datos para este período.",
+    "noDataHint": "Sincroniza tus datos de Garmin primero.",
+    "steps": "Pasos",
+    "sleep": "Sueño",
+    "restingHr": "FC en reposo",
+    "bodyBattery": "Body Battery",
+    "avgDay": "prom/día",
+    "today": "hoy",
+    "dailyBreakdown": "Resumen diario",
+    "date": "Fecha",
+    "period": {
+      "week": "7 días",
+      "month": "30 días"
+    }
   },
   "login": {
     "welcomeBack": "Bienvenido de Nuevo",

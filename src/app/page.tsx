@@ -30,6 +30,7 @@ import SetupWizard from './components/setup/SetupWizard';
 import SystemDashboard from './components/system/SystemDashboard';
 import TelegramBotSettings from './components/settings/TelegramBotSettings';
 import ScheduledJobsModal from './components/scheduled-jobs/ScheduledJobsModal';
+import HealthDashboard from './components/health/HealthDashboard';
 
 export default function AdminChat() {
   const t = useTranslations('home');
@@ -44,6 +45,7 @@ export default function AdminChat() {
     const openSkillsLibrary = () => setIsSkillsLibraryOpen(true);
     const openSystemDashboard = () => { setSystemDashboardInitialTab('system'); setIsSystemDashboardOpen(true); };
     const openScheduledJobsModal = () => setIsScheduledJobsModalOpen(true);
+    const openHealthDashboard = () => setIsHealthDashboardOpen(true);
     const onLogout = () => handleLogoutRef.current();
 
     window.addEventListener('openTokenModal', openTokenModal);
@@ -54,6 +56,7 @@ export default function AdminChat() {
     window.addEventListener('openSkillsLibrary', openSkillsLibrary);
     window.addEventListener('openSystemDashboard', openSystemDashboard);
     window.addEventListener('openScheduledJobsModal', openScheduledJobsModal);
+    window.addEventListener('openHealthDashboard', openHealthDashboard);
     window.addEventListener('logout', onLogout);
 
     return () => {
@@ -65,6 +68,7 @@ export default function AdminChat() {
       window.removeEventListener('openSkillsLibrary', openSkillsLibrary);
       window.removeEventListener('openSystemDashboard', openSystemDashboard);
       window.removeEventListener('openScheduledJobsModal', openScheduledJobsModal);
+      window.removeEventListener('openHealthDashboard', openHealthDashboard);
       window.removeEventListener('logout', onLogout);
     };
   }, []);
@@ -99,6 +103,7 @@ export default function AdminChat() {
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
+  const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
   const [memorySaveLoading, setMemorySaveLoading] = useState(false);
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
@@ -935,6 +940,14 @@ export default function AdminChat() {
         isDarkMode={isDarkMode}
         onAuthSuccess={handleAuthSuccess}
         preventClose={!isAuthenticated}
+      />
+
+      {/* Health Dashboard */}
+      <HealthDashboard
+        isOpen={isHealthDashboardOpen}
+        onClose={() => setIsHealthDashboardOpen(false)}
+        isDarkMode={isDarkMode}
+        userId={userId || undefined}
       />
 
       {/* Configuration Modal (System + API Keys) */}

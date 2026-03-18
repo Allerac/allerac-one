@@ -1,5 +1,5 @@
--- Health Assistant skill for allerac-one + allerac-health integration
--- Requires HEALTH_API_SECRET_KEY to be configured for tool calls to work.
+-- Health Assistant skill — reads from health_daily_metrics in PostgreSQL.
+-- Requires HEALTH_WORKER_SECRET to be configured for tool calls to work.
 
 INSERT INTO skills (
   user_id, name, display_name, description, content, category,

@@ -1,7 +1,7 @@
 // AI Tool definitions for function calling
 
-// Health tools are conditionally included based on HEALTH_API_SECRET_KEY being set.
-const HEALTH_TOOLS = process.env.HEALTH_API_SECRET_KEY ? [
+// Health tools are conditionally included based on HEALTH_WORKER_SECRET being set.
+const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
   {
     type: 'function',
     function: {

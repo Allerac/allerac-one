@@ -1,11 +1,7 @@
-// Health data tool — calls the allerac-health API on behalf of the authenticated user.
-//
-// Required env vars:
-//   HEALTH_API_URL         URL of the allerac-health backend (default: http://allerac-health-backend:8000)
-//   HEALTH_API_SECRET_KEY  Shared secret used to sign health JWT tokens.
-//                          Must match ALLERAC_ONE_SECRET_KEY in allerac-health .env.
+// Health data tool — queries health_daily_metrics directly from PostgreSQL.
+// Used by the AI in conversations to surface Garmin health data.
 
-import { createHmac } from 'crypto';
+import pool from '@/app/clients/db';
 
 export interface HealthUser {
   id: string;
@@ -19,99 +15,78 @@ export interface HealthSummaryResult {
   avg_calories?: number;
   avg_resting_hr?: number;
   avg_sleep_hours?: number;
-  steps_change?: number;
-  calories_change?: number;
+  total_steps?: number;
+  max_steps?: number;
+  days_with_data?: number;
   garmin_connected: boolean;
   error?: string;
 }
 
 export interface HealthMetricsResult {
-  daily_stats?: Array<{ date: string; steps: number; calories: number; distance: number }>;
-  heart_rate?: Array<{ date: string; resting: number; avg: number; max: number }>;
-  sleep?: Array<{ date: string; deep: number; light: number; rem: number; awake: number; duration: number }>;
-  body_battery?: Array<{ date: string; max: number; min: number; end: number }>;
+  daily_stats?: Array<{ date: string; steps: number | null; calories: number | null; distance_meters: number | null }>;
+  heart_rate?: Array<{ date: string; resting_hr: number | null; avg_hr: number | null; max_hr: number | null }>;
+  sleep?: Array<{ date: string; sleep_duration_minutes: number | null; sleep_deep_minutes: number | null; sleep_light_minutes: number | null; sleep_rem_minutes: number | null; sleep_score: number | null }>;
+  body_battery?: Array<{ date: string; body_battery_max: number | null; body_battery_min: number | null; body_battery_end: number | null }>;
   error?: string;
 }
 
 export interface DailySnapshotResult {
   date: string;
-  steps?: number;
-  calories?: number;
-  distance?: number;
-  resting_hr?: number;
-  sleep_hours?: number;
-  body_battery_end?: number;
+  steps?: number | null;
+  calories?: number | null;
+  distance_meters?: number | null;
+  resting_hr?: number | null;
+  sleep_duration_minutes?: number | null;
+  body_battery_end?: number | null;
   error?: string;
 }
 
 export interface GarminStatusResult {
   is_connected: boolean;
-  email?: string;
   last_sync_at?: string;
   error?: string;
 }
 
 export class HealthTool {
-  private apiUrl: string;
-  private secretKey: string;
-
-  constructor() {
-    this.apiUrl = (process.env.HEALTH_API_URL || 'http://allerac-health-backend:8000').replace(/\/$/, '');
-    this.secretKey = process.env.HEALTH_API_SECRET_KEY || '';
-  }
 
   get isConfigured(): boolean {
-    return Boolean(this.secretKey);
-  }
-
-  /** Encode a Buffer as base64url (compatible with all Node.js versions). */
-  private b64url(buf: Buffer): string {
-    return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  }
-
-  /** Generate a short-lived HS256 JWT for the health API. */
-  private createToken(user: HealthUser): string {
-    const header = this.b64url(Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
-    const now = Math.floor(Date.now() / 1000);
-    const payload = this.b64url(Buffer.from(JSON.stringify({
-      iss: 'allerac-one',
-      sub: user.id,
-      email: user.email,
-      name: user.name,
-      iat: now,
-      exp: now + 600, // 10 minutes
-    })));
-    const signature = this.b64url(
-      createHmac('sha256', this.secretKey).update(`${header}.${payload}`).digest()
-    );
-    return `${header}.${payload}.${signature}`;
-  }
-
-  private async get(user: HealthUser, path: string): Promise<any> {
-    const token = this.createToken(user);
-    const response = await fetch(`${this.apiUrl}${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) {
-      throw new Error(`Health API error ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
+    return true; // Always available — reads from local PostgreSQL
   }
 
   async getSummary(user: HealthUser, period: string): Promise<HealthSummaryResult> {
-    const validPeriods = ['day', 'week', 'month', 'year'];
-    const p = validPeriods.includes(period) ? period : 'week';
+    const validPeriods = ['day', 'week', 'month', 'year'] as const;
+    const p = (validPeriods.includes(period as any) ? period : 'week') as typeof validPeriods[number];
+    const days = { day: 1, week: 7, month: 30, year: 365 }[p];
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
     try {
-      const data = await this.get(user, `/api/v1/health/summary?period=${p}`);
+      const connected = await this._isConnected(user.id);
+      if (!connected) return { period: p, garmin_connected: false };
+
+      const res = await pool.query(
+        `SELECT
+           ROUND(AVG(steps))                             AS avg_steps,
+           ROUND(AVG(calories))                          AS avg_calories,
+           ROUND(AVG(resting_hr))                        AS avg_resting_hr,
+           ROUND(AVG(sleep_duration_minutes) / 60.0, 1) AS avg_sleep_hours,
+           SUM(steps)                                    AS total_steps,
+           MAX(steps)                                    AS max_steps,
+           COUNT(*)                                      AS days_with_data
+         FROM health_daily_metrics
+         WHERE user_id = $1 AND date >= $2`,
+        [user.id, since]
+      );
+      const row = res.rows[0];
       return {
         period: p,
-        avg_steps: data.avg_steps != null ? Math.round(data.avg_steps) : undefined,
-        avg_calories: data.avg_calories != null ? Math.round(data.avg_calories) : undefined,
-        avg_resting_hr: data.avg_resting_hr != null ? Math.round(data.avg_resting_hr) : undefined,
-        avg_sleep_hours: data.avg_sleep_hours != null ? Number(data.avg_sleep_hours.toFixed(1)) : undefined,
-        steps_change: data.steps_change,
-        calories_change: data.calories_change,
         garmin_connected: true,
+        avg_steps: row.avg_steps != null ? Number(row.avg_steps) : undefined,
+        avg_calories: row.avg_calories != null ? Number(row.avg_calories) : undefined,
+        avg_resting_hr: row.avg_resting_hr != null ? Number(row.avg_resting_hr) : undefined,
+        avg_sleep_hours: row.avg_sleep_hours != null ? Number(row.avg_sleep_hours) : undefined,
+        total_steps: row.total_steps != null ? Number(row.total_steps) : undefined,
+        max_steps: row.max_steps != null ? Number(row.max_steps) : undefined,
+        days_with_data: Number(row.days_with_data),
       };
     } catch (e: any) {
       return { period: p, garmin_connected: false, error: e.message };
@@ -120,12 +95,18 @@ export class HealthTool {
 
   async getMetrics(user: HealthUser, startDate: string, endDate: string): Promise<HealthMetricsResult> {
     try {
-      const data = await this.get(user, `/api/v1/health/metrics?start_date=${startDate}&end_date=${endDate}`);
+      const res = await pool.query(
+        `SELECT * FROM health_daily_metrics
+         WHERE user_id = $1 AND date BETWEEN $2 AND $3
+         ORDER BY date ASC`,
+        [user.id, startDate, endDate]
+      );
+      const rows = res.rows;
       return {
-        daily_stats: data.daily_stats || [],
-        heart_rate: data.heart_rate || [],
-        sleep: data.sleep || [],
-        body_battery: data.body_battery || [],
+        daily_stats: rows.map(r => ({ date: r.date, steps: r.steps, calories: r.calories, distance_meters: r.distance_meters })),
+        heart_rate: rows.map(r => ({ date: r.date, resting_hr: r.resting_hr, avg_hr: r.avg_hr, max_hr: r.max_hr })),
+        sleep: rows.map(r => ({ date: r.date, sleep_duration_minutes: r.sleep_duration_minutes, sleep_deep_minutes: r.sleep_deep_minutes, sleep_light_minutes: r.sleep_light_minutes, sleep_rem_minutes: r.sleep_rem_minutes, sleep_score: r.sleep_score })),
+        body_battery: rows.map(r => ({ date: r.date, body_battery_max: r.body_battery_max, body_battery_min: r.body_battery_min, body_battery_end: r.body_battery_end })),
       };
     } catch (e: any) {
       return { error: e.message };
@@ -134,15 +115,20 @@ export class HealthTool {
 
   async getDailySnapshot(user: HealthUser, date: string): Promise<DailySnapshotResult> {
     try {
-      const data = await this.get(user, `/api/v1/health/daily/${date}`);
+      const res = await pool.query(
+        'SELECT * FROM health_daily_metrics WHERE user_id = $1 AND date = $2',
+        [user.id, date]
+      );
+      if (res.rows.length === 0) return { date, error: 'No data for this date' };
+      const r = res.rows[0];
       return {
         date,
-        steps: data.steps != null ? Math.round(data.steps) : undefined,
-        calories: data.calories != null ? Math.round(data.calories) : undefined,
-        distance: data.distance,
-        resting_hr: data.resting_hr != null ? Math.round(data.resting_hr) : undefined,
-        sleep_hours: data.sleep_hours != null ? Number(data.sleep_hours.toFixed(1)) : undefined,
-        body_battery_end: data.body_battery_end,
+        steps: r.steps,
+        calories: r.calories,
+        distance_meters: r.distance_meters,
+        resting_hr: r.resting_hr,
+        sleep_duration_minutes: r.sleep_duration_minutes,
+        body_battery_end: r.body_battery_end,
       };
     } catch (e: any) {
       return { date, error: e.message };
@@ -151,14 +137,25 @@ export class HealthTool {
 
   async getGarminStatus(user: HealthUser): Promise<GarminStatusResult> {
     try {
-      const data = await this.get(user, '/api/v1/garmin/status');
+      const res = await pool.query(
+        'SELECT is_connected, last_sync_at FROM garmin_credentials WHERE user_id = $1',
+        [user.id]
+      );
+      if (res.rows.length === 0) return { is_connected: false };
       return {
-        is_connected: data.is_connected,
-        email: data.email,
-        last_sync_at: data.last_sync_at,
+        is_connected: res.rows[0].is_connected,
+        last_sync_at: res.rows[0].last_sync_at,
       };
     } catch (e: any) {
       return { is_connected: false, error: e.message };
     }
+  }
+
+  private async _isConnected(userId: string): Promise<boolean> {
+    const res = await pool.query(
+      'SELECT is_connected FROM garmin_credentials WHERE user_id = $1',
+      [userId]
+    );
+    return res.rows[0]?.is_connected === true;
   }
 }

@@ -15,7 +15,30 @@
     "rename": "Rename",
     "pin": "Pin",
     "unpin": "Unpin",
-    "systemDashboard": "Configuration"
+    "systemDashboard": "Configuration",
+    "health": "Health"
+  },
+  "health": {
+    "title": "Health",
+    "lastSync": "Last sync",
+    "syncNow": "Sync",
+    "syncing": "Syncing...",
+    "syncSuccess": "Synced {records} days of data.",
+    "connectPrompt": "Connect your Garmin account to view your health data.",
+    "noData": "No data for this period.",
+    "noDataHint": "Try syncing your Garmin data first.",
+    "steps": "Steps",
+    "sleep": "Sleep",
+    "restingHr": "Resting HR",
+    "bodyBattery": "Body Battery",
+    "avgDay": "avg/day",
+    "today": "today",
+    "dailyBreakdown": "Daily breakdown",
+    "date": "Date",
+    "period": {
+      "week": "7 days",
+      "month": "30 days"
+    }
   },
   "login": {
     "welcomeBack": "Welcome Back",
