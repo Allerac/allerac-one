@@ -58,22 +58,7 @@ def _login_thread(
             raise RuntimeError("MFA timeout: code not provided in time")
 
     try:
-        from requests.adapters import HTTPAdapter
-        from urllib3.util.retry import Retry
-
         garmin = Garmin(email=email, password=password)
-
-        # Do not retry on 429 — Garmin rate-limits aggressively and retrying
-        # only makes the ban longer. Fail fast and let the user try again later.
-        no_429_retry = Retry(
-            total=3,
-            status_forcelist=[500, 502, 503, 504],
-            backoff_factor=1,
-        )
-        adapter = HTTPAdapter(max_retries=no_429_retry)
-        garmin.garth.sess.mount("https://", adapter)
-        garmin.garth.sess.mount("http://", adapter)
-
         garmin.garth.sess.headers.update({
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
