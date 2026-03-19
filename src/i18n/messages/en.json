@@ -5,7 +5,7 @@
     "options": "Options",
     "configuration": "Configuration",
     "apiKeys": "API Keys",
-    "memorySettings": "Consciousness",
+    "memorySettings": "Context",
     "documents": "Knowledge",
     "memories": "Memories",
     "skills": "Skills",
@@ -263,7 +263,7 @@
     "errors": { "invalidCron": "Invalid cron expression", "nameRequired": "Name is required", "promptRequired": "Prompt is required", "channelRequired": "At least one channel is required", "loadFailed": "Failed to load jobs", "deleteFailed": "Failed to delete", "createFailed": "Failed to create job", "updateFailed": "Failed to update job" }
   },
   "consciousness": {
-    "title": "Consciousness",
+    "title": "Context",
     "description": "Shared across every conversation.",
     "placeholder": "Who you are, how you like to work, what the AI should always know about you...",
     "privacy": "Only you can see this. It is never shared or visible to anyone else.",

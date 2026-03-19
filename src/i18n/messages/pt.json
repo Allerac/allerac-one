@@ -5,7 +5,7 @@
     "options": "Opções",
     "configuration": "Configuração",
     "apiKeys": "Chaves de API",
-    "memorySettings": "Consciência",
+    "memorySettings": "Contexto",
     "documents": "Conhecimento",
     "memories": "Memórias",
     "skills": "Habilidades",
@@ -263,7 +263,7 @@
     "errors": { "invalidCron": "Expressão cron inválida", "nameRequired": "Nome é obrigatório", "promptRequired": "Prompt é obrigatório", "channelRequired": "Pelo menos um canal é obrigatório", "loadFailed": "Falha ao carregar jobs", "deleteFailed": "Falha ao excluir", "createFailed": "Falha ao criar job", "updateFailed": "Falha ao atualizar job" }
   },
   "consciousness": {
-    "title": "Consciência",
+    "title": "Contexto",
     "description": "Compartilhado em todas as conversas.",
     "placeholder": "Quem você é, como gosta de trabalhar, o que a IA sempre deve saber sobre você...",
     "privacy": "Somente você pode ver isso. Nunca é compartilhado ou visível para mais ninguém.",
