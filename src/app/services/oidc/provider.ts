@@ -2,14 +2,13 @@
  * OIDC Provider singleton for allerac-one.
  *
  * Turns chat.allerac.ai into a standards-compliant OIDC Authorization Server.
- * Other systems (allerac-health, allerac-crawler, future apps) authenticate
+ * Other systems (allerac-crawler, future apps) authenticate
  * users via this provider using standard OIDC/OAuth2 flows.
  *
  * Required environment variables:
  *   OIDC_ISSUER              Base URL of the OIDC endpoints (e.g. https://chat.allerac.ai/api/oidc)
  *   OIDC_JWKS_JSON           RS256 keypair as a JWK Set JSON string
  *   OIDC_COOKIE_SECRET       Secret for signing OIDC interaction session cookies
- *   OIDC_CLIENT_SECRET_HEALTH  Client secret for allerac-health
  *
  * Optional:
  *   OIDC_CLIENT_SECRET_CRAWLER  Client secret for allerac-crawler (machine-to-machine)
@@ -52,27 +51,11 @@ export async function getProvider() {
   const cookieSecret = process.env.OIDC_COOKIE_SECRET;
   if (!cookieSecret) throw new Error('OIDC_COOKIE_SECRET environment variable is not set');
 
-  const healthSecret = process.env.OIDC_CLIENT_SECRET_HEALTH;
-  if (!healthSecret) throw new Error('OIDC_CLIENT_SECRET_HEALTH environment variable is not set');
-
   const jwks = JSON.parse(jwksJson);
 
   // Registered OIDC clients.
-  // allerac-health: authorization_code flow (user-facing web app)
   // allerac-crawler: client_credentials flow (machine-to-machine, no user)
-  const clients = [
-    {
-      client_id: 'allerac-health',
-      client_secret: healthSecret,
-      redirect_uris: [
-        process.env.HEALTH_REDIRECT_URI || 'https://health.allerac.ai/api/auth/callback/allerac-one',
-      ],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      scope: 'openid email profile',
-      token_endpoint_auth_method: 'client_secret_basic',
-    },
-  ];
+  const clients: object[] = [];
 
   const crawlerSecret = process.env.OIDC_CLIENT_SECRET_CRAWLER;
   if (crawlerSecret) {

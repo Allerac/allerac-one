@@ -32,12 +32,21 @@
     "restingHr": "Resting HR",
     "bodyBattery": "Body Battery",
     "avgDay": "avg/day",
+    "latest": "latest",
     "today": "today",
+    "score": "Score",
+    "sleepDetail": "Sleep detail",
+    "sleepDeep": "Deep",
+    "sleepLight": "Light",
+    "sleepRem": "REM",
+    "sleepAwake": "Awake",
     "dailyBreakdown": "Daily breakdown",
     "date": "Date",
     "period": {
-      "week": "7 days",
-      "month": "30 days"
+      "today": "Today",
+      "3days": "3 days",
+      "7days": "7 days",
+      "30days": "30 days"
     }
   },
   "login": {

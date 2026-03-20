@@ -12,7 +12,14 @@ interface HealthDashboardProps {
   userId?: string;
 }
 
-type Period = 'week' | 'month';
+type Period = 'today' | '3days' | '7days' | '30days';
+
+const PERIOD_CONFIG: Record<Period, { days: number; summaryPeriod: 'day' | '3days' | 'week' | 'month' }> = {
+  today:    { days: 1,  summaryPeriod: 'day' },
+  '3days':  { days: 3,  summaryPeriod: '3days' },
+  '7days':  { days: 7,  summaryPeriod: 'week' },
+  '30days': { days: 30, summaryPeriod: 'month' },
+};
 
 interface Summary {
   avg_steps: number | null;
@@ -29,42 +36,93 @@ interface DayMetric {
   calories: number | null;
   resting_hr: number | null;
   sleep_duration_minutes: number | null;
+  sleep_deep_minutes: number | null;
+  sleep_light_minutes: number | null;
+  sleep_rem_minutes: number | null;
+  sleep_awake_minutes: number | null;
+  sleep_score: number | null;
   body_battery_end: number | null;
 }
 
-// ─── Simple bar chart (pure SVG, no dependencies) ──────────────────────────
+function getTodayStr() {
+  return new Date().toISOString().split('T')[0];
+}
 
-function BarChart({
+function fmtDate(date: string) {
+  return new Date(date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function fmtNavDate(date: string) {
+  return new Date(date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function fmtMins(mins: number | null) {
+  if (mins == null) return '—';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// ─── Spark chart — bars for ≤5 points, line for more ───────────────────────
+
+function SparkChart({
   data,
   color,
   height = 48,
+  width = 80,
 }: {
   data: (number | null)[];
   color: string;
   height?: number;
+  width?: number;
 }) {
+  if (data.length === 0) return null;
+
   const values = data.map((v) => v ?? 0);
   const max = Math.max(...values, 1);
-  const barW = 8;
-  const gap = 3;
-  const width = values.length * (barW + gap) - gap;
+
+  if (values.length <= 5) {
+    const barW = Math.max(4, Math.floor((width - (values.length - 1) * 3) / values.length));
+    const gap = 3;
+    const totalW = values.length * barW + (values.length - 1) * gap;
+    return (
+      <svg width={totalW} height={height} className="overflow-visible">
+        {values.map((v, i) => {
+          const h = Math.max(2, (v / max) * height);
+          return (
+            <rect key={i} x={i * (barW + gap)} y={height - h}
+              width={barW} height={h} rx={2}
+              className={color} opacity={v === 0 ? 0.2 : 0.85} />
+          );
+        })}
+      </svg>
+    );
+  }
+
+  // Line chart
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - Math.max(2, (v / max) * (height - 4));
+    return `${x},${y}`;
+  });
+  const areaBottom = values.map((_v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    return `${x},${height}`;
+  });
+  const fillPts = [...pts, ...areaBottom.reverse()].join(' ');
+  const strokeClass = color.replace('fill-', 'stroke-');
 
   return (
     <svg width={width} height={height} className="overflow-visible">
+      <polygon points={fillPts} className={color} opacity={0.15} />
+      <polyline points={pts.join(' ')} fill="none"
+        className={strokeClass} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
       {values.map((v, i) => {
-        const h = Math.max(2, (v / max) * height);
-        return (
-          <rect
-            key={i}
-            x={i * (barW + gap)}
-            y={height - h}
-            width={barW}
-            height={h}
-            rx={2}
-            className={color}
-            opacity={v === 0 ? 0.2 : 0.85}
-          />
-        );
+        const x = (i / (values.length - 1)) * width;
+        const y = height - Math.max(2, (v / max) * (height - 4));
+        return v > 0
+          ? <circle key={i} cx={x} cy={y} r={2} className={color} opacity={0.8} />
+          : null;
       })}
     </svg>
   );
@@ -90,22 +148,23 @@ function MetricCard({
   isDarkMode: boolean;
 }) {
   const card = isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
+  const hasChart = chartData.length > 0;
   return (
     <div className={`rounded-xl border p-4 ${card} flex flex-col gap-3`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-base">{icon}</span>
-          <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{label}</span>
-        </div>
+      <div className="flex items-center gap-2">
+        <span className="text-base">{icon}</span>
+        <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{label}</span>
       </div>
       <div className="flex items-end justify-between gap-2">
         <div>
           <span className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{value}</span>
           {unit && <span className={`text-xs ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{unit}</span>}
         </div>
-        <div className="flex-shrink-0">
-          <BarChart data={chartData} color={chartColor} />
-        </div>
+        {hasChart && (
+          <div className="hidden sm:block flex-shrink-0">
+            <SparkChart data={chartData} color={chartColor} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -118,12 +177,18 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
 
   const [garminConnected, setGarminConnected] = useState<boolean | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
-  const [period, setPeriod] = useState<Period>('week');
+  const [period, setPeriod] = useState<Period>('7days');
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
   const [summary, setSummary] = useState<Summary | null>(null);
   const [metrics, setMetrics] = useState<DayMetric[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Reset to today when switching away from 'today' period and back
+  useEffect(() => {
+    if (period !== 'today') setSelectedDate(getTodayStr());
+  }, [period]);
 
   const loadData = useCallback(async () => {
     if (!userId) return;
@@ -134,29 +199,36 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
       setLastSync(status.last_sync_at ? new Date(status.last_sync_at).toLocaleString() : null);
 
       if (status.is_connected) {
-        const days = period === 'week' ? 7 : 30;
-        const endDate = new Date().toISOString().split('T')[0];
-        const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        if (period === 'today') {
+          // Single day — no summary needed, just fetch the one day's metrics
+          const met = await healthActions.getHealthMetrics(userId, selectedDate, selectedDate);
+          setMetrics(met);
+          setSummary(null);
+        } else {
+          const { days, summaryPeriod } = PERIOD_CONFIG[period];
+          const endDate = getTodayStr();
+          const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        const [sum, met] = await Promise.all([
-          healthActions.getHealthSummary(userId, period),
-          healthActions.getHealthMetrics(userId, startDate, endDate),
-        ]);
+          const [sum, met] = await Promise.all([
+            healthActions.getHealthSummary(userId, summaryPeriod),
+            healthActions.getHealthMetrics(userId, startDate, endDate),
+          ]);
 
-        setSummary({
-          avg_steps: sum.avg_steps ? Number(sum.avg_steps) : null,
-          avg_calories: sum.avg_calories ? Number(sum.avg_calories) : null,
-          avg_resting_hr: sum.avg_resting_hr ? Number(sum.avg_resting_hr) : null,
-          avg_sleep_hours: sum.avg_sleep_hours ? Number(sum.avg_sleep_hours) : null,
-          total_steps: sum.total_steps ? Number(sum.total_steps) : null,
-          days_with_data: sum.days_with_data ? Number(sum.days_with_data) : null,
-        });
-        setMetrics(met);
+          setSummary({
+            avg_steps:      sum.avg_steps      ? Number(sum.avg_steps)      : null,
+            avg_calories:   sum.avg_calories   ? Number(sum.avg_calories)   : null,
+            avg_resting_hr: sum.avg_resting_hr ? Number(sum.avg_resting_hr) : null,
+            avg_sleep_hours: sum.avg_sleep_hours ? Number(sum.avg_sleep_hours) : null,
+            total_steps:    sum.total_steps    ? Number(sum.total_steps)    : null,
+            days_with_data: sum.days_with_data ? Number(sum.days_with_data) : null,
+          });
+          setMetrics(met);
+        }
       }
     } finally {
       setLoading(false);
     }
-  }, [userId, period]);
+  }, [userId, period, selectedDate]);
 
   useEffect(() => {
     if (isOpen && userId) loadData();
@@ -164,8 +236,8 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
 
   useEffect(() => {
     if (syncMessage) {
-      const t = setTimeout(() => setSyncMessage(null), 4000);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setSyncMessage(null), 4000);
+      return () => clearTimeout(timer);
     }
   }, [syncMessage]);
 
@@ -174,7 +246,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
     setSyncing(true);
     setSyncMessage(null);
     try {
-      const result = await healthActions.triggerHealthSync(userId);
+      const result = await healthActions.triggerHealthSync(userId, PERIOD_CONFIG[period].days);
       setSyncMessage({ type: 'success', text: t('syncSuccess', { records: result.records }) });
       await loadData();
     } catch (e: any) {
@@ -184,18 +256,46 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
     }
   }
 
+  function goToPrevDay() {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(d.toISOString().split('T')[0]);
+  }
+
+  function goToNextDay() {
+    if (selectedDate >= getTodayStr()) return;
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    setSelectedDate(d.toISOString().split('T')[0]);
+  }
+
   if (!isOpen) return null;
 
-  const overlay = 'fixed inset-0 z-50 flex items-start justify-end';
   const panel = `fixed inset-y-0 right-0 z-50 w-full sm:w-[520px] flex flex-col shadow-2xl overflow-hidden
     ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`;
   const border = isDarkMode ? 'border-gray-700' : 'border-gray-200';
   const textMuted = isDarkMode ? 'text-gray-400' : 'text-gray-500';
 
-  const chartSteps = metrics.map((m) => m.steps);
-  const chartHr = metrics.map((m) => m.resting_hr);
-  const chartSleep = metrics.map((m) => m.sleep_duration_minutes ? m.sleep_duration_minutes / 60 : null);
-  const chartBattery = metrics.map((m) => m.body_battery_end);
+  const isSingleDay = period === 'today';
+  const isViewingToday = isSingleDay && selectedDate === getTodayStr();
+  const dayMetric = isSingleDay ? (metrics[0] ?? null) : null;
+
+  // Charts only make sense for multi-day periods
+  const chartSteps   = isSingleDay ? [] : metrics.map((m) => m.steps);
+  const chartHr      = isSingleDay ? [] : metrics.map((m) => m.resting_hr);
+  const chartSleep   = isSingleDay ? [] : metrics.map((m) => m.sleep_duration_minutes ? m.sleep_duration_minutes / 60 : null);
+  const chartBattery = isSingleDay ? [] : metrics.map((m) => m.body_battery_end);
+
+  // Sleep phases
+  const sleepRows = metrics.filter(m => m.sleep_duration_minutes != null);
+  const avgPhase = (key: keyof DayMetric) =>
+    sleepRows.length ? Math.round(sleepRows.reduce((s, m) => s + ((m[key] as number) ?? 0), 0) / sleepRows.length) : null;
+  const sleepPhases = isSingleDay
+    ? { deep: dayMetric?.sleep_deep_minutes ?? null, light: dayMetric?.sleep_light_minutes ?? null, rem: dayMetric?.sleep_rem_minutes ?? null, awake: dayMetric?.sleep_awake_minutes ?? null, score: dayMetric?.sleep_score ?? null }
+    : { deep: avgPhase('sleep_deep_minutes'), light: avgPhase('sleep_light_minutes'), rem: avgPhase('sleep_rem_minutes'), awake: avgPhase('sleep_awake_minutes'), score: null };
+
+  // Hide sync when viewing a past day — data is already there, user can switch to 7/30d to re-sync a range
+  const showSync = garminConnected && (!isSingleDay || isViewingToday);
 
   return (
     <>
@@ -214,7 +314,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {garminConnected && (
+            {showSync && (
               <button
                 onClick={handleSync}
                 disabled={syncing}
@@ -256,20 +356,19 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-500 border-t-transparent" />
             </div>
           ) : garminConnected === false ? (
-            /* Not connected — show Garmin settings inline */
             <div className="p-5">
               <p className={`text-sm mb-4 ${textMuted}`}>{t('connectPrompt')}</p>
               <GarminSettings userId={userId} isDarkMode={isDarkMode} />
             </div>
           ) : (
-            <div className="p-5 space-y-5">
+            <div className="p-5 space-y-4">
               {/* Period selector */}
-              <div className="flex gap-2">
-                {(['week', 'month'] as Period[]).map((p) => (
+              <div className="flex gap-2 flex-wrap">
+                {(['today', '3days', '7days', '30days'] as Period[]).map((p) => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
                       ${period === p
                         ? 'bg-brand-500 text-white'
                         : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -284,7 +383,51 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                 )}
               </div>
 
-              {/* No data yet */}
+              {/* Day navigator — only in single-day mode */}
+              {isSingleDay && (
+                <div className="flex items-center justify-center gap-3">
+                  {/* Prev button — circle */}
+                  <button
+                    onClick={goToPrevDay}
+                    className={`h-8 w-8 flex items-center justify-center rounded-full border transition-colors
+                      ${isDarkMode
+                        ? 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-white'
+                        : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Date card */}
+                  <div className={`flex items-center gap-2 px-4 py-1.5 rounded-xl border ${border} ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                    <svg className={`h-3.5 w-3.5 ${textMuted}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                      {fmtNavDate(selectedDate)}
+                    </span>
+                  </div>
+
+                  {/* Next button — circle (invisible when on today) */}
+                  <button
+                    onClick={goToNextDay}
+                    disabled={isViewingToday}
+                    className={`h-8 w-8 flex items-center justify-center rounded-full border transition-colors
+                      ${isViewingToday
+                        ? 'opacity-0 pointer-events-none'
+                        : isDarkMode
+                          ? 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-white'
+                          : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {/* No data */}
               {!loading && metrics.length === 0 && (
                 <div className={`rounded-xl border ${border} p-8 text-center`}>
                   <p className={`text-sm ${textMuted}`}>{t('noData')}</p>
@@ -297,8 +440,10 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                 <div className="grid grid-cols-2 gap-3">
                   <MetricCard
                     label={t('steps')}
-                    value={summary?.avg_steps ? summary.avg_steps.toLocaleString() : '—'}
-                    unit={t('avgDay')}
+                    value={isSingleDay
+                      ? (dayMetric?.steps != null ? dayMetric.steps.toLocaleString() : '—')
+                      : (summary?.avg_steps ? summary.avg_steps.toLocaleString() : '—')}
+                    unit={isSingleDay ? undefined : t('avgDay')}
                     icon="👟"
                     chartData={chartSteps}
                     chartColor="fill-brand-500"
@@ -306,8 +451,12 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                   />
                   <MetricCard
                     label={t('sleep')}
-                    value={summary?.avg_sleep_hours ? summary.avg_sleep_hours.toFixed(1) : '—'}
-                    unit="h"
+                    value={isSingleDay
+                      ? fmtMins(dayMetric?.sleep_duration_minutes ?? null)
+                      : (summary?.avg_sleep_hours ? summary.avg_sleep_hours.toFixed(1) + 'h' : '—')}
+                    unit={isSingleDay
+                      ? (dayMetric?.sleep_score != null ? `score ${dayMetric.sleep_score}` : undefined)
+                      : t('avgDay')}
                     icon="😴"
                     chartData={chartSleep}
                     chartColor="fill-blue-400"
@@ -315,7 +464,9 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                   />
                   <MetricCard
                     label={t('restingHr')}
-                    value={summary?.avg_resting_hr ? String(summary.avg_resting_hr) : '—'}
+                    value={isSingleDay
+                      ? (dayMetric?.resting_hr != null ? String(dayMetric.resting_hr) : '—')
+                      : (summary?.avg_resting_hr ? String(summary.avg_resting_hr) : '—')}
                     unit="bpm"
                     icon="❤️"
                     chartData={chartHr}
@@ -324,10 +475,10 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                   />
                   <MetricCard
                     label={t('bodyBattery')}
-                    value={metrics.length > 0 && metrics[metrics.length - 1]?.body_battery_end != null
-                      ? String(metrics[metrics.length - 1].body_battery_end)
-                      : '—'}
-                    unit={t('today')}
+                    value={isSingleDay
+                      ? (dayMetric?.body_battery_end != null ? String(dayMetric.body_battery_end) : '—')
+                      : (metrics[metrics.length - 1]?.body_battery_end != null ? String(metrics[metrics.length - 1].body_battery_end) : '—')}
+                    unit={isSingleDay ? undefined : t('latest')}
                     icon="⚡"
                     chartData={chartBattery}
                     chartColor="fill-yellow-400"
@@ -336,8 +487,36 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                 </div>
               )}
 
-              {/* Daily breakdown table */}
-              {metrics.length > 0 && (
+              {/* Sleep detail */}
+              {metrics.length > 0 && (sleepPhases.deep != null || sleepPhases.light != null || sleepPhases.rem != null) && (
+                <div className={`rounded-xl border ${border} p-4`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className={`text-xs font-semibold uppercase tracking-wide ${textMuted}`}>{t('sleepDetail')}</h3>
+                    {sleepPhases.score != null && (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-50 text-blue-600'}`}>
+                        {t('score')} {sleepPhases.score}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { label: t('sleepDeep'),  value: sleepPhases.deep,  color: isDarkMode ? 'text-indigo-400' : 'text-indigo-600', icon: '🌑' },
+                      { label: t('sleepLight'), value: sleepPhases.light, color: isDarkMode ? 'text-blue-400'   : 'text-blue-500',   icon: '🌙' },
+                      { label: t('sleepRem'),   value: sleepPhases.rem,   color: isDarkMode ? 'text-purple-400' : 'text-purple-600', icon: '💭' },
+                      { label: t('sleepAwake'), value: sleepPhases.awake, color: isDarkMode ? 'text-orange-400' : 'text-orange-500', icon: '👁️' },
+                    ].map(({ label, value, color, icon }) => (
+                      <div key={label} className={`rounded-lg p-2.5 ${isDarkMode ? 'bg-gray-800/60' : 'bg-gray-50'} flex flex-col gap-1`}>
+                        <span className="text-base">{icon}</span>
+                        <span className={`text-xs font-bold ${value != null ? color : textMuted}`}>{fmtMins(value)}</span>
+                        <span className={`text-xs ${textMuted}`}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Daily breakdown table — multi-day only */}
+              {metrics.length > 0 && !isSingleDay && (
                 <div className={`rounded-xl border ${border} overflow-hidden`}>
                   <div className={`px-4 py-3 border-b ${border}`}>
                     <h3 className={`text-xs font-semibold uppercase tracking-wide ${textMuted}`}>{t('dailyBreakdown')}</h3>
@@ -350,6 +529,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                           <th className="text-right px-3 py-2 font-medium">👟</th>
                           <th className="text-right px-3 py-2 font-medium">❤️</th>
                           <th className="text-right px-3 py-2 font-medium">😴</th>
+                          <th className="text-right px-3 py-2 font-medium">{t('score')}</th>
                           <th className="text-right px-4 py-2 font-medium">⚡</th>
                         </tr>
                       </thead>
@@ -360,7 +540,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                             className={`border-t ${border} ${isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'} transition-colors`}
                           >
                             <td className={`px-4 py-2.5 font-medium text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {new Date(m.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                              {fmtDate(m.date)}
                             </td>
                             <td className={`px-3 py-2.5 text-right text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                               {m.steps != null ? m.steps.toLocaleString() : <span className={textMuted}>—</span>}
@@ -369,8 +549,11 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                               {m.resting_hr != null ? `${m.resting_hr} bpm` : <span className={textMuted}>—</span>}
                             </td>
                             <td className={`px-3 py-2.5 text-right text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {m.sleep_duration_minutes != null
-                                ? `${(m.sleep_duration_minutes / 60).toFixed(1)}h`
+                              {fmtMins(m.sleep_duration_minutes)}
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-xs">
+                              {m.sleep_score != null
+                                ? <span className={isDarkMode ? 'text-blue-300' : 'text-blue-600'}>{m.sleep_score}</span>
                                 : <span className={textMuted}>—</span>}
                             </td>
                             <td className={`px-4 py-2.5 text-right text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>

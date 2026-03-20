@@ -32,12 +32,21 @@
     "restingHr": "FC Repouso",
     "bodyBattery": "Body Battery",
     "avgDay": "média/dia",
+    "latest": "último",
     "today": "hoje",
+    "score": "Score",
+    "sleepDetail": "Detalhes do sono",
+    "sleepDeep": "Profundo",
+    "sleepLight": "Leve",
+    "sleepRem": "REM",
+    "sleepAwake": "Acordado",
     "dailyBreakdown": "Resumo diário",
     "date": "Data",
     "period": {
-      "week": "7 dias",
-      "month": "30 dias"
+      "today": "Hoje",
+      "3days": "3 dias",
+      "7days": "7 dias",
+      "30days": "30 dias"
     }
   },
   "login": {

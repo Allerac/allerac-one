@@ -204,7 +204,7 @@ if [ "$PRODUCT_LINE" = "cloud" ]; then
     echo "  App:     http://localhost:8080"
     echo "  Grafana: http://localhost:3001"
 else
-    APP_PORT=$(grep "^APP_PORT=" .env 2>/dev/null | cut -d= -f2 || echo "8080")
-    echo "  App: http://localhost:${APP_PORT}"
+    APP_PORT=$(grep "^APP_PORT=" .env 2>/dev/null | cut -d= -f2)
+    echo "  App: http://localhost:${APP_PORT:-8080}"
 fi
 echo ""

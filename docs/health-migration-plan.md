@@ -234,29 +234,14 @@ New route `/health` in Next.js with a dedicated health dashboard.
 
 ---
 
-### Phase 5 — Data Migration Script ✅ TODO
+### Phase 6 — Cleanup ✅ Done
 
-Before shutting down allerac-health, migrate historical data from InfluxDB to PostgreSQL.
-
-**Script location:** `scripts/migrate-influxdb-to-postgres.py`
-
-**Process:**
-1. Connect to InfluxDB, query all measurements per user
-2. Transform from InfluxDB line protocol format to `health_daily_metrics` row format
-3. Insert into PostgreSQL with `ON CONFLICT (user_id, date) DO UPDATE`
-4. Verify row counts match
-
----
-
-### Phase 6 — Cleanup ✅ TODO
-
-- Remove from `.env`: `HEALTH_API_URL`, `HEALTH_APP_URL`, `HEALTH_API_SECRET_KEY`
-- Remove from `GarminSettings.tsx`: "Open Health" SSO button
-- Update `docker-compose.local.yml`:
-  - Remove: `allerac-health-backend`, `allerac-health-worker`, `redis`, `influxdb`
-  - Add: `health-worker` (new minimal Python service)
-- Archive the `allerac-health` repo
-- Update `docs/architecture.md` and `docs/local-setup.md`
+- Removed `HEALTH_API_SECRET_KEY` and `OIDC_CLIENT_SECRET_HEALTH` from `.env`
+- Removed `allerac-health` OIDC client from `src/app/services/oidc/provider.ts`
+- `GarminSettings.tsx` had no SSO button to remove (already clean)
+- `docker-compose.local.yml` had no old allerac-health service references
+- allerac-health was never in production — no data migration needed (Phase 5 skipped)
+- Archive the `allerac-health` repo when ready
 
 ---
 
@@ -265,21 +250,33 @@ Before shutting down allerac-health, migrate historical data from InfluxDB to Po
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 1 — DB Migrations | ✅ Done | migrations 015–018 |
-| Phase 2 — Python Worker | ✅ Done | `services/health-worker/` — profile: health |
+| Phase 2 — Python Worker | ✅ Done | `services/health-worker/` FastAPI at port 8001 |
 | Phase 3 — Server Actions | ✅ Done | actions/health.ts + health.tool.ts + GarminSettings.tsx |
 | Phase 4 — Health Dashboard | ✅ Done | components/health/HealthDashboard.tsx — sidebar button + i18n (en/pt/es) |
-| Phase 5 — Data Migration | 🔲 Not started | Requires allerac-health still running |
-| Phase 6 — Cleanup | 🔲 Not started | Last step |
+| Phase 6 — Cleanup | ✅ Done | OIDC client removed, old env vars removed |
+
+## Post-Phase-4 Fixes & Improvements (2026-03-20)
+
+- **Float → Integer cast**: Garmin API returns some fields (e.g. `distance_meters`, `floors_climbed`) as floats. Added `toInt()` helper in `_upsertMetrics` to `Math.round()` all numeric fields before PostgreSQL insert.
+- **Date serialization**: `getHealthMetrics` now normalizes PostgreSQL `DATE` objects to ISO strings to avoid `Invalid Date` in the UI.
+- **Period filters**: Replaced `week/month` with `today / 3 days / 7 days / 30 days`. Default is 7 days.
+- **Period-aware sync**: `triggerHealthSync` now accepts a `days` parameter. The dashboard passes the current period's days so "Sync" always fetches the visible range.
+- **Sleep detail section**: Dashboard shows Deep / Light / REM / Awake phases (actual values for Today, averages for multi-day). Sleep score shown as a badge.
+- **Today mode**: Cards show actual values for the day instead of averages. Sleep card shows duration + score.
+- **Spark charts**: Bar chart for ≤5 data points, SVG line chart with area fill for 7/30 days. Charts hidden on mobile (`hidden sm:block`) for a cleaner layout.
+- **`update.sh` URL fix**: APP_PORT fallback now uses `${APP_PORT:-8080}` to handle empty variable correctly.
+- **`HEALTH_WORKER_SECRET`**: Must be set in `.env` (both local and VM). Worker also needs restart after `.env` change.
 
 ---
 
 ## Environment Variables
 
-### To remove (post-migration)
+### Removed
 ```
 HEALTH_API_URL
 HEALTH_APP_URL
 HEALTH_API_SECRET_KEY
+OIDC_CLIENT_SECRET_HEALTH
 ```
 
 ### To add

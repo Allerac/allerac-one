@@ -158,8 +158,8 @@ export async function disconnectGarmin(userId: string) {
 
 // ─── Sync ──────────────────────────────────────────────────────────────────────
 
-export async function triggerHealthSync(userId: string) {
-  return _runSync(userId, 'manual', 2);
+export async function triggerHealthSync(userId: string, days = 2) {
+  return _runSync(userId, 'manual', days);
 }
 
 export async function triggerInitialSync(userId: string) {
@@ -226,11 +226,14 @@ export async function getHealthMetrics(userId: string, startDate: string, endDat
      ORDER BY date ASC`,
     [userId, startDate, endDate]
   );
-  return res.rows;
+  return res.rows.map((row: any) => ({
+    ...row,
+    date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date).split('T')[0],
+  }));
 }
 
-export async function getHealthSummary(userId: string, period: 'day' | 'week' | 'month' | 'year') {
-  const days = { day: 1, week: 7, month: 30, year: 365 }[period];
+export async function getHealthSummary(userId: string, period: 'day' | '3days' | 'week' | 'month' | 'year') {
+  const days = { day: 1, '3days': 3, week: 7, month: 30, year: 365 }[period];
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const res = await pool.query(
@@ -260,6 +263,8 @@ export async function getDailySnapshot(userId: string, date: string) {
 }
 
 // ─── Internal ──────────────────────────────────────────────────────────────────
+
+const toInt = (v: any) => (v != null ? Math.round(Number(v)) : null);
 
 async function _upsertMetrics(userId: string, metrics: any[]) {
   for (const m of metrics) {
@@ -312,14 +317,14 @@ async function _upsertMetrics(userId: string, metrics: any[]) {
          updated_at                 = NOW()`,
       [
         userId, m.date,
-        m.steps ?? null, m.calories ?? null, m.distance_meters ?? null, m.active_minutes ?? null, m.floors_climbed ?? null,
-        m.resting_hr ?? null, m.avg_hr ?? null, m.max_hr ?? null,
-        m.sleep_duration_minutes ?? null, m.sleep_deep_minutes ?? null, m.sleep_light_minutes ?? null,
-        m.sleep_rem_minutes ?? null, m.sleep_awake_minutes ?? null, m.sleep_score ?? null,
-        m.body_battery_min ?? null, m.body_battery_max ?? null, m.body_battery_end ?? null,
-        m.body_battery_charged ?? null, m.body_battery_drained ?? null,
-        m.stress_avg ?? null, m.stress_max ?? null, m.stress_rest_duration_minutes ?? null,
-        m.hrv_weekly_avg ?? null, m.hrv_last_night ?? null, m.hrv_status ?? null,
+        toInt(m.steps), toInt(m.calories), toInt(m.distance_meters), toInt(m.active_minutes), toInt(m.floors_climbed),
+        toInt(m.resting_hr), toInt(m.avg_hr), toInt(m.max_hr),
+        toInt(m.sleep_duration_minutes), toInt(m.sleep_deep_minutes), toInt(m.sleep_light_minutes),
+        toInt(m.sleep_rem_minutes), toInt(m.sleep_awake_minutes), toInt(m.sleep_score),
+        toInt(m.body_battery_min), toInt(m.body_battery_max), toInt(m.body_battery_end),
+        toInt(m.body_battery_charged), toInt(m.body_battery_drained),
+        toInt(m.stress_avg), toInt(m.stress_max), toInt(m.stress_rest_duration_minutes),
+        toInt(m.hrv_weekly_avg), toInt(m.hrv_last_night), m.hrv_status ?? null,
       ]
     );
   }
