@@ -19,26 +19,45 @@ CREATE TABLE IF NOT EXISTS _migrations (
 );
 EOF
 
-echo "Running migrations..."
-
-# Migrations directory (relative to where script is mounted)
 MIGRATIONS_DIR="/database/migrations"
 
-# Run each migration file in order
-for migration in $(ls "$MIGRATIONS_DIR"/*.sql 2>/dev/null | sort); do
-  migration_name=$(basename "$migration")
+# Collect all migration files
+TOTAL=0
+APPLIED=0
+SKIPPED=0
+FAILED=0
+LAST=""
 
-  # Check if migration was already applied
+for migration in $(ls "$MIGRATIONS_DIR"/*.sql 2>/dev/null | sort); do
+  TOTAL=$((TOTAL + 1))
+  migration_name=$(basename "$migration")
+  # Track the highest migration number seen
+  LAST="$migration_name"
+
   already_applied=$(PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT COUNT(*) FROM _migrations WHERE name = '$migration_name';" | tr -d ' ')
 
   if [ "$already_applied" = "0" ]; then
-    echo "Applying migration: $migration_name"
-    PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "$migration"
-    PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "INSERT INTO _migrations (name) VALUES ('$migration_name');"
-    echo "Migration $migration_name applied successfully"
+    if PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "$migration" -q 2>/dev/null; then
+      PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "INSERT INTO _migrations (name) VALUES ('$migration_name');" -q
+      echo "  + $migration_name"
+      APPLIED=$((APPLIED + 1))
+    else
+      echo "  ✗ $migration_name FAILED"
+      FAILED=$((FAILED + 1))
+    fi
   else
-    echo "Migration $migration_name already applied, skipping"
+    SKIPPED=$((SKIPPED + 1))
   fi
 done
 
-echo "All migrations completed!"
+# Extract version number from last migration filename (e.g. 020_user_location.sql → 020)
+VERSION=$(echo "$LAST" | sed 's/^\([0-9]*\).*/\1/')
+
+if [ "$FAILED" -gt 0 ]; then
+  echo "Database schema: $FAILED migration(s) FAILED — check logs above"
+  exit 1
+elif [ "$APPLIED" -gt 0 ]; then
+  echo "Database schema: updated to v${VERSION} ($APPLIED migration(s) applied)"
+else
+  echo "Database schema: up to date (v${VERSION})"
+fi
