@@ -20,6 +20,7 @@ import { ChatService } from '@/app/services/database/chat.service';
 import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
 import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
+import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
 import { SearchWebTool } from '@/app/tools/search-web.tool';
 import { ShellTool } from '@/app/tools/shell.tool';
 import { HealthTool } from '@/app/tools/health.tool';
@@ -92,9 +93,18 @@ export async function POST(request: Request): Promise<Response> {
         const googleApiKey = settings?.google_api_key || '';
         const userLocation = settings?.location || null;
 
-        let systemMessage = settings?.system_message || 'You are a helpful AI assistant.';
+        let systemMessage = settings?.system_message || ALLERAC_SOUL;
+
+        // Inject user's name and location as context (always, regardless of custom system message)
+        const contextLines: string[] = [];
+        if (user.name) contextLines.push(`The user's name is ${user.name}.`);
+        if (userLocation) contextLines.push(`The user's location is ${userLocation}.`);
+        if (contextLines.length > 0) {
+          systemMessage = contextLines.join(' ') + '\n\n' + systemMessage;
+        }
+
         if (userLocation) {
-          systemMessage = `User location: ${userLocation}\n\nWhen the user asks about weather, temperature, or anything requiring real-time local information, use the search_web tool to find current data for their location.\n\n${systemMessage}`;
+          systemMessage += '\n\nWhen the user asks about weather, temperature, or anything requiring real-time local information, use the search_web tool to find current data for their location.';
         } else if (tavilyApiKey) {
           systemMessage += '\n\nWhen the user asks about current weather, news, prices, or any real-time information, use the search_web tool.';
         }

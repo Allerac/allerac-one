@@ -14,6 +14,7 @@ import { ShellTool } from '../../tools/shell.tool';
 import { ChatService } from '../database/chat.service';
 import { skillsService } from '../skills/skills.service';
 import { TOOLS } from '../../tools/tools';
+import { ALLERAC_SOUL } from '../../config/allerac-soul';
 
 export interface ChatHandlerConfig {
   userId: string;
@@ -152,7 +153,7 @@ export async function handleChatMessage(
   }
 
   // 4. Build system message with context
-  let enrichedSystemMessage = systemMessage || 'You are a helpful AI assistant.';
+  let enrichedSystemMessage = systemMessage || ALLERAC_SOUL;
 
   // Inject active skill content if available
   if (activeSkill) {

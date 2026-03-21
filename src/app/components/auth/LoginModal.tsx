@@ -66,6 +66,10 @@ export default function LoginModal({
       return t('passwordLength');
     }
 
+    if (activeTab === 'register' && !name.trim()) {
+      return t('nameRequired');
+    }
+
     if (activeTab === 'register' && password !== confirmPassword) {
       return t('passwordsNoMatch');
     }
@@ -335,7 +339,7 @@ export default function LoginModal({
 
               {activeTab === 'register' && (
                 <div>
-                  <label className={labelClass}>{t('nameOptional')}</label>
+                  <label className={labelClass}>{t('name')}</label>
                   <input
                     type="text"
                     value={name}

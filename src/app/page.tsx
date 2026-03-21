@@ -863,6 +863,7 @@ export default function AdminChat() {
         systemMessageEdit={systemMessageEdit}
         setSystemMessageEdit={setSystemMessageEdit}
         systemMessage={systemMessage}
+        userName={userName}
         onSave={saveSystemMessage}
       />
 

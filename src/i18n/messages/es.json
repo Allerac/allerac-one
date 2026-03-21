@@ -58,6 +58,8 @@
     "password": "Contraseña",
     "confirmPassword": "Confirmar Contraseña",
     "nameOptional": "Nombre (opcional)",
+    "name": "Nombre",
+    "nameRequired": "Por favor, introduce tu nombre",
     "yourName": "Tu nombre",
     "loggingIn": "Iniciando sesión...",
     "creatingAccount": "Creando cuenta...",
@@ -271,5 +273,14 @@
     "languageEnglish": "English",
     "languageSpanish": "Español",
     "languagePortuguese": "Português"
+  },
+  "consciousness": {
+    "title": "Contexto",
+    "description": "Compartido en todas las conversaciones.",
+    "placeholder": "Quién eres, cómo te gusta trabajar, lo que la IA siempre debe saber sobre ti...",
+    "privacy": "Solo tú puedes ver esto. Nunca se comparte ni es visible para nadie más.",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "defaultTemplate": "## Estilo de comunicación\n- Sé conciso y directo\n- Usa ejemplos al explicar conceptos\n- Prefiero respuestas en Español\n\n## Mi perfil\n- (tu profesión, nivel de experiencia, áreas de conocimiento)\n\n## Para qué uso Allerac\n- (programación, investigación, escritura, tareas del día a día...)\n\n## Preferencias\n- (tono, formato, qué evitar...)"
   }
 }

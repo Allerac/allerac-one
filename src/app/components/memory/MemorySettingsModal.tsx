@@ -10,6 +10,7 @@ interface MemorySettingsModalProps {
   systemMessageEdit: string;
   setSystemMessageEdit: (value: string) => void;
   systemMessage: string;
+  userName?: string;
   onSave: () => Promise<void>;
 }
 
@@ -20,16 +21,24 @@ export default function MemorySettingsModal({
   systemMessageEdit,
   setSystemMessageEdit,
   systemMessage,
+  userName,
   onSave
 }: MemorySettingsModalProps) {
   const t = useTranslations('consciousness');
 
-  // Sync systemMessageEdit with systemMessage when modal opens
+  // Sync systemMessageEdit with systemMessage when modal opens.
+  // If there's no saved message yet, pre-fill with a personalized template.
   useEffect(() => {
     if (isOpen) {
-      setSystemMessageEdit(systemMessage);
+      if (systemMessage) {
+        setSystemMessageEdit(systemMessage);
+      } else {
+        const firstName = userName?.split(' ')[0] || '';
+        const namePrefix = firstName ? `My name is ${firstName}.\n\n` : '';
+        setSystemMessageEdit(namePrefix + t('defaultTemplate'));
+      }
     }
-  }, [isOpen, systemMessage, setSystemMessageEdit]);
+  }, [isOpen, systemMessage, userName, setSystemMessageEdit]);
 
   // ESC key handler
   useEffect(() => {

@@ -58,6 +58,8 @@
     "password": "Senha",
     "confirmPassword": "Confirmar Senha",
     "nameOptional": "Nome (opcional)",
+    "name": "Nome",
+    "nameRequired": "Por favor, insira seu nome",
     "yourName": "Seu nome",
     "loggingIn": "Entrando...",
     "creatingAccount": "Criando conta...",
@@ -277,7 +279,8 @@
     "placeholder": "Quem você é, como gosta de trabalhar, o que a IA sempre deve saber sobre você...",
     "privacy": "Somente você pode ver isso. Nunca é compartilhado ou visível para mais ninguém.",
     "save": "Salvar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "defaultTemplate": "## Estilo de comunicação\n- Seja conciso e direto\n- Use exemplos ao explicar conceitos\n- Prefiro respostas em Português\n\n## Meu perfil\n- (sua profissão, nível de experiência, áreas de conhecimento)\n\n## Para que uso o Allerac\n- (programação, pesquisa, escrita, tarefas do dia a dia...)\n\n## Preferências\n- (tom, formato, o que evitar...)"
   },
   "memoriesModal": {
     "title": "Memórias de Conversas",

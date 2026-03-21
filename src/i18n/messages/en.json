@@ -58,6 +58,8 @@
     "password": "Password",
     "confirmPassword": "Confirm Password",
     "nameOptional": "Name (optional)",
+    "name": "Name",
+    "nameRequired": "Please enter your name",
     "yourName": "Your name",
     "loggingIn": "Logging in...",
     "creatingAccount": "Creating account...",
@@ -277,7 +279,8 @@
     "placeholder": "Who you are, how you like to work, what the AI should always know about you...",
     "privacy": "Only you can see this. It is never shared or visible to anyone else.",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "defaultTemplate": "## Communication style\n- Be concise and direct\n- Use examples when explaining concepts\n- I prefer responses in English\n\n## My background\n- (your profession, experience level, areas of expertise)\n\n## What I use Allerac for\n- (coding, research, writing, daily tasks...)\n\n## Preferences\n- (tone, format, things to avoid...)"
   },
   "memoriesModal": {
     "title": "Conversation Memories",
