@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 interface TokenConfigurationProps {
   isOpen: boolean;
@@ -15,6 +15,8 @@ interface TokenConfigurationProps {
   setTavilyKeyInput: (value: string) => void;
   telegramBotTokenInput: string;
   setTelegramBotTokenInput: (value: string) => void;
+  locationInput: string;
+  setLocationInput: (value: string) => void;
   onSave: () => void;
 }
 
@@ -31,8 +33,44 @@ export default function TokenConfiguration({
   setTavilyKeyInput,
   telegramBotTokenInput,
   setTelegramBotTokenInput,
+  locationInput,
+  setLocationInput,
   onSave
 }: TokenConfigurationProps) {
+  const [detectingLocation, setDetectingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  async function detectLocation() {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setDetectingLocation(true);
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { 'Accept-Language': 'en' } }
+          );
+          const data = await res.json();
+          const city = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
+          const country = data.address?.country || '';
+          setLocationInput(city && country ? `${city}, ${country}` : city || country || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
+        } catch {
+          setLocationError('Could not resolve your location. Please enter it manually.');
+        } finally {
+          setDetectingLocation(false);
+        }
+      },
+      () => {
+        setLocationError('Location access denied. Please enter your city manually.');
+        setDetectingLocation(false);
+      }
+    );
+  }
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -117,10 +155,46 @@ export default function TokenConfiguration({
             </p>
           </div>
 
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Your Location (Optional - for weather and local context)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={locationInput}
+                onChange={(e) => { setLocationInput(e.target.value); setLocationError(null); }}
+                placeholder="e.g. Lisbon, Portugal"
+                className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+              />
+              <button
+                onClick={detectLocation}
+                disabled={detectingLocation}
+                title="Detect my location"
+                className={`px-3 py-2 rounded-md border transition-colors disabled:opacity-50 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600' : 'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+              >
+                {detectingLocation ? (
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            {locationError && <p className="text-xs mt-1 text-red-500">{locationError}</p>}
+            {!locationError && <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Used to answer questions like "what&apos;s the weather here?". Click 📍 to detect automatically.
+            </p>}
+          </div>
+
           <div className="flex gap-3">
             <button
               onClick={onSave}
-              disabled={!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim()}
+              disabled={!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim() && !locationInput.trim()}
               className="flex-1 px-4 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Save Keys

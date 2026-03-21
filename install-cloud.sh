@@ -114,7 +114,7 @@ read_secret() {
     local VALUE=""
     if [ -t 0 ]; then
         read -rsp "  $PROMPT: " VALUE
-        echo ""
+        echo "" >&2
     else
         read -r VALUE
     fi
@@ -263,6 +263,13 @@ start_services() {
 
     export COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    log_info "Creating Docker network and volumes..."
+    $USE_SUDO docker network create allerac 2>/dev/null || true
+    for vol in allerac_ollama_data allerac_postgres_data allerac_db_data allerac_prometheus_data allerac_backups_data; do
+        $USE_SUDO docker volume create "$vol" 2>/dev/null || true
+    done
+    log_success "Network and volumes ready"
 
     log_info "Pulling base images..."
     $USE_SUDO docker compose pull --quiet

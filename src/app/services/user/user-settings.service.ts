@@ -12,7 +12,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, location FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -29,6 +29,7 @@ export class UserSettingsService {
         telegram_bot_token: row.telegram_bot_token ? safeDecrypt(row.telegram_bot_token) : null,
         system_message: row.system_message || null,
         google_api_key: row.google_api_key ? safeDecrypt(row.google_api_key) : null,
+        location: row.location || null,
       };
     } catch (error) {
       console.error('Error loading user settings:', error);
@@ -40,7 +41,7 @@ export class UserSettingsService {
    * Save or update user API keys
    * Encrypts sensitive fields before storing
    */
-  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string) {
+  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, location?: string) {
     try {
       // Encrypt tokens before storing
       const encryptedGithubToken = githubToken ? encrypt(githubToken) : undefined;
@@ -74,6 +75,10 @@ export class UserSettingsService {
         if (encryptedGoogleKey !== undefined) {
           updateFields.push(`google_api_key = $${paramCount++}`);
           values.push(encryptedGoogleKey);
+        }
+        if (location !== undefined) {
+          updateFields.push(`location = $${paramCount++}`);
+          values.push(location || null);
         }
 
         if (updateFields.length > 0) {

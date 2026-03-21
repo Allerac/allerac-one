@@ -21,7 +21,7 @@ export interface LLMRequest {
   temperature?: number;
   max_tokens?: number;
   tools?: any[];
-  tool_choice?: string;
+  tool_choice?: string | { type: string; function: { name: string } };
 }
 
 export interface LLMResponse {

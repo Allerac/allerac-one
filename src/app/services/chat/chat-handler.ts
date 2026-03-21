@@ -217,13 +217,19 @@ export async function handleChatMessage(
   // 5. Call LLM
   const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken, geminiToken });
 
+  // If the active skill forces a specific tool, use it on the first call
+  const forceTool = activeSkill?.force_tool ?? null;
+  const initialToolChoice = forceTool
+    ? { type: 'function', function: { name: forceTool } }
+    : 'auto';
+
   let data = await llmService.chatCompletion({
     messages: conversationMessages,
     model: selectedModel,
     temperature: 0.7,
     max_tokens: 2000,
     tools: TOOLS,
-    tool_choice: 'auto',
+    tool_choice: initialToolChoice,
   });
 
   let assistantMessage = data.choices[0].message;

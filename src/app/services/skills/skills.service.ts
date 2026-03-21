@@ -18,6 +18,7 @@ export interface Skill {
   memory_scope: string;
   rag_integration: boolean;
   auto_switch_rules: AutoSwitchRules | null;
+  force_tool: string | null;
   version: string;
   license: string;
   verified: boolean;
@@ -553,8 +554,8 @@ export class SkillsService {
       `INSERT INTO skills (
         user_id, name, display_name, description, content, category,
         learning_enabled, memory_scope, rag_integration, auto_switch_rules,
-        version, license, shared
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        force_tool, version, license, shared
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         skillData.user_id || null,
@@ -567,6 +568,7 @@ export class SkillsService {
         skillData.memory_scope || 'user',
         skillData.rag_integration || false,
         skillData.auto_switch_rules ? JSON.stringify(skillData.auto_switch_rules) : null,
+        skillData.force_tool || null,
         skillData.version || '1.0.0',
         skillData.license || 'MIT',
         skillData.shared || false,
@@ -589,8 +591,9 @@ export class SkillsService {
         memory_scope = COALESCE($7, memory_scope),
         rag_integration = COALESCE($8, rag_integration),
         auto_switch_rules = COALESCE($9, auto_switch_rules),
-        version = COALESCE($10, version),
-        shared = COALESCE($11, shared)
+        force_tool = COALESCE($10, force_tool),
+        version = COALESCE($11, version),
+        shared = COALESCE($12, shared)
        WHERE id = $1
        RETURNING *`,
       [
@@ -603,6 +606,7 @@ export class SkillsService {
         skillData.memory_scope,
         skillData.rag_integration,
         skillData.auto_switch_rules ? JSON.stringify(skillData.auto_switch_rules) : null,
+        skillData.force_tool,
         skillData.version,
         skillData.shared,
       ]

@@ -89,8 +89,15 @@ export async function POST(request: Request): Promise<Response> {
         const settings = await userSettingsService.loadUserSettings(userId);
         const githubToken = settings?.github_token || '';
         const tavilyApiKey = settings?.tavily_api_key || process.env.TAVILY_API_KEY || undefined;
-        const systemMessage = settings?.system_message || 'You are a helpful AI assistant.';
         const googleApiKey = settings?.google_api_key || '';
+        const userLocation = settings?.location || null;
+
+        let systemMessage = settings?.system_message || 'You are a helpful AI assistant.';
+        if (userLocation) {
+          systemMessage = `User location: ${userLocation}\n\nWhen the user asks about weather, temperature, or anything requiring real-time local information, use the search_web tool to find current data for their location.\n\n${systemMessage}`;
+        } else if (tavilyApiKey) {
+          systemMessage += '\n\nWhen the user asks about current weather, news, prices, or any real-time information, use the search_web tool.';
+        }
 
         if (!message && (!imageAttachments || imageAttachments.length === 0)) {
           controller.enqueue(encode({ type: 'error', message: 'Message is required' }));

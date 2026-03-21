@@ -93,6 +93,7 @@ export default function AdminChat() {
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [telegramBotTokenInput, setTelegramBotTokenInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
+  const [locationInput, setLocationInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('qwen2.5:3b');
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
@@ -342,6 +343,7 @@ export default function AdminChat() {
         if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
         if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
         if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
+        if (settings.location) setLocationInput(settings.location);
       }
 
       setGithubToken(savedToken);
@@ -507,6 +509,7 @@ export default function AdminChat() {
       if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
       if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
       if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
+      if (settings.location) setLocationInput(settings.location);
     }
 
     setGithubToken(savedToken);
@@ -552,8 +555,9 @@ export default function AdminChat() {
     const newTavilyKey = tavilyKeyInput.trim();
     const newTelegramToken = telegramBotTokenInput.trim();
     const newGoogleKey = googleKeyInput.trim();
+    const newLocation = locationInput.trim();
 
-    if (!newGithubToken && !newTavilyKey && !newTelegramToken && !newGoogleKey) return;
+    if (!newGithubToken && !newTavilyKey && !newTelegramToken && !newGoogleKey && !newLocation) return;
 
     try {
       // Save to localStorage
@@ -577,7 +581,7 @@ export default function AdminChat() {
       }
 
       // Save to DB
-      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, newTelegramToken || undefined, newGoogleKey || undefined);
+      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, newTelegramToken || undefined, newGoogleKey || undefined, newLocation || undefined);
 
       if (!result?.success) {
         alert('Error saving keys to database. Please check server configuration.');
@@ -969,6 +973,8 @@ export default function AdminChat() {
         setTelegramBotTokenInput={setTelegramBotTokenInput}
         googleKeyInput={googleKeyInput}
         setGoogleKeyInput={setGoogleKeyInput}
+        locationInput={locationInput}
+        setLocationInput={setLocationInput}
         onSaveToken={handleSaveToken}
         MODELS={MODELS}
         selectedModel={selectedModel}
