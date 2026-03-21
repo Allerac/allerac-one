@@ -88,10 +88,9 @@ export default function AdminChat() {
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
-  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'system' | 'apiKeys' | 'benchmark'>('system');
+  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark'>('preferences');
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
-  const [telegramBotTokenInput, setTelegramBotTokenInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
@@ -156,9 +155,9 @@ export default function AdminChat() {
   useEffect(() => {
     checkAuth();
     const savedTheme = localStorage.getItem('chatTheme');
-    if (savedTheme) {
-      setIsDarkMode(savedTheme === 'dark');
-    }
+    if (savedTheme) setIsDarkMode(savedTheme === 'dark');
+    const savedModel = localStorage.getItem('selected_model');
+    if (savedModel) setSelectedModel(savedModel);
   }, []);
 
   // Load system message when userId becomes available
@@ -541,11 +540,10 @@ export default function AdminChat() {
 
     const newGithubToken = tokenInput.trim();
     const newTavilyKey = tavilyKeyInput.trim();
-    const newTelegramToken = telegramBotTokenInput.trim();
     const newGoogleKey = googleKeyInput.trim();
     const newLocation = locationInput.trim();
 
-    if (!newGithubToken && !newTavilyKey && !newTelegramToken && !newGoogleKey && !newLocation) return;
+    if (!newGithubToken && !newTavilyKey && !newGoogleKey && !newLocation) return;
 
     try {
       // Save to localStorage
@@ -559,17 +557,13 @@ export default function AdminChat() {
         setTavilyApiKey(newTavilyKey);
         setTavilyKeyInput('');
       }
-      if (newTelegramToken) {
-        setTelegramBotToken(newTelegramToken);
-        setTelegramBotTokenInput('');
-      }
       if (newGoogleKey) {
         setGoogleApiKey(newGoogleKey);
         setGoogleKeyInput('');
       }
 
       // Save to DB
-      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, newTelegramToken || undefined, newGoogleKey || undefined, newLocation || undefined);
+      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newLocation || undefined);
 
       if (!result?.success) {
         alert('Error saving keys to database. Please check server configuration.');
@@ -891,10 +885,6 @@ export default function AdminChat() {
         userName={userName}
         userEmail={userEmail}
         userId={userId}
-        onOpenTelegramSettings={() => {
-          setIsUserSettingsOpen(false);
-          setIsTelegramBotSettingsOpen(true);
-        }}
         onLogout={handleLogout}
       />
 
@@ -939,19 +929,20 @@ export default function AdminChat() {
         initialTab={systemDashboardInitialTab}
         githubToken={githubToken}
         tavilyApiKey={tavilyApiKey}
-        telegramBotToken={telegramBotToken}
         googleApiKey={googleApiKey}
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}
         tavilyKeyInput={tavilyKeyInput}
         setTavilyKeyInput={setTavilyKeyInput}
-        telegramBotTokenInput={telegramBotTokenInput}
-        setTelegramBotTokenInput={setTelegramBotTokenInput}
         googleKeyInput={googleKeyInput}
         setGoogleKeyInput={setGoogleKeyInput}
         locationInput={locationInput}
         setLocationInput={setLocationInput}
         onSaveToken={handleSaveToken}
+        onOpenTelegramSettings={() => {
+          setIsSystemDashboardOpen(false);
+          setIsTelegramBotSettingsOpen(true);
+        }}
         MODELS={MODELS}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}

@@ -14,26 +14,24 @@ interface SystemDashboardProps {
   onClose: () => void;
   isDarkMode: boolean;
   userId?: string;
-  initialTab?: 'system' | 'apiKeys' | 'benchmark';
+  initialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark';
   MODELS?: Model[];
   selectedModel?: string;
   setSelectedModel: (modelId: string) => void;
   // API Keys props
   githubToken: string;
   tavilyApiKey: string;
-  telegramBotToken: string;
   googleApiKey: string;
   tokenInput: string;
   setTokenInput: (v: string) => void;
   tavilyKeyInput: string;
   setTavilyKeyInput: (v: string) => void;
-  telegramBotTokenInput: string;
-  setTelegramBotTokenInput: (v: string) => void;
   googleKeyInput: string;
   setGoogleKeyInput: (v: string) => void;
   locationInput: string;
   setLocationInput: (v: string) => void;
   onSaveToken: () => Promise<void>;
+  onOpenTelegramSettings?: () => void;
 }
 
 interface SystemDashboard {
@@ -148,28 +146,26 @@ export default function SystemDashboardModal({
   onClose,
   isDarkMode,
   userId,
-  initialTab = 'system',
+  initialTab = 'preferences',
   githubToken,
   tavilyApiKey,
-  telegramBotToken,
   googleApiKey,
   tokenInput,
   setTokenInput,
   tavilyKeyInput,
   setTavilyKeyInput,
-  telegramBotTokenInput,
-  setTelegramBotTokenInput,
   googleKeyInput,
   setGoogleKeyInput,
   locationInput,
   setLocationInput,
   onSaveToken,
+  onOpenTelegramSettings,
   MODELS = [],
   selectedModel = '',
   setSelectedModel,
 }: SystemDashboardProps) {
   const t = useTranslations('system');
-  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'benchmark'>(initialTab ?? 'system');
+  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark'>(initialTab ?? 'system');
   const [data, setData] = useState<SystemDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -194,7 +190,7 @@ export default function SystemDashboardModal({
 
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(initialTab);
+      setActiveTab(initialTab ?? 'system');
       loadDashboard();
       checkUpdates();
       loadBackups();
@@ -463,7 +459,7 @@ export default function SystemDashboardModal({
     }
   };
 
-  const tabClass = (tab: 'system' | 'apiKeys' | 'benchmark') =>
+  const tabClass = (tab: 'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark') =>
     `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
       activeTab === tab
         ? isDarkMode
@@ -546,12 +542,18 @@ export default function SystemDashboardModal({
         </div>
 
         {/* Tabs */}
-        <div className={`flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <button className={tabClass('system')} onClick={() => setActiveTab('system')}>
-            {t('tabSystem')}
+        <div className={`flex overflow-x-auto border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <button className={`${tabClass('preferences')} whitespace-nowrap`} onClick={() => setActiveTab('preferences')}>
+            Preferences
           </button>
           <button className={tabClass('apiKeys')} onClick={() => setActiveTab('apiKeys')}>
             {t('tabApiKeys')}
+          </button>
+          <button className={tabClass('health')} onClick={() => setActiveTab('health')}>
+            Health
+          </button>
+          <button className={tabClass('system')} onClick={() => setActiveTab('system')}>
+            {t('tabSystem')}
           </button>
           <button className={tabClass('benchmark')} onClick={() => setActiveTab('benchmark')}>
             Benchmark
@@ -904,27 +906,6 @@ export default function SystemDashboardModal({
                 </p>
               </div>
 
-              {/* Telegram */}
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Telegram Bot Token <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — Telegram access)</span>
-                </label>
-                <input
-                  type="password"
-                  value={telegramBotTokenInput}
-                  onChange={(e) => setTelegramBotTokenInput(e.target.value)}
-                  placeholder={telegramBotToken ? '••••••••' : 'Enter bot token...'}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                />
-                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Create a bot via{' '}
-                  <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">
-                    @BotFather
-                  </a>
-                  {' '}on Telegram
-                </p>
-              </div>
-
               {/* Google API Key */}
               <div>
                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -942,6 +923,30 @@ export default function SystemDashboardModal({
                 </p>
               </div>
 
+              {keySaveMessage && (
+                <div className={`p-2.5 rounded-lg text-sm ${
+                  keySaveMessage.type === 'success'
+                    ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
+                    : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
+                }`}>
+                  {keySaveMessage.text}
+                </div>
+              )}
+
+              <button
+                onClick={handleSaveApiKeys}
+                disabled={isSavingKeys || (!tokenInput.trim() && !tavilyKeyInput.trim() && !googleKeyInput.trim())}
+                className="px-5 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+              >
+                {isSavingKeys && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>}
+                {t('saveKeys')}
+              </button>
+            </div>
+          )}
+
+          {/* User Preferences Tab */}
+          {activeTab === 'preferences' && (
+            <div className="max-w-lg space-y-5">
               {/* Location */}
               <div>
                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -974,13 +979,12 @@ export default function SystemDashboardModal({
                   </button>
                 </div>
                 {locationError && <p className="text-xs mt-1 text-red-500">{locationError}</p>}
-                {!locationError && <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Used to answer questions like &quot;what&apos;s the weather here?&quot;. Click the pin to detect automatically.
-                </p>}
+                {!locationError && (
+                  <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Used to answer questions like &quot;what&apos;s the weather here?&quot;. Click the pin to detect automatically.
+                  </p>
+                )}
               </div>
-
-              {/* Garmin Connect */}
-              <GarminSettings userId={userId} isDarkMode={isDarkMode} />
 
               {/* AI Model */}
               <div>
@@ -989,7 +993,7 @@ export default function SystemDashboardModal({
                 </label>
                 <select
                   value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
+                  onChange={(e) => { setSelectedModel(e.target.value); localStorage.setItem('selected_model', e.target.value); }}
                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
                 >
                   {MODELS.map((model) => (
@@ -999,9 +1003,39 @@ export default function SystemDashboardModal({
                   ))}
                 </select>
                 <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Choose the AI model used in your conversations.
+                  Choose the AI model used in your conversations. Saved automatically.
                 </p>
               </div>
+
+              {/* Telegram Bot */}
+              {onOpenTelegramSettings && (
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Telegram Bot
+                  </label>
+                  <button
+                    onClick={onOpenTelegramSettings}
+                    className={`w-full px-4 py-3 rounded-lg border transition-colors flex items-center justify-between ${
+                      isDarkMode
+                        ? 'border-gray-600 bg-gray-700/50 hover:bg-gray-700 text-gray-200'
+                        : 'border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <svg className="w-5 h-5 text-brand-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                      </svg>
+                      <span className="text-sm font-medium">Manage Telegram Bots</span>
+                    </div>
+                    <svg className="w-4 h-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Configure bots and allowed Telegram users.
+                  </p>
+                </div>
+              )}
 
               {keySaveMessage && (
                 <div className={`p-2.5 rounded-lg text-sm ${
@@ -1015,12 +1049,19 @@ export default function SystemDashboardModal({
 
               <button
                 onClick={handleSaveApiKeys}
-                disabled={isSavingKeys || (!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim() && !googleKeyInput.trim() && !locationInput.trim())}
+                disabled={isSavingKeys}
                 className="px-5 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
               >
                 {isSavingKeys && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>}
-                {t('saveKeys')}
+                Save Preferences
               </button>
+            </div>
+          )}
+
+          {/* Health Tab */}
+          {activeTab === 'health' && (
+            <div className="max-w-lg">
+              <GarminSettings userId={userId} isDarkMode={isDarkMode} />
             </div>
           )}
 
