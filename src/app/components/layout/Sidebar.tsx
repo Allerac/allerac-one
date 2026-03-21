@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Model, Conversation } from '../../types';
+import { Conversation } from '../../types';
 
 interface SidebarProps {
   isSidebarOpen: boolean;
@@ -14,9 +14,6 @@ interface SidebarProps {
   currentConversationId: string | null;
   loadConversation: (conversationId: string) => void;
   deleteConversation: (conversationId: string) => void;
-  MODELS: Model[];
-  selectedModel: string;
-  setSelectedModel: (modelId: string) => void;
   setIsTokenModalOpen: (open: boolean) => void;
   setSystemMessageEdit: (message: string) => void;
   systemMessage: string;
@@ -39,9 +36,6 @@ export default function Sidebar({
   currentConversationId,
   loadConversation,
   deleteConversation,
-  MODELS,
-  selectedModel,
-  setSelectedModel,
   setIsTokenModalOpen,
   setSystemMessageEdit,
   systemMessage,
@@ -52,9 +46,7 @@ export default function Sidebar({
   setIsUserSettingsOpen,
   handleLogout
 }: SidebarProps) {
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [isConfigurationExpanded, setIsConfigurationExpanded] = useState(true);
-  const selectedModelObj = MODELS.find(m => m.id === selectedModel);
 
   return (
     <div className={`fixed inset-y-0 left-0 z-50 bg-gray-900 text-white flex flex-col border-r border-gray-800 transform transition-all duration-300 ${
@@ -160,70 +152,6 @@ export default function Sidebar({
             </svg>
           </div>
         </button>
-        </div>
-
-        {/* AI Model Dropdown - Only show when expanded on desktop, always visible on mobile when configuration is expanded */}
-        <div className={isSidebarCollapsed ? 'hidden lg:hidden' : (isConfigurationExpanded ? '' : 'hidden')}>
-        <div className="relative mb-2">
-          
-          {/* Dropdown Button */}
-          <button
-            onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 transition-colors"
-          >
-            <span className="text-lg">{selectedModelObj?.icon}</span>
-            <div className="flex-1 text-left font-medium">{selectedModelObj?.name}</div>
-            <svg 
-              className={`h-5 w-5 transition-transform ${isModelDropdownOpen ? 'rotate-180' : ''}`}
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {/* Dropdown Overlay (click outside to close) */}
-          {isModelDropdownOpen && (
-            <div 
-              className="fixed inset-0 z-10" 
-              onClick={() => setIsModelDropdownOpen(false)}
-            />
-          )}
-
-          {/* Dropdown Menu */}
-          {isModelDropdownOpen && (
-            <div className="absolute left-0 right-0 bottom-full mb-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto">
-              {MODELS.map((model) => (
-                <button
-                  key={model.id}
-                  onClick={() => {
-                    setSelectedModel(model.id);
-                    setIsModelDropdownOpen(false);
-                  }}
-                  className={`w-full flex items-start gap-3 px-3 py-2 text-sm transition-colors ${
-                    selectedModel === model.id
-                      ? 'bg-gray-700 text-white'
-                      : 'text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="text-lg mt-0.5">{model.icon}</span>
-                  <div className="flex-1 text-left">
-                    <div className="font-medium">{model.name}</div>
-                    {model.description && (
-                      <div className="text-xs text-gray-400 mt-0.5">{model.description}</div>
-                    )}
-                  </div>
-                  {selectedModel === model.id && (
-                    <svg className="h-4 w-4 text-brand-400 mt-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
         </div>
 
         {/* Action Buttons - Only show when configuration is expanded */}

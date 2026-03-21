@@ -17,6 +17,7 @@ interface SystemDashboardProps {
   initialTab?: 'system' | 'apiKeys' | 'benchmark';
   MODELS?: Model[];
   selectedModel?: string;
+  setSelectedModel: (modelId: string) => void;
   // API Keys props
   githubToken: string;
   tavilyApiKey: string;
@@ -165,6 +166,7 @@ export default function SystemDashboardModal({
   onSaveToken,
   MODELS = [],
   selectedModel = '',
+  setSelectedModel,
 }: SystemDashboardProps) {
   const t = useTranslations('system');
   const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'benchmark'>(initialTab ?? 'system');
@@ -979,6 +981,27 @@ export default function SystemDashboardModal({
 
               {/* Garmin Connect */}
               <GarminSettings userId={userId} isDarkMode={isDarkMode} />
+
+              {/* AI Model */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  AI Model
+                </label>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+                >
+                  {MODELS.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.icon} {model.name}
+                    </option>
+                  ))}
+                </select>
+                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Choose the AI model used in your conversations.
+                </p>
+              </div>
 
               {keySaveMessage && (
                 <div className={`p-2.5 rounded-lg text-sm ${

@@ -248,7 +248,7 @@ export default function ChatInput({
                 const dropdown = document.getElementById('chat-input-skills-dropdown');
                 if (dropdown) dropdown.classList.toggle('hidden');
               }}
-              className="w-11 h-11 rounded-lg flex items-center justify-center transition-all text-white bg-brand-900 hover:bg-brand-800"
+              className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${currentSkill ? 'text-white bg-brand-900 hover:bg-brand-800' : isDarkMode ? 'text-gray-400 bg-gray-700 hover:bg-gray-600' : 'text-gray-500 bg-gray-100 hover:bg-gray-200'}`}
               title={currentSkill ? currentSkill.display_name || currentSkill.name : t('selectSkill')}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -333,104 +333,8 @@ export default function ChatInput({
           </div>
         </div>
         
-        {/* Right side: Model selector + Send button */}
+        {/* Right side: Send button */}
         <div className="flex items-center gap-1">
-          {MODELS.length > 0 && (
-            <div className="relative" ref={modelDropdownRef}>
-              <button
-                onClick={() => {
-                  const dropdown = document.getElementById('chat-input-model-dropdown');
-                  if (dropdown) dropdown.classList.toggle('hidden');
-                }}
-                className={`px-3 h-11 rounded-lg flex items-center gap-1.5 transition-all text-sm ${
-                  isDarkMode
-                    ? 'hover:bg-gray-600 text-gray-300'
-                    : 'hover:bg-gray-200 text-gray-700'
-                }`}
-                title={currentModel?.name || 'Select Model'}
-              >
-                <span className="max-w-40 truncate">
-                  {currentModel
-                    ? `${CATEGORY_ICONS[currentModel.category]} ${currentModel.category} · ${currentModel.shortName}`
-                    : 'Model'}
-                </span>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {/* Model dropdown menu */}
-              <div
-                id="chat-input-model-dropdown"
-                className={`hidden absolute right-0 bottom-full mb-2 w-64 sm:w-80 max-w-[85vw] rounded-lg shadow-lg z-50 ${
-                  isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
-                }`}
-              >
-                <div className="max-h-96 overflow-y-auto">
-                  {CATEGORY_ORDER.map((category) => {
-                    const models = modelsByCategory[category];
-                    if (!models || models.length === 0) return null;
-                    return (
-                      <div key={category}>
-                        <div className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-gray-500 bg-gray-900' : 'text-gray-400 bg-gray-50'}`}>
-                          {CATEGORY_ICONS[category]} {category}
-                        </div>
-                        {models.map((model) => {
-                          const isDisabled =
-                            (model.provider === 'github' && !githubConfigured) ||
-                            (model.provider === 'gemini' && !googleConfigured) ||
-                            (model.provider === 'ollama' && !ollamaConnected);
-                          return (
-                            <button
-                              key={model.id}
-                              onClick={() => {
-                                setSelectedModel?.(model.id);
-                                document.getElementById('chat-input-model-dropdown')?.classList.add('hidden');
-                              }}
-                              disabled={isDisabled}
-                              className={`w-full pl-6 pr-4 py-2.5 text-left border-b transition-colors last:border-b-0 disabled:opacity-50 disabled:cursor-not-allowed ${
-                                selectedModel === model.id
-                                  ? isDarkMode
-                                    ? 'bg-brand-900 border-brand-700'
-                                    : 'bg-brand-50 border-brand-200'
-                                  : isDarkMode
-                                  ? 'border-gray-700 hover:bg-gray-700'
-                                  : 'border-gray-200 hover:bg-gray-50'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)' }}>
-                                    <AlleracIcon size={16} />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <span className={`font-medium block ${selectedModel === model.id ? 'text-brand-400' : isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                                      {model.shortName}
-                                    </span>
-                                    {model.description && (
-                                      <span className={`text-xs truncate block ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                                        {model.description}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                {selectedModel === model.id && (
-                                  <svg className="w-4 h-4 text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Send button */}
           <button
             onClick={handleSendMessage}

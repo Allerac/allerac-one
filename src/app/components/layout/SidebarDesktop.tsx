@@ -1,6 +1,6 @@
 'use client';
 
-import { Model, Conversation } from '../../types';
+import { Conversation } from '../../types';
 import SidebarContent from './SidebarContent';
 
 interface SidebarDesktopProps {
@@ -13,9 +13,6 @@ interface SidebarDesktopProps {
   deleteConversation: (conversationId: string) => void;
   pinConversation: (conversationId: string, pinned: boolean) => void;
   renameConversation: (conversationId: string, title: string) => void;
-  MODELS: Model[];
-  selectedModel: string;
-  setSelectedModel: (modelId: string) => void;
 }
 
 export default function SidebarDesktop({
@@ -28,9 +25,6 @@ export default function SidebarDesktop({
   deleteConversation,
   pinConversation,
   renameConversation,
-  MODELS,
-  selectedModel,
-  setSelectedModel,
 }: SidebarDesktopProps) {
   return (
     <div className={`fixed inset-y-0 left-0 z-40 bg-gray-900 text-white flex flex-col border-r border-gray-800 transition-all duration-300 ${
@@ -67,11 +61,6 @@ export default function SidebarDesktop({
         deleteConversation={deleteConversation}
         pinConversation={pinConversation}
         renameConversation={renameConversation}
-        MODELS={MODELS}
-        selectedModel={selectedModel}
-        setSelectedModel={setSelectedModel}
-        isModelDropdownOpen={false}
-        setIsModelDropdownOpen={() => {}}
         isSidebarCollapsed={isSidebarCollapsed}
       />
     </div>

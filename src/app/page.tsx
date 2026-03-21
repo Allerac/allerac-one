@@ -94,7 +94,7 @@ export default function AdminChat() {
   const [telegramBotTokenInput, setTelegramBotTokenInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('qwen2.5:3b');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
   const [isEditingSettings, setIsEditingSettings] = useState(false);
@@ -349,12 +349,6 @@ export default function AdminChat() {
       setGithubToken(savedToken);
       setTavilyApiKey(savedTavilyKey);
 
-      // Open API Keys config if no GitHub token is configured
-      if (!savedToken) {
-        setSystemDashboardInitialTab('apiKeys');
-        setIsSystemDashboardOpen(true);
-      }
-
       // Load conversations
       await loadConversations(user.id);
     } catch (error) {
@@ -514,12 +508,6 @@ export default function AdminChat() {
 
     setGithubToken(savedToken);
     setTavilyApiKey(savedTavilyKey);
-
-    // Open API Keys config if no GitHub token is configured
-    if (!savedToken) {
-      setSystemDashboardInitialTab('apiKeys');
-      setIsSystemDashboardOpen(true);
-    }
 
     // Load conversations
     await loadConversations(user.id);
@@ -712,9 +700,6 @@ export default function AdminChat() {
             deleteConversation={deleteConversation}
             pinConversation={handlePinConversation}
             renameConversation={handleRenameConversation}
-            MODELS={MODELS}
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
           />
         </div>
 
@@ -730,9 +715,6 @@ export default function AdminChat() {
             deleteConversation={deleteConversation}
             pinConversation={handlePinConversation}
             renameConversation={handleRenameConversation}
-            MODELS={MODELS}
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
           />
         </div>
 
@@ -767,13 +749,6 @@ export default function AdminChat() {
                   <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
                   <h3 className={`text-xl font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
                 </div>
-                {!githubToken && (
-                  <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-800">
-                      ⚠️ Please configure your GitHub token in Settings to start chatting
-                    </p>
-                  </div>
-                )}
                 <ChatInput
                   inputMessage={inputMessage}
                   setInputMessage={setInputMessage}
@@ -979,6 +954,7 @@ export default function AdminChat() {
         onSaveToken={handleSaveToken}
         MODELS={MODELS}
         selectedModel={selectedModel}
+        setSelectedModel={setSelectedModel}
       />
     </div>
   );

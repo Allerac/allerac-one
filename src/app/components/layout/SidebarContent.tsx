@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { Model, Conversation } from '../../types';
+import { Conversation } from '../../types';
 
 interface SidebarContentProps {
   conversations: Conversation[];
@@ -11,11 +11,6 @@ interface SidebarContentProps {
   deleteConversation: (conversationId: string) => void;
   pinConversation: (conversationId: string, pinned: boolean) => void;
   renameConversation: (conversationId: string, title: string) => void;
-  MODELS: Model[];
-  selectedModel: string;
-  setSelectedModel: (modelId: string) => void;
-  isModelDropdownOpen: boolean;
-  setIsModelDropdownOpen: (open: boolean) => void;
   isSidebarCollapsed?: boolean;
 }
 
@@ -54,9 +49,6 @@ export default function SidebarContent({
   deleteConversation,
   pinConversation,
   renameConversation,
-  MODELS,
-  selectedModel,
-  setSelectedModel,
   isSidebarCollapsed = false,
 }: SidebarContentProps & { isSidebarCollapsed?: boolean }) {
   const t = useTranslations('sidebar');
