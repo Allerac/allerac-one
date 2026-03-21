@@ -5,8 +5,8 @@
     "options": "Options",
     "configuration": "Configuration",
     "apiKeys": "API Keys",
-    "memorySettings": "Context",
-    "documents": "Knowledge",
+    "memorySettings": "About me",
+    "documents": "My Documents",
     "memories": "Memories",
     "skills": "Skills",
     "scheduledJobs": "Tasks",
@@ -91,7 +91,7 @@
     "helpText": "How can I help you today?"
   },
   "documents": {
-    "title": "Knowledge Base Documents",
+    "title": "My Documents",
     "description": "Upload documents to enhance the AI's knowledge. The AI will search these documents to answer questions.",
     "loading": "Loading..."
   },
@@ -274,13 +274,13 @@
     "errors": { "invalidCron": "Invalid cron expression", "nameRequired": "Name is required", "promptRequired": "Prompt is required", "channelRequired": "At least one channel is required", "loadFailed": "Failed to load jobs", "deleteFailed": "Failed to delete", "createFailed": "Failed to create job", "updateFailed": "Failed to update job" }
   },
   "consciousness": {
-    "title": "Context",
-    "description": "Shared across every conversation.",
-    "placeholder": "Who you are, how you like to work, what the AI should always know about you...",
+    "title": "About me",
+    "description": "Tell Allerac who you are. This is shared across every conversation.",
+    "placeholder": "I'm a software engineer based in Lisbon. I prefer concise answers in English...",
     "privacy": "Only you can see this. It is never shared or visible to anyone else.",
     "save": "Save",
     "cancel": "Cancel",
-    "defaultTemplate": "## Communication style\n- Be concise and direct\n- Use examples when explaining concepts\n- I prefer responses in English\n\n## My background\n- (your profession, experience level, areas of expertise)\n\n## What I use Allerac for\n- (coding, research, writing, daily tasks...)\n\n## Preferences\n- (tone, format, things to avoid...)"
+    "defaultTemplate": "## Who I am\n- I'm a [profession] with experience in [area]\n- I'm based in [city, country]\n\n## How I like to communicate\n- Be concise and direct\n- Use examples when explaining concepts\n- I prefer responses in [language]\n\n## What I use Allerac for\n- (coding, research, writing, day-to-day questions...)\n\n## Anything else\n- (other context that helps Allerac assist you better)"
   },
   "memoriesModal": {
     "title": "Conversation Memories",

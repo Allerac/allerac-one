@@ -5,8 +5,8 @@
     "options": "Opciones",
     "configuration": "Configuración",
     "apiKeys": "Claves de API",
-    "memorySettings": "Contexto",
-    "documents": "Conocimiento",
+    "memorySettings": "Sobre mí",
+    "documents": "Mis Documentos",
     "memories": "Memorias",
     "skills": "Habilidades",
     "scheduledJobs": "Tareas",
@@ -91,7 +91,7 @@
     "helpText": "¿Cómo puedo ayudarte hoy?"
   },
   "documents": {
-    "title": "Documentos de la Base de Conocimiento",
+    "title": "Mis Documentos",
     "description": "Sube documentos para mejorar el conocimiento de la IA. La IA buscará en estos documentos para responder preguntas.",
     "loading": "Cargando..."
   },
@@ -275,12 +275,12 @@
     "languagePortuguese": "Português"
   },
   "consciousness": {
-    "title": "Contexto",
-    "description": "Compartido en todas las conversaciones.",
-    "placeholder": "Quién eres, cómo te gusta trabajar, lo que la IA siempre debe saber sobre ti...",
+    "title": "Sobre mí",
+    "description": "Cuéntale a Allerac quién eres. Compartido en todas las conversaciones.",
+    "placeholder": "Soy ingeniero de software en Madrid. Prefiero respuestas directas en Español...",
     "privacy": "Solo tú puedes ver esto. Nunca se comparte ni es visible para nadie más.",
     "save": "Guardar",
     "cancel": "Cancelar",
-    "defaultTemplate": "## Estilo de comunicación\n- Sé conciso y directo\n- Usa ejemplos al explicar conceptos\n- Prefiero respuestas en Español\n\n## Mi perfil\n- (tu profesión, nivel de experiencia, áreas de conocimiento)\n\n## Para qué uso Allerac\n- (programación, investigación, escritura, tareas del día a día...)\n\n## Preferencias\n- (tono, formato, qué evitar...)"
+    "defaultTemplate": "## Quién soy\n- Soy [profesión] con experiencia en [área]\n- Vivo en [ciudad, país]\n\n## Cómo me gusta comunicarme\n- Sé conciso y directo\n- Usa ejemplos al explicar conceptos\n- Prefiero respuestas en [idioma]\n\n## Para qué uso Allerac\n- (programación, investigación, escritura, preguntas del día a día...)\n\n## Algo más sobre mí\n- (otros detalles que ayuden a Allerac a asistirte mejor)"
   }
 }

@@ -218,11 +218,24 @@ export async function handleChatMessage(
   // 5. Call LLM
   const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken, geminiToken });
 
-  // If the active skill forces a specific tool, use it on the first call
+  // If the active skill forces a specific tool, use it on the first call.
+  // Otherwise, auto-force search_web for real-time queries (weather, news, prices)
+  // when Tavily is available — unreliable models ignore tool_choice:'auto' for these.
   const forceTool = activeSkill?.force_tool ?? null;
+  const REALTIME_KEYWORDS = [
+    'weather', 'forecast', 'temperature', 'rain', 'snow', 'wind', 'humidity', 'storm',
+    'news', 'latest', 'current', 'today', 'tonight', 'right now', 'price', 'stock',
+    'clima', 'tempo', 'chuva', 'neve', 'previsão', 'notícia', 'notícias', 'agora', 'hoje',
+    'météo', 'actualité', 'maintenant', 'aujourd\'hui',
+    'tiempo', 'noticias', 'ahora', 'hoy',
+  ];
+  const messageLower = message.toLowerCase();
+  const isRealtimeQuery = tavilyApiKey && REALTIME_KEYWORDS.some(kw => messageLower.includes(kw));
   const initialToolChoice = forceTool
     ? { type: 'function', function: { name: forceTool } }
-    : 'auto';
+    : isRealtimeQuery
+      ? { type: 'function', function: { name: 'search_web' } }
+      : 'auto';
 
   let data = await llmService.chatCompletion({
     messages: conversationMessages,

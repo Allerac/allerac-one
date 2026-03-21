@@ -5,8 +5,8 @@
     "options": "Opções",
     "configuration": "Configuração",
     "apiKeys": "Chaves de API",
-    "memorySettings": "Contexto",
-    "documents": "Conhecimento",
+    "memorySettings": "Sobre mim",
+    "documents": "Meus Documentos",
     "memories": "Memórias",
     "skills": "Habilidades",
     "scheduledJobs": "Tarefas",
@@ -91,7 +91,7 @@
     "helpText": "Como posso ajudar você hoje?"
   },
   "documents": {
-    "title": "Documentos da Base de Conhecimento",
+    "title": "Meus Documentos",
     "description": "Envie documentos para melhorar o conhecimento da IA. A IA pesquisará estes documentos para responder perguntas.",
     "loading": "Carregando..."
   },
@@ -274,13 +274,13 @@
     "errors": { "invalidCron": "Expressão cron inválida", "nameRequired": "Nome é obrigatório", "promptRequired": "Prompt é obrigatório", "channelRequired": "Pelo menos um canal é obrigatório", "loadFailed": "Falha ao carregar jobs", "deleteFailed": "Falha ao excluir", "createFailed": "Falha ao criar job", "updateFailed": "Falha ao atualizar job" }
   },
   "consciousness": {
-    "title": "Contexto",
-    "description": "Compartilhado em todas as conversas.",
-    "placeholder": "Quem você é, como gosta de trabalhar, o que a IA sempre deve saber sobre você...",
+    "title": "Sobre mim",
+    "description": "Conte ao Allerac quem você é. Compartilhado em todas as conversas.",
+    "placeholder": "Sou engenheiro de software em Lisboa. Prefiro respostas diretas em Português...",
     "privacy": "Somente você pode ver isso. Nunca é compartilhado ou visível para mais ninguém.",
     "save": "Salvar",
     "cancel": "Cancelar",
-    "defaultTemplate": "## Estilo de comunicação\n- Seja conciso e direto\n- Use exemplos ao explicar conceitos\n- Prefiro respostas em Português\n\n## Meu perfil\n- (sua profissão, nível de experiência, áreas de conhecimento)\n\n## Para que uso o Allerac\n- (programação, pesquisa, escrita, tarefas do dia a dia...)\n\n## Preferências\n- (tom, formato, o que evitar...)"
+    "defaultTemplate": "## Quem sou\n- Sou [profissão] com experiência em [área]\n- Moro em [cidade, país]\n\n## Como gosto de me comunicar\n- Seja conciso e direto\n- Use exemplos ao explicar conceitos\n- Prefiro respostas em [idioma]\n\n## Para que uso o Allerac\n- (programação, pesquisa, escrita, perguntas do dia a dia...)\n\n## Mais sobre mim\n- (outros detalhes que ajudam o Allerac a te atender melhor)"
   },
   "memoriesModal": {
     "title": "Memórias de Conversas",
