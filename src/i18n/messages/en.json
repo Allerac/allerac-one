@@ -84,7 +84,12 @@
     "document": "Document",
     "selectSkill": "Select Skill",
     "noSkills": "No skills yet. Create one in the sidebar.",
-    "deactivateSkill": "Deactivate Skill"
+    "deactivateSkill": "Deactivate Skill",
+    "providerNotReady": "Configure API key in settings to send messages",
+    "ollamaNotConnected": "Ollama is not running. Start Ollama to use this model.",
+    "modelNotAvailable": "Model not available. Pull it in Ollama first.",
+    "googleNotConfigured": "Google API key not configured. Add it in Settings.",
+    "githubNotConfigured": "GitHub token not configured. Add it in Settings."
   },
   "home": {
     "greeting": "Hello, {name}!",

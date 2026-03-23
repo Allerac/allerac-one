@@ -87,6 +87,50 @@ Horizontal lockup: icon mark (200×200) + "Allerac" wordmark.
 
 ---
 
+## Typography
+
+The brand typeface is **Geist**, derived directly from the wordmark in `logo.svg`. Use it for headings, display text, and any prominent UI label that needs to carry brand weight.
+
+### Type scale
+
+| Role | Tailwind classes | Usage |
+|------|-----------------|-------|
+| **Display** | `font-sans font-bold text-4xl tracking-tight` | Hero titles, empty-state headings |
+| **Heading 1** | `font-sans font-bold text-2xl tracking-tight` | Page/section titles |
+| **Heading 2** | `font-sans font-bold text-xl tracking-tight` | Sub-section titles, modal headers |
+| **Heading 3** | `font-sans font-semibold text-lg` | Card titles, group labels |
+| **Body** | `font-sans text-base` | Default prose, chat messages |
+| **Small** | `font-sans text-sm` | Labels, captions, metadata |
+| **Micro** | `font-sans text-xs` | Timestamps, badges, hints |
+
+### Wordmark style (logo exact)
+
+```css
+font-family: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
+font-weight: 700;
+letter-spacing: 1px;
+```
+
+```tsx
+// In Tailwind — closest match to the wordmark
+className="font-sans font-bold tracking-wide"
+```
+
+### Color pairing
+
+| Context | Text color | Background |
+|---------|-----------|------------|
+| Light surfaces | `text-gray-900` | white / `bg-gray-50` |
+| Dark surfaces | `text-gray-100` | `bg-gray-800` / `bg-gray-900` |
+| Brand accent | `text-brand-900` (`#14532d`) | white |
+| On brand | `text-white` | `bg-brand-900` |
+
+### Font loading
+
+Geist is loaded via `next/font/google` in `src/app/layout.tsx` and exposed as `var(--font-geist-sans)`. It is available globally through the `font-sans` Tailwind utility.
+
+---
+
 ## Visual Language
 
 ### Identity Icons — `icon.svg` image

@@ -1,7 +1,6 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { AlleracIcon } from '../ui/AlleracIcon';
 
 interface ChatHeaderProps {
   isSidebarOpen: boolean;
@@ -60,14 +59,9 @@ export default function ChatHeader({
               {currentConversationTitle}
             </span>
           ) : (
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 flex-shrink-0">
-                <AlleracIcon size={28} />
-              </div>
-              <span className={`text-xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                Allerac
-              </span>
-            </div>
+            <span className={`text-xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+              Allerac
+            </span>
           )}
 
           {/* Spacer */}

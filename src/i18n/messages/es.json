@@ -84,7 +84,12 @@
     "document": "Documento",
     "selectSkill": "Seleccionar habilidad",
     "noSkills": "Sin habilidades aún. Crea una en el menú lateral.",
-    "deactivateSkill": "Desactivar habilidad"
+    "deactivateSkill": "Desactivar habilidad",
+    "providerNotReady": "Configura la clave API en ajustes para enviar mensajes",
+    "ollamaNotConnected": "Ollama no está en ejecución. Inicia Ollama para usar este modelo.",
+    "modelNotAvailable": "Modelo no disponible. Descárgalo en Ollama primero.",
+    "googleNotConfigured": "Clave de API de Google no configurada. Añádela en Configuración.",
+    "githubNotConfigured": "Token de GitHub no configurado. Añádelo en Configuración."
   },
   "home": {
     "greeting": "¡Hola, {name}!",

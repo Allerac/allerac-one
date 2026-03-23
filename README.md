@@ -1,5 +1,10 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/logo.svg">
+  <img src="public/logo-light.svg" alt="Allerac One" width="320" />
+</picture>
+
 # Allerac One
 
 **Your private AI assistant. Runs on your hardware. Your data never leaves.**

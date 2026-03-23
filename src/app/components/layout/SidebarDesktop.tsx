@@ -2,6 +2,7 @@
 
 import { Conversation } from '../../types';
 import SidebarContent from './SidebarContent';
+import { AlleracLogo } from '../ui/AlleracLogo';
 
 interface SidebarDesktopProps {
   isSidebarCollapsed: boolean;
@@ -49,7 +50,7 @@ export default function SidebarDesktop({
             )}
           </button>
           {!isSidebarCollapsed && (
-            <span className="text-xl font-bold text-gray-100">Allerac</span>
+            <AlleracLogo height={28} variant="dark" />
           )}
         </div>
       </div>

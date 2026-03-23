@@ -52,6 +52,14 @@ body {
   min-height: 100dvh;
 }
 
+/* Allerac icon glint — diagonal light sweep */
+@keyframes allerac-glint {
+  0%, 18%   { transform: translateX(-150%) skewX(-20deg); opacity: 0; }
+  20%        { opacity: 1; }
+  35%        { transform: translateX(260%) skewX(-20deg); opacity: 0; }
+  100%       { transform: translateX(260%) skewX(-20deg); opacity: 0; }
+}
+
 /* Safe-area padding utilities */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);

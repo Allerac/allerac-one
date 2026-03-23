@@ -2,6 +2,7 @@
 
 import { Conversation } from '../../types';
 import SidebarContent from './SidebarContent';
+import { AlleracLogo } from '../ui/AlleracLogo';
 
 interface SidebarMobileProps {
   isSidebarOpen: boolean;
@@ -42,7 +43,7 @@ export default function SidebarMobile({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <span className="text-xl font-bold text-gray-100">Allerac</span>
+          <AlleracLogo height={28} variant="dark" />
         </div>
       </div>
 

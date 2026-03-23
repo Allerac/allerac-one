@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { Message, Model, MessageContentPart } from '../../types';
 import CorrectAndMemorize from '../memory/CorrectAndMemorize';
 import { AlleracIcon } from '../ui/AlleracIcon';
+import { AlleracAnimatedIcon } from '../ui/AlleracAnimatedIcon';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -162,22 +163,12 @@ export default function ChatMessages({
               <div className="w-full">
                 {/* Header: Icon and Menu */}
                 <div className="flex items-start justify-between mb-2">
-                  {/* Agent icon — spinning ring while this message is streaming */}
-                  <div className="relative flex-shrink-0 w-8 h-8">
-                    {isSending && index === messages.length - 1 && (
-                      <div
-                        className="absolute rounded-full animate-spin"
-                        style={{
-                          inset: '-2px',
-                          background: 'conic-gradient(from 0deg, transparent, #006437 40%, #00a35a 60%, transparent)',
-                          animationDuration: '2s',
-                        }}
-                      />
-                    )}
-                    <div className="w-full h-full rounded-full overflow-hidden" style={{ position: 'relative', zIndex: 1 }}>
-                      <AlleracIcon size={32} />
-                    </div>
-                  </div>
+                  {/* Agent icon */}
+                  <AlleracAnimatedIcon
+                    size={32}
+                    isDarkMode={isDarkMode}
+                    isThinking={isSending && index === messages.length - 1}
+                  />
 
                   {/* 3-dot menu */}
                   <div className="relative" ref={el => { menuRefs.current[index] = el; }}>
