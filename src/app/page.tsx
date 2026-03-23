@@ -736,7 +736,7 @@ export default function AdminChat() {
             <div className={`flex-1 flex flex-col items-center justify-center px-4 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
               <div className="w-full max-w-2xl">
                 <div className="text-center mb-8">
-                  <div className="mx-auto mb-6">
+                  <div className="w-fit mx-auto mb-6">
                     <AlleracIcon size={80} />
                   </div>
                   <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
