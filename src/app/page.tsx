@@ -31,6 +31,7 @@ import SystemDashboard from './components/system/SystemDashboard';
 import TelegramBotSettings from './components/settings/TelegramBotSettings';
 import ScheduledJobsModal from './components/scheduled-jobs/ScheduledJobsModal';
 import HealthDashboard from './components/health/HealthDashboard';
+import { AlleracIcon } from './components/ui/AlleracIcon';
 
 export default function AdminChat() {
   const t = useTranslations('home');
@@ -735,8 +736,8 @@ export default function AdminChat() {
             <div className={`flex-1 flex flex-col items-center justify-center px-4 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
               <div className="w-full max-w-2xl">
                 <div className="text-center mb-8">
-                  <div className="w-20 h-20 mx-auto mb-6">
-                    <img src="/icon.svg" alt="Allerac" style={{ width: 80, height: 80 }} />
+                  <div className="mx-auto mb-6">
+                    <AlleracIcon size={80} />
                   </div>
                   <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
                   <h3 className={`text-xl font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
