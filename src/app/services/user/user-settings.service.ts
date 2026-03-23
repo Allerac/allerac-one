@@ -12,7 +12,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, location FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, location, onboarding_completed FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -30,6 +30,7 @@ export class UserSettingsService {
         system_message: row.system_message || null,
         google_api_key: row.google_api_key ? safeDecrypt(row.google_api_key) : null,
         location: row.location || null,
+        onboarding_completed: row.onboarding_completed ?? false,
       };
     } catch (error) {
       console.error('Error loading user settings:', error);
@@ -99,6 +100,21 @@ export class UserSettingsService {
       return { success: true };
     } catch (error) {
       console.error('Error saving user settings:', error);
+      return { success: false, error };
+    }
+  }
+
+  async completeOnboarding(userId: string) {
+    try {
+      await pool.query(
+        `INSERT INTO user_settings (user_id, onboarding_completed)
+         VALUES ($1, TRUE)
+         ON CONFLICT (user_id) DO UPDATE SET onboarding_completed = TRUE`,
+        [userId]
+      );
+      return { success: true };
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
       return { success: false, error };
     }
   }

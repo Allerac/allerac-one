@@ -13,6 +13,10 @@ export async function saveUserSettings(userId: string, githubToken?: string, tav
     return await userSettingsService.saveUserSettings(userId, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, location);
 }
 
+export async function completeOnboarding(userId: string) {
+    return await userSettingsService.completeOnboarding(userId);
+}
+
 export async function getLanguage(): Promise<string> {
     const cookieStore = await cookies();
     return cookieStore.get('locale')?.value || 'en';

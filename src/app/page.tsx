@@ -32,6 +32,7 @@ import TelegramBotSettings from './components/settings/TelegramBotSettings';
 import ScheduledJobsModal from './components/scheduled-jobs/ScheduledJobsModal';
 import HealthDashboard from './components/health/HealthDashboard';
 import { AlleracIcon } from './components/ui/AlleracIcon';
+import OnboardingWizard from './components/onboarding/OnboardingWizard';
 
 export default function AdminChat() {
   const t = useTranslations('home');
@@ -94,7 +95,7 @@ export default function AdminChat() {
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [systemMessage, setSystemMessage] = useState('');
   const [systemMessageEdit, setSystemMessageEdit] = useState('');
   const [isEditingSettings, setIsEditingSettings] = useState(false);
@@ -102,6 +103,7 @@ export default function AdminChat() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
   const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
@@ -344,6 +346,11 @@ export default function AdminChat() {
         if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
         if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
         if (settings.location) setLocationInput(settings.location);
+        if (settings.system_message) setSystemMessage(settings.system_message);
+        if (!settings.onboarding_completed) setShowOnboarding(true);
+      } else {
+        // No settings row yet — first time user
+        setShowOnboarding(true);
       }
 
       setGithubToken(savedToken);
@@ -504,6 +511,10 @@ export default function AdminChat() {
       if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
       if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
       if (settings.location) setLocationInput(settings.location);
+      if (settings.system_message) setSystemMessage(settings.system_message);
+      if (!settings.onboarding_completed) setShowOnboarding(true);
+    } else {
+      setShowOnboarding(true);
     }
 
     setGithubToken(savedToken);
@@ -918,6 +929,23 @@ export default function AdminChat() {
         isDarkMode={isDarkMode}
         userId={userId || undefined}
       />
+
+      {/* Onboarding Wizard */}
+      {showOnboarding && userId && (
+        <OnboardingWizard
+          userId={userId}
+          userName={userName || ''}
+          isDarkMode={isDarkMode}
+          systemMessage={systemMessage}
+          ollamaConnected={ollamaConnected}
+          onComplete={(updates) => {
+            if (updates.googleApiKey) setGoogleApiKey(updates.googleApiKey);
+            if (updates.githubToken) setGithubToken(updates.githubToken);
+            if (updates.systemMessage) setSystemMessage(updates.systemMessage);
+            setShowOnboarding(false);
+          }}
+        />
+      )}
 
       {/* Configuration Modal (System + API Keys) */}
       <SystemDashboard
