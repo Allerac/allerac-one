@@ -61,8 +61,8 @@ export default function ChatHeader({
             </span>
           ) : (
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)' }}>
-                <AlleracIcon size={20} />
+              <div className="w-7 h-7 flex-shrink-0">
+                <AlleracIcon size={28} />
               </div>
               <span className={`text-xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
                 Allerac

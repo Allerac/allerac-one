@@ -169,14 +169,13 @@ export default function ChatMessages({
                         className="absolute rounded-full animate-spin"
                         style={{
                           inset: '-2px',
-                          background: 'conic-gradient(from 0deg, transparent, #39d353 40%, #4ade80 60%, transparent)',
+                          background: 'conic-gradient(from 0deg, transparent, #006437 40%, #00a35a 60%, transparent)',
                           animationDuration: '2s',
                         }}
                       />
                     )}
-                    <div className="w-full h-full rounded-full flex items-center justify-center"
-                         style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)', position: 'relative', zIndex: 1 }}>
-                      <AlleracIcon size={18} />
+                    <div className="w-full h-full rounded-full overflow-hidden" style={{ position: 'relative', zIndex: 1 }}>
+                      <AlleracIcon size={32} />
                     </div>
                   </div>
 

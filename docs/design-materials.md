@@ -2,117 +2,139 @@
 
 ## Brand Colors
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| `brand-500` | `#39d353` | Primary brand green (logo, accents) |
-| `brand-900` | `#14532d` | Primary button background |
-| `brand-800` | `#166534` | Button hover state |
-| `brand-50`–`brand-900` | see globals.css | Full palette via Tailwind `@theme inline` |
+| Token | Hex | RGB | Usage |
+|-------|-----|-----|-------|
+| Primary Green | `#006437` | (0, 100, 55) | Main brand green — PANTONE PMS 141-15 C |
+| Light Green | `#00a35a` | — | Gradient highlight (top of icon) |
+| Dark Green | `#002e1a` | — | Gradient shadow (bottom of icon) |
+| White | `#ffffff` | (255, 255, 255) | Icon background, light surfaces |
 
-Dark background: `#0d0d0d`
+CMYK (Primary Green): 93, 29, 87, 17
 
----
-
-## Visual Language
-
-Two distinct patterns keep icons and buttons clearly different:
-
-### Identity Icons — gradient circle
-Used for avatars, AI indicators, and brand marks. The green→black gradient signals "this is Allerac".
-
+### Icon gradient
 ```
-background: linear-gradient(135deg, #39d353, #0d0d0d)
-shape: rounded-full
+linear-gradient(135deg, #00a35a → #006437 → #002e1a)
+stops: 0% #00a35a  |  30% #006437  |  100% #002e1a
 ```
 
-| Location | Size | Icon size |
-|----------|------|-----------|
-| Chat header logo | 28×28 | `AlleracIcon size={20}` |
-| AI message avatar | 32×32 | `AlleracIcon size={18}` |
-| Model dropdown | 24×24 | `AlleracIcon size={16}` |
-| User avatar | 36×36 | user initial (text) |
-| First page icon | 80×80 | chat bubble SVG |
-
-### Action Buttons — solid dark green
-Used for any interactive button (send, skills, settings toggles). Solid and distinct from icons.
-
-```tsx
-className="bg-brand-900 hover:bg-brand-800 text-white rounded-lg"
-```
-
-| Button | Notes |
-|--------|-------|
-| Send message | Active state only; disabled = gray |
-| Skills | Always visible, `bg-brand-900` |
-| Any future primary button | Same pattern |
+### Legacy (deprecated)
+| Hex | Notes |
+|-----|-------|
+| `#39d353` | Old brand green — replaced by `#006437` |
+| `#0d0d0d` | Old dark — replaced by `#002e1a` |
 
 ---
 
 ## Icon Mark
 
-The Allerac icon is a capital **A** in Geist/Inter Bold, white on a green→dark gradient circle.
+The Allerac icon is an abstract **A** formed by two geometric shapes:
 
-- **Gradient**: `linear-gradient(135deg, #39d353, #0d0d0d)` — green top-left to near-black bottom-right
-- **Shape**: Perfect circle (`rx` = half the side length)
-- **Letter**: `A` in `'Geist', 'Inter', system-ui` Bold, `text-anchor="middle"` `dominant-baseline="central"`
-- **Clip**: `<clipPath>` referencing the same circle — ensures A never bleeds outside
+1. **Top** — solid triangle (apex floating above)
+2. **Bottom** — open /-\ shape (two angled legs with a horizontal bar at the top, open at the bottom)
 
-### SVG source (512×512 — favicon / app icon)
+Both shapes share the same slope (`22/47`) so their sides are perfectly aligned, as if cut from the same pyramid.
+
+- **Background**: white circle
+- **Fill**: `linear-gradient(135deg, #00a35a, #006437, #002e1a)` on each shape
+- **Shadow**: `feDropShadow dx=2 dy=3 stdDeviation=3 opacity=0.2`
+- **Scale**: both shapes scaled `1.32×` from center `(100, 85.5)`
+
+### Files
+| File | Description |
+|------|-------------|
+| `public/icon.svg` | Main icon — white circle bg + gradient shapes |
+| `public/apple-touch-icon.png` | 180×180 PNG — iOS home screen |
+| `public/icon-192.png` | 192×192 PNG — PWA manifest |
+| `public/icon-512.png` | 512×512 PNG — PWA maskable |
+
+### SVG source (200×200)
 ```svg
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#39d353"/>
-      <stop offset="100%" stop-color="#0d0d0d"/>
+    <linearGradient id="shapes-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00a35a"/>
+      <stop offset="30%" stop-color="#006437"/>
+      <stop offset="100%" stop-color="#002e1a"/>
     </linearGradient>
-    <clipPath id="icon-clip">
-      <circle cx="256" cy="256" r="256"/>
-    </clipPath>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.2"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="256" fill="url(#bg)"/>
-  <text x="256" y="256"
-        font-family="'Geist', 'Inter', system-ui, -apple-system, sans-serif"
-        font-weight="700" font-size="396" fill="#ffffff"
-        text-anchor="middle" dominant-baseline="central"
-        clip-path="url(#icon-clip)">A</text>
+
+  <rect width="200" height="200" rx="100" fill="white"/>
+
+  <g transform="translate(100,85.5) scale(1.32) translate(-100,-85.5)">
+    <!-- Top triangle -->
+    <polygon points="100,37 78,84 122,84" fill="url(#shapes-grad)" filter="url(#shadow)"/>
+    <!-- Bottom /-\ shape: bar at top, legs open at bottom -->
+    <path d="M 71.4,98 L 128.6,98 L 145.4,134 L 130.3,134
+             L 120,112 L 80,112 L 69.7,134 L 54.6,134 Z"
+      fill="url(#shapes-grad)" filter="url(#shadow)"/>
+  </g>
 </svg>
 ```
 
-Font size formula: `icon_side × 0.773` (e.g. 512 → 396, 200 → 155).
+---
 
 ## Wordmark Logo
 
-Horizontal lockup: icon mark (200×200 circle) + "Allerac" wordmark.
+Horizontal lockup: icon mark (200×200) + "Allerac" wordmark.
 
 - **Font**: Geist 700, fallback Inter → system-ui
 - **Letter spacing**: 1
 - **Dark version** (`public/logo.svg`): white wordmark — for dark backgrounds
-- **Light version** (`public/logo-light.svg`): `#0d0d0d` wordmark — for light backgrounds
+- **Light version** (`public/logo-light.svg`): `#006437` wordmark — for light backgrounds
+
+---
+
+## Visual Language
+
+### Identity Icons — `icon.svg` image
+Used for avatars, AI indicators, and brand marks.
+
+```tsx
+<img src="/icon.svg" style={{ width: size, height: size }} />
+```
+
+| Location | Size |
+|----------|------|
+| Chat header logo | 28×28 |
+| AI message avatar | 32×32 |
+| First page (empty chat) | 80×80 |
+
+### Action Buttons — solid dark green
+Used for any interactive button (send, skills, settings toggles).
+
+```tsx
+className="bg-brand-900 hover:bg-brand-800 text-white rounded-lg"
+```
+
+---
 
 ## React Component
 
-`src/app/components/ui/AlleracIcon.tsx` renders the white **A** on a transparent background.
+`src/app/components/ui/AlleracIcon.tsx` renders `icon.svg` as an `<img>`.
 
 ```tsx
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 
-// Identity icon circle
-<div
-  className="w-8 h-8 rounded-full flex items-center justify-center"
-  style={{ background: 'linear-gradient(135deg, #39d353, #0d0d0d)', position: 'relative', zIndex: 1 }}
->
-  <AlleracIcon size={18} />
-</div>
+// Identity icon
+<AlleracIcon size={32} />
 
-// Spinning thinking indicator (sibling before the icon circle)
-<div
-  className="absolute rounded-full animate-spin"
-  style={{
-    inset: '-2px',
-    background: 'conic-gradient(from 0deg, transparent, #39d353 40%, #4ade80 60%, transparent)',
-    animationDuration: '2s',
-  }}
-/>
+// Spinning thinking indicator (wrap in relative container)
+<div className="relative w-8 h-8">
+  <div
+    className="absolute rounded-full animate-spin"
+    style={{
+      inset: '-2px',
+      background: 'conic-gradient(from 0deg, transparent, #006437 40%, #00a35a 60%, transparent)',
+      animationDuration: '2s',
+    }}
+  />
+  <div className="w-full h-full rounded-full overflow-hidden" style={{ position: 'relative', zIndex: 1 }}>
+    <AlleracIcon size={32} />
+  </div>
+</div>
 
 // Primary action button
 <button className="w-11 h-11 rounded-lg bg-brand-900 hover:bg-brand-800 text-white transition-all">
