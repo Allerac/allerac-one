@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   description: "Private-first AI agent platform. Self-hosted, local LLM, memory & RAG.",
   icons: {
     icon: "/icon.svg",
-    apple: "/icon.svg",
+    apple: "/apple-touch-icon.png",
   },
 };
 
