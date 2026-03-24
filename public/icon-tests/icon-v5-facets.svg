@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <rect width="200" height="200" rx="100" fill="white"/>
+
+  <!-- All facets share the same transform as the original -->
+  <g transform="translate(100,85.5) scale(1.32) translate(-100,-85.5)">
+
+    <!-- Triangle: split into 3 facets around internal point (100,62) -->
+    <!-- Left face — medium -->
+    <polygon points="100,37 78,84 100,62" fill="#4f46e5"/>
+    <!-- Right face — light, catches highlight -->
+    <polygon points="100,37 100,62 122,84" fill="#818cf8"/>
+    <!-- Bottom face — darkest -->
+    <polygon points="78,84 100,62 122,84" fill="#312e81"/>
+
+    <!-- Bottom M: 3 facets -->
+    <!-- Center bar — medium -->
+    <polygon points="71.4,98 128.6,98 120,112 80,112" fill="#6366f1"/>
+    <!-- Left leg — dark -->
+    <polygon points="54.6,134 71.4,98 80,112 69.7,134" fill="#4c1d95"/>
+    <!-- Right leg — darker -->
+    <polygon points="128.6,98 145.4,134 130.3,134 120,112" fill="#3730a3"/>
+
+  </g>
+</svg>

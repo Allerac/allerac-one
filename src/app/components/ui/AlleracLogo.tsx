@@ -8,7 +8,7 @@ interface AlleracLogoProps {
 export function AlleracLogo({ height = 28, variant = 'dark' }: AlleracLogoProps) {
   // viewBox covers only the text portion (x=232 to x=760)
   const width = Math.round(height * (528 / 200));
-  const textFill = variant === 'light' ? '#006437' : '#ffffff';
+  const textFill = variant === 'light' ? '#4c1d95' : '#ffffff';
 
   return (
     <svg

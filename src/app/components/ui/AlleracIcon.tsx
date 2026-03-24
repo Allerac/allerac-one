@@ -19,9 +19,9 @@ export function AlleracIcon({ size = 16, className = '' }: AlleracIconProps) {
     >
       <defs>
         <linearGradient id="allerac-icon-grad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#00a35a" />
-          <stop offset="30%" stopColor="#006437" />
-          <stop offset="100%" stopColor="#002e1a" />
+          <stop offset="0%" stopColor="#6366f1" />
+          <stop offset="40%" stopColor="#4c1d95" />
+          <stop offset="100%" stopColor="#1e1b4b" />
         </linearGradient>
         <filter id="allerac-icon-shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="2" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.2" />

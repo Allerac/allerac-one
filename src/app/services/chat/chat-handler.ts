@@ -153,7 +153,11 @@ export async function handleChatMessage(
   }
 
   // 4. Build system message with context
-  let enrichedSystemMessage = systemMessage || ALLERAC_SOUL;
+  const isCustomSoul = systemMessage && systemMessage !== 'You are a helpful AI assistant.';
+  let enrichedSystemMessage = ALLERAC_SOUL;
+  if (isCustomSoul) {
+    enrichedSystemMessage += `\n\n## About the user\n${systemMessage}`;
+  }
 
   // Inject active skill content if available
   if (activeSkill) {

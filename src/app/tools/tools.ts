@@ -94,17 +94,17 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'execute_shell',
-      description: 'Execute a shell command on the host machine. Use this to run scripts, list files, install packages, call APIs via curl, send emails via sendmail/msmtp, manipulate files, or perform any system operation. Returns stdout, stderr, and exit code.',
+      description: 'Execute a shell command in a sandboxed Linux environment (bash). Use this to create files, write code, set up projects, run scripts, install packages, or perform any system task. IMPORTANT: (1) each call is stateless — cd does not persist. Always chain with && in one call. (2) Projects go in /workspace/projects/. (3) Write multi-line file content with heredoc: cat > file.js << \'HEREDOC\' ... HEREDOC. Never use echo with single quotes for JS/Python code — always use heredoc. (4) Servers you start are NOT accessible from the user\'s browser — after creating a project, tell the user how to run it locally. Available: node, npm, python3, git, curl, standard unix tools. Do NOT use npx scaffolding tools.',
       parameters: {
         type: 'object',
         properties: {
           command: {
             type: 'string',
-            description: 'The shell command to execute (bash syntax)',
+            description: 'The bash command to execute. Chain multiple steps with && in a single call.',
           },
           cwd: {
             type: 'string',
-            description: 'Working directory for the command (optional, defaults to app root)',
+            description: 'Working directory (must already exist). Prefer using cd within the command instead.',
           },
           timeout: {
             type: 'number',

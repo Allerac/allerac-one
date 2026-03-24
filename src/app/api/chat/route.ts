@@ -93,14 +93,24 @@ export async function POST(request: Request): Promise<Response> {
         const googleApiKey = settings?.google_api_key || '';
         const userLocation = settings?.location || null;
 
-        let systemMessage = settings?.system_message || ALLERAC_SOUL;
+        // Always start from ALLERAC_SOUL, never replace it
+        let systemMessage = ALLERAC_SOUL;
 
-        // Inject user's name and location as context (always, regardless of custom system message)
+        // Inject structured user context
+        const locale = cookieStore.get('locale')?.value || 'en';
+        const languageNames: Record<string, string> = { en: 'English', pt: 'Portuguese', es: 'Spanish' };
+        const language = languageNames[locale] || 'English';
         const contextLines: string[] = [];
-        if (user.name) contextLines.push(`The user's name is ${user.name}.`);
-        if (userLocation) contextLines.push(`The user's location is ${userLocation}.`);
-        if (contextLines.length > 0) {
-          systemMessage = contextLines.join(' ') + '\n\n' + systemMessage;
+        if (user.name) contextLines.push(`- Name: ${user.name}`);
+        contextLines.push(`- Language: ${language} — always reply in this language`);
+        if (userLocation) contextLines.push(`- Location: ${userLocation}`);
+        systemMessage += `\n\n## User context\n${contextLines.join('\n')}`;
+
+        // Inject user's About Me as instructions (if set)
+        const aboutMe = settings?.system_message;
+        const hasAboutMe = aboutMe && aboutMe !== 'You are a helpful AI assistant.';
+        if (hasAboutMe) {
+          systemMessage += `\n\n## User instructions\n${aboutMe}`;
         }
 
         if (userLocation) {
@@ -251,10 +261,8 @@ export async function POST(request: Request): Promise<Response> {
 
         const llmService = new LLMService(provider, modelBaseUrl, { githubToken, geminiToken: googleApiKey });
 
-        // Gemini goes straight to streaming — skip tool detection to avoid hangs
-        // with the OpenAI-compatible endpoint's tool_choice handling.
-        if (provider !== 'gemini') {
-          // 10. First LLM call — non-streaming for tool detection
+        // 10. First LLM call — non-streaming for tool detection
+        {
           // Send periodic keepalives during long LLM calls to prevent client timeout
           const keepaliveInterval = setInterval(() => {
             try {
@@ -271,7 +279,8 @@ export async function POST(request: Request): Promise<Response> {
             temperature: 0.7,
             max_tokens: 2000,
             tools: TOOLS,
-            tool_choice: 'auto',
+            // Gemini's OpenAI-compatible endpoint doesn't support tool_choice
+            ...(provider !== 'gemini' && { tool_choice: 'auto' }),
           });
           console.log('[ChatRoute] First LLM call completed');
           clearInterval(keepaliveInterval);

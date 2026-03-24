@@ -8,8 +8,8 @@ interface Props {
 
 export function AlleracAnimatedIcon({ size = 32, isDarkMode = false, isThinking = false }: Props) {
   const spinRingGradient = isDarkMode
-    ? 'conic-gradient(from 0deg, transparent, #00a35a 40%, #4ade80 60%, transparent)'
-    : 'conic-gradient(from 0deg, transparent, #006437 40%, #00a35a 60%, transparent)';
+    ? 'conic-gradient(from 0deg, transparent, #6366f1 40%, #a78bfa 60%, transparent)'
+    : 'conic-gradient(from 0deg, transparent, #4f46e5 40%, #6366f1 60%, transparent)';
 
   return (
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
@@ -41,9 +41,9 @@ export function AlleracAnimatedIcon({ size = 32, isDarkMode = false, isThinking 
         >
           <defs>
             <linearGradient id="allerac-anim-grad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#00a35a" />
-              <stop offset="30%" stopColor="#006437" />
-              <stop offset="100%" stopColor="#002e1a" />
+              <stop offset="0%" stopColor="#6366f1" />
+              <stop offset="40%" stopColor="#4c1d95" />
+              <stop offset="100%" stopColor="#1e1b4b" />
             </linearGradient>
             <filter id="allerac-anim-shadow" x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow dx="2" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.2" />

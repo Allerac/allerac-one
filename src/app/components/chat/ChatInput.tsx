@@ -99,6 +99,11 @@ export default function ChatInput({
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [inputMessage]);
 
+  // Refocus textarea after message is sent
+  useEffect(() => {
+    if (!isSending) textareaRef.current?.focus();
+  }, [isSending]);
+
   // Close dropdowns on ESC or click outside
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

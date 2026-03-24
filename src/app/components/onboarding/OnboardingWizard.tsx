@@ -40,6 +40,7 @@ export default function OnboardingWizard({
   const [altProvider, setAltProvider] = useState<AltProvider>(null);
 
   // Step 3 state
+  const [location, setLocation] = useState('');
   const [aboutMe, setAboutMe] = useState(() => {
     const isCustom = systemMessage && systemMessage !== 'You are a helpful AI assistant.';
     return isCustom ? systemMessage : '';
@@ -71,10 +72,14 @@ export default function OnboardingWizard({
   };
 
   const handleSaveAboutMe = async () => {
-    if (!aboutMe.trim()) return;
     setIsSaving(true);
-    await chatActions.saveSystemMessage(userId, aboutMe);
-    setAboutMeSaved(true);
+    if (location.trim()) {
+      await userActions.saveUserSettings(userId, undefined, undefined, undefined, undefined, location.trim());
+    }
+    if (aboutMe.trim()) {
+      await chatActions.saveSystemMessage(userId, aboutMe);
+      setAboutMeSaved(true);
+    }
     setIsSaving(false);
     setStep(4);
   };
@@ -224,6 +229,12 @@ export default function OnboardingWizard({
                 {ollamaConnected ? t('ollamaConnected') : t('ollamaNotConnected')}
               </div>
             )}
+            <div className={`flex items-start gap-2 p-3 rounded-lg text-xs mb-4 ${isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-50 text-gray-500'}`}>
+              <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {t('step2PrivacyNote')}
+            </div>
             <div className="flex items-center justify-between">
               <button className={secondaryBtn} onClick={() => setStep(1)}>← {t('back')}</button>
               <button className={primaryBtn} onClick={() => setStep(3)}>{t('next')} →</button>
@@ -236,18 +247,31 @@ export default function OnboardingWizard({
           <div>
             <h2 className="text-xl font-bold mb-1">{t('step3Title')}</h2>
             <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('step3Subtitle')}</p>
+            <div className="mb-4">
+              <label className={labelCls}>{t('step3LocationLabel')}</label>
+              <input
+                type="text"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                placeholder={t('step3LocationPlaceholder')}
+                className={inputCls}
+              />
+            </div>
+            <div className="mb-1">
+              <label className={labelCls}>{t('step3InstructionsLabel')}</label>
+            </div>
             <textarea
               value={aboutMe}
               onChange={e => setAboutMe(e.target.value)}
               placeholder={t('step3Placeholder')}
-              rows={8}
+              rows={6}
               className={inputCls + ' resize-none text-sm leading-relaxed'}
             />
             <div className="flex items-center justify-between mt-4">
               <button className={secondaryBtn} onClick={() => setStep(2)}>← {t('back')}</button>
               <div className="flex items-center gap-3">
                 <button className={ghostBtn} onClick={() => setStep(4)}>{t('skipStep')}</button>
-                <button className={primaryBtn} onClick={handleSaveAboutMe} disabled={isSaving || !aboutMe.trim()}>
+                <button className={primaryBtn} onClick={handleSaveAboutMe} disabled={isSaving}>
                   {isSaving ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
