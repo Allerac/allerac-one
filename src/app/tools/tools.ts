@@ -94,7 +94,7 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'execute_shell',
-      description: 'Execute a shell command in a sandboxed Linux environment (bash). Use this to create files, write code, set up projects, run scripts, install packages, or perform any system task. IMPORTANT: (1) each call is stateless — cd does not persist. Always chain with && in one call. (2) Projects go in /workspace/projects/. (3) Write multi-line file content with heredoc: cat > file.js << \'HEREDOC\' ... HEREDOC. Never use echo with single quotes for JS/Python code — always use heredoc. (4) Servers you start are NOT accessible from the user\'s browser — after creating a project, tell the user how to run it locally. Available: node, npm, python3, git, curl, standard unix tools. Do NOT use npx scaffolding tools.',
+      description: 'Execute a shell command in a sandboxed Linux environment (bash). Use ONLY for tasks that require actually running something: creating files on disk, setting up projects, installing packages, running scripts. Do NOT use this tool for questions, analysis, math, or anything you can answer from knowledge. IMPORTANT: (1) each call is stateless — chain everything with && in one call. (2) Projects go in /workspace/projects/. (3) Write multi-line files with heredoc: cat > file.js << \'HEREDOC\' ... HEREDOC. Never use echo with single quotes for code. (4) Servers started here are NOT accessible from the browser. Available: node, npm, python3, git, curl, standard unix tools. Do NOT use npx.',
       parameters: {
         type: 'object',
         properties: {

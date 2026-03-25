@@ -27,16 +27,17 @@ export default function SidebarDesktop({
   pinConversation,
   renameConversation,
 }: SidebarDesktopProps) {
+  const d = isDarkMode;
   return (
-    <div className={`fixed inset-y-0 left-0 z-40 bg-gray-900 text-white flex flex-col border-r border-gray-800 transition-all duration-300 ${
+    <div className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r transition-all duration-300 ${
       isSidebarCollapsed ? 'w-20' : 'w-64'
-    }`}>
+    } ${d ? 'bg-gray-900 text-white border-gray-800' : 'bg-white text-gray-900 border-gray-200'}`}>
       {/* Header — matches ChatHeader style */}
       <div>
         <div className="px-3 pb-2 flex items-center gap-3" style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="p-2 rounded-lg text-gray-300 hover:bg-gray-700 transition-colors flex-shrink-0"
+            className={`p-2 rounded-lg transition-colors flex-shrink-0 ${d ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}
             title={isSidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
           >
             {isSidebarCollapsed ? (
@@ -50,7 +51,7 @@ export default function SidebarDesktop({
             )}
           </button>
           {!isSidebarCollapsed && (
-            <AlleracLogo height={28} variant="dark" />
+            <AlleracLogo height={28} variant={d ? 'dark' : 'light'} />
           )}
         </div>
       </div>
@@ -63,6 +64,7 @@ export default function SidebarDesktop({
         pinConversation={pinConversation}
         renameConversation={renameConversation}
         isSidebarCollapsed={isSidebarCollapsed}
+        isDarkMode={isDarkMode}
       />
     </div>
   );

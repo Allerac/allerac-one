@@ -80,6 +80,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Project directory so the agent can run update.sh
       - ${COMPOSE_DIR:-.}:/project
+    ports:
+      # Workspace project servers — range available for user projects (3001 reserved for executor API)
+      - "3000:3000"
+      - "3002-3010:3002-3010"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

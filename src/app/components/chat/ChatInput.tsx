@@ -17,6 +17,10 @@ interface ChatInputProps {
   onImageSelect?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveImage?: (index: number) => void;
   fileInputRef?: React.RefObject<HTMLInputElement | null>;
+  documentAttachments?: Array<{ file: File; name: string; content: string }>;
+  onDocumentSelect?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemoveDocument?: (index: number) => void;
+  documentFileInputRef?: React.RefObject<HTMLInputElement | null>;
   // Skills props
   availableSkills?: any[];
   activeSkill?: any | null;
@@ -47,11 +51,10 @@ export default function ChatInput({
   onImageSelect,
   onRemoveImage,
   fileInputRef,
-  availableSkills = [],
-  activeSkill = null,
-  preSelectedSkill = null,
-  onActivateSkill,
-  onDeactivateSkill,
+  documentAttachments = [],
+  onDocumentSelect,
+  onRemoveDocument,
+  documentFileInputRef,
   selectedModel,
   setSelectedModel,
   MODELS = [],
@@ -62,8 +65,6 @@ export default function ChatInput({
   onDownloadModel,
 }: ChatInputProps) {
   const t = useTranslations('chat');
-  const currentSkill = activeSkill || preSelectedSkill;
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const attachDropdownRef = useRef<HTMLDivElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -108,20 +109,14 @@ export default function ChatInput({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        const skillsDropdown = document.getElementById('chat-input-skills-dropdown');
         const attachDropdown = document.getElementById('chat-input-attach-dropdown');
         const modelDropdown = document.getElementById('chat-input-model-dropdown');
-        skillsDropdown?.classList.add('hidden');
         attachDropdown?.classList.add('hidden');
         modelDropdown?.classList.add('hidden');
       }
     };
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        const dropdown = document.getElementById('chat-input-skills-dropdown');
-        dropdown?.classList.add('hidden');
-      }
       if (attachDropdownRef.current && !attachDropdownRef.current.contains(e.target as Node)) {
         const dropdown = document.getElementById('chat-input-attach-dropdown');
         dropdown?.classList.add('hidden');
@@ -143,13 +138,13 @@ export default function ChatInput({
 
   return (
     <div data-name="chat-input-box" className={`rounded-2xl shadow-lg ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-      {/* Image previews */}
-      {imageAttachments.length > 0 && (
-        <div className={`m-2 flex flex-wrap gap-2 p-2 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+      {/* Image + document previews */}
+      {(imageAttachments.length > 0 || documentAttachments.length > 0) && (
+        <div className={`m-2 flex flex-wrap gap-2 p-2 rounded-lg ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100'}`}>
           {imageAttachments.map((img, index) => (
-            <div key={index} className="relative group">
-              <img 
-                src={img.preview} 
+            <div key={`img-${index}`} className="relative group">
+              <img
+                src={img.preview}
                 alt={`Preview ${index + 1}`}
                 className="w-20 h-20 object-cover rounded border-2 border-brand-500"
               />
@@ -161,16 +156,54 @@ export default function ChatInput({
               </button>
             </div>
           ))}
+          {documentAttachments.map((doc, index) => {
+            const processing = doc.content === '';
+            return (
+              <div
+                key={`doc-${index}`}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs max-w-[180px] group ${
+                  isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-white border border-gray-200 text-gray-700'
+                }`}
+              >
+                {processing ? (
+                  <div className="h-3.5 w-3.5 shrink-0 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                <span className="truncate flex-1">{doc.name}</span>
+                {!processing && (
+                  <button
+                    onClick={() => onRemoveDocument?.(index)}
+                    className={`shrink-0 rounded transition-colors ${isDarkMode ? 'text-gray-400 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
-      
-      {/* Hidden file input */}
+
+      {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
         multiple
         onChange={onImageSelect}
+        className="hidden"
+      />
+      <input
+        ref={documentFileInputRef}
+        type="file"
+        accept=".txt,.md,.markdown,.csv,.json,.xml,.html,.ts,.tsx,.js,.jsx,.py,.rb,.go,.rs,.java,.c,.cpp,.sh,.yaml,.yml,.toml,.ini,.env,.sql,.pdf"
+        multiple
+        onChange={onDocumentSelect}
         className="hidden"
       />
       
@@ -246,7 +279,7 @@ export default function ChatInput({
                 </button>
                 <button
                   onClick={() => {
-                    setIsDocumentModalOpen?.(true);
+                    documentFileInputRef?.current?.click();
                     document.getElementById('chat-input-attach-dropdown')?.classList.add('hidden');
                   }}
                   className={`w-full px-4 py-2 text-left flex items-center gap-3 transition-colors ${
@@ -256,7 +289,7 @@ export default function ChatInput({
                   }`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   <span className="text-sm">{t('document')}</span>
                 </button>
@@ -264,96 +297,6 @@ export default function ChatInput({
             </div>
           </div>
           
-          {/* Skills dropdown — always visible */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => {
-                const dropdown = document.getElementById('chat-input-skills-dropdown');
-                if (dropdown) dropdown.classList.toggle('hidden');
-              }}
-              className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${currentSkill ? 'text-white bg-brand-900 hover:bg-brand-800' : isDarkMode ? 'text-gray-400 bg-gray-700 hover:bg-gray-600' : 'text-gray-500 bg-gray-100 hover:bg-gray-200'}`}
-              title={currentSkill ? currentSkill.display_name || currentSkill.name : t('selectSkill')}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </button>
-
-            <div
-              id="chat-input-skills-dropdown"
-              className={`hidden absolute bottom-full mb-2 left-0 w-64 sm:w-80 max-w-[85vw] rounded-lg shadow-lg z-50 ${
-                isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
-              }`}
-            >
-              {availableSkills.length === 0 ? (
-                <div className={`px-4 py-3 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {t('noSkills')}
-                </div>
-              ) : (
-                <>
-                  {currentSkill && (
-                    <button
-                      onClick={() => {
-                        onDeactivateSkill?.();
-                        document.getElementById('chat-input-skills-dropdown')?.classList.add('hidden');
-                      }}
-                      className={`w-full px-4 py-3 text-left border-b flex items-center gap-2 ${
-                        isDarkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      <span className="text-red-500 font-medium">{t('deactivateSkill')}</span>
-                    </button>
-                  )}
-
-                  <div className="max-h-96 overflow-y-auto">
-                    {availableSkills.map((skill) => (
-                      <button
-                        key={skill.id}
-                        onClick={() => {
-                          onActivateSkill?.(skill.id);
-                          document.getElementById('chat-input-skills-dropdown')?.classList.add('hidden');
-                        }}
-                        className={`w-full px-4 py-3 text-left border-b transition-colors last:border-b-0 ${
-                          currentSkill?.id === skill.id
-                            ? isDarkMode
-                              ? 'bg-brand-900 border-brand-700'
-                              : 'bg-brand-50 border-brand-200'
-                            : isDarkMode
-                            ? 'border-gray-700 hover:bg-gray-700'
-                            : 'border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`font-medium ${
-                            currentSkill?.id === skill.id
-                              ? 'text-brand-400'
-                              : isDarkMode
-                              ? 'text-gray-200'
-                              : 'text-gray-900'
-                          }`}>
-                            {skill.display_name || skill.name}
-                          </span>
-                          {currentSkill?.id === skill.id && (
-                            <svg className="w-5 h-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          )}
-                        </div>
-                        {skill.description && (
-                          <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {skill.description}
-                          </p>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
         </div>
         
         {/* Right side: Send button */}
@@ -361,9 +304,9 @@ export default function ChatInput({
           {/* Send button */}
           <button
             onClick={handleSendMessage}
-            disabled={isSending || (!inputMessage.trim() && imageAttachments.length === 0) || !isProviderReady}
+            disabled={isSending || (!inputMessage.trim() && imageAttachments.length === 0 && documentAttachments.length === 0) || documentAttachments.some(d => d.content === '') || !isProviderReady}
             className={`w-11 h-11 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
-              (inputMessage.trim() || imageAttachments.length > 0) && !isSending
+              (inputMessage.trim() || imageAttachments.length > 0 || documentAttachments.length > 0) && !isSending
                 ? 'bg-brand-900 hover:bg-brand-950 text-white'
                 : isDarkMode
                 ? 'bg-gray-600 text-gray-400'

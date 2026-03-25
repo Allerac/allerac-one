@@ -90,11 +90,17 @@ export class SkillsService {
    */
   async getUserSkills(userId: string): Promise<Skill[]> {
     const result = await pool.query<Skill>(
-      `SELECT s.*, us.is_default, us.order_index, us.enabled
-       FROM skills s
-       JOIN user_skills us ON s.id = us.skill_id
-       WHERE us.user_id = $1 AND us.enabled = true
-       ORDER BY us.order_index, s.name`,
+      `SELECT * FROM (
+         SELECT s.*, false AS is_default, 0 AS order_index, true AS enabled
+         FROM skills s
+         WHERE s.is_system = true
+         UNION ALL
+         SELECT s.*, us.is_default, us.order_index, us.enabled
+         FROM skills s
+         JOIN user_skills us ON s.id = us.skill_id
+         WHERE us.user_id = $1 AND us.enabled = true AND (s.is_system = false OR s.is_system IS NULL)
+       ) combined
+       ORDER BY is_system DESC NULLS LAST, order_index, name`,
       [userId]
     );
     return result.rows;

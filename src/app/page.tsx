@@ -21,7 +21,6 @@ import ChatMessages from './components/chat/ChatMessages';
 import ChatInput from './components/chat/ChatInput';
 import MemorySaveModal from './components/memory/MemorySaveModal';
 import MemorySettingsModal from './components/memory/MemorySettingsModal';
-import DocumentsModal from './components/documents/DocumentsModal';
 import MemoriesModal from './components/memory/MemoriesModal';
 import SkillsLibrary from './components/skills/SkillsLibrary';
 import UserSettingsModal from './components/auth/UserSettingsModal';
@@ -42,8 +41,8 @@ export default function AdminChat() {
     const openTokenModal = () => { setSystemDashboardInitialTab('apiKeys'); setIsSystemDashboardOpen(true); };
     const openMemorySettingsModal = () => setIsEditingSettings(true);
     const openUserSettingsModal = () => setIsUserSettingsOpen(true);
-    const openDocumentsModal = () => setIsDocumentModalOpen(true);
-    const openMemoriesModal = () => setIsMemoryModalOpen(true);
+    const openDocumentsModal = () => { setMemoryModalTab('documents'); setIsMemoryModalOpen(true); };
+    const openMemoriesModal = () => { setMemoryModalTab('conversations'); setIsMemoryModalOpen(true); };
     const openSkillsLibrary = () => setIsSkillsLibraryOpen(true);
     const openSystemDashboard = () => { setSystemDashboardInitialTab('system'); setIsSystemDashboardOpen(true); };
     const openScheduledJobsModal = () => setIsScheduledJobsModalOpen(true);
@@ -102,9 +101,9 @@ export default function AdminChat() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
-  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
+  const [memoryModalTab, setMemoryModalTab] = useState<'conversations' | 'documents'>('conversations');
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
   const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
@@ -120,11 +119,13 @@ export default function AdminChat() {
   const [ollamaConnected, setOllamaConnected] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<Array<{ name: string; size: number; modified_at: string }>>([]);
   const [imageAttachments, setImageAttachments] = useState<Array<{ file: File; preview: string }>>([]);
+  const [documentAttachments, setDocumentAttachments] = useState<Array<{ file: File; name: string; content: string }>>([]);
   const [availableSkills, setAvailableSkills] = useState<any[]>([]);
   const [activeSkill, setActiveSkill] = useState<any | null>(null);
   const [preSelectedSkill, setPreSelectedSkill] = useState<any | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentFileInputRef = useRef<HTMLInputElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
 
   // Initialize chatMessageService
@@ -592,14 +593,49 @@ export default function AdminChat() {
     if (isSending) return;
     setIsSending(true);
     try {
-      await chatMessageService.sendMessage(inputMessage, imageAttachments, activeSkill);
+      let message = inputMessage;
+      if (documentAttachments.length > 0) {
+        const docBlocks = documentAttachments.map(d =>
+          `<attachment name="${d.name}">\n${d.content}\n</attachment>`
+        ).join('\n\n');
+        message = (message.trim() ? message + '\n\n' : '') + docBlocks;
+      }
+      await chatMessageService.sendMessage(message, imageAttachments, activeSkill);
       setInputMessage('');
-      // Clear image attachments
       imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
       setImageAttachments([]);
+      setDocumentAttachments([]);
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleDocumentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach(file => {
+      const placeholder = { file, name: file.name, content: '' };
+      setDocumentAttachments(prev => [...prev, placeholder]);
+      const form = new FormData();
+      form.append('file', file);
+      fetch('/api/chat/extract-text', { method: 'POST', body: form })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) throw new Error(data.error);
+          setDocumentAttachments(prev =>
+            prev.map(d => d.file === file ? { ...d, content: data.text } : d)
+          );
+        })
+        .catch(err => {
+          setDocumentAttachments(prev => prev.filter(d => d.file !== file));
+          alert(`Erro ao processar "${file.name}": ${err.message}`);
+        });
+    });
+    if (documentFileInputRef.current) documentFileInputRef.current.value = '';
+  };
+
+  const removeDocument = (index: number) => {
+    setDocumentAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -761,11 +797,15 @@ export default function AdminChat() {
                   isSending={isSending}
                   githubToken={githubToken}
                   isDarkMode={isDarkMode}
-                  setIsDocumentModalOpen={setIsDocumentModalOpen}
+                  setIsDocumentModalOpen={() => { setMemoryModalTab("documents"); setIsMemoryModalOpen(true); }}
                   imageAttachments={imageAttachments}
                   onImageSelect={handleImageSelect}
                   onRemoveImage={removeImage}
                   fileInputRef={fileInputRef}
+                  documentAttachments={documentAttachments}
+                  onDocumentSelect={handleDocumentSelect}
+                  onRemoveDocument={removeDocument}
+                  documentFileInputRef={documentFileInputRef}
                   availableSkills={availableSkills}
                   activeSkill={activeSkill}
                   preSelectedSkill={preSelectedSkill}
@@ -808,7 +848,7 @@ export default function AdminChat() {
                     isSending={isSending}
                     githubToken={githubToken}
                     isDarkMode={isDarkMode}
-                    setIsDocumentModalOpen={setIsDocumentModalOpen}
+                    setIsDocumentModalOpen={() => { setMemoryModalTab("documents"); setIsMemoryModalOpen(true); }}
                     imageAttachments={imageAttachments}
                     onImageSelect={handleImageSelect}
                     onRemoveImage={removeImage}
@@ -846,22 +886,14 @@ export default function AdminChat() {
         onSave={saveSystemMessage}
       />
 
-      {/* Documents Modal */}
-      <DocumentsModal
-        isOpen={isDocumentModalOpen}
-        onClose={() => setIsDocumentModalOpen(false)}
-        isDarkMode={isDarkMode}
-        userId={userId}
-        githubToken={githubToken}
-      />
-
-      {/* Memories Modal */}
+      {/* Memory Modal */}
       <MemoriesModal
         isOpen={isMemoryModalOpen}
         onClose={() => setIsMemoryModalOpen(false)}
         isDarkMode={isDarkMode}
         userId={userId}
         githubToken={githubToken}
+        defaultTab={memoryModalTab}
       />
 
       {/* Skills Library Modal */}

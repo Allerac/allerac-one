@@ -53,6 +53,7 @@ COPY --from=builder /app/src/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/build-info.json ./build-info.json
+COPY --from=builder --chown=nextjs:nodejs /app/skills ./skills
 
 # Set the correct permission for prerender cache
 RUN mkdir -p .next

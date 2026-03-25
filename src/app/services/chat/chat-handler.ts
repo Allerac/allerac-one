@@ -182,6 +182,12 @@ export async function handleChatMessage(
     enrichedSystemMessage += '\n\n' + relevantContext;
   }
 
+  // Inject user-scoped workspace path so the AI always writes to the right directory
+  enrichedSystemMessage = enrichedSystemMessage.replace(
+    /\/workspace\/projects\//g,
+    `/workspace/projects/${userId}/`
+  );
+
   // Load conversation history
   const history = await chatService.loadMessages(convId);
   const conversationMessages: Array<{
@@ -279,7 +285,15 @@ export async function handleChatMessage(
           toolResult = await searchTool.execute(toolArgs.query);
         } else if (toolName === 'execute_shell') {
           const shellTool = new ShellTool();
-          toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
+          // Enforce user-scoped workspace paths regardless of what the LLM wrote
+          const scopedCommand = (toolArgs.command as string || '').replace(
+            /\/workspace\/projects\//g,
+            `/workspace/projects/${userId}/`
+          );
+          const scopedCwd = toolArgs.cwd
+            ? (toolArgs.cwd as string).replace(/\/workspace\/projects\//g, `/workspace/projects/${userId}/`)
+            : toolArgs.cwd;
+          toolResult = await shellTool.execute(scopedCommand, scopedCwd, toolArgs.timeout);
         } else {
           toolResult = { error: `Tool ${toolName} not available` };
         }

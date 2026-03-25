@@ -5,9 +5,9 @@
     "options": "Opções",
     "configuration": "Configuração",
     "apiKeys": "Chaves de API",
-    "memorySettings": "Sobre mim",
+    "memorySettings": "Instructions",
     "documents": "Meus Documentos",
-    "memories": "Memórias",
+    "memories": "Memory",
     "skills": "Habilidades",
     "scheduledJobs": "Tarefas",
     "logout": "Sair",
@@ -251,9 +251,25 @@
     "noJobs": "Nenhum job agendado ainda",
     "noJobsHint": "Clique em \"+ Novo Job\" para começar.",
     "loading": "Carregando...",
-    "tabs": { "list": "Jobs", "create": "Criar", "edit": "Editar" },
-    "fields": { "name": "Nome *", "prompt": "Prompt *", "channels": "Canais *", "enabled": "Ativo", "frequency": "Frequência" },
-    "presets": { "hourly": "A cada hora", "daily": "Todo dia às…", "weekly": "Toda semana no…", "monthly": "Todo mês no dia…", "custom": "Personalizado (cron)" },
+    "tabs": {
+      "list": "Jobs",
+      "create": "Criar",
+      "edit": "Editar"
+    },
+    "fields": {
+      "name": "Nome *",
+      "prompt": "Prompt *",
+      "channels": "Canais *",
+      "enabled": "Ativo",
+      "frequency": "Frequência"
+    },
+    "presets": {
+      "hourly": "A cada hora",
+      "daily": "Todo dia às…",
+      "weekly": "Toda semana no…",
+      "monthly": "Todo mês no dia…",
+      "custom": "Personalizado (cron)"
+    },
     "timeAt": "às",
     "timeH": "h",
     "timeMin": "min",
@@ -272,11 +288,39 @@
     "saving": "Salvando…",
     "createJob": "Criar Job",
     "saveChanges": "Salvar Alterações",
-    "days": ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"],
-    "actions": { "save": "Salvar", "cancel": "Cancelar", "delete": "Excluir", "edit": "Editar" },
-    "confirm": { "delete": "Excluir este job?" },
-    "success": { "created": "Job criado", "updated": "Job atualizado", "deleted": "Job excluído" },
-    "errors": { "invalidCron": "Expressão cron inválida", "nameRequired": "Nome é obrigatório", "promptRequired": "Prompt é obrigatório", "channelRequired": "Pelo menos um canal é obrigatório", "loadFailed": "Falha ao carregar jobs", "deleteFailed": "Falha ao excluir", "createFailed": "Falha ao criar job", "updateFailed": "Falha ao atualizar job" }
+    "days": [
+      "Domingo",
+      "Segunda-feira",
+      "Terça-feira",
+      "Quarta-feira",
+      "Quinta-feira",
+      "Sexta-feira",
+      "Sábado"
+    ],
+    "actions": {
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "delete": "Excluir",
+      "edit": "Editar"
+    },
+    "confirm": {
+      "delete": "Excluir este job?"
+    },
+    "success": {
+      "created": "Job criado",
+      "updated": "Job atualizado",
+      "deleted": "Job excluído"
+    },
+    "errors": {
+      "invalidCron": "Expressão cron inválida",
+      "nameRequired": "Nome é obrigatório",
+      "promptRequired": "Prompt é obrigatório",
+      "channelRequired": "Pelo menos um canal é obrigatório",
+      "loadFailed": "Falha ao carregar jobs",
+      "deleteFailed": "Falha ao excluir",
+      "createFailed": "Falha ao criar job",
+      "updateFailed": "Falha ao atualizar job"
+    }
   },
   "consciousness": {
     "title": "Sobre mim",

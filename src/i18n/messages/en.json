@@ -5,9 +5,9 @@
     "options": "Options",
     "configuration": "Configuration",
     "apiKeys": "API Keys",
-    "memorySettings": "About me",
+    "memorySettings": "Instructions",
     "documents": "My Documents",
-    "memories": "Memories",
+    "memories": "Memory",
     "skills": "Skills",
     "scheduledJobs": "Tasks",
     "logout": "Logout",
@@ -251,9 +251,25 @@
     "noJobs": "No scheduled jobs yet",
     "noJobsHint": "Click \"+ New Job\" to get started.",
     "loading": "Loading...",
-    "tabs": { "list": "Jobs", "create": "Create", "edit": "Edit" },
-    "fields": { "name": "Name *", "prompt": "Prompt *", "channels": "Channels *", "enabled": "Enabled", "frequency": "Frequency" },
-    "presets": { "hourly": "Every hour", "daily": "Every day at…", "weekly": "Every week on…", "monthly": "Every month on day…", "custom": "Custom (cron)" },
+    "tabs": {
+      "list": "Jobs",
+      "create": "Create",
+      "edit": "Edit"
+    },
+    "fields": {
+      "name": "Name *",
+      "prompt": "Prompt *",
+      "channels": "Channels *",
+      "enabled": "Enabled",
+      "frequency": "Frequency"
+    },
+    "presets": {
+      "hourly": "Every hour",
+      "daily": "Every day at…",
+      "weekly": "Every week on…",
+      "monthly": "Every month on day…",
+      "custom": "Custom (cron)"
+    },
     "timeAt": "at",
     "timeH": "h",
     "timeMin": "min",
@@ -272,11 +288,39 @@
     "saving": "Saving…",
     "createJob": "Create Job",
     "saveChanges": "Save Changes",
-    "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-    "actions": { "save": "Save", "cancel": "Cancel", "delete": "Delete", "edit": "Edit" },
-    "confirm": { "delete": "Delete this job?" },
-    "success": { "created": "Job created", "updated": "Job updated", "deleted": "Job deleted" },
-    "errors": { "invalidCron": "Invalid cron expression", "nameRequired": "Name is required", "promptRequired": "Prompt is required", "channelRequired": "At least one channel is required", "loadFailed": "Failed to load jobs", "deleteFailed": "Failed to delete", "createFailed": "Failed to create job", "updateFailed": "Failed to update job" }
+    "days": [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "actions": {
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "edit": "Edit"
+    },
+    "confirm": {
+      "delete": "Delete this job?"
+    },
+    "success": {
+      "created": "Job created",
+      "updated": "Job updated",
+      "deleted": "Job deleted"
+    },
+    "errors": {
+      "invalidCron": "Invalid cron expression",
+      "nameRequired": "Name is required",
+      "promptRequired": "Prompt is required",
+      "channelRequired": "At least one channel is required",
+      "loadFailed": "Failed to load jobs",
+      "deleteFailed": "Failed to delete",
+      "createFailed": "Failed to create job",
+      "updateFailed": "Failed to update job"
+    }
   },
   "consciousness": {
     "title": "About me",

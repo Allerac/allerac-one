@@ -169,11 +169,13 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
-        // Auto-switch skills based on message content
-        if (activeSkill) {
-          const availableSkills = await skillsService.getUserSkills(userId);
+        // Auto-activate or auto-switch skills based on message content.
+        // Runs even when no skill is active so keyword-based skills (e.g. Programmer)
+        // can activate on the first message of a new conversation.
+        {
+          const availableSkills = await skillsService.getAvailableSkills(userId);
           for (const skill of availableSkills) {
-            if (skill.id !== activeSkill.id && skill.auto_switch_rules) {
+            if (skill.id !== activeSkill?.id && skill.auto_switch_rules) {
               const shouldSwitch = await skillsService.shouldAutoActivate(skill, {
                 message,
                 conversationHistory: await chatService.loadMessages(convId),
@@ -181,7 +183,7 @@ export async function POST(request: Request): Promise<Response> {
               if (shouldSwitch) {
                 await skillsService.activateSkill(skill.id, convId, userId, 'auto', message);
                 activeSkill = skill;
-                console.log(`[ChatRoute] Auto-switched to skill: ${skill.name}`);
+                console.log(`[ChatRoute] Auto-activated skill: ${skill.name}`);
                 break;
               }
             }
@@ -272,6 +274,13 @@ export async function POST(request: Request): Promise<Response> {
             }
           }, 15000); // Every 15 seconds
 
+          // Determine tool_choice: force a specific tool if the active skill requires it,
+          // otherwise use 'auto' (Gemini doesn't support tool_choice, so skip for gemini)
+          const forceTool = activeSkill?.force_tool ?? null;
+          const initialToolChoice = forceTool
+            ? { type: 'function', function: { name: forceTool } }
+            : provider !== 'gemini' ? 'auto' : undefined;
+
           console.log('[ChatRoute] Starting first LLM call (tool detection)...');
           let data = await llmService.chatCompletion({
             messages: conversationMessages,
@@ -279,8 +288,7 @@ export async function POST(request: Request): Promise<Response> {
             temperature: 0.7,
             max_tokens: 2000,
             tools: TOOLS,
-            // Gemini's OpenAI-compatible endpoint doesn't support tool_choice
-            ...(provider !== 'gemini' && { tool_choice: 'auto' }),
+            ...(initialToolChoice !== undefined && { tool_choice: initialToolChoice }),
           });
           console.log('[ChatRoute] First LLM call completed');
           clearInterval(keepaliveInterval);
