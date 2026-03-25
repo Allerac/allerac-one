@@ -32,8 +32,12 @@ import OnboardingWizard from '../components/onboarding/OnboardingWizard';
 
 export default function AdminChat({
   defaultSkillName,
+  showWorkspace = false,
+  showHealth = false,
 }: {
   defaultSkillName?: string;
+  showWorkspace?: boolean;
+  showHealth?: boolean;
 }) {
   const t = useTranslations('home');
   const router = useRouter();
@@ -685,6 +689,8 @@ export default function AdminChat({
             deleteConversation={deleteConversation}
             pinConversation={handlePinConversation}
             renameConversation={handleRenameConversation}
+            showWorkspace={showWorkspace}
+            showHealth={showHealth}
           />
         </div>
 
@@ -700,6 +706,8 @@ export default function AdminChat({
             deleteConversation={deleteConversation}
             pinConversation={handlePinConversation}
             renameConversation={handleRenameConversation}
+            showWorkspace={showWorkspace}
+            showHealth={showHealth}
           />
         </div>
 

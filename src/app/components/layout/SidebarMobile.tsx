@@ -14,6 +14,8 @@ interface SidebarMobileProps {
   deleteConversation: (conversationId: string) => void;
   pinConversation: (conversationId: string, pinned: boolean) => void;
   renameConversation: (conversationId: string, title: string) => void;
+  showWorkspace?: boolean;
+  showHealth?: boolean;
 }
 
 export default function SidebarMobile({
@@ -26,6 +28,8 @@ export default function SidebarMobile({
   deleteConversation,
   pinConversation,
   renameConversation,
+  showWorkspace,
+  showHealth,
 }: SidebarMobileProps) {
   const d = isDarkMode;
   return (
@@ -56,6 +60,8 @@ export default function SidebarMobile({
         pinConversation={pinConversation}
         renameConversation={renameConversation}
         isDarkMode={isDarkMode}
+        showWorkspace={showWorkspace}
+        showHealth={showHealth}
       />
     </div>
   );

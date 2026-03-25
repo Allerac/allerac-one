@@ -12,5 +12,5 @@ export default async function HealthPage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient defaultSkillName="health" />;
+  return <ChatClient defaultSkillName="health" showHealth />;
 }
