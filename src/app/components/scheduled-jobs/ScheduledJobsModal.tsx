@@ -173,11 +173,12 @@ interface Props {
   onClose: () => void;
   isDarkMode: boolean;
   userId: string | null;
+  inline?: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId }: Props) {
+export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId, inline = false }: Props) {
   const t = useTranslations('scheduledJobs');
   const DAYS = t.raw('days') as string[];
   const [activeTab, setActiveTab] = useState<Tab>('list');
@@ -341,14 +342,10 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div
-        className={`backdrop-blur-md rounded-lg shadow-xl max-w-4xl w-full max-h-[90dvh] flex flex-col ${
-          isDarkMode ? 'bg-gray-800/95 border border-gray-700' : 'bg-white/95 border border-gray-200'
-        }`}
-      >
-        {/* Header */}
+  const inner = (
+    <>
+      {/* Header — only shown when not inline (inline = inside MyAlleracModal) */}
+      {!inline && (
         <div className={`p-6 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div>
             <h2 className={`text-2xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
@@ -357,9 +354,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
               </svg>
               {t('title')}
             </h2>
-            <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              {t('description')}
-            </p>
+            <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('description')}</p>
           </div>
           <button onClick={onClose} className={`transition-colors ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}>
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -367,22 +362,17 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
             </svg>
           </button>
         </div>
+      )}
 
-        {/* Tabs */}
-        <div className={`flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <button onClick={() => setActiveTab('list')} className={tabCls(activeTab === 'list')}>
-            {t('tabs.list')}
-          </button>
-          <button onClick={openCreate} className={tabCls(activeTab === 'create')}>
-            {t('newJob')}
-          </button>
-          {activeTab === 'edit' && (
-            <button className={tabCls(true)}>{t('tabs.edit')}</button>
-          )}
-        </div>
+      {/* Tabs */}
+      <div className={`flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+        <button onClick={() => setActiveTab('list')} className={tabCls(activeTab === 'list')}>{t('tabs.list')}</button>
+        <button onClick={openCreate} className={tabCls(activeTab === 'create')}>{t('newJob')}</button>
+        {activeTab === 'edit' && <button className={tabCls(true)}>{t('tabs.edit')}</button>}
+      </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6">
           {/* Notifications */}
           {error && (
             <div className={`mb-4 p-3 rounded-lg text-sm ${isDarkMode ? 'bg-red-900/20 text-red-400 border border-red-800' : 'bg-red-50 text-red-600 border border-red-200'}`}>
@@ -682,6 +672,17 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
             </div>
           )}
         </div>
+    </>
+  );
+
+  if (inline) return inner;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className={`backdrop-blur-md rounded-lg shadow-xl max-w-4xl w-full max-h-[90dvh] flex flex-col ${
+        isDarkMode ? 'bg-gray-800/95 border border-gray-700' : 'bg-white/95 border border-gray-200'
+      }`}>
+        {inner}
       </div>
     </div>
   );

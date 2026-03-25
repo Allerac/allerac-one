@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as authActions from '@/app/actions/auth';
+import UserSettingsModal from '@/app/components/auth/UserSettingsModal';
 
 const DOMAINS = [
-  { id: 'chat',    label: 'Chat',    icon: '💬', path: '/',         desc: 'General assistant' },
+  { id: 'chat',    label: 'Chat',    icon: '💬', path: '/chat',     desc: 'General assistant' },
   { id: 'code',    label: 'Code',    icon: '💻', path: '/code',     desc: 'Programmer mode' },
   { id: 'recipes', label: 'Recipes', icon: '🍳', path: '/recipes',  desc: 'Chef & nutrition' },
   { id: 'search',  label: 'Search',  icon: '🔍', path: '/search',   desc: 'Web research' },
@@ -17,15 +18,16 @@ const DOMAINS = [
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 
-export default function HubClient({ userName }: { userName: string }) {
+export default function HubClient({ userName, userEmail, userId }: { userName: string; userEmail: string; userId: string }) {
   const router = useRouter();
-  const [booting, setBooting] = useState(true);
+  const [booting, setBooting] = useState(() => !sessionStorage.getItem('allerac_booted'));
   const [bootStep, setBootStep] = useState(0);
   const [time, setTime] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [clickCount, setClickCount] = useState<Record<string, number>>({});
   const [startMenuOpen, setStartMenuOpen] = useState(false);
   const [shutdownPhase, setShutdownPhase] = useState<ShutdownPhase>('running');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const startMenuRef = useRef<HTMLDivElement>(null);
 
   const BOOT_LINES = [
@@ -44,7 +46,7 @@ export default function HubClient({ userName }: { userName: string }) {
       setBootStep(i);
       if (i >= BOOT_LINES.length) {
         clearInterval(interval);
-        setTimeout(() => setBooting(false), 500);
+        setTimeout(() => { sessionStorage.setItem('allerac_booted', '1'); setBooting(false); }, 500);
       }
     }, 350);
     return () => clearInterval(interval);
@@ -97,6 +99,7 @@ export default function HubClient({ userName }: { userName: string }) {
     setShutdownPhase('shutting-down');
 
     // Call logout in background
+    sessionStorage.removeItem('allerac_booted');
     authActions.logout().catch(() => {});
 
     // After 2.5s show "safe to turn off"
@@ -105,7 +108,7 @@ export default function HubClient({ userName }: { userName: string }) {
 
       // After another 2.5s redirect to login
       setTimeout(() => {
-        router.push('/');
+        router.push('/login');
       }, 2500);
     }, 2500);
   };
@@ -152,7 +155,7 @@ export default function HubClient({ userName }: { userName: string }) {
         fontFamily: '"Press Start 2P", monospace',
       }}>
         <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
-        <img src="/icon-nobg.svg" alt="Allerac" style={{ width: 64, height: 64, opacity: 0.9 }} />
+        <img src="/icon-nobg-purple.svg" alt="Allerac" style={{ width: 64, height: 64, opacity: 0.9 }} />
         <div style={{ color: '#fff', fontSize: '13px', textAlign: 'center', lineHeight: 2 }}>
           Allerac is shutting down...
         </div>
@@ -197,7 +200,7 @@ export default function HubClient({ userName }: { userName: string }) {
       <div
         onClick={handleDesktopClick}
         style={{
-          background: '#008080',
+          background: 'linear-gradient(135deg, #6366f1 0%, #4c1d95 60%, #1e1b4b 100%)',
           height: '100dvh',
           display: 'flex',
           flexDirection: 'column',
@@ -217,6 +220,19 @@ export default function HubClient({ userName }: { userName: string }) {
               onClick={(e) => handleIconClick(e, domain)}
             />
           ))}
+          {/* Settings icon */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setStartMenuOpen(false); setSelected('settings'); setIsSettingsOpen(true); }}
+            title="User Settings"
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', width: '72px' }}
+          >
+            <div style={{ width: 48, height: 48, fontSize: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: selected === 'settings' ? 'rgba(0,0,128,0.5)' : 'transparent', outline: selected === 'settings' ? '1px dotted #fff' : 'none' }}>
+              ⚙️
+            </div>
+            <span style={{ fontSize: '11px', textAlign: 'center', lineHeight: 1.3, color: '#fff', textShadow: '1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000', background: selected === 'settings' ? '#000080' : 'transparent', padding: '1px 3px', display: 'block', maxWidth: '70px', wordBreak: 'break-word', fontFamily: 'Arial, sans-serif' }}>
+              Settings
+            </span>
+          </button>
         </div>
 
         {/* Start menu (above taskbar) */}
@@ -260,7 +276,8 @@ export default function HubClient({ userName }: { userName: string }) {
 
             {/* Menu items */}
             <div style={{ flex: 1, padding: '4px 0' }}>
-              <StartMenuItem icon="💬" label="Chat" onClick={() => { setStartMenuOpen(false); router.push('/'); }} />
+              <StartMenuItem icon="💬" label="Chat" onClick={() => { setStartMenuOpen(false); router.push('/chat'); }} />
+              <StartMenuItem icon="⚙️" label="Settings" onClick={() => { setStartMenuOpen(false); setIsSettingsOpen(true); }} />
               <div style={{ height: '1px', background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
               <StartMenuItem icon="🔌" label="Shut Down..." onClick={handleShutDown} />
             </div>
@@ -302,8 +319,8 @@ export default function HubClient({ userName }: { userName: string }) {
               flexShrink: 0,
             }}
           >
-            <img src="/icon-nobg.svg" alt="Allerac" style={{ width: 18, height: 18 }} />
-            <span style={{ fontSize: '8px' }}>Start</span>
+            <img src="/icon-nobg-purple.svg" alt="Allerac" style={{ width: 18, height: 18 }} />
+            <span style={{ fontSize: '8px', color: '#000' }}>Start</span>
           </button>
 
           {/* Divider */}
@@ -333,6 +350,17 @@ export default function HubClient({ userName }: { userName: string }) {
           </span>
         </div>
       </div>
+
+      {/* User Settings Modal */}
+      <UserSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        isDarkMode={false}
+        userName={userName}
+        userEmail={userEmail}
+        userId={userId}
+        onLogout={handleShutDown}
+      />
     </>
   );
 }

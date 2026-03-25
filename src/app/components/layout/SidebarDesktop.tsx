@@ -14,6 +14,8 @@ interface SidebarDesktopProps {
   deleteConversation: (conversationId: string) => void;
   pinConversation: (conversationId: string, pinned: boolean) => void;
   renameConversation: (conversationId: string, title: string) => void;
+  showWorkspace?: boolean;
+  showHealth?: boolean;
 }
 
 export default function SidebarDesktop({
@@ -26,6 +28,8 @@ export default function SidebarDesktop({
   deleteConversation,
   pinConversation,
   renameConversation,
+  showWorkspace,
+  showHealth,
 }: SidebarDesktopProps) {
   const d = isDarkMode;
   return (
@@ -65,6 +69,8 @@ export default function SidebarDesktop({
         renameConversation={renameConversation}
         isSidebarCollapsed={isSidebarCollapsed}
         isDarkMode={isDarkMode}
+        showWorkspace={showWorkspace}
+        showHealth={showHealth}
       />
     </div>
   );
