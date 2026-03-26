@@ -47,7 +47,7 @@ export default function AdminChat({
     const openTokenModal = () => { setSystemDashboardInitialTab('apiKeys'); setIsSystemDashboardOpen(true); };
     const openUserSettingsModal = () => setIsUserSettingsOpen(true);
     const openSkillsLibrary = () => setIsSkillsLibraryOpen(true);
-    const openSystemDashboard = () => { setSystemDashboardInitialTab('system'); setIsSystemDashboardOpen(true); };
+    const openSystemDashboard = () => { setSystemDashboardInitialTab('preferences'); setIsSystemDashboardOpen(true); };
     const openHealthDashboard = () => setIsHealthDashboardOpen(true);
     const onLogout = () => handleLogoutRef.current();
     const openMyAlleracModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
