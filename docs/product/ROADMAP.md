@@ -20,19 +20,22 @@ Layer 3 — Super-Agents (future)
 
 ## Roadmap
 
-### Phase 1 — Invisible Skills (current)
+### Phase 1 — Invisible Skills ✅ DONE
 - [x] Skills stored as .md files in /skills/ repo folder
 - [x] Auto-synced to DB on deploy via SystemSkillsLoader
 - [x] Auto-switch via keywords — user never selects manually
 - [x] Remove skills combobox from chat UI
-- [ ] Add more system skills (writer, analyst, chef)
+- [x] Added system skills: writer, analyst, chef, finance, health, search
 
-### Phase 2 — Intent Detection (next)
-- [ ] Replace keyword-based auto-switch with LLM-based intent detection
-  - More robust than keyword matching
-  - Handles multi-intent messages ("healthy recipe for someone who codes all day")
-- [ ] Skill selection becomes a background inference step, not user action
-- [ ] "Skill active" indicator visible but subtle (small badge, not a selector)
+### Phase 2 — Intent Detection ✅ DONE
+- [x] Replace keyword-based auto-switch with LLM-based intent detection
+  - Uses Ollama `deepseek-r1:1.5b` — fully local, no cloud dependency
+  - Handles natural language intent, not just keyword matching
+  - Strips `<think>...</think>` chain-of-thought before reading answer
+  - Falls back to keyword matching if Ollama is unavailable
+- [x] Skill selection is a background step — user never sees it
+- [x] "Skill active" badge in ChatHeader — subtle, not a selector
+- **Bug to fix:** `num_predict: 10 → 200` in `skills.service.ts` `detectIntent()` — deepseek-r1 needs ~200 tokens for chain-of-thought; current value cuts off response mid-think
 
 ### Phase 3 — Curated Knowledge per Domain
 - [ ] Each system skill gets its own RAG document set
@@ -42,22 +45,18 @@ Layer 3 — Super-Agents (future)
 - [ ] RAG retrieval scoped per active skill (not global search)
 - [ ] Quality over quantity: 50 curated sources > 10,000 generic
 
-### Phase 3.5 — Domain Hub + Subroutes
-- [ ] Hub screen at `/` — entry point showing available domains
-  - User chooses context: Code, Recipes, Finance, Health, Search, Write
-  - Or just types freely — auto-routing kicks in
-  - Design: simple grid of domain cards, plus a free-text input below
-  ```
-  What do you want to do today?
-  [💻 Code]  [🍳 Recipes]  [🔍 Search]
-  [💰 Finance]  [❤️ Health]  [✍️ Write]
-  or just type...
-  ```
-- [ ] Domain subroutes: `/code`, `/recipes`, `/finance`, etc.
-  - Each route = same app instance, different UI focus + skill pre-activated
-  - `/code` → workspace sidebar visible by default, Programmer skill active
-  - `/recipes` → clean minimal UI, Chef skill active
-  - Zero infra overhead — just Next.js routes
+### Phase 3.5 — Domain Hub + Subroutes ✅ DONE
+- [x] Hub screen at `/` — retro Windows 3.1 Program Manager UI
+  - Boot animation on first login per session (sessionStorage `allerac_booted` flag)
+  - Start menu with domain shortcuts + Settings + Logout
+  - User Settings modal accessible from hub
+- [x] Domain subroutes: `/code`, `/recipes`, `/finance`, `/health`, `/search`, `/write`
+  - Each opens with sidebar minimized by default (`defaultSidebarCollapsed`)
+  - Domain name shown in ChatHeader instead of "Allerac" (`domainName` prop)
+  - Domain-specific sidebars: `/code` shows Workspace panel, `/health` shows Health panel
+  - Pre-selected skill activated on first message in each domain
+- [x] Desktop button in ChatHeader navigates back to hub (same tab)
+- [x] My Allerac modal (Instructions | Memory | Tasks) replaces 3 separate modals
 - [ ] Migrate to subdomains later when domains need independent RAG/model/infra
 
 ### Memory & Documents Architecture (cross-domain)
@@ -163,11 +162,77 @@ Located in `/skills/*.md` — edit via PR, auto-deployed.
 | File | Domain | Status |
 |------|--------|--------|
 | programmer.md | Code & development | Live |
+| writer.md | Writing, editing, tone | Live |
+| analyst.md | Data analysis, research | Live |
+| chef.md | Recipes, nutrition, cooking | Live |
+| finance.md | Personal finance, investments | Live |
+| health.md | Health & wellness | Live |
+| search.md | Web research (force_tool: search_web) | Live |
 
-## Next Skills to Build
-| File | Domain | Priority |
-|------|--------|----------|
-| writer.md | Writing, editing, tone | High |
-| analyst.md | Data analysis, research | High |
-| chef.md | Recipes, nutrition, cooking | Medium |
-| finance.md | Personal finance, investments | Medium |
+## Upcoming Work
+
+### Immediate Bug Fix
+- [ ] `skills.service.ts` `detectIntent()`: change `num_predict: 10` → `num_predict: 200`
+  - **Why:** deepseek-r1:1.5b uses `<think>...</think>` chain-of-thought (~100 tokens) before answering. With only 10 tokens, it gets cut off and returns empty string, falling back to keywords every time.
+
+### Terminal-style Retro Chat UI (High Priority)
+The big next feature. Replace the current chat interface with a Win95/CRT terminal aesthetic per domain.
+
+**Vision:** Each domain chat looks like a terminal window from 1992, but answers with 2025 intelligence. The contrast IS the personality.
+
+```
+┌─────────────────────────────────────────────────────┐
+│ 💻 Code Terminal                              _ □ x │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  Allerac Code v1.0 — Ready.                         │
+│  > how do I debounce in React?                      │
+│                                                     │
+│  Use useCallback + setTimeout:                      │
+│                                                     │
+│  const debounced = useCallback(                     │
+│    debounce((val) => search(val), 300), []          │
+│  );                                                 │
+│                                                     │
+│  > _                                                │
+└─────────────────────────────────────────────────────┘
+```
+
+**Per-domain terminal personality:**
+- `/code` → green text on black, monospace, `>` prompt, blinking cursor
+- `/recipes` → warm amber on dark brown, `🍳 Chef >` prompt
+- `/health` → blue-white on dark, `❤️ Health >` prompt
+- `/finance` → green-on-black Matrix vibe, `$ Finance >` prompt
+
+**Implementation plan:**
+- [ ] New `ChatTerminal.tsx` component — replaces message bubbles with terminal lines
+- [ ] Terminal window chrome: title bar, minimize/maximize (cosmetic), scrollback
+- [ ] Monospace font: `JetBrains Mono` or `Courier New`
+- [ ] Blinking cursor `▋` in input area
+- [ ] Domain-specific color themes via CSS vars (`--terminal-bg`, `--terminal-fg`, `--terminal-prompt`)
+- [ ] Markdown rendered as plain text with ASCII decorations (```code blocks as-is, **bold** → BOLD, etc.)
+- [ ] Response streams character by character (typewriter effect, optional)
+- [ ] "Boot sequence" per domain on first open: `Loading Chef module... ████████ 100%`
+
+### Onboarding Tour
+- [ ] First-time user overlay: sequential highlights
+  1. Hub → "This is your Allerac Desktop"
+  2. Domain icon → "Each domain has a specialized AI"
+  3. Chat → "Just talk — Allerac routes to the right expert"
+  4. My Allerac → "Your memory and instructions live here"
+- [ ] Triggered once: `localStorage.getItem('allerac_onboarded')`
+- [ ] Skip button always visible
+
+### Memory & Documents by Domain (next architecture milestone)
+See section above for full spec. Priority items:
+- [ ] Add `domain` column to `documents` and `conversation_summaries` tables (migration)
+- [ ] Scope RAG retrieval: global docs + active domain docs
+- [ ] Scope memory loading: global summaries + active domain summaries
+- [ ] Documents modal: Global / Code / Recipes / etc. tabs
+
+### Hub UX Polish (~1-2 hours)
+- [ ] More Win95 details: inset button shadows, dithered background texture
+- [ ] Working clock in taskbar corner (real time)
+- [ ] Window drag (cosmetic, no real multi-window)
+- [ ] Hover: window title animates like a Win95 focus effect
+- [ ] Mobile: icons reflow to 2-column, tap once to open

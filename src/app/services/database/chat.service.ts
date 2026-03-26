@@ -5,7 +5,7 @@ export class ChatService {
      * Load system message from database (per user)
      */
     async loadSystemMessage(userId: string) {
-        console.log('[loadSystemMessage] Starting with userId:', userId);
+        console.log('[DB] Starting with userId:', userId);
 
         try {
             const res = await pool.query(
@@ -15,10 +15,10 @@ export class ChatService {
 
             if (res.rows.length === 0) return '';
 
-            console.log('[loadSystemMessage] Loaded data');
+            console.log('[DB] Loaded data');
             return res.rows[0].system_message || '';
         } catch (error) {
-            console.error('[loadSystemMessage] Error loading system message:', error);
+            console.error('[DB] Error loading system message:', error);
             return '';
         }
     }
@@ -27,7 +27,7 @@ export class ChatService {
      * Save system message to database (per user)
      */
     async saveSystemMessage(userId: string, systemMessage: string) {
-        console.log('[saveSystemMessage] Starting with userId:', userId);
+        console.log('[DB] Starting with userId:', userId);
 
         try {
             await pool.query(
@@ -38,10 +38,10 @@ export class ChatService {
                 [userId, systemMessage]
             );
 
-            console.log('[saveSystemMessage] Successfully saved');
+            console.log('[DB] Successfully saved');
             return { success: true };
         } catch (error) {
-            console.error('[saveSystemMessage] Error saving system message:', error);
+            console.error('[DB] Error saving system message:', error);
             return { success: false, error };
         }
     }
@@ -57,7 +57,7 @@ export class ChatService {
             );
             return res.rows;
         } catch (error) {
-            console.error('Error loading conversations:', error);
+            console.error('[DB] loadConversations failed:', error);
             return [];
         }
     }
@@ -70,7 +70,7 @@ export class ChatService {
             );
             return { success: true };
         } catch (error) {
-            console.error('Error pinning conversation:', error);
+            console.error('[DB] pinConversation failed:', error);
             return { success: false, error };
         }
     }
@@ -86,7 +86,7 @@ export class ChatService {
             );
             return res.rows;
         } catch (error) {
-            console.error('Error loading messages:', error);
+            console.error('[DB] loadMessages failed:', error);
             return [];
         }
     }
@@ -102,7 +102,7 @@ export class ChatService {
             );
             return res.rows[0]?.id || null;
         } catch (error) {
-            console.error('Error creating conversation:', error);
+            console.error('[DB] createConversation failed:', error);
             return null;
         }
     }
@@ -125,7 +125,7 @@ export class ChatService {
 
             return { success: true };
         } catch (error) {
-            console.error('Error saving message:', error);
+            console.error('[DB] saveMessage failed:', error);
             return { success: false, error };
         }
     }
@@ -141,7 +141,7 @@ export class ChatService {
             );
             return { success: true };
         } catch (error) {
-            console.error('Error renaming conversation:', error);
+            console.error('[DB] renameConversation failed:', error);
             return { success: false, error };
         }
     }
@@ -154,7 +154,7 @@ export class ChatService {
             await pool.query('DELETE FROM chat_conversations WHERE id = $1', [conversationId]);
             return { success: true };
         } catch (error) {
-            console.error('Error deleting conversation:', error);
+            console.error('[DB] deleteConversation failed:', error);
             return { success: false, error };
         }
     }

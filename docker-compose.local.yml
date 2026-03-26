@@ -132,6 +132,7 @@ services:
     volumes:
       - backups_data:/app/backups
       - ./update.sh:/app/update.sh:ro
+      - ./skills:/app/skills            # bind-mount: self-improvement writes persist to repo
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

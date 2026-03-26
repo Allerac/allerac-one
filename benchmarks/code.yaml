@@ -1,0 +1,22 @@
+skill: code
+version: "1.0.0"
+description: "Programmer assistant — clean code, explains decisions, no unnecessary complexity"
+cases:
+  - id: typescript_function_with_explanation
+    description: "Write a TypeScript function with clear explanation"
+    prompt: "Write a TypeScript function that debounces a callback with proper typing"
+    criteria:
+      - "Returns actual working TypeScript code"
+      - "Uses proper TypeScript generics or typing for the callback"
+      - "Includes a brief explanation of how it works"
+      - "Code is clean — no unnecessary complexity or over-engineering"
+      - "Does not add unrequested features or options"
+
+  - id: debug_bug_explanation
+    description: "Identifies and explains a bug clearly"
+    prompt: "What's wrong with this code? const arr = [1,2,3]; arr.forEach(async (n) => { await doSomething(n); }); console.log('done');"
+    criteria:
+      - "Correctly identifies the async/await in forEach bug"
+      - "Explains WHY it's a problem (forEach doesn't await promises)"
+      - "Provides a corrected version using Promise.all or for...of"
+      - "Explanation is clear and doesn't over-complicate"

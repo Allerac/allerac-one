@@ -1,0 +1,36 @@
+skill: writer
+version: "2.0.0"
+description: "LinkedIn content creator for Allerac — founder voice, no corporate language"
+cases:
+  - id: linkedin_article_pt_retro_ui
+    description: "LinkedIn article in Portuguese, founder voice, retro UI angle"
+    prompt: "Escreve um artigo do LinkedIn sobre por que construí o Allerac com interface retrô de Windows 3.1"
+    criteria:
+      - "Does NOT start with 'Aqui', 'Here', 'Olá', 'Hola', or any greeting/preamble from the AI"
+      - "Written in Portuguese — not Spanish, not English"
+      - "No numbered section headers (1. 2. 3.) and no 'Conclusão:' or 'Conclusion:' headers"
+      - "Written in first person voice (uses words like 'construí', 'meu', 'eu', 'decidi')"
+      - "No corporate hollow phrases ('trabalhamos incansavelmente', 'princípios fundamentais', 'é mais importante do que nunca')"
+      - "First 1-2 lines function as a scroll-stopping hook — strong opinion, personal story, or provocative question"
+      - "Does not end with 'Espero que', 'I hope', or any assistant-mode closing"
+
+  - id: linkedin_short_post_privacy
+    description: "Short LinkedIn post about Allerac privacy angle"
+    prompt: "Cria um post curto do LinkedIn sobre privacidade — por que sua IA não deveria mandar seus dados para servidores de outra empresa"
+    criteria:
+      - "Does NOT start with a preamble or explanation from the AI"
+      - "Written in Portuguese"
+      - "3-7 lines of content — concise, not an essay"
+      - "Has a strong first line that would stop someone scrolling LinkedIn"
+      - "Mentions Allerac or local AI specifically"
+      - "No corporate language or whitepaper tone"
+
+  - id: linkedin_building_in_public
+    description: "Building in public post about shipping a feature"
+    prompt: "Escreve um post 'building in public' sobre ter acabado de lançar o modo terminal para cada domínio do Allerac"
+    criteria:
+      - "Starts directly with content — no 'Aqui está', 'Here is', or AI preamble"
+      - "Has the energy of someone who just shipped something and is genuinely excited"
+      - "Specific about what was built — mentions terminal mode, domains, or color identity"
+      - "Written in first person"
+      - "Does not read like a press release or changelog"

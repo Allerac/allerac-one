@@ -50,6 +50,7 @@ export async function POST(request: Request): Promise<Response> {
     provider,
     imageAttachments,
     preSelectedSkillId,
+    domain,
   }: {
     message: string;
     conversationId: string | null;
@@ -57,6 +58,7 @@ export async function POST(request: Request): Promise<Response> {
     provider: 'github' | 'ollama' | 'gemini';
     imageAttachments?: Array<{ url: string }>;
     preSelectedSkillId?: string;
+    domain?: string;
   } = body;
 
   const cookieStore = await cookies();
@@ -69,22 +71,34 @@ export async function POST(request: Request): Promise<Response> {
       // and issues a 524 if the LLM or DB takes more than ~100 s.
       controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
 
+      // Guard against writing to a closed controller (client disconnect mid-stream)
+      let streamClosed = false;
+      request.signal?.addEventListener('abort', () => { streamClosed = true; });
+      const safeEnqueue = (data: Uint8Array) => {
+        if (streamClosed) return;
+        try { controller.enqueue(data); } catch { streamClosed = true; }
+      };
+
       try {
         // 1. Authenticate via session cookie
         if (!sessionToken) {
-          controller.enqueue(encode({ type: 'error', message: 'Unauthorized' }));
+          safeEnqueue(encode({ type: 'error', message: 'Unauthorized' }));
           controller.close();
           return;
         }
 
         const user = await authService.validateSession(sessionToken);
         if (!user) {
-          controller.enqueue(encode({ type: 'error', message: 'Unauthorized' }));
+          safeEnqueue(encode({ type: 'error', message: 'Unauthorized' }));
           controller.close();
           return;
         }
 
         const userId = user.id;
+
+        // Log domain entry — visible in System Monitor
+        const providerLabel = provider === 'ollama' ? `● LOCAL · ${modelId}` : `◌ ${provider} · ${modelId}`;
+        console.log(`[ChatRoute] ► ${domain ?? 'Chat'} — ${providerLabel}`);
 
         // 2. Load user settings (API keys stay server-side)
         const settings = await userSettingsService.loadUserSettings(userId);
@@ -120,13 +134,13 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         if (!message && (!imageAttachments || imageAttachments.length === 0)) {
-          controller.enqueue(encode({ type: 'error', message: 'Message is required' }));
+          safeEnqueue(encode({ type: 'error', message: 'Message is required' }));
           controller.close();
           return;
         }
 
         if (provider === 'gemini' && !googleApiKey) {
-          controller.enqueue(encode({ type: 'error', message: 'Google API key is not configured. Please add it in Configuration → API Keys.' }));
+          safeEnqueue(encode({ type: 'error', message: 'Google API key is not configured. Please add it in Configuration → API Keys.' }));
           controller.close();
           return;
         }
@@ -170,7 +184,8 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // Auto-activate or auto-switch skills via LLM intent detection (keyword fallback).
-        {
+        // Skip if skill was just pre-selected by domain on this message (first message of new conversation).
+        if (!preSelectedSkillId || inputConversationId) {
           const availableSkills = await skillsService.getAvailableSkills(userId);
           const candidates = availableSkills.filter(s => s.id !== activeSkill?.id);
           const detected = await skillsService.detectIntent(message, candidates);
@@ -178,7 +193,7 @@ export async function POST(request: Request): Promise<Response> {
             await skillsService.activateSkill(detected.id, convId, userId, 'auto', message);
             activeSkill = detected;
             console.log(`[ChatRoute] Auto-activated skill: ${detected.name}`);
-            controller.enqueue(encode({
+            safeEnqueue(encode({
               type: 'skill_activated',
               skill: { id: detected.id, name: detected.name, display_name: detected.display_name },
             }));
@@ -226,6 +241,16 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
+        // Filter tools based on active skill — avoid confusing the model with irrelevant tools
+        const SHELL_SKILLS = ['programmer'];
+        const HEALTH_TOOL_NAMES = ['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status'];
+        const activeSkillName = activeSkill?.name ?? '';
+        const activeTools = TOOLS.filter(t => {
+          if (t.function.name === 'execute_shell') return SHELL_SKILLS.includes(activeSkillName);
+          if (HEALTH_TOOL_NAMES.includes(t.function.name)) return activeSkillName === 'health';
+          return true; // search_web always available
+        });
+
         if (conversationMemories) {
           enrichedSystemMessage = conversationMemories + '\n\n' + enrichedSystemMessage;
         }
@@ -263,7 +288,7 @@ export async function POST(request: Request): Promise<Response> {
           // Send periodic keepalives during long LLM calls to prevent client timeout
           const keepaliveInterval = setInterval(() => {
             try {
-              controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
+              safeEnqueue(new TextEncoder().encode(': keepalive\n\n'));
             } catch {
               clearInterval(keepaliveInterval);
             }
@@ -282,7 +307,7 @@ export async function POST(request: Request): Promise<Response> {
             model: modelId,
             temperature: 0.7,
             max_tokens: 2000,
-            tools: TOOLS,
+            tools: activeTools,
             ...(initialToolChoice !== undefined && { tool_choice: initialToolChoice }),
           });
           console.log('[ChatRoute] First LLM call completed');
@@ -303,12 +328,12 @@ export async function POST(request: Request): Promise<Response> {
                   ? rawArgs
                   : (() => { try { return JSON.parse(rawArgs); } catch { return {}; } })();
 
-              controller.enqueue(encode({ type: 'tool_call', name: toolName, args: toolArgs }));
+              safeEnqueue(encode({ type: 'tool_call', name: toolName, args: toolArgs }));
 
               try {
                 let toolResult: any;
                 if (toolName === 'search_web' && tavilyApiKey) {
-                  const searchTool = new SearchWebTool(tavilyApiKey);
+                  const searchTool = new SearchWebTool(tavilyApiKey, githubToken);
                   toolResult = await searchTool.execute(toolArgs.query);
                 } else if (toolName === 'execute_shell') {
                   const shellTool = new ShellTool();
@@ -328,14 +353,14 @@ export async function POST(request: Request): Promise<Response> {
                 } else {
                   toolResult = { error: `Tool ${toolName} not available` };
                 }
-                controller.enqueue(encode({ type: 'tool_result', name: toolName, success: true }));
+                safeEnqueue(encode({ type: 'tool_result', name: toolName, success: true }));
                 conversationMessages.push({
                   role: 'tool',
                   tool_call_id: toolCallId,
                   content: JSON.stringify(toolResult),
                 });
               } catch (error: any) {
-                controller.enqueue(encode({ type: 'tool_result', name: toolName, success: false }));
+                safeEnqueue(encode({ type: 'tool_result', name: toolName, success: false }));
                 conversationMessages.push({
                   role: 'tool',
                   tool_call_id: toolCallId,
@@ -349,7 +374,7 @@ export async function POST(request: Request): Promise<Response> {
               model: modelId,
               temperature: 0.7,
               max_tokens: 2000,
-              tools: TOOLS,
+              tools: activeTools,
               tool_choice: 'auto',
             });
             assistantMessage = data.choices[0].message;
@@ -365,7 +390,7 @@ export async function POST(request: Request): Promise<Response> {
           max_tokens: 2000,
         })) {
           fullContent += token;
-          controller.enqueue(encode({ type: 'token', content: token }));
+          safeEnqueue(encode({ type: 'token', content: token }));
         }
 
         // 13. Save assistant message to DB
@@ -381,7 +406,7 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // 14. Signal completion
-        controller.enqueue(encode({ type: 'done', conversationId: convId }));
+        safeEnqueue(encode({ type: 'done', conversationId: convId }));
         controller.close();
       } catch (error: any) {
         console.error('[ChatRoute] Caught error:', {
@@ -390,7 +415,7 @@ export async function POST(request: Request): Promise<Response> {
           stack: error.stack,
         });
         try {
-          controller.enqueue(encode({ type: 'error', message: error.message || 'Internal server error' }));
+          safeEnqueue(encode({ type: 'error', message: error.message || 'Internal server error' }));
           controller.close();
         } catch (closeError: any) {
           console.error('[ChatRoute] Failed to send error event (controller already closed):', closeError.message);

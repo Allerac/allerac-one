@@ -9,18 +9,20 @@ const DOMAINS = [
   { id: 'chat',    label: 'Chat',    icon: '💬', path: '/chat',     desc: 'General assistant' },
   { id: 'code',    label: 'Code',    icon: '💻', path: '/code',     desc: 'Programmer mode' },
   { id: 'recipes', label: 'Recipes', icon: '🍳', path: '/recipes',  desc: 'Chef & nutrition' },
-  { id: 'search',  label: 'Search',  icon: '🔍', path: '/search',   desc: 'Web research' },
   { id: 'finance', label: 'Finance', icon: '💰', path: '/finance',  desc: 'Financial advisor' },
   { id: 'health',  label: 'Health',  icon: '❤️', path: '/health',   desc: 'Health & wellness' },
-  { id: 'write',   label: 'Write',   icon: '✍️', path: '/write',    desc: 'Writer & editor' },
-  { id: 'analyze', label: 'Analyze', icon: '📊', path: '/analyze',  desc: 'Data & research' },
+  { id: 'write',   label: 'Content', icon: '✍️', path: '/write',    desc: 'Content creator' },
+  { id: 'social',  label: 'Social',  icon: '📸', path: '/social',   desc: 'Instagram manager' },
 ];
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 
 export default function HubClient({ userName, userEmail, userId }: { userName: string; userEmail: string; userId: string }) {
   const router = useRouter();
-  const [booting, setBooting] = useState(() => !sessionStorage.getItem('allerac_booted'));
+  const [booting, setBooting] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !sessionStorage.getItem('allerac_booted');
+  });
   const [bootStep, setBootStep] = useState(0);
   const [time, setTime] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
@@ -29,6 +31,7 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
   const [shutdownPhase, setShutdownPhase] = useState<ShutdownPhase>('running');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const startMenuRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   const BOOT_LINES = [
     'Allerac OS v1.0',
@@ -73,6 +76,13 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 480);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   const handleDesktopClick = () => {
     setSelected(null);
     setStartMenuOpen(false);
@@ -86,7 +96,13 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
     setSelected(domain.id);
 
     if (count >= 2) {
-      router.push(domain.path);
+      if (domain.id === 'logs') {
+        // Monitor always opens as a floating window
+        window.open(domain.path, 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
+        setClickCount(c => ({ ...c, [domain.id]: 0 }));
+      } else {
+        router.push(domain.path);
+      }
     } else {
       setTimeout(() => {
         setClickCount(c => ({ ...c, [domain.id]: 0 }));
@@ -210,29 +226,21 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
           position: 'relative',
         }}
       >
-        {/* Desktop icon area */}
-        <div style={{ flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px', overflowY: 'auto' }}>
+        {/* Desktop icon area — column on desktop, 2-col grid on mobile */}
+        <div style={{
+          flex: 1,
+          display: isMobile ? 'grid' : 'flex',
+          gridTemplateColumns: isMobile ? 'repeat(2, 72px)' : undefined,
+          flexDirection: isMobile ? undefined : 'column',
+          alignItems: isMobile ? undefined : 'flex-start',
+          alignContent: isMobile ? 'start' : undefined,
+          gap: '4px',
+          padding: '12px',
+          overflowY: 'auto',
+        }}>
           {DOMAINS.map(domain => (
-            <DesktopIcon
-              key={domain.id}
-              domain={domain}
-              selected={selected === domain.id}
-              onClick={(e) => handleIconClick(e, domain)}
-            />
+            <DesktopIcon key={domain.id} domain={domain} selected={selected === domain.id} onClick={(e) => handleIconClick(e, domain)} />
           ))}
-          {/* Settings icon */}
-          <button
-            onClick={(e) => { e.stopPropagation(); setStartMenuOpen(false); setSelected('settings'); setIsSettingsOpen(true); }}
-            title="User Settings"
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', width: '72px' }}
-          >
-            <div style={{ width: 48, height: 48, fontSize: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: selected === 'settings' ? 'rgba(0,0,128,0.5)' : 'transparent', outline: selected === 'settings' ? '1px dotted #fff' : 'none' }}>
-              ⚙️
-            </div>
-            <span style={{ fontSize: '11px', textAlign: 'center', lineHeight: 1.3, color: '#fff', textShadow: '1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000', background: selected === 'settings' ? '#000080' : 'transparent', padding: '1px 3px', display: 'block', maxWidth: '70px', wordBreak: 'break-word', fontFamily: 'Arial, sans-serif' }}>
-              Settings
-            </span>
-          </button>
         </div>
 
         {/* Start menu (above taskbar) */}
@@ -277,6 +285,7 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
             {/* Menu items */}
             <div style={{ flex: 1, padding: '4px 0' }}>
               <StartMenuItem icon="💬" label="Chat" onClick={() => { setStartMenuOpen(false); router.push('/chat'); }} />
+              <StartMenuItem icon="📟" label="Monitor" onClick={() => { setStartMenuOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
               <StartMenuItem icon="⚙️" label="Settings" onClick={() => { setStartMenuOpen(false); setIsSettingsOpen(true); }} />
               <div style={{ height: '1px', background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
               <StartMenuItem icon="🔌" label="Shut Down..." onClick={handleShutDown} />

@@ -12,5 +12,5 @@ export default async function WritePage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient defaultSkillName="writer" defaultSidebarCollapsed domainName="Write" />;
+  return <ChatClient defaultSkillName="writer" defaultSidebarCollapsed domainName="Content" terminalTheme="write" />;
 }

@@ -154,7 +154,7 @@ ${conversationText}`;
 
       return saveRes.rows[0] as ConversationSummary;
     } catch (error) {
-      console.error('Error generating conversation summary:', error);
+      console.error('[Memory] generateSummary failed:', error);
       throw error;
     }
   }
@@ -184,7 +184,7 @@ ${conversationText}`;
 
       return (res.rows || []) as ConversationSummary[];
     } catch (error) {
-      console.error('Error retrieving summaries:', error);
+      console.error('[Memory] getRecentSummaries failed:', error);
       return [];
     }
   }
@@ -251,7 +251,7 @@ ${memoryItems.join('\n\n')}
       // Require at least 4 messages (2 user, 2 assistant minimum)
       return count >= 4;
     } catch (error) {
-      console.error('Error checking if conversation should be summarized:', error);
+      console.error('[Memory] shouldSummarize check failed:', error);
       return false;
     }
   }

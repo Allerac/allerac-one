@@ -1,0 +1,34 @@
+skill: social
+version: "2.0.0"
+description: "Instagram content for Allerac — authentic founder voice, visually-driven captions"
+cases:
+  - id: instagram_caption_retro_ui
+    description: "Instagram caption for hub screenshot, stops the scroll"
+    prompt: "Cria uma legenda para o Instagram para uma screenshot do hub do Allerac que parece um Windows 3.1"
+    criteria:
+      - "Does NOT start with AI preamble ('Aqui está', 'Claro!', 'Here is')"
+      - "First line is a strong scroll-stopping hook"
+      - "Includes hashtags (at least 5)"
+      - "Hashtags are organized in tiers (niche + medium + broad) or clearly varied"
+      - "Tone is human and excited — not corporate marketing copy"
+      - "Mentions the visual/retro aesthetic specifically"
+
+  - id: instagram_privacy_angle
+    description: "Instagram post about privacy — ChatGPT vs Allerac"
+    prompt: "Cria um post para o Instagram sobre privacidade: contraste usar o ChatGPT (dados vão para servidores) vs Allerac com Ollama (fica na sua máquina)"
+    criteria:
+      - "Starts directly with content, no AI preamble"
+      - "Creates clear contrast between cloud AI and local AI"
+      - "Tone is authentic, not fear-mongering or preachy"
+      - "Includes a call to action or question to drive engagement"
+      - "Includes relevant hashtags"
+
+  - id: instagram_reel_script
+    description: "Reel script showing Allerac hub → domain → terminal"
+    prompt: "Escreve um script para um Reel de 20-30 segundos mostrando o Allerac: abrir o hub, entrar no domínio Code, ver o terminal verde"
+    criteria:
+      - "Structured as a reel script with time markers (0-3s, 3-20s, 20-30s)"
+      - "Includes visual direction notes (what to show on screen)"
+      - "Hook in first 3 seconds is strong enough to stop autoplay scrolling"
+      - "Has a clear CTA at the end"
+      - "Captures the visual identity (retro hub, green terminal)"

@@ -54,12 +54,12 @@ export class VectorSearchService {
     // Lower threshold = accepts more distant matches. 0.2 similarity → 0.8 distance threshold
     const similarityThreshold = options.similarityThreshold || 0.2;
 
-    console.log('[VectorSearch] searchSimilarChunks:', { query: query.substring(0, 30), userId, limit, similarityThreshold });
+    console.log('[RAG] searchSimilarChunks:', { query: query.substring(0, 30), userId, limit, similarityThreshold });
 
     try {
       // Step 1: Generate embedding for the query
       const { embedding } = await this.embeddingService.generateEmbedding(query);
-      console.log('[VectorSearch] Embedding generated, length:', embedding.length);
+      console.log('[RAG] Embedding generated, length:', embedding.length);
 
       // Format embedding for pgvector (string representation: "[0.1, 0.2, ...]")
       const embeddingString = `[${embedding.join(',')}]`;
@@ -67,7 +67,7 @@ export class VectorSearchService {
       // Step 2: Perform vector similarity search using pgvector
       // We call the stored function search_document_chunks defined in init.sql
       // Now includes user_id parameter for security filtering
-      console.log('[VectorSearch] Querying DB with:', { userId, threshold: 1 - similarityThreshold, limit });
+      console.log('[RAG] Querying DB with:', { userId, threshold: 1 - similarityThreshold, limit });
 
       const res = await pool.query(
         'SELECT * FROM search_document_chunks($1, $2, $3, $4)',
@@ -79,7 +79,7 @@ export class VectorSearchService {
         ]
       );
 
-      console.log('[VectorSearch] Results found:', res.rows.length, res.rows.map((r: any) => ({ filename: r.document_filename, distance: r.distance })));
+      console.log('[RAG] Results found:', res.rows.length, res.rows.map((r: any) => ({ filename: r.document_filename, distance: r.distance })));
 
       // Step 3: Format and return results
       return res.rows.map((row: any) => ({
@@ -91,7 +91,7 @@ export class VectorSearchService {
         documentFilename: row.document_filename,
       }));
     } catch (error) {
-      console.error('Error in vector search:', error);
+      console.error('[RAG] Vector search failed:', error);
       throw error;
     }
   }
@@ -141,7 +141,7 @@ Please use the above context to answer the user's question. If the context doesn
       );
       return res.rows.length > 0;
     } catch (error) {
-      console.error('Error checking for documents:', error);
+      console.error('[RAG] hasDocuments failed:', error);
       return false;
     }
   }
@@ -180,7 +180,7 @@ Please use the above context to answer the user's question. If the context doesn
         totalSize,
       };
     } catch (error: any) {
-      console.error('Error checking for stats:', error);
+      console.error('[RAG] getCollectionStats failed:', error);
       throw new Error(`Failed to get stats: ${error.message}`);
     }
   }

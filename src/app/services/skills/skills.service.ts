@@ -359,7 +359,7 @@ No explanation. Just one word.`;
           model: ROUTER_MODEL,
           messages: [{ role: 'user', content: prompt }],
           stream: false,
-          options: { temperature: 0, num_predict: 10 },
+          options: { temperature: 0, num_predict: 200 },
         }),
         signal: controller.signal,
       });

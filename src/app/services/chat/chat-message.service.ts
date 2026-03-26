@@ -14,6 +14,7 @@ interface ChatMessageServiceConfig {
   TOOLS: any[];
   activeSkill?: any | null;
   preSelectedSkill?: any | null;
+  domain?: string;
   onConversationCreated?: () => void;
   onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
   onSkillActivated?: (skill: { id: string; name: string; display_name: string }) => void;
@@ -85,6 +86,7 @@ export class ChatMessageService {
           model: this.config.selectedModel,
           provider,
           imageAttachments: encodedImages,
+          domain: this.config.domain,
           // Pass pre-selected skill ID only for new conversations so the server
           // activates and uses it on the very first message
           preSelectedSkillId: !this.config.currentConversationId && this.config.preSelectedSkill

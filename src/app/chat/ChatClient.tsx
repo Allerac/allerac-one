@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Message, Conversation, MemorySaveResult, Model } from '../types';
@@ -20,7 +20,9 @@ import SidebarDesktop from '../components/layout/SidebarDesktop';
 import ChatHeader from '../components/chat/ChatHeader';
 import ChatMessages from '../components/chat/ChatMessages';
 import ChatInput from '../components/chat/ChatInput';
+import TerminalMessageArea, { type TerminalTheme } from '../components/chat/TerminalMessageArea';
 import MemorySaveModal from '../components/memory/MemorySaveModal';
+import CorrectAndMemorize from '../components/memory/CorrectAndMemorize';
 import MyAlleracModal, { type MyAlleracTab, type MemorySubTab } from '../components/allerac/MyAlleracModal';
 import SkillsLibrary from '../components/skills/SkillsLibrary';
 import UserSettingsModal from '../components/auth/UserSettingsModal';
@@ -36,12 +38,16 @@ export default function AdminChat({
   showWorkspace = false,
   showHealth = false,
   defaultSidebarCollapsed = false,
+  chatMode = 'default',
+  terminalTheme,
 }: {
   defaultSkillName?: string;
   domainName?: string;
   showWorkspace?: boolean;
   showHealth?: boolean;
   defaultSidebarCollapsed?: boolean;
+  chatMode?: 'default' | 'terminal';
+  terminalTheme?: TerminalTheme;
 }) {
   const t = useTranslations('home');
   const router = useRouter();
@@ -125,6 +131,24 @@ export default function AdminChat({
   const [memorySaveResult, setMemorySaveResult] = useState<MemorySaveResult | null>(null);
   const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
   const [isTelegramBotSettingsOpen, setIsTelegramBotSettingsOpen] = useState(false);
+  const [terminalTeachContent, setTerminalTeachContent] = useState<string | null>(null);
+
+  // Per-domain terminal mode toggle — reads from localStorage, falls back to prop default
+  // Toggle is available whenever terminalTheme is set, regardless of chatMode default.
+  const storageKey = domainName ? `chatMode_${domainName.toLowerCase()}` : null;
+  const [effectiveChatMode, setEffectiveChatMode] = useState<'default' | 'terminal'>(() => {
+    if (!terminalTheme) return chatMode; // domain has no terminal support at all
+    if (typeof window === 'undefined' || !storageKey) return chatMode;
+    return (localStorage.getItem(storageKey) as 'default' | 'terminal') ?? chatMode;
+  });
+
+  const toggleChatMode = useCallback(() => {
+    setEffectiveChatMode(prev => {
+      const next = prev === 'terminal' ? 'default' : 'terminal';
+      if (storageKey) localStorage.setItem(storageKey, next);
+      return next;
+    });
+  }, [storageKey]);
   const [ollamaConnected, setOllamaConnected] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<Array<{ name: string; size: number; modified_at: string }>>([]);
   const [imageAttachments, setImageAttachments] = useState<Array<{ file: File; preview: string }>>([]);
@@ -153,6 +177,7 @@ export default function AdminChat({
     TOOLS,
     activeSkill,
     preSelectedSkill,
+    domain: domainName,
     onConversationCreated: () => {
       if (userId) loadConversations(userId);
     },
@@ -734,9 +759,31 @@ export default function AdminChat({
             currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
             currentConversationHasMemory={currentConversationHasMemory}
             handleGenerateSummary={handleGenerateSummary}
+            isTerminalMode={effectiveChatMode === 'terminal'}
+            onToggleChatMode={terminalTheme ? toggleChatMode : undefined}
           />
 
-          {messages.length === 0 ? (
+          {/* ── Terminal mode — full area replacement ── */}
+          {effectiveChatMode === 'terminal' ? (
+            <TerminalMessageArea
+              messages={messages}
+              isSending={isSending}
+              inputMessage={inputMessage}
+              setInputMessage={setInputMessage}
+              handleSendMessage={handleSendMessage}
+              domainName={domainName}
+              theme={terminalTheme}
+              onTeach={setTerminalTeachContent}
+              imageAttachments={imageAttachments}
+              documentAttachments={documentAttachments}
+              onImageSelect={handleImageSelect}
+              onDocumentSelect={handleDocumentSelect}
+              onRemoveImage={removeImage}
+              onRemoveDocument={removeDocument}
+              fileInputRef={fileInputRef}
+              documentFileInputRef={documentFileInputRef}
+            />
+          ) : messages.length === 0 ? (
             /* Empty State — greeting + input centered in the remaining space */
             <div className={`flex-1 flex flex-col items-center justify-center px-4 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
               <div className="w-full max-w-2xl">
@@ -870,6 +917,19 @@ export default function AdminChat({
         result={memorySaveResult}
         isDarkMode={isDarkMode}
       />
+
+      {/* Terminal Teach Modal */}
+      {terminalTeachContent !== null && (
+        <CorrectAndMemorize
+          isOpen
+          onClose={() => setTerminalTeachContent(null)}
+          llmResponse={terminalTeachContent}
+          conversationId={currentConversationId}
+          userId={userId}
+          githubToken={githubToken}
+          isDarkMode={isDarkMode}
+        />
+      )}
 
       {/* User Settings Modal */}
       <UserSettingsModal
