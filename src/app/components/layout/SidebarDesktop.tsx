@@ -38,7 +38,7 @@ export default function SidebarDesktop({
     } ${d ? 'bg-gray-900 text-white border-gray-800' : 'bg-white text-gray-900 border-gray-200'}`}>
       {/* Header — matches ChatHeader style */}
       <div>
-        <div className="px-3 pb-2 flex items-center gap-3" style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
+        <div className={`pb-2 flex items-center gap-3 min-h-[48px] ${isSidebarCollapsed ? 'justify-center' : 'px-3'}`} style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             className={`p-2 rounded-lg transition-colors flex-shrink-0 ${d ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}

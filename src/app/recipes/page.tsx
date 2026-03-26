@@ -12,5 +12,5 @@ export default async function RecipesPage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient defaultSkillName="chef" />;
+  return <ChatClient defaultSkillName="chef" defaultSidebarCollapsed domainName="Recipes" />;
 }

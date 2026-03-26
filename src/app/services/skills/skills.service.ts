@@ -321,6 +321,84 @@ export class SkillsService {
   }
 
   /**
+   * Detect intent using a small LLM model via Ollama.
+   * Returns the matching skill or null. Falls back to keyword matching on failure.
+   */
+  async detectIntent(
+    message: string,
+    skills: Skill[]
+  ): Promise<Skill | null> {
+    const routableSkills = skills.filter(s => s.auto_switch_rules);
+    if (routableSkills.length === 0) return null;
+
+    const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434';
+    const ROUTER_MODEL = process.env.SKILL_ROUTER_MODEL || 'deepseek-r1:1.5b';
+
+    const skillList = routableSkills
+      .map(s => `- ${s.name}: ${s.description}`)
+      .join('\n');
+
+    const prompt = `You are a skill router. Given a user message, choose the best matching skill.
+
+Available skills:
+${skillList}
+
+User message: "${message}"
+
+Reply with ONLY the skill name that best matches, or "none" if no skill clearly applies.
+No explanation. Just one word.`;
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
+      const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: ROUTER_MODEL,
+          messages: [{ role: 'user', content: prompt }],
+          stream: false,
+          options: { temperature: 0, num_predict: 10 },
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) throw new Error(`Ollama error: ${response.status}`);
+
+      const data = await response.json();
+      const raw = (data.message?.content || '')
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')  // strip deepseek-r1 chain-of-thought
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)[0];
+
+      const matched = routableSkills.find(s => s.name.toLowerCase() === raw);
+      if (matched) {
+        console.log(`[SkillRouter] LLM routed to skill: ${matched.name}`);
+        return matched;
+      }
+
+      console.log(`[SkillRouter] LLM returned "${raw}" — no match, falling back to keywords`);
+    } catch (err: any) {
+      console.log(`[SkillRouter] LLM unavailable (${err.message}) — falling back to keywords`);
+    }
+
+    // Keyword fallback
+    for (const skill of routableSkills) {
+      const matched = await this.shouldAutoActivate(skill, { message });
+      if (matched) {
+        console.log(`[SkillRouter] Keyword fallback matched: ${skill.name}`);
+        return skill;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Check if skill should auto-activate based on rules
    */
   async shouldAutoActivate(

@@ -12,5 +12,5 @@ export default async function FinancePage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient defaultSkillName="finance" />;
+  return <ChatClient defaultSkillName="finance" defaultSidebarCollapsed domainName="Finance" />;
 }

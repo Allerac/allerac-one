@@ -169,24 +169,19 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
-        // Auto-activate or auto-switch skills based on message content.
-        // Runs even when no skill is active so keyword-based skills (e.g. Programmer)
-        // can activate on the first message of a new conversation.
+        // Auto-activate or auto-switch skills via LLM intent detection (keyword fallback).
         {
           const availableSkills = await skillsService.getAvailableSkills(userId);
-          for (const skill of availableSkills) {
-            if (skill.id !== activeSkill?.id && skill.auto_switch_rules) {
-              const shouldSwitch = await skillsService.shouldAutoActivate(skill, {
-                message,
-                conversationHistory: await chatService.loadMessages(convId),
-              });
-              if (shouldSwitch) {
-                await skillsService.activateSkill(skill.id, convId, userId, 'auto', message);
-                activeSkill = skill;
-                console.log(`[ChatRoute] Auto-activated skill: ${skill.name}`);
-                break;
-              }
-            }
+          const candidates = availableSkills.filter(s => s.id !== activeSkill?.id);
+          const detected = await skillsService.detectIntent(message, candidates);
+          if (detected) {
+            await skillsService.activateSkill(detected.id, convId, userId, 'auto', message);
+            activeSkill = detected;
+            console.log(`[ChatRoute] Auto-activated skill: ${detected.name}`);
+            controller.enqueue(encode({
+              type: 'skill_activated',
+              skill: { id: detected.id, name: detected.name, display_name: detected.display_name },
+            }));
           }
         }
 

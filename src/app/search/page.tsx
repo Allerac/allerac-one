@@ -12,5 +12,5 @@ export default async function SearchPage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient defaultSkillName="search" />;
+  return <ChatClient defaultSkillName="search" defaultSidebarCollapsed domainName="Search" />;
 }

@@ -8,6 +8,8 @@ interface ChatHeaderProps {
   isDarkMode: boolean;
   toggleTheme: () => void;
   clearChat: () => void;
+  domainName?: string;
+  activeSkill?: { name: string; display_name: string } | null;
   currentConversationId: string | null;
   currentConversationTitle?: string;
   currentConversationHasMemory: boolean;
@@ -20,6 +22,8 @@ export default function ChatHeader({
   isDarkMode,
   toggleTheme,
   clearChat,
+  domainName,
+  activeSkill,
   currentConversationId,
   currentConversationTitle,
   currentConversationHasMemory,
@@ -30,7 +34,7 @@ export default function ChatHeader({
   return (
     <div>
       <div className="px-3 sm:px-6 pb-2" style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-h-[48px]">
 
           {/* Hamburger — mobile only */}
           <button
@@ -48,15 +52,24 @@ export default function ChatHeader({
           </button>
 
           {/* Brand / Conversation title */}
-          {currentConversationId && currentConversationTitle ? (
-            <span className={`text-sm font-medium truncate max-w-[40vw] sm:max-w-[260px] ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-              {currentConversationTitle}
-            </span>
-          ) : (
-            <span className={`text-xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-              Allerac
-            </span>
-          )}
+          <div className="flex items-center gap-2 min-w-0">
+            {currentConversationId && currentConversationTitle ? (
+              <span className={`text-sm font-medium truncate max-w-[40vw] sm:max-w-[260px] ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                {currentConversationTitle}
+              </span>
+            ) : (
+              <span className={`text-xl font-bold flex-shrink-0 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                {domainName ?? 'Allerac'}
+              </span>
+            )}
+            {activeSkill && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                isDarkMode ? 'bg-indigo-900/60 text-indigo-300 border border-indigo-700' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+              }`}>
+                {activeSkill.display_name ?? activeSkill.name}
+              </span>
+            )}
+          </div>
 
           {/* Spacer */}
           <div className="flex-1" />

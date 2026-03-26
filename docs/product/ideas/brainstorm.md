@@ -198,6 +198,35 @@ allerac-one's stack (pgvector + RAG + skills + memories) is already built for th
 
 ---
 
+## 7. Shared Workspace & Desktop Files
+
+**Status:** Decision made — not implementing for now
+**Effort:** Medium
+
+### The question
+Should domain workspaces (Code, Finance, Analyze, etc.) share the same file storage? And should files appear as folders on the Win95 desktop?
+
+### Context
+Today the Workspace feature exists only in `/code`. The idea was to surface it as a shared filesystem across all domains — files created in Finance could be used in Analyze, etc. And potentially expose this as folder icons on the hub desktop (Win95 metaphor).
+
+### Decision: Documents (RAG) already solves the main use case
+The most valuable "shared context" use case — e.g. a document describing a company that should be available to Finance, Write, Analyze, Health — is already solved by **My Allerac → Memory → Documents**. Documents uploaded there are indexed per `user_id` with no domain distinction, so they're already globally available via RAG across all domains.
+
+The distinction between the two mechanisms:
+- **Documents (RAG)** → passive knowledge, injected automatically into context. Best for reference material: company descriptions, personal context, domain knowledge.
+- **Workspace (files)** → active artifacts, created and manipulated by the user. Best for outputs: a CSV generated in Finance, a report written in Write, a script from Code.
+
+### When it would make sense
+Workspace becomes compelling when cross-domain workflows produce outputs that feed into other domains. Example:
+- Finance generates a CSV analysis → saves to Workspace
+- Analyze opens the same CSV → continues the work
+- Write references the data → drafts a report
+
+### Why not now
+The current priority is UX clarity (domains, hub, sidebar). Shared Workspace adds infrastructure complexity (file permissions per domain? shared storage? desktop icons?) that isn't justified until there's a clear cross-domain workflow that users actually hit.
+
+---
+
 ## Notes
 
 - The core differentiator of allerac-one is **deep personal context** — the more the system knows the user, the more useful it becomes. No public ChatGPT or Claude can offer this.

@@ -92,35 +92,17 @@ export async function handleChatMessage(
     }
   }
 
-  // Check if we should auto-switch skills based on message content
-  if (activeSkill) {
-    // Get all available skills for auto-switching
+  // Auto-switch skills via LLM intent detection (keyword fallback)
+  {
     const availableSkills = botId
       ? await skillsService.getBotSkills(botId)
       : await skillsService.getUserSkills(userId);
-
-    // Check if any skill should auto-activate
-    for (const skill of availableSkills) {
-      if (skill.id !== activeSkill.id && skill.auto_switch_rules) {
-        const shouldSwitch = await skillsService.shouldAutoActivate(skill, {
-          message,
-          conversationHistory: await chatService.loadMessages(convId),
-        });
-
-        if (shouldSwitch) {
-          await skillsService.activateSkill(
-            skill.id,
-            convId,
-            userId,
-            'auto',
-            message,
-            botId
-          );
-          activeSkill = skill;
-          console.log(`[ChatHandler] Auto-switched to skill: ${skill.name}`);
-          break;
-        }
-      }
+    const candidates = availableSkills.filter(s => s.id !== activeSkill?.id);
+    const detected = await skillsService.detectIntent(message, candidates);
+    if (detected) {
+      await skillsService.activateSkill(detected.id, convId, userId, 'auto', message, botId);
+      activeSkill = detected;
+      console.log(`[ChatHandler] Auto-switched to skill: ${detected.name}`);
     }
   }
 

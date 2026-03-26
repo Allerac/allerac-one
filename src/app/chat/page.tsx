@@ -12,5 +12,5 @@ export default async function ChatPage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient />;
+  return <ChatClient defaultSidebarCollapsed />;
 }

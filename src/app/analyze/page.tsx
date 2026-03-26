@@ -12,5 +12,5 @@ export default async function AnalyzePage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient defaultSkillName="analyst" />;
+  return <ChatClient defaultSkillName="analyst" defaultSidebarCollapsed domainName="Analyze" />;
 }

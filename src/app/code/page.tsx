@@ -12,5 +12,5 @@ export default async function CodePage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient defaultSkillName="programmer" showWorkspace />;
+  return <ChatClient defaultSkillName="programmer" domainName="Code" showWorkspace defaultSidebarCollapsed />;
 }
