@@ -116,4 +116,54 @@ export const TOOLS = [
     },
   },
   ...HEALTH_TOOLS,
+  {
+    type: 'function',
+    function: {
+      name: 'instagram_publish_post',
+      description: 'Publish a post to the user\'s Instagram account. Requires an image URL. Use this when the user asks to post something on Instagram.',
+      parameters: {
+        type: 'object',
+        properties: {
+          caption: {
+            type: 'string',
+            description: 'The caption text for the Instagram post, including hashtags.',
+          },
+          image_url: {
+            type: 'string',
+            description: 'Public URL of the image to post. Must be publicly accessible.',
+          },
+        },
+        required: ['caption'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'instagram_get_profile',
+      description: 'Get the connected Instagram account profile info (username, followers, bio, media count).',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'instagram_get_recent_posts',
+      description: 'Get the most recent posts from the connected Instagram account.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Number of posts to retrieve (default 6, max 12).',
+          },
+        },
+        required: [],
+      },
+    },
+  },
 ];

@@ -24,6 +24,7 @@ import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
 import { SearchWebTool } from '@/app/tools/search-web.tool';
 import { ShellTool } from '@/app/tools/shell.tool';
 import { HealthTool } from '@/app/tools/health.tool';
+import { InstagramTool } from '@/app/tools/instagram.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { TOOLS } from '@/app/tools/tools';
 import pool from '@/app/clients/db';
@@ -268,10 +269,12 @@ export async function POST(request: Request): Promise<Response> {
         // Filter tools based on active skill — avoid confusing the model with irrelevant tools
         const SHELL_SKILLS = ['programmer'];
         const HEALTH_TOOL_NAMES = ['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status'];
+        const INSTAGRAM_TOOL_NAMES = ['instagram_publish_post', 'instagram_get_profile', 'instagram_get_recent_posts'];
         const activeSkillName = activeSkill?.name ?? '';
         const activeTools = TOOLS.filter(t => {
           if (t.function.name === 'execute_shell') return SHELL_SKILLS.includes(activeSkillName);
           if (HEALTH_TOOL_NAMES.includes(t.function.name)) return activeSkillName === 'health';
+          if (INSTAGRAM_TOOL_NAMES.includes(t.function.name)) return activeSkillName === 'social';
           return true; // search_web always available
         });
 
@@ -362,6 +365,15 @@ export async function POST(request: Request): Promise<Response> {
                 } else if (toolName === 'execute_shell') {
                   const shellTool = new ShellTool();
                   toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
+                } else if (INSTAGRAM_TOOL_NAMES.includes(toolName)) {
+                  const igTool = new InstagramTool();
+                  if (toolName === 'instagram_publish_post') {
+                    toolResult = await igTool.publishPost(userId, toolArgs.caption, toolArgs.image_url);
+                  } else if (toolName === 'instagram_get_profile') {
+                    toolResult = await igTool.getProfile(userId);
+                  } else {
+                    toolResult = await igTool.getRecentMedia(userId, toolArgs.limit ?? 6);
+                  }
                 } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status'].includes(toolName)) {
                   const healthTool = new HealthTool();
                   const healthUser = { id: userId, email: user.email, name: user.name || user.email };

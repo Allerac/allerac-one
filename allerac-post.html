@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1080px;
+    height: 1080px;
+    font-family: 'Courier New', Courier, monospace;
+    overflow: hidden;
+  }
+
+  .content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px;
+    position: relative;
+  }
+
+  .scanlines {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(255,255,255,0.012) 3px,
+      rgba(255,255,255,0.012) 4px
+    );
+    pointer-events: none;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    color: #666;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    margin-bottom: 48px;
+  }
+
+  .title {
+    font-size: 88px;
+    color: #e8e8e8;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-align: center;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .title-sub {
+    font-size: 16px;
+    color: #555;
+    letter-spacing: 12px;
+    text-transform: uppercase;
+    margin-bottom: 72px;
+  }
+
+  .divider {
+    width: 40px;
+    border: none;
+    border-top: 1px solid #444;
+    margin-bottom: 48px;
+  }
+
+  .tagline {
+    font-size: 15px;
+    color: #888;
+    text-align: center;
+    line-height: 2.2;
+    letter-spacing: 2px;
+    margin-bottom: 72px;
+  }
+
+  .tagline em {
+    color: #bbb;
+    font-style: normal;
+  }
+
+  .prompt {
+    font-size: 12px;
+    color: #555;
+    letter-spacing: 1px;
+  }
+
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: #555;
+    vertical-align: middle;
+    margin-left: 2px;
+    animation: blink 1.2s step-end infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .corner {
+    position: absolute;
+    font-size: 10px;
+    color: #444;
+    letter-spacing: 2px;
+  }
+
+  .corner.tl { top: 32px; left: 40px; }
+  .corner.br { bottom: 32px; right: 40px; }
+</style>
+</head>
+<body>
+  <div class="content">
+    <div class="scanlines"></div>
+
+    <div class="corner tl">ALLERAC · 2025</div>
+    <div class="corner br">allerac.ai</div>
+
+    <div class="eyebrow">introducing</div>
+
+    <div class="title">ALLERAC</div>
+    <div class="title-sub">one</div>
+
+    <hr class="divider">
+
+    <div class="tagline">
+      <em>Your AI.</em> Your machine.<br>
+      Your data. <em>Your control.</em><br>
+      Self-hosted · Local · Private
+    </div>
+
+    <div class="prompt">
+      > 1992 UI &nbsp;·&nbsp; 2025 Intelligence<span class="cursor"></span>
+    </div>
+  </div>
+</body>
+</html>
