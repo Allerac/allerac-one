@@ -99,7 +99,7 @@ export class InstagramGraphService {
 
     // Step 2: exchange for long-lived user token (60 days)
     const longRes = await fetch(
-      `${FB_TOKEN_URL}?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${APP_SECRET}&fb_exchange_token=${userAccessToken}`
+      `${GRAPH_URL}/access_token?grant_type=ig_exchange_token&client_secret=${APP_SECRET}&access_token=${userAccessToken}`
     );
     const longToken = longRes.ok ? (await longRes.json() as IGTokenResponse & { expires_in?: number }) : tokenData;
     const accessToken = longToken.access_token ?? userAccessToken;
