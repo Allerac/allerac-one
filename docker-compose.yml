@@ -118,6 +118,10 @@ services:
       # Health worker (Garmin sync)
       - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
       - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
+      # Instagram Graph API (optional — needed for Social domain DM automation)
+      - INSTAGRAM_APP_ID=${INSTAGRAM_APP_ID:-}
+      - INSTAGRAM_APP_SECRET=${INSTAGRAM_APP_SECRET:-}
+      - INSTAGRAM_REDIRECT_URI=${INSTAGRAM_REDIRECT_URI:-}
       # OIDC Identity Provider (optional)
       - OIDC_ISSUER=${OIDC_ISSUER:-https://chat.allerac.ai/api/oidc}
       - OIDC_JWKS_JSON=${OIDC_JWKS_JSON:-}
