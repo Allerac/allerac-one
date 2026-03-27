@@ -51,12 +51,15 @@ export async function GET(request: Request) {
 // ── POST — incoming events ───────────────────────────────────────────────────
 
 export async function POST(request: Request) {
+  console.log('[Instagram Webhook] POST received');
   let body: any;
   try {
     body = await request.json();
   } catch {
     return new Response('Bad Request', { status: 400 });
   }
+
+  console.log('[Instagram Webhook] body:', JSON.stringify(body).slice(0, 200));
 
   // Acknowledge immediately — Meta requires a fast 200
   // Processing happens in the background (fire-and-forget)
