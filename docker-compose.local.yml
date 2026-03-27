@@ -130,6 +130,8 @@ services:
       - INSTAGRAM_APP_SECRET=${INSTAGRAM_APP_SECRET:-}
       - INSTAGRAM_REDIRECT_URI=${INSTAGRAM_REDIRECT_URI:-}
       - INSTAGRAM_CONFIG_ID=${INSTAGRAM_CONFIG_ID:-}
+      - INSTAGRAM_WEBHOOK_VERIFY_TOKEN=${INSTAGRAM_WEBHOOK_VERIFY_TOKEN:-allerac-ig-webhook}
+      - INSTAGRAM_BOT_SYSTEM_PROMPT=${INSTAGRAM_BOT_SYSTEM_PROMPT:-}
       # Tells update.sh which compose file to use (local vs cloud)
       - ALLERAC_PRODUCT_LINE=local
     ports:

@@ -78,6 +78,19 @@ export class InstagramCredentialsService {
     );
   }
 
+  /** Look up credentials by Instagram user ID (for webhook — no Allerac session available) */
+  async getByIgUserId(igUserId: string): Promise<{ userId: string; accessToken: string } | null> {
+    const result = await pool.query(
+      `SELECT user_id, access_token_encrypted FROM instagram_credentials
+       WHERE ig_user_id = $1 AND is_connected = true`,
+      [igUserId]
+    );
+    if (!result.rows[0]?.access_token_encrypted) return null;
+    const accessToken = safeDecrypt(result.rows[0].access_token_encrypted);
+    if (!accessToken) return null;
+    return { userId: result.rows[0].user_id, accessToken };
+  }
+
   async setError(userId: string, error: string): Promise<void> {
     await pool.query(
       `INSERT INTO instagram_credentials (user_id, is_connected, last_error)
