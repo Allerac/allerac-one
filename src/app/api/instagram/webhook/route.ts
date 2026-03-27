@@ -70,6 +70,7 @@ export async function POST(request: Request) {
 // ── Event processing ─────────────────────────────────────────────────────────
 
 async function processEvents(body: any) {
+  console.log('[Instagram Webhook] POST received:', JSON.stringify(body).slice(0, 300));
   if (body.object !== 'instagram') return;
 
   for (const entry of body.entry ?? []) {
