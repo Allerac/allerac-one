@@ -9,9 +9,10 @@
  *   INSTAGRAM_REDIRECT_URI   (e.g. https://yourdomain.com/api/instagram/callback)
  */
 
-const APP_ID       = process.env.INSTAGRAM_APP_ID       ?? '';
-const APP_SECRET   = process.env.INSTAGRAM_APP_SECRET   ?? '';
-const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI ?? '';
+const APP_ID       = process.env.INSTAGRAM_APP_ID          ?? '';
+const APP_SECRET   = process.env.INSTAGRAM_APP_SECRET      ?? '';
+const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI    ?? '';
+const CONFIG_ID    = process.env.INSTAGRAM_CONFIG_ID       ?? '';
 // Facebook Login for Business with Instagram Graph API configuration
 // Docs: https://developers.facebook.com/docs/facebook-login/guides/advanced/business-login
 const GRAPH_URL    = 'https://graph.facebook.com/v21.0';
@@ -63,11 +64,11 @@ export interface IGTokenResponse {
 export class InstagramGraphService {
   /** Build the OAuth authorization URL to redirect the user to */
   buildAuthUrl(state: string): string {
-    // Facebook Login for Business — scopes for Instagram Graph API access
+    // Facebook Login for Business uses config_id instead of scope
     const params = new URLSearchParams({
       client_id:     APP_ID,
       redirect_uri:  REDIRECT_URI,
-      scope:         'instagram_basic,email',
+      config_id:     CONFIG_ID,
       response_type: 'code',
       state,
     });
