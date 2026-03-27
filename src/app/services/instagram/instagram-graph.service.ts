@@ -13,11 +13,11 @@ const APP_ID       = process.env.INSTAGRAM_APP_ID          ?? '';
 const APP_SECRET   = process.env.INSTAGRAM_APP_SECRET      ?? '';
 const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI    ?? '';
 const CONFIG_ID    = process.env.INSTAGRAM_CONFIG_ID       ?? '';
-// Facebook Login for Business with Instagram Graph API configuration
-// Docs: https://developers.facebook.com/docs/facebook-login/guides/advanced/business-login
-const GRAPH_URL    = 'https://graph.facebook.com/v21.0';
-const FB_AUTH_URL  = 'https://www.facebook.com/v21.0/dialog/oauth';
-const FB_TOKEN_URL = 'https://graph.facebook.com/v21.0/oauth/access_token';
+// Instagram Login for Business (2024+)
+// Docs: https://developers.facebook.com/docs/instagram/business-login-for-instagram
+const GRAPH_URL    = 'https://graph.instagram.com/v21.0';
+const IG_AUTH_URL  = 'https://www.instagram.com/oauth/authorize';
+const IG_TOKEN_URL = 'https://api.instagram.com/oauth/access_token';
 
 export interface IGUser {
   id: string;
@@ -64,21 +64,20 @@ export interface IGTokenResponse {
 export class InstagramGraphService {
   /** Build the OAuth authorization URL to redirect the user to */
   buildAuthUrl(state: string): string {
-    // Facebook Login for Business uses config_id instead of scope
     const params = new URLSearchParams({
       client_id:     APP_ID,
       redirect_uri:  REDIRECT_URI,
-      config_id:     CONFIG_ID,
+      scope:         'instagram_business_basic,instagram_business_manage_messages,instagram_business_content_publish',
       response_type: 'code',
       state,
     });
-    return `${FB_AUTH_URL}?${params.toString()}`;
+    return `${IG_AUTH_URL}?${params.toString()}`;
   }
 
   /** Exchange authorization code for a user access token, then find the linked IG Business account */
   async exchangeCodeForToken(code: string): Promise<{ accessToken: string; igUserId: string; expiresAt: Date | null }> {
     // Step 1: exchange code for short-lived user access token
-    const tokenRes = await fetch(FB_TOKEN_URL, {
+    const tokenRes = await fetch(IG_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -100,7 +99,7 @@ export class InstagramGraphService {
 
     // Step 2: exchange for long-lived user token (60 days)
     const longRes = await fetch(
-      `${FB_TOKEN_URL}?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${APP_SECRET}&fb_exchange_token=${userAccessToken}`
+      `${GRAPH_URL}/access_token?grant_type=ig_exchange_token&client_secret=${APP_SECRET}&access_token=${userAccessToken}`
     );
     const longToken = longRes.ok ? (await longRes.json() as IGTokenResponse & { expires_in?: number }) : tokenData;
     const accessToken = longToken.access_token ?? userAccessToken;
