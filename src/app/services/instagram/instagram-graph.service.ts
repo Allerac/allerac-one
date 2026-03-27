@@ -12,11 +12,11 @@
 const APP_ID       = process.env.INSTAGRAM_APP_ID       ?? '';
 const APP_SECRET   = process.env.INSTAGRAM_APP_SECRET   ?? '';
 const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI ?? '';
-// Instagram Login for Business (new flow, 2024+)
-// Docs: https://developers.facebook.com/docs/instagram/business-login-for-instagram
-const GRAPH_URL    = 'https://graph.instagram.com/v21.0';
-const IG_AUTH_URL  = 'https://www.instagram.com/oauth/authorize';
-const IG_TOKEN_URL = 'https://api.instagram.com/oauth/access_token';
+// Facebook Login for Business — grants access to Instagram Graph API
+// Docs: https://developers.facebook.com/docs/facebook-login/guides/advanced/business-login
+const GRAPH_URL    = 'https://graph.facebook.com/v21.0';
+const FB_AUTH_URL  = 'https://www.facebook.com/v21.0/dialog/oauth';
+const FB_TOKEN_URL = 'https://graph.facebook.com/v21.0/oauth/access_token';
 
 export interface IGUser {
   id: string;
@@ -63,21 +63,21 @@ export interface IGTokenResponse {
 export class InstagramGraphService {
   /** Build the OAuth authorization URL to redirect the user to */
   buildAuthUrl(state: string): string {
-    // Instagram Login for Business — new 2024+ flow with instagram_business_* scopes
+    // Facebook Login for Business — scopes for Instagram Graph API access
     const params = new URLSearchParams({
       client_id:     APP_ID,
       redirect_uri:  REDIRECT_URI,
-      scope:         'instagram_business_basic,instagram_business_manage_messages,instagram_business_content_publish',
+      scope:         'instagram_basic,instagram_manage_messages,instagram_content_publish,pages_show_list,pages_read_engagement',
       response_type: 'code',
       state,
     });
-    return `${IG_AUTH_URL}?${params.toString()}`;
+    return `${FB_AUTH_URL}?${params.toString()}`;
   }
 
-  /** Exchange authorization code for a short-lived token, then upgrade to long-lived */
+  /** Exchange authorization code for a user access token, then find the linked IG Business account */
   async exchangeCodeForToken(code: string): Promise<{ accessToken: string; igUserId: string; expiresAt: Date | null }> {
-    // Step 1: short-lived user token (1h)
-    const shortRes = await fetch(IG_TOKEN_URL, {
+    // Step 1: exchange code for short-lived user access token
+    const tokenRes = await fetch(FB_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -89,28 +89,39 @@ export class InstagramGraphService {
       }).toString(),
     });
 
-    if (!shortRes.ok) {
-      const err = await shortRes.text();
+    if (!tokenRes.ok) {
+      const err = await tokenRes.text();
       throw new Error(`Instagram OAuth error: ${err}`);
     }
 
-    const short: IGTokenResponse & { user_id?: string } = await shortRes.json();
-    const igUserId = String(short.user_id ?? '');
+    const tokenData: IGTokenResponse & { expires_in?: number } = await tokenRes.json();
+    const userAccessToken = tokenData.access_token;
 
-    // Step 2: exchange for long-lived token (60 days)
+    // Step 2: exchange for long-lived user token (60 days)
     const longRes = await fetch(
-      `${GRAPH_URL}/access_token?grant_type=ig_exchange_token&client_secret=${APP_SECRET}&access_token=${short.access_token}`
+      `${FB_TOKEN_URL}?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${APP_SECRET}&fb_exchange_token=${userAccessToken}`
     );
+    const longToken = longRes.ok ? (await longRes.json() as IGTokenResponse & { expires_in?: number }) : tokenData;
+    const accessToken = longToken.access_token ?? userAccessToken;
+    const expiresAt = longToken.expires_in ? new Date(Date.now() + longToken.expires_in * 1000) : null;
 
-    if (!longRes.ok) {
-      // Fall back to short-lived token
-      return { accessToken: short.access_token, igUserId, expiresAt: new Date(Date.now() + 3600 * 1000) };
+    // Step 3: find the Instagram Business Account linked to a Facebook Page
+    const pagesRes = await fetch(`${GRAPH_URL}/me/accounts?access_token=${accessToken}`);
+    if (!pagesRes.ok) throw new Error(`Could not fetch pages: ${await pagesRes.text()}`);
+    const pages = await pagesRes.json() as { data: Array<{ id: string; access_token: string }> };
+
+    for (const page of pages.data ?? []) {
+      const igRes = await fetch(
+        `${GRAPH_URL}/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`
+      );
+      if (!igRes.ok) continue;
+      const pageData = await igRes.json() as { instagram_business_account?: { id: string } };
+      if (pageData.instagram_business_account?.id) {
+        return { accessToken, igUserId: pageData.instagram_business_account.id, expiresAt };
+      }
     }
 
-    const long: IGTokenResponse & { expires_in?: number } = await longRes.json();
-    const expiresAt = long.expires_in ? new Date(Date.now() + long.expires_in * 1000) : null;
-
-    return { accessToken: long.access_token, igUserId, expiresAt };
+    throw new Error('Nenhuma conta Instagram Business encontrada. Certifica-te que o teu Instagram é Business/Creator e está ligado a uma Facebook Page.');
   }
 
   /** Get basic profile info */
