@@ -16,6 +16,7 @@ interface SidebarDesktopProps {
   renameConversation: (conversationId: string, title: string) => void;
   showWorkspace?: boolean;
   showHealth?: boolean;
+  showInstagramDM?: boolean;
 }
 
 export default function SidebarDesktop({
@@ -30,6 +31,7 @@ export default function SidebarDesktop({
   renameConversation,
   showWorkspace,
   showHealth,
+  showInstagramDM,
 }: SidebarDesktopProps) {
   const d = isDarkMode;
   return (
@@ -71,6 +73,7 @@ export default function SidebarDesktop({
         isDarkMode={isDarkMode}
         showWorkspace={showWorkspace}
         showHealth={showHealth}
+        showInstagramDM={showInstagramDM}
       />
     </div>
   );

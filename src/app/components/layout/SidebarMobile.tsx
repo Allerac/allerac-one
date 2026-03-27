@@ -16,6 +16,7 @@ interface SidebarMobileProps {
   renameConversation: (conversationId: string, title: string) => void;
   showWorkspace?: boolean;
   showHealth?: boolean;
+  showInstagramDM?: boolean;
 }
 
 export default function SidebarMobile({
@@ -30,6 +31,7 @@ export default function SidebarMobile({
   renameConversation,
   showWorkspace,
   showHealth,
+  showInstagramDM,
 }: SidebarMobileProps) {
   const d = isDarkMode;
   return (
@@ -62,6 +64,7 @@ export default function SidebarMobile({
         isDarkMode={isDarkMode}
         showWorkspace={showWorkspace}
         showHealth={showHealth}
+        showInstagramDM={showInstagramDM}
       />
     </div>
   );

@@ -29,6 +29,7 @@ import UserSettingsModal from '../components/auth/UserSettingsModal';
 import SystemDashboard from '../components/system/SystemDashboard';
 import TelegramBotSettings from '../components/settings/TelegramBotSettings';
 import HealthDashboard from '../components/health/HealthDashboard';
+import InstagramDMPanel from '../components/social/InstagramDMPanel';
 import { AlleracIcon } from '../components/ui/AlleracIcon';
 import OnboardingWizard from '../components/onboarding/OnboardingWizard';
 
@@ -37,6 +38,7 @@ export default function AdminChat({
   domainName,
   showWorkspace = false,
   showHealth = false,
+  showInstagramDM = false,
   defaultSidebarCollapsed = false,
   chatMode = 'default',
   terminalTheme,
@@ -46,6 +48,7 @@ export default function AdminChat({
   domainName?: string;
   showWorkspace?: boolean;
   showHealth?: boolean;
+  showInstagramDM?: boolean;
   defaultSidebarCollapsed?: boolean;
   chatMode?: 'default' | 'terminal';
   terminalTheme?: TerminalTheme;
@@ -61,6 +64,7 @@ export default function AdminChat({
     const openSkillsLibrary = () => setIsSkillsLibraryOpen(true);
     const openSystemDashboard = () => { setSystemDashboardInitialTab('preferences'); setIsSystemDashboardOpen(true); };
     const openHealthDashboard = () => setIsHealthDashboardOpen(true);
+    const openInstagramDM = () => setIsInstagramDMOpen(true);
     const onLogout = () => handleLogoutRef.current();
     const openMyAlleracModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
     const openMemorySettingsModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
@@ -73,6 +77,7 @@ export default function AdminChat({
     window.addEventListener('openSkillsLibrary', openSkillsLibrary);
     window.addEventListener('openSystemDashboard', openSystemDashboard);
     window.addEventListener('openHealthDashboard', openHealthDashboard);
+    window.addEventListener('openInstagramDM', openInstagramDM);
     window.addEventListener('logout', onLogout);
     window.addEventListener('openMyAlleracModal', openMyAlleracModal);
     window.addEventListener('openMemorySettingsModal', openMemorySettingsModal);
@@ -86,6 +91,7 @@ export default function AdminChat({
       window.removeEventListener('openSkillsLibrary', openSkillsLibrary);
       window.removeEventListener('openSystemDashboard', openSystemDashboard);
       window.removeEventListener('openHealthDashboard', openHealthDashboard);
+      window.removeEventListener('openInstagramDM', openInstagramDM);
       window.removeEventListener('logout', onLogout);
       window.removeEventListener('openMyAlleracModal', openMyAlleracModal);
       window.removeEventListener('openMemorySettingsModal', openMemorySettingsModal);
@@ -127,6 +133,7 @@ export default function AdminChat({
   const [myAlleracMemoryTab, setMyAlleracMemoryTab] = useState<MemorySubTab>('conversations');
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
   const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
+  const [isInstagramDMOpen, setIsInstagramDMOpen] = useState(false);
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
   const [memorySaveLoading, setMemorySaveLoading] = useState(false);
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
@@ -726,6 +733,7 @@ export default function AdminChat({
             renameConversation={handleRenameConversation}
             showWorkspace={showWorkspace}
             showHealth={showHealth}
+            showInstagramDM={showInstagramDM}
           />
         </div>
 
@@ -743,6 +751,7 @@ export default function AdminChat({
             renameConversation={handleRenameConversation}
             showWorkspace={showWorkspace}
             showHealth={showHealth}
+            showInstagramDM={showInstagramDM}
           />
         </div>
 
@@ -960,6 +969,13 @@ export default function AdminChat({
         onClose={() => setIsHealthDashboardOpen(false)}
         isDarkMode={isDarkMode}
         userId={userId || undefined}
+      />
+
+      {/* Instagram DM Panel */}
+      <InstagramDMPanel
+        isOpen={isInstagramDMOpen}
+        onClose={() => setIsInstagramDMOpen(false)}
+        isDarkMode={isDarkMode}
       />
 
       {/* Onboarding Wizard */}
