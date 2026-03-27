@@ -7,6 +7,7 @@ import * as updateActions from '@/app/actions/updates';
 import * as backupActions from '@/app/actions/backup';
 import BenchmarkPanel from './BenchmarkPanel';
 import GarminSettings from '../settings/GarminSettings';
+import InstagramSettings from '../settings/InstagramSettings';
 import { Model } from '@/app/types';
 
 interface SystemDashboardProps {
@@ -14,7 +15,7 @@ interface SystemDashboardProps {
   onClose: () => void;
   isDarkMode: boolean;
   userId?: string;
-  initialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark';
+  initialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social';
   MODELS?: Model[];
   selectedModel?: string;
   setSelectedModel: (modelId: string) => void;
@@ -165,7 +166,7 @@ export default function SystemDashboardModal({
   setSelectedModel,
 }: SystemDashboardProps) {
   const t = useTranslations('system');
-  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark'>(initialTab ?? 'system');
+  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark' | 'social'>(initialTab ?? 'system');
   const [data, setData] = useState<SystemDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -459,7 +460,7 @@ export default function SystemDashboardModal({
     }
   };
 
-  const tabClass = (tab: 'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark') =>
+  const tabClass = (tab: 'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark' | 'social') =>
     `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
       activeTab === tab
         ? isDarkMode
@@ -551,6 +552,9 @@ export default function SystemDashboardModal({
           </button>
           <button className={tabClass('health')} onClick={() => setActiveTab('health')}>
             Health
+          </button>
+          <button className={tabClass('social')} onClick={() => setActiveTab('social')}>
+            📸 Social
           </button>
           <button className={tabClass('system')} onClick={() => setActiveTab('system')}>
             {t('tabSystem')}
@@ -1062,6 +1066,13 @@ export default function SystemDashboardModal({
           {activeTab === 'health' && (
             <div className="max-w-lg">
               <GarminSettings userId={userId} isDarkMode={isDarkMode} />
+            </div>
+          )}
+
+          {/* Social Tab */}
+          {activeTab === 'social' && (
+            <div className="max-w-lg">
+              <InstagramSettings userId={userId} isDarkMode={isDarkMode} />
             </div>
           )}
 

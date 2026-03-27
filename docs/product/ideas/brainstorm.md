@@ -227,6 +227,56 @@ The current priority is UX clarity (domains, hub, sidebar). Shared Workspace add
 
 ---
 
+## 8. Instagram C2C Seller Automation
+
+**Status:** Idea — Phase 2 of Social skill (2026-03-27)
+**Effort:** Medium (Instagram Graph API + RAG product catalog)
+
+### The use case
+A small seller on Instagram (clothes, handmade goods, etc.) spends hours on repetitive tasks: writing captions, answering the same DMs ("ainda tem?", "quanto é?", "entrega onde?"). Allerac automates the entire loop with human approval at each step.
+
+### The flow (from diagram)
+
+```
+Seller                          Buyer
+  take picture
+  upload to Allerac Social
+  ← AI generates caption + hashtags
+  approve + post → → → → → → scroll products
+                              open post
+                              write DM: "tem disponível?"
+  ← Allerac reads DM
+  ← RAG finds: product, price, stock, delivery
+  ← AI drafts: "Oi! Sim, tenho 3. R$80, entrega SP..."
+  approve + send → → → → → → books product
+                              pays
+  ← notification: payment confirmed
+  deliver → → → → → → → → → receives
+  update stock (-1) ← AI updates catalog
+```
+
+### What Allerac already has
+- Social skill for caption + hashtag generation (works today, copy-paste)
+- RAG for product catalog context (upload product list as document)
+- Memory for seller preferences (tone, delivery zones, policies)
+
+### What needs to be built
+- Instagram Graph API: read DMs, send messages, post content
+- Stock tool: a simple product catalog (name, price, qty) that updates on sale
+- Human approval UI for DM responses (already in social.md Phase 2 roadmap)
+
+### Why it's a strong product angle
+- The seller never writes a caption or answers "tem disponível?" again
+- Non-technical users: one photo → Allerac handles the rest
+- Privacy: product catalog stays local, never on Meta's servers
+- Works for: clothes, plants, handmade goods, food, art — any Instagram shop
+
+### Connection to existing ideas
+- Feeds into idea #3 (multi-instance): a seller's Allerac instance as their business back-office
+- Feeds into idea #5 (super-agents): `shop.allerac.ai` as a public seller assistant
+
+---
+
 ## Notes
 
 - The core differentiator of allerac-one is **deep personal context** — the more the system knows the user, the more useful it becomes. No public ChatGPT or Claude can offer this.

@@ -26,6 +26,7 @@ import { ShellTool } from '@/app/tools/shell.tool';
 import { HealthTool } from '@/app/tools/health.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { TOOLS } from '@/app/tools/tools';
+import pool from '@/app/clients/db';
 
 const authService = new AuthService();
 const userSettingsService = new UserSettingsService();
@@ -50,6 +51,7 @@ export async function POST(request: Request): Promise<Response> {
     provider,
     imageAttachments,
     preSelectedSkillId,
+    defaultSkillName,
     domain,
   }: {
     message: string;
@@ -58,6 +60,7 @@ export async function POST(request: Request): Promise<Response> {
     provider: 'github' | 'ollama' | 'gemini';
     imageAttachments?: Array<{ url: string }>;
     preSelectedSkillId?: string;
+    defaultSkillName?: string;
     domain?: string;
   } = body;
 
@@ -162,13 +165,23 @@ export async function POST(request: Request): Promise<Response> {
         let activeSkill = await skillsService.getActiveSkill(convId);
 
         if (!activeSkill && !inputConversationId) {
-          // Client explicitly selected a skill before sending the first message
+          // Client explicitly selected a skill before sending the first message (by ID)
           if (preSelectedSkillId) {
             const preSelected = await skillsService.getSkillById(preSelectedSkillId);
             if (preSelected) {
               await skillsService.activateSkill(preSelected.id, convId, userId, 'manual', 'Pre-selected by user');
               activeSkill = preSelected;
               console.log(`[ChatRoute] Activated pre-selected skill: ${preSelected.name}`);
+            }
+          }
+
+          // Fallback: resolve by name (handles race condition where client-side lookup didn't complete)
+          if (!activeSkill && defaultSkillName) {
+            const byName = await skillsService.getSkillByName(defaultSkillName, userId);
+            if (byName) {
+              await skillsService.activateSkill(byName.id, convId, userId, 'manual', 'Domain default skill');
+              activeSkill = byName;
+              console.log(`[ChatRoute] Activated domain default skill: ${byName.name}`);
             }
           }
 
@@ -184,8 +197,19 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // Auto-activate or auto-switch skills via LLM intent detection (keyword fallback).
-        // Skip if skill was just pre-selected by domain on this message (first message of new conversation).
-        if (!preSelectedSkillId || inputConversationId) {
+        // Skip if:
+        //   (a) skill was just pre-selected by domain on THIS message (first msg, new conversation), OR
+        //   (b) the active skill was manually activated (domain-locked conversation — user chose a specific domain)
+        const isManuallyLocked = activeSkill
+          ? await pool.query(
+              `SELECT trigger_type FROM skill_usage
+               WHERE conversation_id = $1 AND skill_id = $2
+               ORDER BY started_at DESC LIMIT 1`,
+              [convId, activeSkill.id]
+            ).then(r => r.rows[0]?.trigger_type === 'manual').catch(() => false)
+          : false;
+
+        if (!isManuallyLocked && (!preSelectedSkillId || inputConversationId)) {
           const availableSkills = await skillsService.getAvailableSkills(userId);
           const candidates = availableSkills.filter(s => s.id !== activeSkill?.id);
           const detected = await skillsService.detectIntent(message, candidates);

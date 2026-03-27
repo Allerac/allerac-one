@@ -14,6 +14,7 @@ interface ChatMessageServiceConfig {
   TOOLS: any[];
   activeSkill?: any | null;
   preSelectedSkill?: any | null;
+  defaultSkillName?: string;
   domain?: string;
   onConversationCreated?: () => void;
   onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
@@ -91,6 +92,10 @@ export class ChatMessageService {
           // activates and uses it on the very first message
           preSelectedSkillId: !this.config.currentConversationId && this.config.preSelectedSkill
             ? this.config.preSelectedSkill.id
+            : undefined,
+          // Fallback: send skill name so server can resolve even if client-side lookup raced
+          defaultSkillName: !this.config.currentConversationId && !this.config.preSelectedSkill
+            ? this.config.defaultSkillName
             : undefined,
         }),
       });

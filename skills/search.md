@@ -5,7 +5,7 @@ description: "Web research assistant that searches the internet for current info
 category: research
 icon: "🔍"
 force_tool: search_web
-auto_switch_rules: {"keywords": ["pesquisa", "pesquise", "search", "busca", "busque", "encontra", "find", "procura", "look up", "notícias", "news", "atual", "current", "hoje", "today", "agora", "now", "recente", "recent", "último", "latest", "preço", "price", "cotação", "quote", "quanto está", "how much is", "o que é", "what is", "quem é", "who is", "onde fica", "where is", "quando foi", "when was", "me diz sobre", "tell me about", "informação sobre", "info about", "verifique", "verify", "confirme", "confirm", "fato", "fact", "wikipedia", "referência", "reference", "fonte", "source", "clima", "weather", "temperatura", "temperature"]}
+auto_switch_rules: {"keywords": ["pesquisa", "pesquise", "search", "busca", "busque", "procura", "look up", "notícias", "news", "preço", "price", "cotação", "quote", "quanto está", "how much is", "quem é", "who is", "onde fica", "where is", "quando foi", "when was", "verifique", "verify", "confirme", "confirm", "wikipedia", "referência", "reference", "fonte", "source", "clima", "weather", "temperatura", "temperature", "pesquise na web", "search the web", "busque na internet"]}
 version: "1.0.0"
 ---
 

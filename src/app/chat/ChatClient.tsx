@@ -40,6 +40,7 @@ export default function AdminChat({
   defaultSidebarCollapsed = false,
   chatMode = 'default',
   terminalTheme,
+  systemDashboardInitialTab: initialDashboardTab,
 }: {
   defaultSkillName?: string;
   domainName?: string;
@@ -48,6 +49,7 @@ export default function AdminChat({
   defaultSidebarCollapsed?: boolean;
   chatMode?: 'default' | 'terminal';
   terminalTheme?: TerminalTheme;
+  systemDashboardInitialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social';
 }) {
   const t = useTranslations('home');
   const router = useRouter();
@@ -108,7 +110,7 @@ export default function AdminChat({
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
-  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark'>('preferences');
+  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social'>(initialDashboardTab ?? 'preferences');
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
@@ -177,6 +179,7 @@ export default function AdminChat({
     TOOLS,
     activeSkill,
     preSelectedSkill,
+    defaultSkillName,
     domain: domainName,
     onConversationCreated: () => {
       if (userId) loadConversations(userId);

@@ -125,6 +125,10 @@ services:
       # Health worker (Garmin sync) — only active with --profile health
       - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
       - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
+      # Instagram Graph API (optional — needed for Social domain DM automation)
+      - INSTAGRAM_APP_ID=${INSTAGRAM_APP_ID:-}
+      - INSTAGRAM_APP_SECRET=${INSTAGRAM_APP_SECRET:-}
+      - INSTAGRAM_REDIRECT_URI=${INSTAGRAM_REDIRECT_URI:-}
       # Tells update.sh which compose file to use (local vs cloud)
       - ALLERAC_PRODUCT_LINE=local
     ports:
