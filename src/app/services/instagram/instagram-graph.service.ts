@@ -12,11 +12,11 @@
 const APP_ID       = process.env.INSTAGRAM_APP_ID       ?? '';
 const APP_SECRET   = process.env.INSTAGRAM_APP_SECRET   ?? '';
 const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI ?? '';
-// Facebook Login for Business — grants access to Instagram Graph API
-// Docs: https://developers.facebook.com/docs/facebook-login/guides/advanced/business-login
-const GRAPH_URL    = 'https://graph.facebook.com/v21.0';
-const FB_AUTH_URL  = 'https://www.facebook.com/v21.0/dialog/oauth';
-const FB_TOKEN_URL = 'https://graph.facebook.com/v21.0/oauth/access_token';
+// Instagram Login for Business (2024+)
+// Docs: https://developers.facebook.com/docs/instagram/business-login-for-instagram
+const GRAPH_URL    = 'https://graph.instagram.com/v21.0';
+const IG_AUTH_URL  = 'https://www.instagram.com/oauth/authorize';
+const IG_TOKEN_URL = 'https://api.instagram.com/oauth/access_token';
 
 export interface IGUser {
   id: string;
@@ -71,13 +71,13 @@ export class InstagramGraphService {
       response_type: 'code',
       state,
     });
-    return `${FB_AUTH_URL}?${params.toString()}`;
+    return `${IG_AUTH_URL}?${params.toString()}`;
   }
 
   /** Exchange authorization code for a user access token, then find the linked IG Business account */
   async exchangeCodeForToken(code: string): Promise<{ accessToken: string; igUserId: string; expiresAt: Date | null }> {
     // Step 1: exchange code for short-lived user access token
-    const tokenRes = await fetch(FB_TOKEN_URL, {
+    const tokenRes = await fetch(IG_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
