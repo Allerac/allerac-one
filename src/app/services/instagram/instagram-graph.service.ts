@@ -67,7 +67,7 @@ export class InstagramGraphService {
     const params = new URLSearchParams({
       client_id:     APP_ID,
       redirect_uri:  REDIRECT_URI,
-      scope:         'instagram_basic,instagram_manage_messages,instagram_content_publish,pages_show_list,pages_read_engagement',
+      scope:         'instagram_business_basic,instagram_business_manage_messages,instagram_manage_comments',
       response_type: 'code',
       state,
     });
@@ -105,23 +105,12 @@ export class InstagramGraphService {
     const accessToken = longToken.access_token ?? userAccessToken;
     const expiresAt = longToken.expires_in ? new Date(Date.now() + longToken.expires_in * 1000) : null;
 
-    // Step 3: find the Instagram Business Account linked to a Facebook Page
-    const pagesRes = await fetch(`${GRAPH_URL}/me/accounts?access_token=${accessToken}`);
-    if (!pagesRes.ok) throw new Error(`Could not fetch pages: ${await pagesRes.text()}`);
-    const pages = await pagesRes.json() as { data: Array<{ id: string; access_token: string }> };
+    // Step 3: get Instagram user ID from the token
+    const meRes = await fetch(`${GRAPH_URL}/me?fields=id,username&access_token=${accessToken}`);
+    if (!meRes.ok) throw new Error(`Could not fetch Instagram user: ${await meRes.text()}`);
+    const me = await meRes.json() as { id: string; username?: string };
 
-    for (const page of pages.data ?? []) {
-      const igRes = await fetch(
-        `${GRAPH_URL}/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`
-      );
-      if (!igRes.ok) continue;
-      const pageData = await igRes.json() as { instagram_business_account?: { id: string } };
-      if (pageData.instagram_business_account?.id) {
-        return { accessToken, igUserId: pageData.instagram_business_account.id, expiresAt };
-      }
-    }
-
-    throw new Error('Nenhuma conta Instagram Business encontrada. Certifica-te que o teu Instagram é Business/Creator e está ligado a uma Facebook Page.');
+    return { accessToken, igUserId: me.id, expiresAt };
   }
 
   /** Get basic profile info */
