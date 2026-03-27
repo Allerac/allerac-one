@@ -181,7 +181,22 @@ export class InstagramGraphService {
     if (!createRes.ok) throw new Error(`Instagram createMedia error: ${await createRes.text()}`);
     const { id: creationId } = await createRes.json();
 
-    // Step 2: Publish
+    // Step 2: Wait for container to be ready (poll up to 30s)
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    for (let i = 0; i < 10; i++) {
+      await sleep(3000);
+      const statusRes = await fetch(
+        `${GRAPH_URL}/${creationId}?fields=status_code&access_token=${accessToken}`
+      );
+      if (statusRes.ok) {
+        const { status_code } = await statusRes.json() as { status_code: string };
+        console.log(`[Instagram] Media container status: ${status_code}`);
+        if (status_code === 'FINISHED') break;
+        if (status_code === 'ERROR') throw new Error('Instagram media container processing failed');
+      }
+    }
+
+    // Step 3: Publish
     const publishRes = await fetch(`${GRAPH_URL}/${igUserId}/media_publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
