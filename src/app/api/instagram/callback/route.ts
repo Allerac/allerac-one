@@ -64,6 +64,8 @@ export async function GET(request: Request) {
     redirect('/social?instagram=connected');
 
   } catch (err: any) {
+    // Next.js redirect() throws internally — let it propagate
+    if (err?.message === 'NEXT_REDIRECT' || err?.digest?.startsWith('NEXT_REDIRECT')) throw err;
     console.error('[Instagram] OAuth callback error:', err.message);
     await credService.setError(user.id, err.message);
     redirect('/social?instagram=error');
