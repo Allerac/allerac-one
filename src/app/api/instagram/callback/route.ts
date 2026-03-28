@@ -51,14 +51,32 @@ export async function GET(request: Request) {
     // Fetch profile
     const profile = await instagramService.getMe(accessToken);
 
+    const resolvedIgUserId = profile.id ?? igUserId;
+
     // Store encrypted
     await credService.saveTokens(user.id, {
       accessToken,
-      igUserId:  profile.id ?? igUserId,
+      igUserId:  resolvedIgUserId,
       username:  profile.username ?? '',
       expiresAt,
       scopes:    'instagram_basic,instagram_manage_messages,instagram_content_publish',
     });
+
+    // Subscribe this IG account to webhook message events
+    try {
+      const subRes = await fetch(
+        `https://graph.instagram.com/v21.0/${resolvedIgUserId}/subscribed_apps`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ subscribed_fields: 'messages' }),
+        }
+      );
+      const subData = await subRes.json();
+      console.log(`[Instagram] Webhook subscription:`, JSON.stringify(subData));
+    } catch (subErr) {
+      console.warn('[Instagram] Could not subscribe to webhook:', subErr);
+    }
 
     console.log(`[Instagram] Connected account @${profile.username} for user ${user.id}`);
     redirect('/social?instagram=connected');
