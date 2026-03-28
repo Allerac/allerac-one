@@ -96,6 +96,8 @@ export class InstagramGraphService {
 
     const tokenData: IGTokenResponse & { expires_in?: number } = await tokenRes.json();
     const userAccessToken = tokenData.access_token;
+    // api.instagram.com returns the legacy webhook-compatible IG user ID here
+    const legacyUserId = tokenData.user_id;
 
     // Step 2: exchange for long-lived user token (60 days)
     const longRes = await fetch(
@@ -110,7 +112,12 @@ export class InstagramGraphService {
     if (!meRes.ok) throw new Error(`Could not fetch Instagram user: ${await meRes.text()}`);
     const me = await meRes.json() as { id: string; username?: string };
 
-    return { accessToken, igUserId: me.id, expiresAt };
+    // Prefer the legacy user_id from the initial exchange — this is the ID that Meta webhooks use.
+    // The /me endpoint on graph.instagram.com returns the Business Login scoped ID which differs.
+    const igUserId = legacyUserId ?? me.id;
+    console.log(`[Instagram] user IDs — token exchange: ${legacyUserId ?? '(none)'}, /me: ${me.id}, using: ${igUserId}`);
+
+    return { accessToken, igUserId, expiresAt };
   }
 
   /** Get basic profile info */

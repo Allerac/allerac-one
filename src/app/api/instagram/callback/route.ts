@@ -48,10 +48,11 @@ export async function GET(request: Request) {
     // Exchange code for tokens
     const { accessToken, igUserId, expiresAt } = await instagramService.exchangeCodeForToken(code);
 
-    // Fetch profile
+    // Fetch profile (for username/display info only — do NOT use profile.id for storage,
+    // it returns the Business Login scoped ID which differs from the webhook legacy ID)
     const profile = await instagramService.getMe(accessToken);
 
-    const resolvedIgUserId = profile.id ?? igUserId;
+    const resolvedIgUserId = igUserId;
 
     // Store encrypted
     await credService.saveTokens(user.id, {
