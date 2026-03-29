@@ -503,5 +503,20 @@
     "step4Tip2": "Add documents to your knowledge base",
     "step4Tip3": "Create skills for recurring tasks",
     "startChatting": "Start chatting"
+  },
+  "hubTour": {
+    "step1Title": "Welcome to Allerac",
+    "step1Body": "Your private AI workspace. Everything runs on your machine — your data never leaves.",
+    "step2Title": "Your AI Domains",
+    "step2Body": "Each icon is a specialized assistant. Double-click to enter. Each one has its own personality and skills.",
+    "step3Title": "Start Menu",
+    "step3Body": "Access Settings, System Monitor, and all your domains from here.",
+    "step4Title": "You're ready.",
+    "step4Body": "Pick a domain and start exploring. Your AI is waiting.",
+    "dontShowAgain": "Don't show again",
+    "skip": "Skip",
+    "next": "Next ►",
+    "letsGo": "Let's go ►",
+    "stepCounter": "{current} / {total}"
   }
 }

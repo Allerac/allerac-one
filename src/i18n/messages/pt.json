@@ -503,5 +503,20 @@
     "step4Tip2": "Adicione documentos à sua base de conhecimento",
     "step4Tip3": "Crie habilidades para tarefas recorrentes",
     "startChatting": "Começar a conversar"
+  },
+  "hubTour": {
+    "step1Title": "Bem-vindo ao Allerac",
+    "step1Body": "Seu espaço de trabalho privado com IA. Tudo funciona na sua máquina — seus dados nunca saem daqui.",
+    "step2Title": "Seus Domínios de IA",
+    "step2Body": "Cada ícone é um assistente especializado. Clique duas vezes para entrar. Cada um tem sua própria personalidade e habilidades.",
+    "step3Title": "Menu Iniciar",
+    "step3Body": "Acesse Configurações, Monitor do Sistema e todos seus domínios daqui.",
+    "step4Title": "Você está pronto.",
+    "step4Body": "Escolha um domínio e comece a explorar. Seu IA está esperando.",
+    "dontShowAgain": "Não mostrar novamente",
+    "skip": "Pular",
+    "next": "Próximo ►",
+    "letsGo": "Vamos lá ►",
+    "stepCounter": "{current} / {total}"
   }
 }

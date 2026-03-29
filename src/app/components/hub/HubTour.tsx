@@ -1,42 +1,47 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import * as userActions from '@/app/actions/user';
 
-const STEPS = [
-  {
-    id: 'welcome',
-    title: 'Welcome to Allerac',
-    body: 'Your private AI workspace. Everything runs on your machine — your data never leaves.',
-    targetId: null,
-  },
-  {
-    id: 'domains',
-    title: 'Your AI Domains',
-    body: 'Each icon is a specialized assistant. Double-click to enter. Each one has its own personality and skills.',
-    targetId: 'hub-icon-chat',
-  },
-  {
-    id: 'start',
-    title: 'Start Menu',
-    body: 'Access Settings, System Monitor, and all your domains from here.',
-    targetId: 'hub-start-button',
-  },
-  {
-    id: 'done',
-    title: "You're ready.",
-    body: 'Pick a domain and start exploring. Your AI is waiting.',
-    targetId: null,
-  },
-];
+const STEPS_IDS = ['step1', 'step2', 'step3', 'step4'];
 
 const PAD = 14;
 
 export default function HubTour({ userId, onDone }: { userId: string; onDone: () => void }) {
+  const t = useTranslations('hubTour');
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Build steps dynamically from translations
+  const STEPS = [
+    {
+      id: 'welcome',
+      title: t('step1Title'),
+      body: t('step1Body'),
+      targetId: null,
+    },
+    {
+      id: 'domains',
+      title: t('step2Title'),
+      body: t('step2Body'),
+      targetId: 'hub-icon-chat',
+    },
+    {
+      id: 'start',
+      title: t('step3Title'),
+      body: t('step3Body'),
+      targetId: 'hub-start-button',
+    },
+    {
+      id: 'done',
+      title: t('step4Title'),
+      body: t('step4Body'),
+      targetId: null,
+    },
+  ];
 
   const current = STEPS[step];
 
@@ -141,7 +146,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
             {current.title}
           </span>
           <span style={{ fontSize: '10px', color: '#aad', fontFamily: 'Arial, sans-serif' }}>
-            {step + 1} / {STEPS.length}
+            {t('stepCounter', { current: step + 1, total: STEPS.length })}
           </span>
         </div>
 
@@ -171,7 +176,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
             cursor: isSubmitting ? 'not-allowed' : 'pointer',
             opacity: isSubmitting ? 0.6 : 1,
           }}>
-            Don't show again
+            {t('dontShowAgain')}
           </label>
         </div>
 
@@ -196,7 +201,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
               opacity: isSubmitting ? 0.6 : 1,
             }}
           >
-            Skip
+            {t('skip')}
           </button>
           <button
             onClick={next}
@@ -213,7 +218,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
               opacity: isSubmitting ? 0.6 : 1,
             }}
           >
-            {isLast ? "Let's go ►" : 'Next ►'}
+            {isLast ? t('letsGo') : t('next')}
           </button>
         </div>
       </div>
