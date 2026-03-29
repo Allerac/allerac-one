@@ -118,4 +118,17 @@ export class UserSettingsService {
       return { success: false, error };
     }
   }
+
+  async completeHubTour(userId: string) {
+    try {
+      await pool.query(
+        `UPDATE users SET completed_onboarding_tour = TRUE WHERE id = $1`,
+        [userId]
+      );
+      return { success: true };
+    } catch (error) {
+      console.error('Error completing hub tour:', error);
+      return { success: false, error };
+    }
+  }
 }

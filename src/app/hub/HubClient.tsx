@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as authActions from '@/app/actions/auth';
 import UserSettingsModal from '@/app/components/auth/UserSettingsModal';
+import HubTour from '@/app/components/hub/HubTour';
 
 const DOMAINS = [
   { id: 'chat',    label: 'Chat',    icon: '💬', path: '/chat',     desc: 'General assistant' },
@@ -17,8 +18,9 @@ const DOMAINS = [
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 
-export default function HubClient({ userName, userEmail, userId }: { userName: string; userEmail: string; userId: string }) {
+export default function HubClient({ userName, userEmail, userId, completedHubTour }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean }) {
   const router = useRouter();
+  console.log('[HubClient] completedHubTour:', completedHubTour);
   const [booting, setBooting] = useState(() => {
     if (typeof window === 'undefined') return false;
     return !sessionStorage.getItem('allerac_booted');
@@ -30,6 +32,12 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
   const [startMenuOpen, setStartMenuOpen] = useState(false);
   const [shutdownPhase, setShutdownPhase] = useState<ShutdownPhase>('running');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showTour, setShowTour] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const shouldShow = !completedHubTour;
+    console.log('[HubClient] initializing showTour:', shouldShow);
+    return shouldShow;
+  });
   const startMenuRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -49,7 +57,10 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
       setBootStep(i);
       if (i >= BOOT_LINES.length) {
         clearInterval(interval);
-        setTimeout(() => { sessionStorage.setItem('allerac_booted', '1'); setBooting(false); }, 500);
+        setTimeout(() => {
+          sessionStorage.setItem('allerac_booted', '1');
+          setBooting(false);
+        }, 500);
       }
     }, 350);
     return () => clearInterval(interval);
@@ -309,6 +320,7 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
         }}>
           {/* Start button */}
           <button
+            id="hub-start-button"
             onClick={e => { e.stopPropagation(); setStartMenuOpen(v => !v); }}
             style={{
               display: 'flex',
@@ -360,6 +372,16 @@ export default function HubClient({ userName, userEmail, userId }: { userName: s
         </div>
       </div>
 
+      {/* Onboarding Tour */}
+      {(console.log('[HubClient] Rendering tour, showTour:', showTour), showTour) && (
+        <HubTour
+          userId={userId}
+          onDone={() => {
+            setShowTour(false);
+          }}
+        />
+      )}
+
       {/* User Settings Modal */}
       <UserSettingsModal
         isOpen={isSettingsOpen}
@@ -410,6 +432,7 @@ function DesktopIcon({
 }) {
   return (
     <button
+      id={`hub-icon-${domain.id}`}
       onClick={onClick}
       title={`${domain.desc} — double-click to open`}
       style={{

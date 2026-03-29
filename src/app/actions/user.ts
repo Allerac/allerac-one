@@ -17,6 +17,10 @@ export async function completeOnboarding(userId: string) {
     return await userSettingsService.completeOnboarding(userId);
 }
 
+export async function completeHubTour(userId: string) {
+    return await userSettingsService.completeHubTour(userId);
+}
+
 export async function getLanguage(): Promise<string> {
     const cookieStore = await cookies();
     return cookieStore.get('locale')?.value || 'en';
