@@ -1,22 +1,26 @@
 """
 Garmin Connect integration.
 
-Auth flow:
-  1. authenticate(email, password) — starts login in a background thread.
-     Returns { status: "success", session_dump } or { status: "mfa_required", session_id }.
-  2. complete_mfa(session_id, mfa_code) — unblocks the waiting thread.
-     Returns { status: "success", session_dump }.
+Auth flow (with CF Worker):
+  1. authenticate(email, password)
+     → calls Worker /login-start
+     → returns { status: "success", session_dump } or { status: "mfa_required", session_id }
+  2. complete_mfa(session_id, mfa_code)
+     → calls Worker /login-complete
+     → returns { status: "success", session_dump }
+
+Auth flow (fallback — no CF Worker configured):
+  Uses garth directly. Works on IPs not blocked by Garmin.
 
 Data fetch:
-  fetch_metrics(session_dump, start_date, end_date) — returns a list of daily
-  metric dicts ready to be inserted into health_daily_metrics.
+  fetch_metrics(session_dump, start_date, end_date)
+  → returns a list of daily metric dicts for health_daily_metrics table.
 """
 
 import json
 import logging
 import os
-import threading
-import queue
+import time
 import uuid
 from datetime import datetime, date, timedelta
 from typing import Any
@@ -25,125 +29,132 @@ import requests as _requests
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# CF Worker proxy for Garmin OAuth1 preauthorized call
-#
-# The connectapi.garmin.com/oauth-service/oauth/preauthorized endpoint returns
-# 429 when called from cloud provider IPs. If AUTH_WORKER_URL is set, we
-# monkeypatch garth.sso.get_oauth1_token to route that one call through a
-# Cloudflare Worker that makes it from an edge IP instead.
-# ---------------------------------------------------------------------------
 _AUTH_WORKER_URL = os.getenv("AUTH_WORKER_URL", "").rstrip("/")
 _AUTH_WORKER_SECRET = os.getenv("AUTH_WORKER_SECRET", "")
 
-if _AUTH_WORKER_URL:
-    import garth.sso as _garth_sso
-
-    _orig_get_oauth1_token = _garth_sso.get_oauth1_token
-
-    def _proxied_get_oauth1_token(ticket: str, client):  # type: ignore[override]
-        logger.info(f"[Garmin] routing OAuth1 preauth via CF Worker: {_AUTH_WORKER_URL}")
-        resp = _requests.post(
-            f"{_AUTH_WORKER_URL}/preauthorize",
-            json={"ticket": ticket},
-            headers={"X-Worker-Secret": _AUTH_WORKER_SECRET},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        if "error" in data:
-            raise RuntimeError(f"Auth worker error: {data['error']}")
-        allowed = {"oauth_token", "oauth_token_secret", "mfa_token", "mfa_expiration_timestamp"}
-        return _garth_sso.OAuth1Token(domain=client.domain, **{k: v for k, v in data.items() if k in allowed})
-
-    _garth_sso.get_oauth1_token = _proxied_get_oauth1_token  # type: ignore[assignment]
-    logger.info(f"[Garmin] OAuth1 preauth proxied through CF Worker at {_AUTH_WORKER_URL}")
-
-# In-memory MFA sessions: session_id → { mfa_queue, result_queue, created_at }
+# In-memory store for pending MFA states: session_id → { state, created_at }
 _pending: dict[str, dict] = {}
-_lock = threading.Lock()
-
-MFA_TIMEOUT_SECS = 310   # 5 min + margin
-LOGIN_TIMEOUT_SECS = 60
 
 
 def _cleanup_expired():
     cutoff = datetime.utcnow() - timedelta(minutes=10)
-    with _lock:
-        expired = [sid for sid, s in _pending.items() if s["created_at"] < cutoff]
-        for sid in expired:
-            logger.info(f"Removing expired MFA session {sid}")
-            del _pending[sid]
+    expired = [sid for sid, s in _pending.items() if s["created_at"] < cutoff]
+    for sid in expired:
+        logger.info(f"Removing expired MFA session {sid}")
+        del _pending[sid]
 
 
-def _login_thread(
-    email: str,
-    password: str,
-    session_id: str,
-    mfa_queue: "queue.Queue[str]",
-    result_queue: "queue.Queue[dict]",
-    mfa_needed_event: threading.Event,
-):
+def _worker_post(path: str, payload: dict) -> dict:
+    resp = _requests.post(
+        f"{_AUTH_WORKER_URL}{path}",
+        json=payload,
+        headers={"X-Worker-Secret": _AUTH_WORKER_SECRET},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"Worker error ({path}): {data['error']}")
+    return data
+
+
+def _build_session_dump(oauth1: dict, oauth2: dict) -> str:
+    """Reconstructs a garth session dump from raw token dicts returned by the Worker."""
     from garminconnect import Garmin
+    from garth.auth_tokens import OAuth1Token, OAuth2Token
 
-    def prompt_mfa() -> str:
-        logger.info(f"MFA required for session {session_id}")
-        mfa_needed_event.set()
-        try:
-            return mfa_queue.get(timeout=MFA_TIMEOUT_SECS)
-        except queue.Empty:
-            raise RuntimeError("MFA timeout: code not provided in time")
+    allowed_oauth1 = {"oauth_token", "oauth_token_secret", "mfa_token", "mfa_expiration_timestamp"}
+    garmin = Garmin()
+    garmin.garth.oauth1_token = OAuth1Token(
+        domain="garmin.com",
+        **{k: v for k, v in oauth1.items() if k in allowed_oauth1 and v}
+    )
 
-    try:
-        garmin = Garmin(email=email, password=password)
-        garmin.garth.sess.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
-            "origin": "https://sso.garmin.com",
-            "referer": "https://sso.garmin.com/",
-        })
-        garmin.garth.login(email, password, prompt_mfa=prompt_mfa)
-        session_dump = garmin.garth.dumps()
-        logger.info(f"Garmin login successful for {email}")
-        result_queue.put({"status": "success", "session_dump": session_dump})
-    except Exception as e:
-        logger.error(f"Garmin login failed for {email}: {e}", exc_info=True)
-        result_queue.put({"status": "error", "error": str(e)})
-    finally:
-        with _lock:
-            _pending.pop(session_id, None)
+    # Ensure expiration fields are present
+    now = int(time.time())
+    if "expires_at" not in oauth2:
+        oauth2["expires_at"] = now + int(oauth2.get("expires_in", 3600))
+    if "refresh_token_expires_at" not in oauth2:
+        oauth2["refresh_token_expires_at"] = now + int(oauth2.get("refresh_token_expires_in", 7776000))
 
+    garmin.garth.oauth2_token = OAuth2Token(**oauth2)
+    return garmin.garth.dumps()
+
+
+# ---------------------------------------------------------------------------
+# authenticate — works with or without CF Worker
+# ---------------------------------------------------------------------------
 
 def authenticate(email: str, password: str) -> dict[str, Any]:
     """
-    Starts Garmin authentication. Blocks up to 60s waiting for MFA signal or success.
-    Returns { status, session_dump? } or { status: "mfa_required", session_id }.
+    Initiates Garmin authentication.
+    Returns { status: "success", session_dump } or { status: "mfa_required", session_id }.
     """
     _cleanup_expired()
 
+    if _AUTH_WORKER_URL:
+        return _authenticate_via_worker(email, password)
+    else:
+        return _authenticate_direct(email, password)
+
+
+def _authenticate_via_worker(email: str, password: str) -> dict[str, Any]:
+    logger.info(f"[Garmin] starting login via CF Worker for {email}")
+    data = _worker_post("/login-start", {"email": email, "password": password})
+
+    if not data.get("mfa_required"):
+        tokens = data["tokens"]
+        session_dump = _build_session_dump(tokens["oauth1"], tokens["oauth2"])
+        logger.info(f"[Garmin] login successful (no MFA) for {email}")
+        return {"status": "success", "session_dump": session_dump}
+
+    # MFA required — store state, return session_id to caller
     session_id = str(uuid.uuid4())
+    _pending[session_id] = {
+        "state": data["state"],
+        "created_at": datetime.utcnow(),
+    }
+    logger.info(f"[Garmin] MFA required for {email}, session {session_id}")
+    return {"status": "mfa_required", "session_id": session_id}
+
+
+def _authenticate_direct(email: str, password: str) -> dict[str, Any]:
+    """Fallback: direct garth login (for local IPs not blocked by Garmin)."""
+    import threading
+    import queue
+
+    from garminconnect import Garmin
+
     mfa_q: queue.Queue = queue.Queue()
     result_q: queue.Queue = queue.Queue()
     mfa_event = threading.Event()
+    session_id = str(uuid.uuid4())
 
-    with _lock:
-        _pending[session_id] = {
-            "mfa_queue": mfa_q,
-            "result_queue": result_q,
-            "created_at": datetime.utcnow(),
-        }
+    def prompt_mfa() -> str:
+        logger.info(f"MFA required for session {session_id}")
+        mfa_event.set()
+        return mfa_q.get(timeout=310)
 
-    thread = threading.Thread(
-        target=_login_thread,
-        args=(email, password, session_id, mfa_q, result_q, mfa_event),
-        daemon=True,
-    )
-    thread.start()
+    def run():
+        try:
+            garmin = Garmin(email=email, password=password)
+            garmin.garth.login(email, password, prompt_mfa=prompt_mfa)
+            session_dump = garmin.garth.dumps()
+            result_q.put({"status": "success", "session_dump": session_dump})
+        except Exception as e:
+            logger.error(f"Garmin direct login failed: {e}", exc_info=True)
+            result_q.put({"status": "error", "error": str(e)})
+        finally:
+            _pending.pop(session_id, None)
 
-    deadline = datetime.utcnow() + timedelta(seconds=LOGIN_TIMEOUT_SECS)
+    _pending[session_id] = {
+        "mfa_queue": mfa_q,
+        "result_queue": result_q,
+        "created_at": datetime.utcnow(),
+    }
+    threading.Thread(target=run, daemon=True).start()
+
+    deadline = datetime.utcnow() + timedelta(seconds=60)
     while datetime.utcnow() < deadline:
         if mfa_event.wait(timeout=0.3):
             return {"status": "mfa_required", "session_id": session_id}
@@ -155,24 +166,42 @@ def authenticate(email: str, password: str) -> dict[str, Any]:
         except queue.Empty:
             pass
 
-    with _lock:
-        _pending.pop(session_id, None)
+    _pending.pop(session_id, None)
     raise RuntimeError("Login timeout: Garmin did not respond in 60s")
 
 
+# ---------------------------------------------------------------------------
+# complete_mfa
+# ---------------------------------------------------------------------------
+
 def complete_mfa(session_id: str, mfa_code: str) -> dict[str, Any]:
     """
-    Submits MFA code to the waiting login thread and returns the result.
+    Submits MFA code and returns { status: "success", session_dump }.
     """
-    with _lock:
-        session = _pending.get(session_id)
-
+    session = _pending.get(session_id)
     if not session:
         raise RuntimeError("MFA session not found or expired. Please try connecting again.")
 
-    session["mfa_queue"].put(mfa_code)
+    if _AUTH_WORKER_URL:
+        return _complete_mfa_via_worker(session_id, session, mfa_code)
+    else:
+        return _complete_mfa_direct(session_id, session, mfa_code)
 
-    deadline = datetime.utcnow() + timedelta(seconds=LOGIN_TIMEOUT_SECS)
+
+def _complete_mfa_via_worker(session_id: str, session: dict, mfa_code: str) -> dict[str, Any]:
+    logger.info(f"[Garmin] submitting MFA via CF Worker for session {session_id}")
+    data = _worker_post("/login-complete", {"state": session["state"], "mfa_code": mfa_code})
+    tokens = data["tokens"]
+    session_dump = _build_session_dump(tokens["oauth1"], tokens["oauth2"])
+    _pending.pop(session_id, None)
+    logger.info(f"[Garmin] MFA login successful for session {session_id}")
+    return {"status": "success", "session_dump": session_dump}
+
+
+def _complete_mfa_direct(session_id: str, session: dict, mfa_code: str) -> dict[str, Any]:
+    import queue
+    session["mfa_queue"].put(mfa_code)
+    deadline = datetime.utcnow() + timedelta(seconds=60)
     while datetime.utcnow() < deadline:
         try:
             result = session["result_queue"].get(timeout=0.3)
@@ -181,12 +210,14 @@ def complete_mfa(session_id: str, mfa_code: str) -> dict[str, Any]:
             raise RuntimeError(result["error"])
         except queue.Empty:
             pass
-
     raise RuntimeError("MFA timeout: authentication did not complete in 60s")
 
 
+# ---------------------------------------------------------------------------
+# fetch_metrics — unchanged, uses session_dump from authenticate/complete_mfa
+# ---------------------------------------------------------------------------
+
 def _garmin_from_session(session_dump: str):
-    """Restores an authenticated Garmin client from a session dump."""
     from garminconnect import Garmin
     garmin = Garmin()
     garmin.garth.loads(session_dump)
@@ -200,8 +231,6 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
     """
     Fetches daily health metrics from Garmin for the given date range.
     Returns a list of dicts compatible with health_daily_metrics table columns.
-    Each dict has a "date" key (ISO string) plus nullable metric fields.
-    Errors on individual metrics for a day are logged but do not abort the fetch.
     """
     garmin = _garmin_from_session(session_dump)
     results = []
@@ -217,7 +246,6 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
 
         row: dict[str, Any] = {"date": date_str}
 
-        # Activity
         try:
             stats = garmin.get_stats(date_str)
             if stats:
@@ -232,7 +260,6 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
         except Exception as e:
             logger.warning(f"activity {date_str}: {e}")
 
-        # Heart rate
         try:
             hr = garmin.get_heart_rates(date_str)
             if hr:
@@ -242,12 +269,11 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
         except Exception as e:
             logger.warning(f"heart_rate {date_str}: {e}")
 
-        # Sleep
         try:
             sleep = garmin.get_sleep_data(date_str)
             if sleep and sleep.get("dailySleepDTO"):
                 s = sleep["dailySleepDTO"]
-                secs = lambda k: int((s.get(k) or 0) / 60)  # seconds → minutes
+                secs = lambda k: int((s.get(k) or 0) / 60)
                 row["sleep_duration_minutes"] = secs("sleepTimeSeconds")
                 row["sleep_deep_minutes"] = secs("deepSleepSeconds")
                 row["sleep_light_minutes"] = secs("lightSleepSeconds")
@@ -258,7 +284,6 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
         except Exception as e:
             logger.warning(f"sleep {date_str}: {e}")
 
-        # Body battery
         try:
             bb = garmin.get_body_battery(date_str, date_str)
             if bb and len(bb) > 0:
@@ -277,7 +302,6 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
         except Exception as e:
             logger.warning(f"body_battery {date_str}: {e}")
 
-        # Stress
         try:
             stress = garmin.get_stress_data(date_str)
             if stress:
@@ -288,7 +312,6 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
         except Exception as e:
             logger.warning(f"stress {date_str}: {e}")
 
-        # HRV
         try:
             hrv = garmin.get_hrv_data(date_str)
             if hrv:
