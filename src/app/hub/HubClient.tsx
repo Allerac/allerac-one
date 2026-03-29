@@ -108,7 +108,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     setStartMenuOpen(false);
   };
 
-  const handleIconClick = (e: React.MouseEvent, domain: typeof DOMAINS[0]) => {
+  const handleIconClick = (e: React.MouseEvent, domain: typeof DOMAINS_ALL[0]) => {
     e.stopPropagation();
     setStartMenuOpen(false);
     const count = (clickCount[domain.id] || 0) + 1;
@@ -433,7 +433,7 @@ function DesktopIcon({
   selected,
   onClick,
 }: {
-  domain: typeof DOMAINS[0];
+  domain: typeof DOMAINS_ALL[0];
   selected: boolean;
   onClick: (e: React.MouseEvent) => void;
 }) {
