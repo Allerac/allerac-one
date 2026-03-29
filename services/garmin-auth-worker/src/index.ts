@@ -103,6 +103,8 @@ async function garminFetch(
     }
 
     const text = await resp.text();
+    if (resp.status === 429) throw new Error(`Garmin rate limit (429). Try again in a few minutes.`);
+    if (resp.status >= 400) throw new Error(`Garmin returned ${resp.status}: ${text.slice(0, 200)}`);
     return { text, status: resp.status };
   }
 
