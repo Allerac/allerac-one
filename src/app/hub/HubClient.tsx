@@ -16,18 +16,11 @@ const DOMAINS_ALL = [
   { id: 'social',  label: 'Social',  icon: '📸', path: '/social',   desc: 'Instagram manager' },
 ];
 
-// Filter domains by NEXT_PUBLIC_VISIBLE_DOMAINS env var (comma-separated IDs)
-const visibleDomainIds = process.env.NEXT_PUBLIC_VISIBLE_DOMAINS
-  ? process.env.NEXT_PUBLIC_VISIBLE_DOMAINS.split(',').map(s => s.trim())
-  : null;
-const DOMAINS = visibleDomainIds
-  ? DOMAINS_ALL.filter(d => visibleDomainIds.includes(d.id))
-  : DOMAINS_ALL;
-
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 
 export default function HubClient({ userName, userEmail, userId, completedHubTour }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean }) {
   const router = useRouter();
+  const [domains, setDomains] = useState<typeof DOMAINS_ALL>([]);
   const [booting, setBooting] = useState(() => {
     if (typeof window === 'undefined') return false;
     return !sessionStorage.getItem('allerac_booted');
@@ -54,6 +47,17 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     '████████████████ 100%',
     'Welcome.',
   ];
+
+  useEffect(() => {
+    // Fetch visible domains from config
+    fetch('/api/domains')
+      .then(r => r.json())
+      .then(data => {
+        const filtered = DOMAINS_ALL.filter(d => data.visible.includes(d.id));
+        setDomains(filtered);
+      })
+      .catch(() => setDomains(DOMAINS_ALL)); // Fallback to all
+  }, []);
 
   useEffect(() => {
     let i = 0;
@@ -252,7 +256,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           padding: '12px',
           overflowY: 'auto',
         }}>
-          {DOMAINS.map(domain => (
+          {domains.map(domain => (
             <DesktopIcon key={domain.id} domain={domain} selected={selected === domain.id} onClick={(e) => handleIconClick(e, domain)} />
           ))}
         </div>
