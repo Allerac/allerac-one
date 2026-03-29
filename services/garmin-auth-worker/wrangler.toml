@@ -1,0 +1,6 @@
+name = "garmin-auth-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+[vars]
+# WORKER_SECRET must be set via `wrangler secret put WORKER_SECRET`

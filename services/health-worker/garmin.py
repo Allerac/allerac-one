@@ -14,13 +14,50 @@ Data fetch:
 
 import json
 import logging
+import os
 import threading
 import queue
 import uuid
 from datetime import datetime, date, timedelta
 from typing import Any
 
+import requests as _requests
+
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# CF Worker proxy for Garmin OAuth1 preauthorized call
+#
+# The connectapi.garmin.com/oauth-service/oauth/preauthorized endpoint returns
+# 429 when called from cloud provider IPs. If AUTH_WORKER_URL is set, we
+# monkeypatch garth.sso.get_oauth1_token to route that one call through a
+# Cloudflare Worker that makes it from an edge IP instead.
+# ---------------------------------------------------------------------------
+_AUTH_WORKER_URL = os.getenv("AUTH_WORKER_URL", "").rstrip("/")
+_AUTH_WORKER_SECRET = os.getenv("AUTH_WORKER_SECRET", "")
+
+if _AUTH_WORKER_URL:
+    import garth.sso as _garth_sso
+
+    _orig_get_oauth1_token = _garth_sso.get_oauth1_token
+
+    def _proxied_get_oauth1_token(ticket: str, client):  # type: ignore[override]
+        logger.info(f"[Garmin] routing OAuth1 preauth via CF Worker: {_AUTH_WORKER_URL}")
+        resp = _requests.post(
+            f"{_AUTH_WORKER_URL}/preauthorize",
+            json={"ticket": ticket},
+            headers={"X-Worker-Secret": _AUTH_WORKER_SECRET},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if "error" in data:
+            raise RuntimeError(f"Auth worker error: {data['error']}")
+        allowed = {"oauth_token", "oauth_token_secret", "mfa_token", "mfa_expiration_timestamp"}
+        return _garth_sso.OAuth1Token(domain=client.domain, **{k: v for k, v in data.items() if k in allowed})
+
+    _garth_sso.get_oauth1_token = _proxied_get_oauth1_token  # type: ignore[assignment]
+    logger.info(f"[Garmin] OAuth1 preauth proxied through CF Worker at {_AUTH_WORKER_URL}")
 
 # In-memory MFA sessions: session_id → { mfa_queue, result_queue, created_at }
 _pending: dict[str, dict] = {}
