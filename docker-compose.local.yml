@@ -104,6 +104,7 @@ services:
       args:
         COMMIT_HASH: ${COMMIT_HASH:-unknown}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        NEXT_PUBLIC_VISIBLE_DOMAINS: ${NEXT_PUBLIC_VISIBLE_DOMAINS:-}
     container_name: allerac-app
     restart: unless-stopped
     environment:
@@ -115,6 +116,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - NEXT_PUBLIC_API_URL=http://localhost:${APP_PORT:-8080}
+      - NEXT_PUBLIC_VISIBLE_DOMAINS=${NEXT_PUBLIC_VISIBLE_DOMAINS:-}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - BACKUP_DIR=/app/backups
       # Optional external APIs (not required for local use)

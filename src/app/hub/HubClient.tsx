@@ -6,7 +6,7 @@ import * as authActions from '@/app/actions/auth';
 import UserSettingsModal from '@/app/components/auth/UserSettingsModal';
 import HubTour from '@/app/components/hub/HubTour';
 
-const DOMAINS = [
+const DOMAINS_ALL = [
   { id: 'chat',    label: 'Chat',    icon: '💬', path: '/chat',     desc: 'General assistant' },
   { id: 'code',    label: 'Code',    icon: '💻', path: '/code',     desc: 'Programmer mode' },
   { id: 'recipes', label: 'Recipes', icon: '🍳', path: '/recipes',  desc: 'Chef & nutrition' },
@@ -16,11 +16,18 @@ const DOMAINS = [
   { id: 'social',  label: 'Social',  icon: '📸', path: '/social',   desc: 'Instagram manager' },
 ];
 
+// Filter domains by NEXT_PUBLIC_VISIBLE_DOMAINS env var (comma-separated IDs)
+const visibleDomainIds = process.env.NEXT_PUBLIC_VISIBLE_DOMAINS
+  ? process.env.NEXT_PUBLIC_VISIBLE_DOMAINS.split(',').map(s => s.trim())
+  : null;
+const DOMAINS = visibleDomainIds
+  ? DOMAINS_ALL.filter(d => visibleDomainIds.includes(d.id))
+  : DOMAINS_ALL;
+
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 
 export default function HubClient({ userName, userEmail, userId, completedHubTour }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean }) {
   const router = useRouter();
-  console.log('[HubClient] completedHubTour:', completedHubTour);
   const [booting, setBooting] = useState(() => {
     if (typeof window === 'undefined') return false;
     return !sessionStorage.getItem('allerac_booted');
@@ -34,9 +41,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showTour, setShowTour] = useState(() => {
     if (typeof window === 'undefined') return false;
-    const shouldShow = !completedHubTour;
-    console.log('[HubClient] initializing showTour:', shouldShow);
-    return shouldShow;
+    return !completedHubTour;
   });
   const startMenuRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -237,14 +242,12 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           position: 'relative',
         }}
       >
-        {/* Desktop icon area — column on desktop, 2-col grid on mobile */}
+        {/* Desktop icon area — vertical on both desktop and mobile */}
         <div style={{
           flex: 1,
-          display: isMobile ? 'grid' : 'flex',
-          gridTemplateColumns: isMobile ? 'repeat(2, 72px)' : undefined,
-          flexDirection: isMobile ? undefined : 'column',
-          alignItems: isMobile ? undefined : 'flex-start',
-          alignContent: isMobile ? 'start' : undefined,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
           gap: '4px',
           padding: '12px',
           overflowY: 'auto',
@@ -373,7 +376,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
       </div>
 
       {/* Onboarding Tour */}
-      {(console.log('[HubClient] Rendering tour, showTour:', showTour), showTour) && (
+      {showTour && (
         <HubTour
           userId={userId}
           onDone={() => {

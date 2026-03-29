@@ -21,6 +21,10 @@ ARG COMMIT_HASH=unknown
 ARG BUILD_DATE=unknown
 RUN printf '{"commit":"%s","date":"%s"}' "$COMMIT_HASH" "$BUILD_DATE" > /app/build-info.json
 
+# NEXT_PUBLIC_* vars needed during build
+ARG NEXT_PUBLIC_VISIBLE_DOMAINS
+ENV NEXT_PUBLIC_VISIBLE_DOMAINS=${NEXT_PUBLIC_VISIBLE_DOMAINS}
+
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.

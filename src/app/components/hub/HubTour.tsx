@@ -24,10 +24,25 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
       targetId: null,
     },
     {
-      id: 'domains',
-      title: t('step2Title'),
-      body: t('step2Body'),
+      id: 'chat',
+      title: t('chatTitle'),
+      body: t('chatDesc'),
       targetId: 'hub-icon-chat',
+      link: 'https://allerac.ai/docs/allerac-one/chat',
+    },
+    {
+      id: 'social',
+      title: t('socialTitle'),
+      body: t('socialDesc'),
+      targetId: 'hub-icon-social',
+      link: 'https://allerac.ai/docs/allerac-one/social',
+    },
+    {
+      id: 'health',
+      title: t('healthTitle'),
+      body: t('healthDesc'),
+      targetId: 'hub-icon-health',
+      link: 'https://allerac.ai/docs/allerac-one/health',
     },
     {
       id: 'start',
@@ -88,18 +103,19 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
     tooltipStyle = { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
   } else {
     const panelH = 160;
+    const panelW = 300;
     const spaceBelow = window.innerHeight - (rect.bottom + PAD + 8);
     if (spaceBelow >= panelH) {
       tooltipStyle = {
         position: 'fixed',
         top: rect.bottom + PAD + 8,
-        left: Math.max(8, Math.min(rect.left - PAD, window.innerWidth - 308)),
+        left: Math.max(8, Math.min(rect.left - PAD, window.innerWidth - panelW - 8)),
       };
     } else {
       tooltipStyle = {
         position: 'fixed',
         top: Math.max(8, rect.top - PAD - panelH - 8),
-        left: Math.max(8, Math.min(rect.left - PAD, window.innerWidth - 308)),
+        left: Math.max(8, Math.min(rect.left - PAD, window.innerWidth - panelW - 8)),
       };
     }
   }
@@ -152,7 +168,20 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
 
         {/* Body */}
         <div style={{ padding: '12px 14px 8px', color: '#000', lineHeight: 1.6 }}>
-          {current.body}
+          <div style={{ fontSize: '11px', marginBottom: (current as any).link ? '8px' : 0 }}>
+            {current.body}
+          </div>
+          {(current as any).link && (
+            <a href={(current as any).link} style={{
+              color: '#6366f1',
+              textDecoration: 'none',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+            }}>
+              {t('learnMore')}
+            </a>
+          )}
         </div>
 
         {/* Checkbox */}
