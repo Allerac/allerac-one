@@ -296,6 +296,73 @@ const allowedIPs = ['192.168.1.0/24', '10.0.0.0/8'];
 
 ---
 
+## Third-Party Credentials Security
+
+Allerac integrates with external services (Garmin, Instagram, Telegram) that require storing user credentials or OAuth tokens. This section documents the security model for these integrations.
+
+### Storage (at rest)
+
+All sensitive third-party data is encrypted in PostgreSQL using **AES-256-GCM** before storage. The encryption key (`ENCRYPTION_KEY`) is loaded from the environment and never stored in the database.
+
+| Field | Table | Encrypted |
+|---|---|---|
+| Email | `garmin_credentials.email_encrypted` | ✅ AES-256-GCM |
+| Password | `garmin_credentials.password_encrypted` | ✅ AES-256-GCM |
+| OAuth1 token | `garmin_credentials.oauth1_token_encrypted` | ✅ AES-256-GCM |
+| OAuth2 token | `garmin_credentials.oauth2_token_encrypted` | ✅ AES-256-GCM |
+| Instagram access token | `instagram_credentials.access_token_encrypted` | ✅ AES-256-GCM |
+
+Each encryption operation generates a random IV — the same plaintext always produces a different ciphertext. The format stored is `iv:authTag:ciphertext` (all hex-encoded).
+
+See `src/app/services/crypto/encryption.service.ts` for implementation.
+
+### In-memory state (MFA flows)
+
+During multi-step authentication flows (e.g. Garmin MFA), intermediate state (SSO session cookies, CSRF tokens) is held in memory in the `health-worker` container. This state is:
+
+- **Encrypted** using an ephemeral Fernet key (AES-128-CBC + HMAC-SHA256) generated at container startup
+- **Never written to disk or logs**
+- **Auto-expired** after 10 minutes
+- **Deleted immediately** after use
+
+The ephemeral key is lost on container restart. Since MFA sessions are short-lived (< 5 minutes), this has no functional impact.
+
+See `services/health-worker/garmin.py` — `_EPHEMERAL_KEY` / `_encrypt_state` / `_decrypt_state`.
+
+### In transit
+
+| Leg | Protocol | Notes |
+|---|---|---|
+| Browser → allerac-one | HTTPS (via Cloudflare Tunnel or reverse proxy) | See deployment docs |
+| allerac-one → health-worker | HTTP on private Docker network | Never leaves the host |
+| health-worker → CF Worker | HTTPS (workers.dev) | TLS enforced by Cloudflare |
+| CF Worker → Garmin | HTTPS | TLS enforced |
+| CF Worker → Instagram API | HTTPS | TLS enforced |
+
+Credentials never travel in plain text over the internet.
+
+### Cloudflare Worker security
+
+The Garmin Auth Worker (`services/garmin-auth-worker/`) executes the full Garmin SSO login flow from Cloudflare edge IPs. Security properties:
+
+- Requests authenticated with `X-Worker-Secret` (shared secret, set via `wrangler secret put`)
+- The Worker is **stateless** — no credentials or tokens are stored at the edge
+- Email/password pass through the Worker transiently (in memory during execution only)
+- The Worker only communicates with `*.garmin.com` — no other outbound targets
+
+For full details, see `docs/technical/garmin-auth-worker.md`.
+
+### Key management
+
+| Key | Where stored | Rotation |
+|---|---|---|
+| `ENCRYPTION_KEY` | `.env` file (never in DB or logs) | Requires re-encrypting all stored credentials |
+| `HEALTH_WORKER_SECRET` | `.env` + Docker env | Rotate in `.env` and rebuild container |
+| `WORKER_SECRET` | Cloudflare Worker secret (wrangler) | `wrangler secret put WORKER_SECRET` + update `.env` |
+| MFA ephemeral key | Process memory only | Automatically regenerated on every container restart |
+
+---
+
 ## Multi-Agent Security (Phase 3)
 
 ### Architecture Overview

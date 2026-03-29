@@ -1,112 +1,205 @@
 # Garmin Auth Worker
 
-## Problema
+## Problem
 
-O Garmin SSO bloqueia com 429 requisições vindas de IPs de cloud providers (Azure, GCP, AWS) no passo de troca do OAuth1 token — especificamente a chamada para:
+Garmin blocks with 429 the **entire SSO authentication flow** when requests come from cloud provider IPs (AWS, GCP, Azure, VMs). This includes:
 
-```
-GET https://connectapi.garmin.com/oauth-service/oauth/preauthorized?ticket=...
-```
+- `sso.garmin.com/sso/embed` — initial cookies
+- `sso.garmin.com/sso/signin` — CSRF token + credentials submission
+- `sso.garmin.com/sso/verifyMFA/loginEnterMfaCode` — MFA
+- `connectapi.garmin.com/oauth-service/oauth/preauthorized` — OAuth1 token
+- `connectapi.garmin.com/oauth-service/oauth/exchange/user/2.0` — OAuth2 exchange
 
-O restante do fluxo (login, cookies, CSRF, MFA) funciona normalmente. Só esse endpoint específico é bloqueado.
+## Solution
 
-## Solução
-
-Um Cloudflare Worker que serve como proxy cirúrgico para esse único request. O Worker roda em 300+ edge locations com IPs diversificados que o Garmin não bloqueia.
-
-```
-Antes:  health-worker (VM IP) → connectapi.garmin.com  ❌ 429
-Depois: health-worker (VM IP) → CF Worker (edge IP) → connectapi.garmin.com  ✅
-```
-
-Todo o restante do fluxo de autenticação (SSO, cookies, CSRF, MFA) continua rodando no `health-worker` Python. Só o OAuth1 token exchange vai pelo CF.
-
-O Worker é **compartilhado por todos os usuários** — ele não guarda estado, apenas faz o request de um IP limpo e retorna o token. Múltiplos usuários podem autenticar simultaneamente sem conflito.
-
-## Arquitetura
+A Cloudflare Worker that executes the **complete login flow** from Cloudflare edge IPs, which Garmin does not block. The Python `health-worker` never makes direct requests to Garmin — it only orchestrates calls to the Worker.
 
 ```
-Usuário → allerac-one → health-worker
-                             │
-                     garth SSO flow normal
-                     (login, cookies, MFA)
-                             │
-                    get_oauth1_token() ──► CF Worker ──► connectapi.garmin.com
-                    (monkeypatched)
+Before:  health-worker (VM IP) → sso.garmin.com / connectapi.garmin.com  ❌ 429
+
+After:   health-worker → CF Worker (edge IP) → sso.garmin.com            ✅
+                                              → connectapi.garmin.com     ✅
 ```
 
-O monkeypatch em `services/health-worker/garmin.py` substitui `garth.sso.get_oauth1_token` por uma versão que chama o CF Worker se `AUTH_WORKER_URL` estiver configurado. Se não estiver, o código segue o caminho original sem mudança.
+## Architecture
 
-## Arquivos
+### Flow without MFA
+
+```
+allerac-one → health-worker
+                   │
+         POST /login-start {email, password}
+                   │
+              CF Worker executes:
+              1. GET sso.garmin.com/sso/embed       (cookies)
+              2. GET sso.garmin.com/sso/signin      (CSRF token)
+              3. POST sso.garmin.com/sso/signin     (credentials)
+              4. GET connectapi.../preauthorized    (OAuth1 token)
+              5. POST connectapi.../exchange        (OAuth2 token)
+                   │
+              { mfa_required: false, tokens: { oauth1, oauth2 } }
+                   │
+         garmin.py rebuilds session_dump
+         and stores it encrypted in PostgreSQL
+```
+
+### Flow with MFA
+
+```
+allerac-one → health-worker
+                   │
+         POST /login-start {email, password}
+                   │
+              CF Worker executes steps 1-3
+              Garmin requires MFA → stops here
+                   │
+              { mfa_required: true, state: { cookies, mfa_csrf } }
+                   │
+         health-worker stores state in memory
+         returns session_id to allerac-one
+                   │
+         [User receives email, reads code]
+                   │
+         POST /login-complete {state, mfa_code}
+                   │
+              CF Worker executes:
+              4. POST sso.garmin.com/verifyMFA/...  (MFA code)
+              5. GET connectapi.../preauthorized    (OAuth1 token)
+              6. POST connectapi.../exchange        (OAuth2 token)
+                   │
+              { tokens: { oauth1, oauth2 } }
+                   │
+         garmin.py rebuilds session_dump
+         and stores it encrypted in PostgreSQL
+```
+
+The Worker is **stateless** — the intermediate MFA state (cookies + CSRF token) is returned to `health-worker` and sent back in the second call. The Worker stores nothing.
+
+## Files
 
 ```
 services/garmin-auth-worker/
-  src/index.ts      — Worker: recebe { ticket }, assina OAuth1, chama Garmin, retorna token
-  wrangler.toml     — config do Cloudflare Worker
+  src/index.ts      — Worker TypeScript: full SSO flow + OAuth1/2
+  wrangler.toml     — Cloudflare Worker config
   package.json
   tsconfig.json
 
 services/health-worker/garmin.py
-  — monkeypatch de garth.sso.get_oauth1_token (ativo se AUTH_WORKER_URL estiver setado)
+  — authenticate(): calls /login-start, stores state if MFA required
+  — complete_mfa(): calls /login-complete with state + code
+  — fetch_metrics(): uses session_dump, unchanged
+  — direct garth fallback if AUTH_WORKER_URL is not set
 ```
 
-## Deploy
+## Worker Endpoints
 
-### 1. Deploy do CF Worker
+### `GET /health`
+```
+Response 200: { "status": "ok", "time": "...", "version": "..." }
+```
+
+### `POST /login-start`
+```
+Headers: X-Worker-Secret: <secret>
+Body:    { "email": "...", "password": "..." }
+
+Response 200 (no MFA):   { "mfa_required": false, "tokens": { "oauth1": {...}, "oauth2": {...} } }
+Response 200 (MFA):      { "mfa_required": true, "state": { "cookies": {...}, "mfa_csrf": "..." } }
+Response 400: { "error": "..." }   — invalid credentials or unexpected page
+Response 500: { "error": "..." }   — internal error (e.g. rate limit, network failure)
+```
+
+### `POST /login-complete`
+```
+Headers: X-Worker-Secret: <secret>
+Body:    { "state": <state returned by /login-start>, "mfa_code": "123456" }
+
+Response 200: { "tokens": { "oauth1": {...}, "oauth2": {...} } }
+Response 400: { "error": "MFA failed, page: ..." }
+Response 500: { "error": "..." }
+```
+
+## Deployment
+
+> **Note:** Deployment must be done from a machine with browser access (for the first wrangler OAuth login), or using a Cloudflare API token.
+
+### 1. Authenticate wrangler via API token (recommended for VMs)
+
+```bash
+# Create at: dash.cloudflare.com/profile/api-tokens
+# Template: "Edit Cloudflare Workers"
+export CLOUDFLARE_API_TOKEN=<token-from-dashboard>
+```
+
+### 2. Deploy the Worker
 
 ```bash
 cd services/garmin-auth-worker
 npm install
 npx wrangler deploy
-# Anota a URL exibida no output: https://garmin-auth-worker.<account>.workers.dev
+# Output: https://garmin-auth-worker.<account>.workers.dev
 ```
 
-### 2. Configurar o secret no Worker
+### 3. Set the WORKER_SECRET
 
 ```bash
+# Generate a strong secret
+openssl rand -hex 32
+
+# Set it in the Worker (wrangler will prompt for the value)
 npx wrangler secret put WORKER_SECRET
-# Digite um valor forte, ex: openssl rand -hex 32
 ```
 
-### 3. Adicionar no `.env`
+### 4. Add to `.env`
 
 ```env
 AUTH_WORKER_URL=https://garmin-auth-worker.<account>.workers.dev
-AUTH_WORKER_SECRET=<o mesmo secret configurado no wrangler>
+AUTH_WORKER_SECRET=<same value configured in wrangler>
 ```
 
-### 4. Rebuild do health-worker
+### 5. Rebuild health-worker
 
 ```bash
 docker compose -f docker-compose.local.yml up -d --build health-worker
 ```
 
-## Endpoint do Worker
+### 6. Verify
 
-```
-POST /preauthorize
-Headers: X-Worker-Secret: <secret>
-Body:    { "ticket": "<garmin SSO ticket>" }
-
-Response 200: { "oauth_token": "...", "oauth_token_secret": "...", ... }
-Response 401: { "error": "Unauthorized" }
-Response 4xx: { "error": "...", "detail": "..." }
-
-GET /health
-Response 200: { "status": "ok", "time": "..." }
+```bash
+curl https://garmin-auth-worker.<account>.workers.dev/health
+# { "status": "ok", ... }
 ```
 
-## Segurança
+## Security
 
-- `X-Worker-Secret` garante que apenas o `health-worker` pode chamar o Worker
-- O ticket tem vida curta (gerado no momento do login, usado uma única vez)
-- O Worker não armazena nada — sem estado, sem logs de credenciais
-- Se o Worker estiver fora do ar, o login falha com erro claro; o sync (que usa token salvo) não é afetado
+- `X-Worker-Secret` — only the `health-worker` can call the Worker
+- Credentials (email/password) pass through the Worker but are **never stored** — the Worker is stateless
+- The MFA `state` contains SSO session cookies and a CSRF token — expires within minutes with the Garmin session
+- OAuth tokens stored in PostgreSQL encrypted with AES-256-GCM (`oauth1_token_encrypted`, `oauth2_token_encrypted`)
+- If the Worker is down: login fails with a clear error; sync (which uses the already-stored token) is not affected
 
-## Variáveis de ambiente
+## Rate Limiting
 
-| Variável | Onde | Descrição |
+Garmin applies aggressive rate limiting on the SSO by IP. Too many login attempts in a short period can temporarily block Cloudflare edge IPs. In that case:
+
+- Wait 1-2 hours before retrying
+- The typical error is a `429` in the response body (not in the HTTP status)
+- The Worker detects it and returns `"Garmin rate limit (429). Try again in a few minutes."`
+
+## Reuse in Other Contexts
+
+This pattern — **CF Worker as an authentication intermediary for services that block cloud IPs** — applies to any service with the same problem:
+
+1. Create a TypeScript Worker that replicates the target service's HTTP flow
+2. Manage cookies and redirects manually (see `garminFetch` in `src/index.ts`)
+3. Split flows requiring user input (MFA, 2FA) into two endpoints: `/start` and `/complete`
+4. Intermediate state is returned to the caller and sent back in the second call — the Worker remains stateless
+
+## Environment Variables
+
+| Variable | Where | Description |
 |---|---|---|
-| `AUTH_WORKER_URL` | `health-worker` container | URL do CF Worker (ex: `https://garmin-auth-worker.x.workers.dev`) |
-| `AUTH_WORKER_SECRET` | `health-worker` container | Shared secret para autenticar chamadas ao Worker |
-| `WORKER_SECRET` | CF Worker secret (wrangler) | Mesmo valor que `AUTH_WORKER_SECRET` |
+| `AUTH_WORKER_URL` | `.env` / `health-worker` | CF Worker URL |
+| `AUTH_WORKER_SECRET` | `.env` / `health-worker` | Shared secret to authenticate Worker calls |
+| `WORKER_SECRET` | CF Worker (wrangler secret) | Same value as `AUTH_WORKER_SECRET` |
+| `CLOUDFLARE_API_TOKEN` | Deploy only (not in `.env`) | Dashboard token to authenticate wrangler |

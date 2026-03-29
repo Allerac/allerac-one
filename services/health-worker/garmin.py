@@ -26,13 +26,29 @@ from datetime import datetime, date, timedelta
 from typing import Any
 
 import requests as _requests
+from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
 
 _AUTH_WORKER_URL = os.getenv("AUTH_WORKER_URL", "").rstrip("/")
 _AUTH_WORKER_SECRET = os.getenv("AUTH_WORKER_SECRET", "")
 
-# In-memory store for pending MFA states: session_id → { state, created_at }
+# Ephemeral key generated once per process — never written to disk or logs.
+# Encrypts MFA state (SSO cookies + CSRF token) stored in _pending.
+# Lost on container restart, which is fine since MFA sessions are short-lived.
+_EPHEMERAL_KEY = Fernet.generate_key()
+_fernet = Fernet(_EPHEMERAL_KEY)
+
+
+def _encrypt_state(state: dict) -> bytes:
+    return _fernet.encrypt(json.dumps(state).encode())
+
+
+def _decrypt_state(token: bytes) -> dict:
+    return json.loads(_fernet.decrypt(token))
+
+
+# In-memory store: session_id → { encrypted_state, created_at }
 _pending: dict[str, dict] = {}
 
 
@@ -108,10 +124,10 @@ def _authenticate_via_worker(email: str, password: str) -> dict[str, Any]:
         logger.info(f"[Garmin] login successful (no MFA) for {email}")
         return {"status": "success", "session_dump": session_dump}
 
-    # MFA required — store state, return session_id to caller
+    # MFA required — store state encrypted, return session_id to caller
     session_id = str(uuid.uuid4())
     _pending[session_id] = {
-        "state": data["state"],
+        "encrypted_state": _encrypt_state(data["state"]),
         "created_at": datetime.utcnow(),
     }
     logger.info(f"[Garmin] MFA required for {email}, session {session_id}")
@@ -190,7 +206,8 @@ def complete_mfa(session_id: str, mfa_code: str) -> dict[str, Any]:
 
 def _complete_mfa_via_worker(session_id: str, session: dict, mfa_code: str) -> dict[str, Any]:
     logger.info(f"[Garmin] submitting MFA via CF Worker for session {session_id}")
-    data = _worker_post("/login-complete", {"state": session["state"], "mfa_code": mfa_code})
+    state = _decrypt_state(session["encrypted_state"])
+    data = _worker_post("/login-complete", {"state": state, "mfa_code": mfa_code})
     tokens = data["tokens"]
     session_dump = _build_session_dump(tokens["oauth1"], tokens["oauth2"])
     _pending.pop(session_id, None)
