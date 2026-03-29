@@ -135,7 +135,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
       }}>
         {/* Title bar */}
         <div style={{
-          background: 'linear-gradient(90deg, #000080, #1084d0)',
+          background: 'linear-gradient(135deg, #6366f1 0%, #4c1d95 60%, #1e1b4b 100%)',
           color: '#fff',
           padding: '5px 8px',
           display: 'flex',
@@ -196,6 +196,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
               borderColor: '#ffffff #808080 #808080 #ffffff',
               padding: '3px 10px',
               fontSize: '11px',
+              color: '#000',
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
               fontFamily: 'Arial, sans-serif',
               opacity: isSubmitting ? 0.6 : 1,
@@ -213,6 +214,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
               padding: '3px 16px',
               fontSize: '11px',
               fontWeight: 'bold',
+              color: '#000',
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
               fontFamily: 'Arial, sans-serif',
               opacity: isSubmitting ? 0.6 : 1,
