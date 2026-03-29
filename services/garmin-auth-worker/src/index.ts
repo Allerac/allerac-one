@@ -120,9 +120,9 @@ function extractCsrf(html: string): string {
 }
 
 function extractTitle(html: string): string {
-  const m = html.match(/<title>(.+?)<\/title>/i);
-  if (!m) throw new Error("Title not found in page");
-  return m[1];
+  const m = html.match(/<title>([\s\S]+?)<\/title>/i);
+  if (!m) throw new Error(`Title not found. Page preview: ${html.slice(0, 300)}`);
+  return m[1].trim();
 }
 
 function extractTicket(html: string): string {
@@ -269,7 +269,7 @@ export default {
 
     // Public health check
     if (request.method === "GET" && url.pathname === "/health") {
-      return Response.json({ status: "ok", time: new Date().toISOString() });
+      return Response.json({ status: "ok", time: new Date().toISOString(), version: "v3-full-rewrite" });
     }
 
     // Auth guard
@@ -313,7 +313,12 @@ export default {
           jar
         );
 
-        const title = extractTitle(afterLogin);
+        let title: string;
+        try {
+          title = extractTitle(afterLogin);
+        } catch {
+          return Response.json({ error: "title_parse_failed", html: afterLogin.slice(0, 500) }, { status: 500 });
+        }
 
         if (title.includes("MFA")) {
           const mfaCsrf = extractCsrf(afterLogin);
