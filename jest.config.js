@@ -19,6 +19,10 @@ const customJestConfig = {
   testPathIgnorePatterns: [
     '/__tests__/__mocks__/',
     '/__tests__/setup.ts',
+    '/e2e/',
+  ],
+  transformIgnorePatterns: [
+    'node_modules/(?!(react-syntax-highlighter|remark-gfm)/)',
   ],
 }
 
