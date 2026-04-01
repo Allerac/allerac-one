@@ -74,7 +74,8 @@
     "newPassword": "Nueva Contraseña",
     "updatingPassword": "Actualizando contraseña...",
     "setNewPassword": "Establecer Nueva Contraseña",
-    "back": "Volver"
+    "back": "Volver",
+    "language": "Idioma"
   },
   "chat": {
     "typeMessage": "Escribe tu mensaje...",

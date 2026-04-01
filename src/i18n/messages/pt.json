@@ -74,7 +74,8 @@
     "newPassword": "Nova Senha",
     "updatingPassword": "Atualizando senha...",
     "setNewPassword": "Definir Nova Senha",
-    "back": "Voltar"
+    "back": "Voltar",
+    "language": "Idioma"
   },
   "chat": {
     "typeMessage": "Digite sua mensagem...",

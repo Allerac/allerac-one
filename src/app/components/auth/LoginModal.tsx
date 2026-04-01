@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import * as authActions from '@/app/actions/auth';
+import * as userActions from '@/app/actions/user';
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -30,11 +31,14 @@ export default function LoginModal({
   preventClose = false,
 }: LoginModalProps) {
   const t = useTranslations('login');
+  const locale = useLocale();
   const [activeTab, setActiveTab] = useState<Tab>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
+  const [language, setLanguage] = useState(locale);
+  const [languageChanged, setLanguageChanged] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
@@ -95,12 +99,22 @@ export default function LoginModal({
       if (activeTab === 'login') {
         result = await authActions.login(email, hashedPassword);
       } else {
+        // Update language if registering with a different language
+        if (language !== locale) {
+          await userActions.updateLanguage(language);
+          setLanguageChanged(true);
+        }
         result = await authActions.register(email, hashedPassword, name || undefined);
       }
 
       if (result.success) {
-        onAuthSuccess(result.user);
-        resetForm();
+        // If language was changed, reload page to apply new locale before showing onboarding
+        if (languageChanged) {
+          window.location.reload();
+        } else {
+          onAuthSuccess(result.user);
+          resetForm();
+        }
       } else if ('needsMigration' in result && result.needsMigration) {
         setIsMigrating(true);
         setMigrationEmail(email);
@@ -338,16 +352,31 @@ export default function LoginModal({
               )}
 
               {activeTab === 'register' && (
-                <div>
-                  <label className={labelClass}>{t('name')}</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t('yourName')}
-                    className={inputClass}
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className={labelClass}>{t('name')}</label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t('yourName')}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="language-select" className={labelClass}>{t('language')}</label>
+                    <select
+                      id="language-select"
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="en">English</option>
+                      <option value="pt">Português</option>
+                      <option value="es">Español</option>
+                    </select>
+                  </div>
+                </>
               )}
 
               <div>

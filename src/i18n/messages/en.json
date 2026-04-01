@@ -74,7 +74,8 @@
     "newPassword": "New Password",
     "updatingPassword": "Updating password...",
     "setNewPassword": "Set New Password",
-    "back": "Back"
+    "back": "Back",
+    "language": "Language"
   },
   "chat": {
     "typeMessage": "Type your message...",
