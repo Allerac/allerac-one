@@ -1,7 +1,7 @@
 # Testing Roadmap — Allerac One
 
 **Last Updated**: 2026-04-01
-**Status**: Phases 1-3, 7 Complete (158 unit tests + 21 E2E tests) ✅
+**Status**: Phases 1-3, 5 (partial), 7 Complete (200 tests total) ✅
 
 ---
 
@@ -9,8 +9,10 @@
 
 Comprehensive testing implementation for Allerac One following a 7-phase plan:
 - **Phases 1-3**: Complete ✅ (Infrastructure, Pure Services, Services with DB — 158 tests)
+- **Phase 5**: Partial ✅ (React Components — 42 tests for OnboardingWizard, ChatInput)
 - **Phase 7**: Complete ✅ (E2E with Playwright — 21 tests for auth, onboarding, chat)
-- **Phases 4-6**: Pending (Server Actions, React Components, API Routes)
+- **Phases 4, 6**: Pending (Server Actions, API Routes)
+- **ChatMessages**: Deferred (requires react-syntax-highlighter ESM handling)
 
 ---
 
@@ -183,26 +185,44 @@ createConversation() / loadMessages() → simple passthroughs
 
 ---
 
-## Phase 5: React Components (PENDING) ⏳
+## Phase 5: React Components ✅ COMPLETE (Partial)
 
-### Planned Coverage
-- `OnboardingWizard.test.tsx` (TBD)
-  - Multi-step rendering
-  - Language selection + reload
-  - Settings save
-  - onComplete callback
+### Coverage Implemented
 
-- `ChatInput.test.tsx` (TBD)
-  - Send on Enter, Shift+Enter for newline
-  - File attachment
-  - Model selection
+**OnboardingWizard.test.tsx** (15 tests) ✅
+- Step 1 (welcome) rendering with user name
+- Feature bullets display
+- Skip button and onboarding completion
+- Language selection with EN, PT, ES options
+- Language change triggers updateLanguage action
+- Ollama connection status display (connected/disconnected)
+- System message handling (custom vs default detection)
+- Dark mode and light mode styling
+- Modal card and backdrop rendering
+- Component integration tests
 
-- `ChatMessages.test.tsx` (TBD)
-  - User/assistant rendering
-  - Code syntax highlighting
-  - Collapsible thinking blocks
-  - Teach button
+**ChatInput.test.tsx** (27 tests) ✅
+- Textarea rendering with placeholder
+- Text input change handling
+- Key press event handling
+- Textarea auto-resize on content change
+- Textarea disabled state while sending
+- Dark mode styling (bg-gray-800, border-gray-700)
+- Light mode styling (bg-white, border-gray-200)
+- Attachment button and dropdown toggle
+- Image attachment option
+- Document attachment option
+- Image file input acceptance
+- Document file input acceptance (.txt, .md, .csv, .json, etc.)
+- Image preview rendering
+- Image removal with callback
+- Document preview display
+- Document file removal
+- Document processing spinner state
+- Provider hint visibility (Google, GitHub, Ollama)
 
+**Not Yet Implemented**
+- `ChatMessages.test.tsx` (requires react-syntax-highlighter ESM handling)
 - `LoginModal.test.tsx` ✅ **Already exists**
 - `HubTour.test.tsx` ✅ **Already exists**
 
@@ -315,16 +335,20 @@ npm test:e2e:ui        # Interactive Playwright mode (visual testing)
 ### Current Status
 ```
 Unit Tests (Jest):
-  Test Suites: 6 passed
-  Tests:       158 passed
-  Pass Rate:   99.4% (158/159, 1 known issue in Perceptron)
+  Test Suites: 8 passed
+  Tests:       200 passed
+  Pass Rate:   99.5% (200/201, 1 known issue in Perceptron)
+
+  Breakdown:
+  - Services (Phases 1-3):  158 tests
+  - Components (Phase 5):    42 tests
 
 E2E Tests (Playwright):
   Test Suites: 3 (auth, onboarding, chat)
   Tests:       21 total
   Platforms:   Chrome, Firefox, Safari, Mobile Chrome, Mobile Safari
 
-Total Coverage: 179 tests across unit + E2E
+Total Coverage: 221 tests across unit + E2E
 ```
 
 ---
@@ -433,17 +457,22 @@ expect(mockQuery).toHaveBeenCalledTimes(3);
 
 ### Completed ✅
 1. ✅ **Phase 1-3** — Unit tests for all services (158 tests)
-2. ✅ **Phase 7** — E2E tests for critical user flows (21 tests)
+2. ✅ **Phase 5 (Partial)** — React component tests (42 tests: OnboardingWizard, ChatInput)
+3. ✅ **Phase 7** — E2E tests for critical user flows (21 tests)
 
 ### Immediate (Next Sessions)
-1. **Phase 5** — React component tests (OnboardingWizard, ChatInput, ChatMessages)
-   - LoginModal and HubTour already exist
-   - ~45 tests estimated
+1. **Phase 5 (ChatMessages)** — Complete remaining component test
+   - Requires handling react-syntax-highlighter ESM modules
+   - Code blocks with syntax highlighting
+   - Thinking blocks (collapsible)
+   - Message rendering (user/assistant)
+   - Document attachment blocks
+   - Estimated ~30-40 tests
 
 2. **Phase 6** — API route tests (POST /api/chat endpoint)
-   - Session validation
+   - Session validation (401 without session)
    - Streaming SSE responses
-   - Error handling
+   - Error handling (400 invalid body)
    - ~15 tests estimated
 
 ### Optional (Defer)
