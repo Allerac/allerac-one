@@ -1,20 +1,20 @@
 # Testing Guide — Allerac One
 
-Guia completo para executar os testes do projeto.
+Complete guide for running tests in the project.
 
 ## Quick Start
 
 ```bash
-# Instalar dependências (primeira vez)
+# Install dependencies (first time)
 npm install
 
-# Rodar todos os testes unitários
+# Run all unit tests
 npm test
 
-# Rodar testes E2E
+# Run E2E tests
 npm test:e2e
 
-# Rodar tudo (unit + E2E)
+# Run everything (unit + E2E)
 npm test && npm test:e2e
 ```
 
@@ -22,52 +22,52 @@ npm test && npm test:e2e
 
 ## Unit Tests (Jest)
 
-### Rodar Todos os Testes
+### Run All Tests
 ```bash
 npm test
 ```
 
-Output esperado:
+Expected output:
 ```
 Test Suites: 8 passed, 8 total
 Tests:       200 passed, 200 total
 ```
 
-### Rodar Testes Específicos
+### Run Specific Tests
 
-**Por arquivo:**
+**By file:**
 ```bash
 npm test -- ChatInput.test.tsx
 npm test -- OnboardingWizard.test.tsx
 npm test -- auth.service.test.ts
 ```
 
-**Por padrão (pattern):**
+**By pattern:**
 ```bash
-# Testes de componentes apenas
+# Component tests only
 npm test -- --testPathPattern="components"
 
-# Testes de services apenas
+# Service tests only
 npm test -- --testPathPattern="services"
 
-# Testes de um serviço específico
+# Specific service test
 npm test -- --testPathPattern="chat.service"
 ```
 
-**Por suite name:**
+**By test suite name:**
 ```bash
 npm test -- --testNamePattern="ChatInput"
 npm test -- --testNamePattern="OnboardingWizard"
 npm test -- --testNamePattern="AuthService"
 ```
 
-### Watch Mode (desenvolvimento)
+### Watch Mode (development)
 
 ```bash
 npm test:watch
 ```
 
-Pressione `a` para rodar todos os testes, `q` para sair.
+Press `a` to run all tests, `q` to quit.
 
 ### Coverage Report
 
@@ -75,39 +75,39 @@ Pressione `a` para rodar todos os testes, `q` para sair.
 npm test:coverage
 ```
 
-Gera relatório em `coverage/` com:
-- Linhas cobertas
-- Branches cobertas
-- Funções cobertas
-- Statements cobertas
+Generates report in `coverage/` with:
+- Lines covered
+- Branches covered
+- Functions covered
+- Statements covered
 
-Abrir: `coverage/lcov-report/index.html` no navegador.
+Open: `coverage/lcov-report/index.html` in browser.
 
 ---
 
 ## E2E Tests (Playwright)
 
-### Rodar Todos os Testes E2E
+### Run All E2E Tests
 
 ```bash
 npm test:e2e
 ```
 
-Testa:
-- **e2e/auth.spec.ts** — Register, login, logout, validação
+Tests:
+- **e2e/auth.spec.ts** — Register, login, logout, validation
 - **e2e/onboarding.spec.ts** — Wizard, language selection, persistence
-- **e2e/chat.spec.ts** — Conversas, mensagens, rename, delete
+- **e2e/chat.spec.ts** — Conversations, messages, rename, delete
 
-### Rodar Teste Específico
+### Run Specific Test
 
 ```bash
-# Apenas auth tests
+# Auth tests only
 npm test:e2e -- auth.spec
 
-# Apenas onboarding
+# Onboarding only
 npm test:e2e -- onboarding.spec
 
-# Apenas chat
+# Chat only
 npm test:e2e -- chat.spec
 ```
 
@@ -117,29 +117,29 @@ npm test:e2e -- chat.spec
 npm test:e2e:ui
 ```
 
-Abre navegador com interface interativa para:
-- Ver cada passo do teste
-- Inspecionar elementos
-- Pausar/retomar execução
-- Fazer debug visual
+Opens browser with interactive interface for:
+- Seeing each test step
+- Inspecting elements
+- Pausing/resuming execution
+- Visual debugging
 
-### Modo Debug Avançado
+### Advanced Debug Mode
 
 ```bash
-# Com trace recording
+# With trace recording
 npm test:e2e -- --trace on
 
-# Com screenshots em caso de falha
+# With screenshots on failure
 npm test:e2e -- --headed
 ```
 
 ---
 
-## Estrutura dos Testes
+## Test Structure
 
-### Phases Implementadas
+### Implemented Phases
 
-**Phase 1-3: Services (158 testes)** ✅
+**Phase 1-3: Services (158 tests)** ✅
 ```
 src/__tests__/services/
   ├── Perceptron.test.ts (12 tests)
@@ -155,7 +155,7 @@ src/__tests__/services/
       └── skills.service.test.ts (35 tests)
 ```
 
-**Phase 5: Components (42 testes)** ✅
+**Phase 5: Components (42 tests)** ✅
 ```
 src/app/components/
 ├── onboarding/__tests__/
@@ -164,7 +164,7 @@ src/app/components/
     └── ChatInput.test.tsx (27 tests)
 ```
 
-**Phase 7: E2E (21 testes)** ✅
+**Phase 7: E2E (21 tests)** ✅
 ```
 e2e/
 ├── auth.spec.ts (7 tests)
@@ -176,45 +176,45 @@ e2e/
 
 ## Troubleshooting
 
-### Testes Falhando Localmente
+### Tests Failing Locally
 
-**1. Limpar cache Jest:**
+**1. Clear Jest cache:**
 ```bash
 npm test -- --clearCache
 ```
 
-**2. Reinstalar node_modules:**
+**2. Reinstall node_modules:**
 ```bash
 rm -rf node_modules package-lock.json
 npm install
 ```
 
-**3. Verificar Node version:**
+**3. Check Node version:**
 ```bash
-node --version  # Deve ser 18.x ou superior
-npm --version   # Deve ser 9.x ou superior
+node --version  # Should be 18.x or higher
+npm --version   # Should be 9.x or higher
 ```
 
-### E2E Tests não Funcionam
+### E2E Tests Not Working
 
-**1. Playwright não instalado:**
+**1. Playwright not installed:**
 ```bash
 npm install -D @playwright/test
 npx playwright install
 ```
 
-**2. Port 3000 em uso:**
+**2. Port 3000 in use:**
 ```bash
-# Matar processo na port 3000
+# Kill process on port 3000
 lsof -i :3000
 kill -9 <PID>
 
-# Ou usar port diferente no playwright.config.ts
+# Or use different port in playwright.config.ts
 ```
 
 **3. Slow tests:**
 ```bash
-# Aumentar timeout (ms)
+# Increase timeout (ms)
 npm test:e2e -- --timeout 60000
 ```
 
@@ -222,7 +222,7 @@ npm test:e2e -- --timeout 60000
 
 ## CI/CD Integration
 
-### GitHub Actions (exemplo)
+### GitHub Actions (example)
 
 ```yaml
 name: Tests
@@ -246,8 +246,8 @@ jobs:
 
 ## Test Coverage Goals
 
-| Componente | Atual | Alvo |
-|-----------|-------|------|
+| Component | Current | Target |
+|-----------|---------|--------|
 | Services | 99.5% | 95%+ |
 | Components | 60% | 80%+ |
 | API Routes | 0% | 80%+ |
@@ -255,19 +255,19 @@ jobs:
 
 ---
 
-## Scripts Disponíveis
+## Available Scripts
 
-| Script | O que faz |
-|--------|----------|
-| `npm test` | Rodar todos os testes unitários |
-| `npm test:watch` | Watch mode para testes unitários |
-| `npm test:coverage` | Gerar relatório de coverage |
-| `npm test:e2e` | Rodar testes E2E |
-| `npm test:e2e:ui` | Rodar E2E com UI interativa |
+| Script | What it does |
+|--------|-------------|
+| `npm test` | Run all unit tests |
+| `npm test:watch` | Watch mode for unit tests |
+| `npm test:coverage` | Generate coverage report |
+| `npm test:e2e` | Run E2E tests |
+| `npm test:e2e:ui` | Run E2E with interactive UI |
 
 ---
 
-## Escrevendo Novos Testes
+## Writing New Tests
 
 ### Template: Service Test
 
@@ -338,7 +338,7 @@ test.describe('Feature', () => {
 
 ---
 
-## Links Úteis
+## Useful Links
 
 - **Jest Docs**: https://jestjs.io/
 - **Testing Library**: https://testing-library.com/
@@ -347,10 +347,10 @@ test.describe('Feature', () => {
 
 ---
 
-## Checklist para PR
+## PR Checklist
 
-- [ ] Rodar `npm test` localmente — todos devem passar
-- [ ] Rodar `npm test:coverage` — target 80%+
-- [ ] Rodar `npm test:e2e` — todos devem passar
-- [ ] Novos testes escritos para nova funcionalidade
-- [ ] Remover `.only` e `.skip` antes de fazer commit
+- [ ] Run `npm test` locally — all should pass
+- [ ] Run `npm test:coverage` — target 80%+
+- [ ] Run `npm test:e2e` — all should pass
+- [ ] Write new tests for new functionality
+- [ ] Remove `.only` and `.skip` before commit
