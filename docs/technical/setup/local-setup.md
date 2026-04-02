@@ -295,26 +295,6 @@ docker compose -f docker-compose.local.yml logs migrations
 
 ---
 
-## Recommended Hardware
-
-### Budget (~$350)
-- **Beelink SER5 Pro** (AMD Ryzen 5, 32GB RAM)
-- Good for 7B models
-
-### Mid-range (~$600)
-- **Intel NUC 13 Pro** (Intel Core i7, 64GB RAM)
-- Good for 13B models
-
-### High-end (~$800-1500)
-- **Mac Mini M2/M3** (24GB unified memory)
-- Excellent performance, quiet
-
-### With GPU (~$1000+)
-- Any mini PC + external GPU enclosure
-- Or dedicated workstation with RTX 3060+
-
----
-
 ## Security Considerations
 
 1. **Network:** By default, services only bind to localhost

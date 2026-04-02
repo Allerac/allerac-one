@@ -159,7 +159,6 @@ External volumes are created by `update.sh` on first run and never re-created em
 | `9000` | `allerac-portainer` | Host (Cloudflare Zero Trust) |
 | `9090` | `allerac-prometheus` | Host |
 | `9100` | `allerac-node-exporter` | Host |
-| `9999` | `allerac-webhook` | Host (Cloudflare → `deploy.allerac.ai`) |
 | `3001` | `allerac-grafana` | Host (Cloudflare Zero Trust) |
 | `3100` | `allerac-loki` | Host |
 | `11434` | `allerac-ollama` | Internal only |
