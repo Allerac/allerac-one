@@ -26,7 +26,7 @@ export class ImgurUploadService implements ImageUploadService {
     try {
       // Create FormData with image
       const formData = new FormData();
-      const blob = new Blob([buffer], { type: 'image/jpeg' });
+      const blob = new Blob([new Uint8Array(buffer)], { type: 'image/jpeg' });
       formData.append('image', blob, filename || 'image.jpg');
       formData.append('type', 'file');
 
