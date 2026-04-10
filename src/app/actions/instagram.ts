@@ -109,13 +109,13 @@ export async function publishInstagramPost(
     const result = await igTool.publishPost(userId, caption, uploaded.publicUrl);
 
     if ('error' in result) {
-      return { success: false, error: result.error };
+      return { success: false, error: (result as any).error };
     }
 
     return {
       success: true,
-      postId: result.post_id,
-      message: result.message,
+      postId: (result as any).post_id,
+      message: (result as any).message,
     };
   } catch (error: any) {
     return { success: false, error: error.message };
