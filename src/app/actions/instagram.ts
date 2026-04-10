@@ -46,7 +46,7 @@ export async function generateCaption(
       max_tokens: 200,
     });
 
-    const caption = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    const caption = response.choices[0]?.message?.content || '';
     if (!caption) {
       return { success: false, error: 'Failed to generate caption' };
     }
@@ -78,7 +78,7 @@ export async function generateTags(
       max_tokens: 150,
     });
 
-    const tags = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    const tags = response.choices[0]?.message?.content || '';
     if (!tags) {
       return { success: false, error: 'Failed to generate tags' };
     }
