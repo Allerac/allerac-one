@@ -17,6 +17,8 @@ interface SidebarDesktopProps {
   showWorkspace?: boolean;
   showHealth?: boolean;
   showInstagramDM?: boolean;
+  onOpenInstagramPost?: () => void;
+  instagramConnected?: boolean;
 }
 
 export default function SidebarDesktop({
@@ -32,6 +34,8 @@ export default function SidebarDesktop({
   showWorkspace,
   showHealth,
   showInstagramDM,
+  onOpenInstagramPost,
+  instagramConnected,
 }: SidebarDesktopProps) {
   const d = isDarkMode;
   return (
@@ -74,6 +78,8 @@ export default function SidebarDesktop({
         showWorkspace={showWorkspace}
         showHealth={showHealth}
         showInstagramDM={showInstagramDM}
+        onOpenInstagramPost={onOpenInstagramPost}
+        instagramConnected={instagramConnected}
       />
     </div>
   );

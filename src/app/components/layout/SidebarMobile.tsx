@@ -17,6 +17,8 @@ interface SidebarMobileProps {
   showWorkspace?: boolean;
   showHealth?: boolean;
   showInstagramDM?: boolean;
+  onOpenInstagramPost?: () => void;
+  instagramConnected?: boolean;
 }
 
 export default function SidebarMobile({
@@ -32,6 +34,8 @@ export default function SidebarMobile({
   showWorkspace,
   showHealth,
   showInstagramDM,
+  onOpenInstagramPost,
+  instagramConnected,
 }: SidebarMobileProps) {
   const d = isDarkMode;
   return (
@@ -65,6 +69,8 @@ export default function SidebarMobile({
         showWorkspace={showWorkspace}
         showHealth={showHealth}
         showInstagramDM={showInstagramDM}
+        onOpenInstagramPost={onOpenInstagramPost}
+        instagramConnected={instagramConnected}
       />
     </div>
   );

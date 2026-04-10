@@ -30,6 +30,7 @@ import SystemDashboard from '../components/system/SystemDashboard';
 import TelegramBotSettings from '../components/settings/TelegramBotSettings';
 import HealthDashboard from '../components/health/HealthDashboard';
 import InstagramDMPanel from '../components/social/InstagramDMPanel';
+import InstagramPostModal from '../components/instagram/InstagramPostModal';
 import { AlleracIcon } from '../components/ui/AlleracIcon';
 import OnboardingWizard from '../components/onboarding/OnboardingWizard';
 
@@ -39,6 +40,7 @@ export default function AdminChat({
   showWorkspace = false,
   showHealth = false,
   showInstagramDM = false,
+  showInstagramPost = false,
   defaultSidebarCollapsed = false,
   chatMode = 'default',
   terminalTheme,
@@ -49,6 +51,7 @@ export default function AdminChat({
   showWorkspace?: boolean;
   showHealth?: boolean;
   showInstagramDM?: boolean;
+  showInstagramPost?: boolean;
   defaultSidebarCollapsed?: boolean;
   chatMode?: 'default' | 'terminal';
   terminalTheme?: TerminalTheme;
@@ -65,6 +68,7 @@ export default function AdminChat({
     const openSystemDashboard = () => { setSystemDashboardInitialTab('preferences'); setIsSystemDashboardOpen(true); };
     const openHealthDashboard = () => setIsHealthDashboardOpen(true);
     const openInstagramDM = () => setIsInstagramDMOpen(true);
+    const openInstagramPost = () => setIsInstagramPostOpen(true);
     const onLogout = () => handleLogoutRef.current();
     const openMyAlleracModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
     const openMemorySettingsModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
@@ -78,6 +82,7 @@ export default function AdminChat({
     window.addEventListener('openSystemDashboard', openSystemDashboard);
     window.addEventListener('openHealthDashboard', openHealthDashboard);
     window.addEventListener('openInstagramDM', openInstagramDM);
+    window.addEventListener('openInstagramPost', openInstagramPost);
     window.addEventListener('logout', onLogout);
     window.addEventListener('openMyAlleracModal', openMyAlleracModal);
     window.addEventListener('openMemorySettingsModal', openMemorySettingsModal);
@@ -92,6 +97,7 @@ export default function AdminChat({
       window.removeEventListener('openSystemDashboard', openSystemDashboard);
       window.removeEventListener('openHealthDashboard', openHealthDashboard);
       window.removeEventListener('openInstagramDM', openInstagramDM);
+      window.removeEventListener('openInstagramPost', openInstagramPost);
       window.removeEventListener('logout', onLogout);
       window.removeEventListener('openMyAlleracModal', openMyAlleracModal);
       window.removeEventListener('openMemorySettingsModal', openMemorySettingsModal);
@@ -134,6 +140,7 @@ export default function AdminChat({
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
   const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
   const [isInstagramDMOpen, setIsInstagramDMOpen] = useState(false);
+  const [isInstagramPostOpen, setIsInstagramPostOpen] = useState(false);
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
   const [memorySaveLoading, setMemorySaveLoading] = useState(false);
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
@@ -734,6 +741,8 @@ export default function AdminChat({
             showWorkspace={showWorkspace}
             showHealth={showHealth}
             showInstagramDM={showInstagramDM}
+            onOpenInstagramPost={() => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
+            instagramConnected={showInstagramPost}
           />
         </div>
 
@@ -752,6 +761,8 @@ export default function AdminChat({
             showWorkspace={showWorkspace}
             showHealth={showHealth}
             showInstagramDM={showInstagramDM}
+            onOpenInstagramPost={() => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
+            instagramConnected={showInstagramPost}
           />
         </div>
 
@@ -977,6 +988,18 @@ export default function AdminChat({
         onClose={() => setIsInstagramDMOpen(false)}
         isDarkMode={isDarkMode}
       />
+
+      {/* Instagram Post Modal */}
+      {isInstagramPostOpen && userId && (
+        <InstagramPostModal
+          userId={userId}
+          onClose={() => setIsInstagramPostOpen(false)}
+          onSuccess={() => {
+            // Refresh Instagram status after successful post
+            setIsInstagramPostOpen(false);
+          }}
+        />
+      )}
 
       {/* Onboarding Wizard */}
       {showOnboarding && userId && (

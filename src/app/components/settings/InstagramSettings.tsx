@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import * as instagramActions from '@/app/actions/instagram';
-import InstagramPostModal from '../instagram/InstagramPostModal';
 
 interface InstagramSettingsProps {
   userId?: string;
@@ -17,7 +16,6 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
   const [expires,  setExpires]  = useState('');
   const [errMsg,   setErrMsg]   = useState('');
   const [message,  setMessage]  = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [showPostModal, setShowPostModal] = useState(false);
 
   const muted   = isDarkMode ? 'text-gray-400' : 'text-gray-500';
   const card    = `rounded-xl border p-5 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`;
@@ -101,9 +99,6 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <button onClick={() => setShowPostModal(true)} className={btn('primary')}>
-              Post to Instagram
-            </button>
             <button onClick={handleDisconnect} className={btn('danger')}>
               Disconnect
             </button>
@@ -134,20 +129,10 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
 
       {state === 'connected' && (
         <div className={`text-xs ${muted} space-y-1`}>
-          <p>✓ Caption & hashtag generation — available now in the Social domain</p>
+          <p>✓ Caption & hashtag generation — available via Post button in sidebar</p>
           <p>✓ DM inbox & AI-drafted replies — available in Social → DM Manager</p>
           <p>◌ Post scheduling — coming soon</p>
         </div>
-      )}
-
-      {showPostModal && userId && (
-        <InstagramPostModal
-          userId={userId}
-          onClose={() => setShowPostModal(false)}
-          onSuccess={(postId) => {
-            setMessage({ type: 'success', text: `Post published! ID: ${postId}` });
-          }}
-        />
       )}
     </div>
   );
