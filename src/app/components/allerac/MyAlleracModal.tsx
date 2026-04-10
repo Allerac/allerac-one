@@ -90,6 +90,7 @@ export default function MyAlleracModal({
 
   const handleCancelInstructions = () => {
     setSystemMessageEdit(systemMessage);
+    onClose();
   };
 
   const tabCls = (active: boolean) =>

@@ -554,7 +554,7 @@ export default function SystemDashboardModal({
             Health
           </button>
           <button className={tabClass('social')} onClick={() => setActiveTab('social')}>
-            📸 Social
+            Social
           </button>
           <button className={tabClass('system')} onClick={() => setActiveTab('system')}>
             {t('tabSystem')}
