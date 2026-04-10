@@ -12,5 +12,5 @@ export default async function SocialPage() {
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
 
-  return <ChatClient defaultSkillName="social" defaultSidebarCollapsed domainName="Social" terminalTheme="social" systemDashboardInitialTab="social" showInstagramDM />;
+  return <ChatClient defaultSkillName="social" defaultSidebarCollapsed domainName="Social" terminalTheme="social" systemDashboardInitialTab="social" showInstagramDM showInstagramPost />;
 }
