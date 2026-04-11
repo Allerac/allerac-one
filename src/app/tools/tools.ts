@@ -119,8 +119,29 @@ export const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'instagram_create_post_draft',
+      description: 'Prepare an Instagram post draft with caption and hashtags. Use this when the user wants to post to Instagram from the chat and no public image URL is available. This will show a preview button for the user to review and publish.',
+      parameters: {
+        type: 'object',
+        properties: {
+          caption: {
+            type: 'string',
+            description: 'The caption text for the Instagram post (without hashtags)',
+          },
+          tags: {
+            type: 'string',
+            description: 'Hashtags for the post, space-separated (e.g. "#tag1 #tag2 #tag3")',
+          },
+        },
+        required: ['caption'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'instagram_publish_post',
-      description: 'Publish a post to the user\'s Instagram account. Requires an image URL. Use this when the user asks to post something on Instagram.',
+      description: 'Publish a post to the user\'s Instagram account. Only use this when a public image URL is already available. If the user is sending an image from the chat, use instagram_create_post_draft instead.',
       parameters: {
         type: 'object',
         properties: {

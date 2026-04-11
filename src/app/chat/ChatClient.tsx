@@ -68,7 +68,28 @@ export default function AdminChat({
     const openSystemDashboard = () => { setSystemDashboardInitialTab('preferences'); setIsSystemDashboardOpen(true); };
     const openHealthDashboard = () => setIsHealthDashboardOpen(true);
     const openInstagramDM = () => setIsInstagramDMOpen(true);
-    const openInstagramPost = () => setIsInstagramPostOpen(true);
+    const openInstagramPost = async (event?: Event) => {
+      const detail = (event as CustomEvent)?.detail as { caption?: string; tags?: string } | undefined;
+      if (detail?.caption && lastSentImages.length > 0) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          setInstagramPreFill({
+            imageBase64: result.split(',')[1],
+            imagePreview: result,
+            caption: detail.caption,
+            tags: detail.tags,
+          });
+          setIsInstagramPostOpen(true);
+        };
+        reader.readAsDataURL(lastSentImages[0].file);
+      } else if (detail?.caption) {
+        setInstagramPreFill({ caption: detail.caption, tags: detail.tags });
+        setIsInstagramPostOpen(true);
+      } else {
+        setIsInstagramPostOpen(true);
+      }
+    };
     const onLogout = () => handleLogoutRef.current();
     const openMyAlleracModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
     const openMemorySettingsModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
@@ -148,6 +169,12 @@ export default function AdminChat({
   const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
   const [isTelegramBotSettingsOpen, setIsTelegramBotSettingsOpen] = useState(false);
   const [terminalTeachContent, setTerminalTeachContent] = useState<string | null>(null);
+  const [instagramDraft, setInstagramDraft] = useState<{ caption: string; tags: string } | null>(null);
+  const [lastSentImages, setLastSentImages] = useState<Array<{ file: File; preview: string }>>([]);
+  const [instagramPreFill, setInstagramPreFill] = useState<{
+    caption?: string; tags?: string;
+    imageBase64?: string; imagePreview?: string;
+  } | null>(null);
 
   // Per-domain terminal mode toggle — reads from localStorage, falls back to prop default
   // Toggle is available whenever terminalTheme is set, regardless of chatMode default.
@@ -176,6 +203,7 @@ export default function AdminChat({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const documentFileInputRef = useRef<HTMLInputElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
+  const instagramDraftRef = useRef<{ caption: string; tags: string } | null>(null);
 
   // Initialize chatMessageService
   // Note: we re-create it when dependencies change, which is acceptable for this simple app
@@ -207,6 +235,10 @@ export default function AdminChat({
     },
     onSkillActivated: (skill) => {
       setActiveSkill(skill);
+    },
+    onInstagramDraft: (draft) => {
+      setInstagramDraft(draft);
+      instagramDraftRef.current = draft;
     },
   });
 
@@ -601,6 +633,10 @@ export default function AdminChat({
         ).join('\n\n');
         message = (message.trim() ? message + '\n\n' : '') + docBlocks;
       }
+      // Save copy of sent images before clearing (for Instagram draft pre-fill)
+      if (imageAttachments.length > 0) {
+        setLastSentImages([...imageAttachments]);
+      }
       await chatMessageService.sendMessage(message, imageAttachments, activeSkill);
       setInputMessage('');
       imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
@@ -993,11 +1029,16 @@ export default function AdminChat({
       {isInstagramPostOpen && userId && (
         <InstagramPostModal
           userId={userId}
-          onClose={() => setIsInstagramPostOpen(false)}
+          onClose={() => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
           onSuccess={() => {
-            // Refresh Instagram status after successful post
             setIsInstagramPostOpen(false);
+            setInstagramPreFill(null);
+            setInstagramDraft(null);
           }}
+          initialCaption={instagramPreFill?.caption}
+          initialTags={instagramPreFill?.tags}
+          initialImageBase64={instagramPreFill?.imageBase64}
+          initialImagePreview={instagramPreFill?.imagePreview}
         />
       )}
 

@@ -269,7 +269,7 @@ export async function POST(request: Request): Promise<Response> {
         // Filter tools based on active skill — avoid confusing the model with irrelevant tools
         const SHELL_SKILLS = ['programmer'];
         const HEALTH_TOOL_NAMES = ['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status'];
-        const INSTAGRAM_TOOL_NAMES = ['instagram_publish_post', 'instagram_get_profile', 'instagram_get_recent_posts'];
+        const INSTAGRAM_TOOL_NAMES = ['instagram_create_post_draft', 'instagram_publish_post', 'instagram_get_profile', 'instagram_get_recent_posts'];
         const activeSkillName = activeSkill?.name ?? '';
         const activeTools = TOOLS.filter(t => {
           if (t.function.name === 'execute_shell') return SHELL_SKILLS.includes(activeSkillName);
@@ -367,7 +367,18 @@ export async function POST(request: Request): Promise<Response> {
                   toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
                 } else if (INSTAGRAM_TOOL_NAMES.includes(toolName)) {
                   const igTool = new InstagramTool();
-                  if (toolName === 'instagram_publish_post') {
+                  if (toolName === 'instagram_create_post_draft') {
+                    const { caption, tags } = toolArgs;
+                    safeEnqueue(encode({
+                      type: 'instagram_draft',
+                      caption: caption || '',
+                      tags: tags || '',
+                    }));
+                    toolResult = {
+                      success: true,
+                      message: 'Post draft prepared. A preview button has been shown to the user.',
+                    };
+                  } else if (toolName === 'instagram_publish_post') {
                     toolResult = await igTool.publishPost(userId, toolArgs.caption, toolArgs.image_url);
                   } else if (toolName === 'instagram_get_profile') {
                     toolResult = await igTool.getProfile(userId);

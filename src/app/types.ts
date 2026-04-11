@@ -8,12 +8,19 @@ export interface MessageContentPart {
   };
 }
 
+export interface MessageAction {
+  type: 'instagram_draft';
+  caption: string;
+  tags: string;
+}
+
 export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string | MessageContentPart[];
   timestamp: Date;
   tool_call_id?: string;
   responseTime?: number; // ms — only set on completed assistant messages
+  actions?: MessageAction[];
 }
 
 export interface Conversation {

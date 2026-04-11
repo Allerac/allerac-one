@@ -457,6 +457,47 @@ export default function ChatMessages({
                           </div>
                         );
                       })()}
+
+                      {/* Instagram draft action card */}
+                      {message.actions?.map((action, idx) => {
+                        if (action.type === 'instagram_draft') {
+                          return (
+                            <div
+                              key={idx}
+                              className={`mt-3 p-3 rounded-lg border ${
+                                isDarkMode
+                                  ? 'border-pink-500/30 bg-pink-500/5'
+                                  : 'border-pink-200 bg-pink-50'
+                              }`}
+                            >
+                              <div
+                                className={`text-xs mb-2 font-medium ${
+                                  isDarkMode ? 'text-pink-400' : 'text-pink-600'
+                                }`}
+                              >
+                                Post preparado para o Instagram
+                              </div>
+                              <button
+                                onClick={() =>
+                                  window.dispatchEvent(
+                                    new CustomEvent('openInstagramPost', {
+                                      detail: { caption: action.caption, tags: action.tags },
+                                    })
+                                  )
+                                }
+                                className={`flex items-center gap-2 px-4 py-2 text-white text-sm rounded-lg transition-opacity ${
+                                  isDarkMode
+                                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90'
+                                    : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90'
+                                }`}
+                              >
+                                <span>Revisar e Postar no Instagram</span>
+                              </button>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
                     </>
                   );
                 })()}

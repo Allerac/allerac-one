@@ -7,13 +7,25 @@ interface InstagramPostModalProps {
   userId: string;
   onClose: () => void;
   onSuccess?: (postId: string) => void;
+  initialCaption?: string;
+  initialTags?: string;
+  initialImageBase64?: string;
+  initialImagePreview?: string;
 }
 
-export default function InstagramPostModal({ userId, onClose, onSuccess }: InstagramPostModalProps) {
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [caption, setCaption] = useState('');
-  const [tags, setTags] = useState('');
+export default function InstagramPostModal({
+  userId,
+  onClose,
+  onSuccess,
+  initialCaption,
+  initialTags,
+  initialImageBase64,
+  initialImagePreview,
+}: InstagramPostModalProps) {
+  const [imageBase64, setImageBase64] = useState<string | null>(initialImageBase64 ?? null);
+  const [imagePreview, setImagePreview] = useState<string | null>(initialImagePreview ?? null);
+  const [caption, setCaption] = useState(initialCaption ?? '');
+  const [tags, setTags] = useState(initialTags ?? '');
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [isGeneratingTags, setIsGeneratingTags] = useState(false);
