@@ -1,4 +1,4 @@
-import { Message, Model } from '../../types';
+import { Message, MessageAction, Model } from '../../types';
 
 interface ChatMessageServiceConfig {
   githubToken: string;
@@ -171,6 +171,22 @@ export class ChatMessageService {
               this.config.onSkillActivated(event.skill);
             }
           } else if (event.type === 'instagram_draft') {
+            // Add instagram_draft action to the assistant message
+            this.config.setMessages(prev => {
+              const msgs = [...prev];
+              const last = msgs[msgs.length - 1];
+              if (last && last.role === 'assistant') {
+                msgs[msgs.length - 1] = {
+                  ...last,
+                  actions: [...(last.actions || []), {
+                    type: 'instagram_draft' as const,
+                    caption: event.caption || '',
+                    tags: event.tags || '',
+                  }],
+                };
+              }
+              return msgs;
+            });
             if (this.config.onInstagramDraft) {
               this.config.onInstagramDraft({ caption: event.caption, tags: event.tags });
             }
