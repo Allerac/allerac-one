@@ -11,6 +11,7 @@ interface InstagramPostModalProps {
   initialTags?: string;
   initialImageBase64?: string;
   initialImagePreview?: string;
+  initialImageUrl?: string;
 }
 
 export default function InstagramPostModal({
@@ -21,8 +22,10 @@ export default function InstagramPostModal({
   initialTags,
   initialImageBase64,
   initialImagePreview,
+  initialImageUrl,
 }: InstagramPostModalProps) {
   const [imageBase64, setImageBase64] = useState<string | null>(initialImageBase64 ?? null);
+  const [imageUrl, setImageUrl] = useState<string | null>(initialImageUrl ?? null);
   const [imagePreview, setImagePreview] = useState<string | null>(initialImagePreview ?? null);
   const [caption, setCaption] = useState(initialCaption ?? '');
   const [tags, setTags] = useState(initialTags ?? '');
@@ -31,6 +34,7 @@ export default function InstagramPostModal({
   const [isGeneratingTags, setIsGeneratingTags] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,7 +66,8 @@ export default function InstagramPostModal({
   };
 
   const handleGenerateCaption = async () => {
-    if (!imageBase64) {
+    const imageInput = imageBase64 || imageUrl;
+    if (!imageInput) {
       setError('Please select an image first');
       return;
     }
@@ -70,7 +75,7 @@ export default function InstagramPostModal({
     setIsGeneratingCaption(true);
     setError('');
     try {
-      const result = await generateCaption(imageBase64, userId);
+      const result = await generateCaption(imageInput, userId);
       if (result.success) {
         setCaption(result.caption);
       } else {
@@ -100,8 +105,19 @@ export default function InstagramPostModal({
     }
   };
 
+  const handleCopyToClipboard = async () => {
+    try {
+      const fullCaption = tags ? `${caption}\n\n${tags}` : caption;
+      await navigator.clipboard.writeText(fullCaption);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err: any) {
+      setError('Failed to copy to clipboard');
+    }
+  };
+
   const handlePublish = async () => {
-    if (!imageBase64) {
+    if (!imageBase64 && !imageUrl) {
       setError('Please select an image');
       return;
     }
@@ -116,8 +132,31 @@ export default function InstagramPostModal({
     setSuccess('');
 
     try {
+      let base64ToPublish = imageBase64;
+
+      // If only imageUrl is available, fetch and convert to base64
+      if (!base64ToPublish && imageUrl) {
+        try {
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          base64ToPublish = await new Promise((resolve, reject) => {
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result.split(',')[1] || result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (err) {
+          setError('Failed to process image URL');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const fullCaption = tags ? `${caption}\n\n${tags}` : caption;
-      const result = await publishInstagramPost(userId, imageBase64, fullCaption);
+      const result = await publishInstagramPost(userId, base64ToPublish as string, fullCaption);
 
       if (result.success) {
         setSuccess(result.message);
@@ -156,16 +195,17 @@ export default function InstagramPostModal({
             <label className="block text-sm font-medium text-gray-300 mb-3">
               Image
             </label>
-            {imagePreview ? (
+            {imagePreview || imageUrl ? (
               <div className="relative">
                 <img
-                  src={imagePreview}
+                  src={imagePreview || imageUrl || ''}
                   alt="Preview"
                   className="w-full h-64 object-cover rounded-lg"
                 />
                 <button
                   onClick={() => {
                     setImageBase64(null);
+                    setImageUrl(null);
                     setImagePreview(null);
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }}
@@ -260,19 +300,33 @@ export default function InstagramPostModal({
             </div>
           )}
 
+          {/* Copy Success Message */}
+          {copySuccess && (
+            <div className="p-3 rounded-lg bg-blue-900/50 text-blue-300 border border-blue-700 text-sm">
+              Copied to clipboard! 📋
+            </div>
+          )}
+
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-4 flex-wrap">
             <button
               onClick={onClose}
               disabled={isLoading}
-              className="flex-1 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white transition"
+              className="flex-1 min-w-32 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white transition text-sm"
             >
               Cancel
             </button>
             <button
+              onClick={handleCopyToClipboard}
+              disabled={!caption.trim()}
+              className="flex-1 min-w-32 px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-500 disabled:bg-gray-800 disabled:cursor-not-allowed text-white transition text-sm"
+            >
+              📋 Copy Text
+            </button>
+            <button
               onClick={handlePublish}
               disabled={isLoading || !imageBase64 || !caption.trim()}
-              className="flex-1 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition"
+              className="flex-1 min-w-32 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition text-sm"
             >
               {isLoading ? 'Publishing...' : 'Post to Instagram'}
             </button>

@@ -19,9 +19,10 @@ export async function disconnectInstagram(userId: string) {
 
 /**
  * Generate Instagram caption using LLM
+ * @param imageInput - Either a public image URL (http/https) or base64-encoded image data
  */
 export async function generateCaption(
-  imageBase64: string,
+  imageInput: string,
   userId: string,
   topic?: string
 ): Promise<{ success: true; caption: string } | { success: false; error: string }> {
@@ -38,13 +39,26 @@ export async function generateCaption(
       ? `Generate a creative and engaging Instagram caption for a post about "${topic}". Include relevant context but keep it concise (max 150 chars for the caption itself).`
       : `Generate a creative and engaging Instagram caption for this image. Keep it concise and engaging (max 150 chars).`;
 
+    // Detect if input is a URL, data URI, or base64
+    let imageUrl: string;
+    if (imageInput.startsWith('http://') || imageInput.startsWith('https://')) {
+      // Public URL
+      imageUrl = imageInput;
+    } else if (imageInput.startsWith('data:')) {
+      // Already a data URI
+      imageUrl = imageInput;
+    } else {
+      // Plain base64, add data URI prefix
+      imageUrl = `data:image/jpeg;base64,${imageInput}`;
+    }
+
     const response = await llmService.chatCompletion({
       messages: [
         {
           role: 'user',
           content: [
             { type: 'text', text: imageMessage },
-            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+            { type: 'image_url', image_url: { url: imageUrl } },
           ],
         },
       ],

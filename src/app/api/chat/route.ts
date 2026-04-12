@@ -28,6 +28,8 @@ import { InstagramTool } from '@/app/tools/instagram.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { TOOLS } from '@/app/tools/tools';
 import pool from '@/app/clients/db';
+import * as instagramActions from '@/app/actions/instagram';
+import { getImageUploadService } from '@/app/services/image-upload';
 
 const authService = new AuthService();
 const userSettingsService = new UserSettingsService();
@@ -103,6 +105,40 @@ export async function POST(request: Request): Promise<Response> {
         // Log domain entry — visible in System Monitor
         const providerLabel = provider === 'ollama' ? `● LOCAL · ${modelId}` : `◌ ${provider} · ${modelId}`;
         console.log(`[ChatRoute] ► ${domain ?? 'Chat'} — ${providerLabel}`);
+
+        // Auto-upload images before processing
+        console.log('[ChatRoute] Received imageAttachments:', imageAttachments?.length ?? 0);
+        let processedImages = imageAttachments;
+        if (imageAttachments && imageAttachments.length > 0) {
+          try {
+            const uploadService = getImageUploadService();
+            const uploadedImages: Array<{ url: string }> = [];
+
+            for (const img of imageAttachments) {
+              // Extract base64 from data URI
+              const dataUriMatch = img.url.match(/^data:image\/(\w+);base64,(.+)$/);
+              if (dataUriMatch) {
+                const [, mimeType, base64] = dataUriMatch;
+                const buffer = Buffer.from(base64, 'base64');
+                const filename = `chat-image-${Date.now()}.${mimeType === 'jpeg' ? 'jpg' : mimeType}`;
+
+                console.log(`[ChatRoute] Uploading image: ${filename}`);
+                const uploaded = await uploadService.upload(buffer, filename);
+                uploadedImages.push({ url: uploaded.publicUrl });
+                console.log(`[ChatRoute] Image uploaded to: ${uploaded.publicUrl}`);
+              } else {
+                // If not a data URI, assume it's already a public URL
+                uploadedImages.push(img);
+              }
+            }
+
+            // Use uploaded URLs instead
+            processedImages = uploadedImages;
+          } catch (err: any) {
+            console.warn('[ChatRoute] Image upload failed:', err.message);
+            // Continue anyway — images might fail but we can still process the message
+          }
+        }
 
         // 2. Load user settings (API keys stay server-side)
         const settings = await userSettingsService.loadUserSettings(userId);
@@ -225,9 +261,16 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
-        // 6. Save user message
-        const messageToSave = imageAttachments && imageAttachments.length > 0
-          ? `${message} [Image attached: ${imageAttachments.length} file(s)]`
+        // 6. Build final message with image URLs
+        let finalMessage = message;
+        if (processedImages && processedImages.length > 0) {
+          const imageUrls = processedImages.map(img => img.url);
+          finalMessage += `\n\n[Image URLs: ${imageUrls.join(', ')}]`;
+        }
+
+        // 7. Save user message
+        const messageToSave = processedImages && processedImages.length > 0
+          ? `${finalMessage} [Image attached: ${processedImages.length} file(s)]`
           : message;
         await chatService.saveMessage(convId, 'user', messageToSave);
 
@@ -298,14 +341,23 @@ export async function POST(request: Request): Promise<Response> {
           ...history.map((m: any) => ({ role: m.role, content: m.content })),
         ];
 
-        // Build multimodal last message if images are provided
-        if (imageAttachments && imageAttachments.length > 0) {
-          const lastIdx = conversationMessages.length - 1;
+        // Append the new user message (with multimodal content if images provided)
+        if (processedImages && processedImages.length > 0) {
           const contentParts: any[] = [{ type: 'text', text: message }];
-          for (const img of imageAttachments) {
+
+          // Add image URLs to the message so LLM knows them
+          const imageUrls = processedImages.map(img => img.url);
+          if (imageUrls.length > 0) {
+            contentParts[0].text += `\n\n[Image URLs for reference: ${imageUrls.join(', ')}]`;
+          }
+
+          for (const img of processedImages) {
             contentParts.push({ type: 'image_url', image_url: { url: img.url } });
           }
-          conversationMessages[lastIdx] = { role: 'user', content: contentParts };
+          conversationMessages.push({ role: 'user', content: contentParts });
+        } else {
+          // Text-only message
+          conversationMessages.push({ role: 'user', content: message });
         }
 
         const llmService = new LLMService(provider, modelBaseUrl, { githubToken, geminiToken: googleApiKey });
@@ -329,6 +381,11 @@ export async function POST(request: Request): Promise<Response> {
             : provider !== 'gemini' ? 'auto' : undefined;
 
           console.log('[ChatRoute] Starting first LLM call (tool detection)...');
+          const lastMsg = conversationMessages[conversationMessages.length - 1];
+          console.log('[ChatRoute] Last message content type:', Array.isArray(lastMsg?.content) ? 'multimodal' : typeof lastMsg?.content);
+          if (Array.isArray(lastMsg?.content)) {
+            console.log('[ChatRoute] Multimodal parts:', lastMsg.content.map((p: any) => p.type));
+          }
           let data = await llmService.chatCompletion({
             messages: conversationMessages,
             model: modelId,
@@ -368,11 +425,50 @@ export async function POST(request: Request): Promise<Response> {
                 } else if (INSTAGRAM_TOOL_NAMES.includes(toolName)) {
                   const igTool = new InstagramTool();
                   if (toolName === 'instagram_create_post_draft') {
-                    const { caption, tags } = toolArgs;
+                    let { caption, tags, image_url } = toolArgs;
+
+                    // Only auto-generate if image_url is a public URL (not data URI)
+                    // Data URIs will be handled client-side
+                    const isPublicUrl = image_url && (image_url.startsWith('http://') || image_url.startsWith('https://'));
+
+                    // Auto-generate caption and tags if image_url is public URL but caption is empty
+                    if (isPublicUrl && !caption) {
+                      try {
+                        console.log('[Instagram] Generating caption from image...');
+                        // Pass user's message as context for caption generation
+                        const captionRes = await instagramActions.generateCaption(image_url, userId, message);
+                        if (captionRes.success) {
+                          caption = captionRes.caption;
+                          console.log('[Instagram] Caption generated:', caption);
+                        } else {
+                          console.warn('[Instagram] Failed to generate caption:', captionRes.error);
+                        }
+                      } catch (err: any) {
+                        console.error('[Instagram] Caption generation error:', err.message);
+                      }
+                    }
+
+                    // Auto-generate tags if caption is available but tags are empty
+                    if (caption && !tags) {
+                      try {
+                        console.log('[Instagram] Generating tags from caption...');
+                        const tagsRes = await instagramActions.generateTags(userId, caption);
+                        if (tagsRes.success) {
+                          tags = tagsRes.tags;
+                          console.log('[Instagram] Tags generated:', tags);
+                        } else {
+                          console.warn('[Instagram] Failed to generate tags:', tagsRes.error);
+                        }
+                      } catch (err: any) {
+                        console.error('[Instagram] Tags generation error:', err.message);
+                      }
+                    }
+
                     safeEnqueue(encode({
                       type: 'instagram_draft',
                       caption: caption || '',
                       tags: tags || '',
+                      image_url: image_url || '',
                     }));
                     toolResult = {
                       success: true,

@@ -478,13 +478,32 @@ export default function ChatMessages({
                                 Post preparado para o Instagram
                               </div>
                               <button
-                                onClick={() =>
+                                onClick={() => {
+                                  // Use image_url from action if available, otherwise extract from message text
+                                  let imageUrl: string | undefined = (action as any).image_url;
+                                  if (!imageUrl && typeof message.content === 'string') {
+                                    const match = message.content.match(/\[Image URLs?(?:\s+for reference)?:\s*([^\]]+)\]/);
+                                    if (match && match[1]) {
+                                      // Get the first URL if multiple are listed
+                                      const urls = match[1].split(',').map((u: string) => u.trim());
+                                      imageUrl = urls[0];
+                                    }
+                                  }
+                                  console.log('[ChatMessages] Dispatching openInstagramPost with:', {
+                                    caption: action.caption,
+                                    tags: action.tags,
+                                    image_url: imageUrl,
+                                  });
                                   window.dispatchEvent(
                                     new CustomEvent('openInstagramPost', {
-                                      detail: { caption: action.caption, tags: action.tags },
+                                      detail: {
+                                        caption: action.caption,
+                                        tags: action.tags,
+                                        image_url: imageUrl,
+                                      },
                                     })
-                                  )
-                                }
+                                  );
+                                }}
                                 className={`flex items-center gap-2 px-4 py-2 text-white text-sm rounded-lg transition-opacity ${
                                   isDarkMode
                                     ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90'

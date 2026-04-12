@@ -107,6 +107,7 @@ services:
         NEXT_PUBLIC_VISIBLE_DOMAINS: ${NEXT_PUBLIC_VISIBLE_DOMAINS:-}
     container_name: allerac-app
     restart: unless-stopped
+    env_file: .env
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
       - POSTGRES_HOST=db

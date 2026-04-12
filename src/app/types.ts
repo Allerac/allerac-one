@@ -12,6 +12,7 @@ export interface MessageAction {
   type: 'instagram_draft';
   caption: string;
   tags: string;
+  image_url?: string;
 }
 
 export interface Message {

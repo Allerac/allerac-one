@@ -18,12 +18,13 @@
  *   - No env vars or keys needed — DefaultAzureCredential handles auth
  */
 
-import { BlobServiceClient } from '@azure/storage-blob';
+import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
 import { DefaultAzureCredential } from '@azure/identity';
 import { ImageUploadService, UploadedImage } from './image-upload.interface';
 
 const ACCOUNT_NAME = process.env.AZURE_STORAGE_ACCOUNT_NAME ?? '';
 const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER_NAME ?? '';
+const ACCOUNT_KEY = process.env.AZURE_STORAGE_ACCOUNT_KEY ?? '';
 
 if (!ACCOUNT_NAME || !CONTAINER_NAME) {
   console.warn('[AzureStorageUploadService] AZURE_STORAGE_ACCOUNT_NAME or AZURE_STORAGE_CONTAINER_NAME not set. Image uploads will fail.');
@@ -40,12 +41,20 @@ export class AzureStorageUploadService implements ImageUploadService {
 
     this.containerName = CONTAINER_NAME;
 
-    // DefaultAzureCredential tries credentials in this order:
-    // 1. EnvironmentCredential (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
-    // 2. ManagedIdentityCredential (on Azure VMs)
-    // 3. AzureCliCredential (local `az login`)
-    // 4. VisualStudioCodeCredential (VS Code)
-    const credential = new DefaultAzureCredential();
+    // If account key is provided, use StorageSharedKeyCredential (local dev / explicit auth)
+    // Otherwise, use DefaultAzureCredential (Managed Identity on Azure VMs)
+    let credential: StorageSharedKeyCredential | DefaultAzureCredential;
+
+    if (ACCOUNT_KEY) {
+      credential = new StorageSharedKeyCredential(ACCOUNT_NAME, ACCOUNT_KEY);
+    } else {
+      // DefaultAzureCredential tries credentials in this order:
+      // 1. EnvironmentCredential (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
+      // 2. ManagedIdentityCredential (on Azure VMs)
+      // 3. AzureCliCredential (local `az login`)
+      // 4. VisualStudioCodeCredential (VS Code)
+      credential = new DefaultAzureCredential();
+    }
 
     this.blobServiceClient = new BlobServiceClient(
       `https://${ACCOUNT_NAME}.blob.core.windows.net`,

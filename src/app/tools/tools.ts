@@ -120,20 +120,24 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'instagram_create_post_draft',
-      description: 'Prepare an Instagram post draft with caption and hashtags. Use this when the user wants to post to Instagram from the chat and no public image URL is available. This will show a preview button for the user to review and publish.',
+      description: 'Prepare an Instagram post draft with caption and hashtags. The system will auto-generate caption and tags from the image if not provided. Shows a preview modal for user review before publishing.',
       parameters: {
         type: 'object',
         properties: {
+          image_url: {
+            type: 'string',
+            description: 'Public URL of the image to post, OR base64-encoded image data (data:image/jpeg;base64,...). The system will auto-generate caption and tags from this image.',
+          },
           caption: {
             type: 'string',
-            description: 'The caption text for the Instagram post (without hashtags)',
+            description: 'The caption text for the Instagram post (optional - will be auto-generated from image if not provided)',
           },
           tags: {
             type: 'string',
-            description: 'Hashtags for the post, space-separated (e.g. "#tag1 #tag2 #tag3")',
+            description: 'Hashtags for the post, space-separated (e.g. "#tag1 #tag2 #tag3") (optional - will be auto-generated if not provided)',
           },
         },
-        required: ['caption'],
+        required: ['image_url'],
       },
     },
   },

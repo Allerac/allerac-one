@@ -19,7 +19,7 @@ interface ChatMessageServiceConfig {
   onConversationCreated?: () => void;
   onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
   onSkillActivated?: (skill: { id: string; name: string; display_name: string }) => void;
-  onInstagramDraft?: (draft: { caption: string; tags: string }) => void;
+  onInstagramDraft?: (draft: { caption: string; tags: string; image_url?: string }) => void;
 }
 
 export class ChatMessageService {
@@ -182,13 +182,14 @@ export class ChatMessageService {
                     type: 'instagram_draft' as const,
                     caption: event.caption || '',
                     tags: event.tags || '',
+                    image_url: event.image_url || '',
                   }],
                 };
               }
               return msgs;
             });
             if (this.config.onInstagramDraft) {
-              this.config.onInstagramDraft({ caption: event.caption, tags: event.tags });
+              this.config.onInstagramDraft({ caption: event.caption, tags: event.tags, image_url: event.image_url });
             }
           } else if (event.type === 'error') {
             throw new Error(event.message || 'Server error');

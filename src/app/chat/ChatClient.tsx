@@ -69,22 +69,46 @@ export default function AdminChat({
     const openHealthDashboard = () => setIsHealthDashboardOpen(true);
     const openInstagramDM = () => setIsInstagramDMOpen(true);
     const openInstagramPost = async (event?: Event) => {
-      const detail = (event as CustomEvent)?.detail as { caption?: string; tags?: string } | undefined;
-      if (detail?.caption && lastSentImages.length > 0) {
+      const detail = (event as CustomEvent)?.detail as { caption?: string; tags?: string; image_url?: string } | undefined;
+      console.log('[Instagram] Modal opening with detail:', detail);
+
+      // Prefer image_url from event detail (from chat action or button)
+      if (detail?.image_url) {
+        if (detail.image_url.startsWith('data:')) {
+          // Data URI - extract base64
+          const [header, base64] = detail.image_url.split(',');
+          setInstagramPreFill({
+            imageBase64: base64,
+            imagePreview: detail.image_url,
+            caption: detail.caption || '',
+            tags: detail.tags || '',
+          });
+          setIsInstagramPostOpen(true);
+        } else if (detail.image_url.startsWith('http://') || detail.image_url.startsWith('https://')) {
+          // Public URL - pass directly (modal will handle it)
+          setInstagramPreFill({
+            imageUrl: detail.image_url,
+            caption: detail.caption || '',
+            tags: detail.tags || '',
+          });
+          setIsInstagramPostOpen(true);
+        }
+      } else if (detail?.caption && lastSentImages.length > 0) {
+        // Fallback: use lastSentImages (from sidebar button)
         const reader = new FileReader();
         reader.onload = (e) => {
           const result = e.target?.result as string;
           setInstagramPreFill({
             imageBase64: result.split(',')[1],
             imagePreview: result,
-            caption: detail.caption,
-            tags: detail.tags,
+            caption: detail.caption || '',
+            tags: detail.tags || '',
           });
           setIsInstagramPostOpen(true);
         };
         reader.readAsDataURL(lastSentImages[0].file);
       } else if (detail?.caption) {
-        setInstagramPreFill({ caption: detail.caption, tags: detail.tags });
+        setInstagramPreFill({ caption: detail.caption, tags: detail.tags || '' });
         setIsInstagramPostOpen(true);
       } else {
         setIsInstagramPostOpen(true);
@@ -174,6 +198,7 @@ export default function AdminChat({
   const [instagramPreFill, setInstagramPreFill] = useState<{
     caption?: string; tags?: string;
     imageBase64?: string; imagePreview?: string;
+    imageUrl?: string;
   } | null>(null);
 
   // Per-domain terminal mode toggle — reads from localStorage, falls back to prop default
@@ -1039,6 +1064,7 @@ export default function AdminChat({
           initialTags={instagramPreFill?.tags}
           initialImageBase64={instagramPreFill?.imageBase64}
           initialImagePreview={instagramPreFill?.imagePreview}
+          initialImageUrl={instagramPreFill?.imageUrl}
         />
       )}
 
