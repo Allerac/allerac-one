@@ -70,7 +70,7 @@ export default function InstagramPostModal({
     setIsGeneratingCaption(true);
     setError('');
     try {
-      const result = await generateCaption(imageBase64);
+      const result = await generateCaption(imageBase64, userId);
       if (result.success) {
         setCaption(result.caption);
       } else {
@@ -87,7 +87,7 @@ export default function InstagramPostModal({
     setIsGeneratingTags(true);
     setError('');
     try {
-      const result = await generateTags(caption);
+      const result = await generateTags(userId, caption);
       if (result.success) {
         setTags(result.tags);
       } else {

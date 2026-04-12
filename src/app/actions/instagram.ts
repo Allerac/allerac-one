@@ -3,6 +3,7 @@
 import { InstagramCredentialsService } from '@/app/services/instagram/instagram-credentials.service';
 import { getImageUploadService } from '@/app/services/image-upload';
 import { LLMService } from '@/app/services/llm/llm.service';
+import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 
 const credService = new InstagramCredentialsService();
@@ -21,10 +22,16 @@ export async function disconnectInstagram(userId: string) {
  */
 export async function generateCaption(
   imageBase64: string,
+  userId: string,
   topic?: string
 ): Promise<{ success: true; caption: string } | { success: false; error: string }> {
   try {
-    const githubToken = process.env.GITHUB_TOKEN || '';
+    const userSettingsService = new UserSettingsService();
+    const settings = await userSettingsService.loadUserSettings(userId);
+    const githubToken = settings?.github_token || '';
+    if (!githubToken) {
+      return { success: false, error: 'GitHub token is required. Please configure it in Settings → API Keys.' };
+    }
     const llmService = new LLMService('github', 'https://models.inference.ai.azure.com', { githubToken });
 
     const imageMessage = topic
@@ -61,10 +68,16 @@ export async function generateCaption(
  * Generate Instagram hashtags using LLM
  */
 export async function generateTags(
+  userId: string,
   caption?: string
 ): Promise<{ success: true; tags: string } | { success: false; error: string }> {
   try {
-    const githubToken = process.env.GITHUB_TOKEN || '';
+    const userSettingsService = new UserSettingsService();
+    const settings = await userSettingsService.loadUserSettings(userId);
+    const githubToken = settings?.github_token || '';
+    if (!githubToken) {
+      return { success: false, error: 'GitHub token is required. Please configure it in Settings → API Keys.' };
+    }
     const llmService = new LLMService('github', 'https://models.inference.ai.azure.com', { githubToken });
 
     const prompt = caption
