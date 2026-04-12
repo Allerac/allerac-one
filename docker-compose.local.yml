@@ -134,6 +134,10 @@ services:
       - INSTAGRAM_CONFIG_ID=${INSTAGRAM_CONFIG_ID:-}
       - INSTAGRAM_WEBHOOK_VERIFY_TOKEN=${INSTAGRAM_WEBHOOK_VERIFY_TOKEN:-allerac-ig-webhook}
       - INSTAGRAM_BOT_SYSTEM_PROMPT=${INSTAGRAM_BOT_SYSTEM_PROMPT:-}
+      # Azure Storage for image uploads (optional — falls back to Imgur if not configured)
+      - AZURE_STORAGE_ACCOUNT_NAME=${AZURE_STORAGE_ACCOUNT_NAME:-}
+      - AZURE_STORAGE_CONTAINER_NAME=${AZURE_STORAGE_CONTAINER_NAME:-}
+      - AZURE_STORAGE_ACCOUNT_KEY=${AZURE_STORAGE_ACCOUNT_KEY:-}
       # Tells update.sh which compose file to use (local vs cloud)
       - ALLERAC_PRODUCT_LINE=local
     ports:
