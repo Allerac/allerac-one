@@ -179,6 +179,21 @@ export class InstagramGraphService {
 
   /** Publish a prepared media post */
   async publishPost(accessToken: string, igUserId: string, imageUrl: string, caption: string): Promise<{ id: string }> {
+    // Debug: verify the actual IG user ID from /me endpoint
+    try {
+      const meRes = await fetch(`${GRAPH_URL}/me?fields=id,username&access_token=${accessToken}`);
+      if (meRes.ok) {
+        const meData = await meRes.json() as { id: string; username?: string };
+        console.log(`[Instagram] /me endpoint returned ID: ${meData.id}, username: ${meData.username}`);
+        console.log(`[Instagram] Stored igUserId: ${igUserId}`);
+        if (meData.id !== igUserId) {
+          console.warn(`[Instagram] ⚠️ ID MISMATCH! Using stored ID (${igUserId}) but /me returns (${meData.id})`);
+        }
+      }
+    } catch (err) {
+      console.error(`[Instagram] Failed to verify /me:`, err);
+    }
+
     // Step 1: Create media container
     const createUrl = `${GRAPH_URL}/${igUserId}/media?access_token=${accessToken}`;
     const createBody = { image_url: imageUrl, caption };
