@@ -143,7 +143,7 @@ export class InstagramGraphService {
   /** Get DM conversations (requires instagram_manage_messages scope) */
   async getConversations(accessToken: string, igUserId: string): Promise<IGConversation[]> {
     const res = await fetch(
-      `${GRAPH_URL}/${igUserId}/conversations?platform=instagram&fields=id,updated_time,participants&access_token=${accessToken}`
+      `${GRAPH_URL}/${igUserId}/conversations?fields=id,updated_time,participants&access_token=${accessToken}`
     );
     if (!res.ok) throw new Error(`Instagram getConversations error: ${await res.text()}`);
     const data = await res.json();
