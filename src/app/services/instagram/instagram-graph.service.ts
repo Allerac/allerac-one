@@ -180,10 +180,16 @@ export class InstagramGraphService {
   /** Publish a prepared media post */
   async publishPost(accessToken: string, igUserId: string, imageUrl: string, caption: string): Promise<{ id: string }> {
     // Step 1: Create media container
-    const createRes = await fetch(`${GRAPH_URL}/${igUserId}/media?access_token=${accessToken}`, {
+    const createUrl = `${GRAPH_URL}/${igUserId}/media?access_token=${accessToken}`;
+    const createBody = { image_url: imageUrl, caption };
+    console.log(`[Instagram] Publishing POST to: ${GRAPH_URL}/${igUserId}/media`);
+    console.log(`[Instagram] Body:`, JSON.stringify(createBody, null, 2));
+    console.log(`[Instagram] Image URL accessible:`, imageUrl);
+
+    const createRes = await fetch(createUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_url: imageUrl, caption }),
+      body: JSON.stringify(createBody),
     });
     if (!createRes.ok) throw new Error(`Instagram createMedia error: ${await createRes.text()}`);
     const { id: creationId } = await createRes.json();
