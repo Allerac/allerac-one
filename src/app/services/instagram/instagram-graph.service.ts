@@ -179,27 +179,13 @@ export class InstagramGraphService {
 
   /** Publish a prepared media post */
   async publishPost(accessToken: string, igUserId: string, imageUrl: string, caption: string): Promise<{ id: string }> {
-    // Verify and correct the IG user ID from /me endpoint if there's a mismatch
-    let correctIgUserId = igUserId;
-    try {
-      const meRes = await fetch(`${GRAPH_URL}/me?fields=id,username&access_token=${accessToken}`);
-      if (meRes.ok) {
-        const meData = await meRes.json() as { id: string; username?: string };
-        console.log(`[Instagram] /me endpoint returned ID: ${meData.id}, username: ${meData.username}`);
-        console.log(`[Instagram] Stored igUserId: ${igUserId}`);
-        if (meData.id !== igUserId) {
-          console.warn(`[Instagram] ⚠️ ID MISMATCH! Stored: ${igUserId}, /me returns: ${meData.id}. Using /me ID.`);
-          correctIgUserId = meData.id;
-        }
-      }
-    } catch (err) {
-      console.error(`[Instagram] Failed to verify /me:`, err);
-    }
+    // Note: igUserId here is the Business User ID (for Graph API), not the legacy webhook ID
+    const businessUserId = igUserId;
 
     // Step 1: Create media container
-    const createUrl = `${GRAPH_URL}/${correctIgUserId}/media?access_token=${accessToken}`;
+    const createUrl = `${GRAPH_URL}/${businessUserId}/media?access_token=${accessToken}`;
     const createBody = { image_url: imageUrl, caption };
-    console.log(`[Instagram] Publishing POST to: ${GRAPH_URL}/${correctIgUserId}/media`);
+    console.log(`[Instagram] Publishing POST to: ${GRAPH_URL}/${businessUserId}/media`);
     console.log(`[Instagram] Body:`, JSON.stringify(createBody, null, 2));
     console.log(`[Instagram] Image URL accessible:`, imageUrl);
 
@@ -227,8 +213,8 @@ export class InstagramGraphService {
     }
 
     // Step 3: Publish
-    console.log(`[Instagram] Publishing with creation_id: ${creationId}, igUserId: ${correctIgUserId}`);
-    const publishRes = await fetch(`${GRAPH_URL}/${correctIgUserId}/media_publish?access_token=${accessToken}`, {
+    console.log(`[Instagram] Publishing with creation_id: ${creationId}, businessUserId: ${businessUserId}`);
+    const publishRes = await fetch(`${GRAPH_URL}/${businessUserId}/media_publish?access_token=${accessToken}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creation_id: creationId }),

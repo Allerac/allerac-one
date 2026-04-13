@@ -38,7 +38,12 @@ export class InstagramTool {
     }
 
     try {
-      const result = await instagramService.publishPost(accessToken, status.ig_user_id!, finalImageUrl, caption);
+      // Use ig_business_user_id for publishing (Graph API), fall back to ig_user_id if not available
+      const businessUserId = status.ig_business_user_id || status.ig_user_id;
+      if (!businessUserId) {
+        return { error: 'No Instagram user ID available for publishing' };
+      }
+      const result = await instagramService.publishPost(accessToken, businessUserId, finalImageUrl, caption);
       return { success: true, post_id: result.id, message: `Post published successfully! Post ID: ${result.id}` };
     } catch (err: any) {
       return { error: `Failed to publish post: ${err.message}` };

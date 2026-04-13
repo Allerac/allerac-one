@@ -4,6 +4,7 @@ import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 export interface InstagramStatus {
   is_connected: boolean;
   ig_user_id: string | null;
+  ig_business_user_id: string | null;
   username: string | null;
   expires_at: Date | null;
   scopes: string | null;
@@ -13,6 +14,7 @@ export interface InstagramStatus {
 export interface InstagramTokens {
   accessToken: string;
   igUserId: string;
+  igBusinessUserId?: string;
   username: string;
   tokenType?: string;
   expiresAt?: Date | null;
@@ -22,17 +24,18 @@ export interface InstagramTokens {
 export class InstagramCredentialsService {
   async getStatus(userId: string): Promise<InstagramStatus> {
     const result = await pool.query(
-      `SELECT ig_user_id, username, token_type, expires_at, scopes, is_connected, last_error
+      `SELECT ig_user_id, ig_business_user_id, username, token_type, expires_at, scopes, is_connected, last_error
        FROM instagram_credentials WHERE user_id = $1`,
       [userId]
     );
     if (!result.rows[0]) {
-      return { is_connected: false, ig_user_id: null, username: null, expires_at: null, scopes: null, last_error: null };
+      return { is_connected: false, ig_user_id: null, ig_business_user_id: null, username: null, expires_at: null, scopes: null, last_error: null };
     }
     const row = result.rows[0];
     return {
       is_connected: row.is_connected,
       ig_user_id:   row.ig_user_id,
+      ig_business_user_id: row.ig_business_user_id,
       username:     row.username,
       expires_at:   row.expires_at,
       scopes:       row.scopes,
@@ -53,10 +56,11 @@ export class InstagramCredentialsService {
     const encrypted = encrypt(tokens.accessToken);
     await pool.query(
       `INSERT INTO instagram_credentials
-         (user_id, ig_user_id, username, access_token_encrypted, token_type, expires_at, scopes, is_connected, last_error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true, NULL)
+         (user_id, ig_user_id, ig_business_user_id, username, access_token_encrypted, token_type, expires_at, scopes, is_connected, last_error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, NULL)
        ON CONFLICT (user_id) DO UPDATE SET
          ig_user_id             = EXCLUDED.ig_user_id,
+         ig_business_user_id    = EXCLUDED.ig_business_user_id,
          username               = EXCLUDED.username,
          access_token_encrypted = EXCLUDED.access_token_encrypted,
          token_type             = EXCLUDED.token_type,
@@ -65,7 +69,7 @@ export class InstagramCredentialsService {
          is_connected           = true,
          last_error             = NULL,
          updated_at             = NOW()`,
-      [userId, tokens.igUserId, tokens.username, encrypted, tokens.tokenType ?? 'bearer', tokens.expiresAt ?? null, tokens.scopes ?? null]
+      [userId, tokens.igUserId, tokens.igBusinessUserId ?? tokens.igUserId, tokens.username, encrypted, tokens.tokenType ?? 'bearer', tokens.expiresAt ?? null, tokens.scopes ?? null]
     );
   }
 
