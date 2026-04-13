@@ -180,9 +180,9 @@ export class InstagramGraphService {
   /** Publish a prepared media post */
   async publishPost(accessToken: string, igUserId: string, imageUrl: string, caption: string): Promise<{ id: string }> {
     // Step 1: Create media container
-    const createRes = await fetch(`${GRAPH_URL}/${igUserId}/media`, {
+    const createRes = await fetch(`${GRAPH_URL}/${igUserId}/media?access_token=${accessToken}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_url: imageUrl, caption }),
     });
     if (!createRes.ok) throw new Error(`Instagram createMedia error: ${await createRes.text()}`);
@@ -204,9 +204,9 @@ export class InstagramGraphService {
     }
 
     // Step 3: Publish
-    const publishRes = await fetch(`${GRAPH_URL}/${igUserId}/media_publish`, {
+    const publishRes = await fetch(`${GRAPH_URL}/${igUserId}/media_publish?access_token=${accessToken}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creation_id: creationId }),
     });
     if (!publishRes.ok) throw new Error(`Instagram publishMedia error: ${await publishRes.text()}`);
