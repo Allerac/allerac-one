@@ -149,14 +149,21 @@ export default function InstagramPostModal({
             reader.readAsDataURL(blob);
           });
         } catch (err) {
-          setError('Failed to process image URL');
-          setIsLoading(false);
-          return;
+          console.error('Failed to fetch image, will publish with URL directly:', err);
+          // Continue with imageUrl instead of base64
         }
       }
 
       const fullCaption = tags ? `${caption}\n\n${tags}` : caption;
-      const result = await publishInstagramPost(userId, base64ToPublish as string, fullCaption);
+      // If we have base64, use publishInstagramPost server action. Otherwise use imageUrl
+      const result = base64ToPublish
+        ? await publishInstagramPost(userId, base64ToPublish as string, fullCaption)
+        : // For imageUrl, call the tool directly via API
+          await fetch('/api/instagram/publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ caption: fullCaption, image_url: imageUrl }),
+          }).then(r => r.json());
 
       if (result.success) {
         setSuccess(result.message);
@@ -325,7 +332,7 @@ export default function InstagramPostModal({
             </button>
             <button
               onClick={handlePublish}
-              disabled={isLoading || !imageBase64 || !caption.trim()}
+              disabled={isLoading || (!imageBase64 && !imageUrl) || !caption.trim()}
               className="flex-1 min-w-32 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition text-sm"
             >
               {isLoading ? 'Publishing...' : 'Post to Instagram'}
