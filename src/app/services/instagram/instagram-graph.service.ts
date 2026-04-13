@@ -227,11 +227,17 @@ export class InstagramGraphService {
     }
 
     // Step 3: Publish
-    const publishRes = await fetch(`${GRAPH_URL}/${igUserId}/media_publish?access_token=${accessToken}`, {
+    console.log(`[Instagram] Publishing with creation_id: ${creationId}, igUserId: ${correctIgUserId}`);
+    const publishRes = await fetch(`${GRAPH_URL}/${correctIgUserId}/media_publish?access_token=${accessToken}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ creation_id: creationId }),
     });
+    console.log(`[Instagram] Publish response status: ${publishRes.status}`);
+    if (!publishRes.ok) {
+      const errorText = await publishRes.text();
+      console.log(`[Instagram] Publish error response:`, errorText);
+    }
     if (!publishRes.ok) throw new Error(`Instagram publishMedia error: ${await publishRes.text()}`);
     return publishRes.json();
   }
