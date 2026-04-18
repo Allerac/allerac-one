@@ -2,6 +2,7 @@
 
 import pool from '@/app/clients/db';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
+import { submitLog } from '@/lib/submit-log';
 
 const WORKER_URL = (process.env.HEALTH_WORKER_URL || 'http://health-worker:8001').replace(/\/$/, '');
 const WORKER_SECRET = process.env.HEALTH_WORKER_SECRET || '';
@@ -54,9 +55,11 @@ export async function getGarminStatus(userId: string) {
 // ─── Connect ───────────────────────────────────────────────────────────────────
 
 export async function connectGarmin(userId: string, email: string, password: string) {
+  await submitLog('Health', `Garmin connect started for ${email}`);
   const result = await workerFetch('POST', '/connect', { email, password });
 
   if (result.status === 'mfa_required') {
+    await submitLog('Health', `Garmin MFA required`);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const sessionDataEncrypted = encrypt(JSON.stringify({ session_id: result.session_id }));
 
@@ -85,6 +88,7 @@ export async function connectGarmin(userId: string, email: string, password: str
   }
 
   if (result.status === 'success') {
+    await submitLog('Health', `Garmin connected successfully`);
     await pool.query(
       `INSERT INTO garmin_credentials (user_id, email_encrypted, oauth1_token_encrypted, is_connected, mfa_pending)
        VALUES ($1, $2, $3, true, false)
@@ -107,6 +111,7 @@ export async function connectGarmin(userId: string, email: string, password: str
 // ─── MFA ───────────────────────────────────────────────────────────────────────
 
 export async function submitGarminMfa(userId: string, mfaCode: string) {
+  await submitLog('Health', `Garmin MFA submitted`);
   const res = await pool.query(
     'SELECT session_data_encrypted, expires_at FROM health_mfa_sessions WHERE user_id = $1',
     [userId]
@@ -132,6 +137,7 @@ export async function submitGarminMfa(userId: string, mfaCode: string) {
     throw new Error('Invalid MFA code');
   }
 
+  await submitLog('Health', `Garmin MFA success — session saved`);
   await pool.query(
     `UPDATE garmin_credentials SET
        oauth1_token_encrypted = $2,
@@ -167,6 +173,7 @@ export async function triggerInitialSync(userId: string) {
 }
 
 async function _runSync(userId: string, jobType: 'manual' | 'full', days: number) {
+  await submitLog('Health', '_runSync called');
   const res = await pool.query(
     'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
     [userId]
@@ -178,6 +185,8 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
   const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
   const endDate = new Date().toISOString().split('T')[0];
   const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  await submitLog('Health', `Sync started: ${startDate} → ${endDate} (${days} days)`);
 
   const jobRes = await pool.query(
     `INSERT INTO health_sync_jobs (user_id, status, job_type, started_at) VALUES ($1, 'running', $2, NOW()) RETURNING id`,
@@ -192,7 +201,21 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
       end_date: endDate,
     });
 
+    for (const m of data.metrics) {
+      const parts: string[] = [];
+      if (m.steps) parts.push(`steps: ${m.steps}`);
+      if (m.calories) parts.push(`calories: ${m.calories}`);
+      if (m.sleep_duration_minutes) parts.push(`sleep: ${Math.round(m.sleep_duration_minutes / 60)}h`);
+      if (m.hrv_weekly_avg) parts.push(`hrv: ${m.hrv_weekly_avg}`);
+      if (m.body_battery_max && m.body_battery_min) parts.push(`battery: ${m.body_battery_min}-${m.body_battery_max}`);
+      if (parts.length > 0) {
+        await submitLog('Health', `${m.date} → ${parts.join(' | ')}`);
+      }
+    }
+
     await _upsertMetrics(userId, data.metrics);
+
+    await submitLog('Health', `Sync complete: ${data.metrics.length} days synced`);
 
     await pool.query(
       `UPDATE health_sync_jobs SET status='completed', completed_at=NOW(), records_fetched=$2 WHERE id=$1`,
@@ -205,6 +228,7 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
 
     return { success: true, records: data.metrics.length };
   } catch (e: any) {
+    await submitLog('Health', `Sync failed: ${e.message}`);
     await pool.query(
       `UPDATE health_sync_jobs SET status='failed', completed_at=NOW(), error_message=$2 WHERE id=$1`,
       [jobId, e.message]
