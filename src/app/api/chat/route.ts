@@ -311,7 +311,7 @@ export async function POST(request: Request): Promise<Response> {
 
         // Filter tools based on active skill — avoid confusing the model with irrelevant tools
         const SHELL_SKILLS = ['programmer'];
-        const HEALTH_TOOL_NAMES = ['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status'];
+        const HEALTH_TOOL_NAMES = ['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'];
         const INSTAGRAM_TOOL_NAMES = ['instagram_create_post_draft', 'instagram_publish_post', 'instagram_get_profile', 'instagram_get_recent_posts'];
         const activeSkillName = activeSkill?.name ?? '';
         const activeTools = TOOLS.filter(t => {
@@ -499,7 +499,7 @@ export async function POST(request: Request): Promise<Response> {
                   } else {
                     toolResult = await igTool.getRecentMedia(userId, toolArgs.limit ?? 6);
                   }
-                } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status'].includes(toolName)) {
+                } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'].includes(toolName)) {
                   const healthTool = new HealthTool();
                   const healthUser = { id: userId, email: user.email, name: user.name || user.email };
                   if (toolName === 'get_health_summary') {
@@ -508,6 +508,8 @@ export async function POST(request: Request): Promise<Response> {
                     toolResult = await healthTool.getMetrics(healthUser, toolArgs.start_date, toolArgs.end_date);
                   } else if (toolName === 'get_daily_snapshot') {
                     toolResult = await healthTool.getDailySnapshot(healthUser, toolArgs.date);
+                  } else if (toolName === 'get_recent_activities') {
+                    toolResult = await healthTool.getRecentActivities(healthUser, toolArgs.limit || 10);
                   } else {
                     toolResult = await healthTool.getGarminStatus(healthUser);
                   }

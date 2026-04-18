@@ -47,6 +47,26 @@ export interface GarminStatusResult {
   error?: string;
 }
 
+export interface Activity {
+  activityId?: string;
+  activityName?: string;
+  activityType?: string;
+  startTimeInSeconds?: number;
+  duration?: number;
+  calories?: number;
+  distance?: number;
+  movingDuration?: number;
+  avgHeartRate?: number;
+  maxHeartRate?: number;
+  elevationGain?: number;
+  elevationLoss?: number;
+}
+
+export interface RecentActivitiesResult {
+  activities?: Activity[];
+  error?: string;
+}
+
 export class HealthTool {
 
   get isConfigured(): boolean {
@@ -148,6 +168,22 @@ export class HealthTool {
       };
     } catch (e: any) {
       return { is_connected: false, error: e.message };
+    }
+  }
+
+  async getRecentActivities(user: HealthUser, limit: number = 10): Promise<RecentActivitiesResult> {
+    try {
+      const endpoint = `/api/health/activities?limit=${Math.min(limit, 50)}`;
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}${endpoint}`, {
+        headers: {
+          Cookie: `session_token=${user.id}`,
+        },
+      });
+      if (!response.ok) return { error: `API error: ${response.status}` };
+      const data = await response.json();
+      return { activities: data.activities };
+    } catch (e: any) {
+      return { error: e.message };
     }
   }
 

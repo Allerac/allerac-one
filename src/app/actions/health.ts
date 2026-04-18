@@ -286,6 +286,22 @@ export async function getDailySnapshot(userId: string, date: string) {
   return res.rows[0] ?? null;
 }
 
+// ─── Activities ────────────────────────────────────────────────────────────
+
+export async function getRecentActivities(userId: string, limit: number = 10) {
+  const res = await pool.query(
+    'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
+    [userId]
+  );
+  if (res.rows.length === 0 || !res.rows[0].is_connected) {
+    throw new Error('Garmin not connected');
+  }
+
+  const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
+  const data = await workerFetch('POST', '/activities', { session_dump: sessionDump, limit });
+  return data.activities ?? [];
+}
+
 // ─── Internal ──────────────────────────────────────────────────────────────────
 
 const toInt = (v: any) => (v != null ? Math.round(Number(v)) : null);

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import * as healthActions from '@/app/actions/health';
 import GarminSettings from '../settings/GarminSettings';
+import RecentActivity from './RecentActivity';
 
 interface HealthDashboardProps {
   isOpen: boolean;
@@ -362,6 +363,9 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
             </div>
           ) : (
             <div className="p-5 space-y-4">
+              {/* Recent activity card */}
+              <RecentActivity isDarkMode={isDarkMode} />
+
               {/* Period selector */}
               <div className="flex gap-2 flex-wrap">
                 {(['today', '3days', '7days', '30days'] as Period[]).map((p) => (

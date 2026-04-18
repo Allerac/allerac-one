@@ -53,6 +53,11 @@ class SyncRequest(BaseModel):
     end_date: date
 
 
+class ActivitiesRequest(BaseModel):
+    session_dump: str
+    limit: int = 10
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -116,6 +121,21 @@ def sync(req: SyncRequest, x_worker_secret: str = Header(...)):
         return {"metrics": metrics}
     except Exception as e:
         logger.error(f"sync error: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@app.post("/activities")
+def activities(req: ActivitiesRequest, x_worker_secret: str = Header(...)):
+    """
+    Fetches recent activities.
+    Returns { activities: [ { activityId, activityName, activityType, ... }, ... ] }.
+    """
+    _auth(x_worker_secret)
+    try:
+        acts = garmin_service.fetch_recent_activities(req.session_dump, req.limit)
+        return {"activities": acts}
+    except Exception as e:
+        logger.error(f"activities error: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

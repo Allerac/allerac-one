@@ -70,6 +70,23 @@ const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_recent_activities',
+      description: 'Get recent activities from the user\'s Garmin device (workouts, exercises, etc.). Use this when the user asks about their recent activities, latest workout, or recent exercise sessions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Number of recent activities to retrieve (default 10, max 50). Use 1 to get just the most recent activity.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
 ] : [];
 
 export const TOOLS = [

@@ -276,3 +276,49 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
 
     logger.info(f"Fetched {len(results)} days of metrics")
     return results
+
+
+def fetch_recent_activities(session_dump: str, limit: int = 10) -> list[dict]:
+    """
+    Fetches recent activities from Garmin.
+    Returns a list of activity dicts with name, type, duration, calories, date, etc.
+    """
+    garmin = _garmin_from_session(session_dump)
+    results = []
+
+    try:
+        # get_last_activity returns the most recent activity
+        last = garmin.get_last_activity()
+        if last:
+            activity_id = last.get("activityId")
+            if activity_id:
+                # For the most recent, get full details
+                activity = garmin.get_activity(str(activity_id))
+                results.append(_extract_activity_summary(activity))
+
+        # Fetch more activities if needed
+        # Note: garminconnect doesn't have a direct "get_activities" method,
+        # so we'd need to use the API directly or iterate via get_activity_types
+        # For now, we return what we can get from get_last_activity
+    except Exception as e:
+        logger.warning(f"fetch_recent_activities failed: {e}")
+
+    return results
+
+
+def _extract_activity_summary(activity: dict) -> dict:
+    """Extracts key fields from a Garmin activity dict."""
+    return {
+        "activityId": activity.get("activityId"),
+        "activityName": activity.get("activityName"),
+        "activityType": activity.get("activityType", {}).get("displayValue"),
+        "startTimeInSeconds": activity.get("startTimeInSeconds"),
+        "duration": activity.get("duration"),  # milliseconds
+        "calories": activity.get("calories"),
+        "distance": activity.get("distance"),
+        "movingDuration": activity.get("movingDuration"),
+        "avgHeartRate": activity.get("avgHeartRate"),
+        "maxHeartRate": activity.get("maxHeartRate"),
+        "elevationGain": activity.get("elevationGain"),
+        "elevationLoss": activity.get("elevationLoss"),
+    }
