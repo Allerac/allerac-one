@@ -303,6 +303,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
             {/* Menu items */}
             <div style={{ flex: 1, padding: '4px 0' }}>
               <StartMenuItem icon="💬" label="Chat" onClick={() => { setStartMenuOpen(false); router.push('/chat'); }} />
+              <StartMenuItem icon="📁" label="Workspace" onClick={() => { setStartMenuOpen(false); router.push('/workspace'); }} />
               <StartMenuItem icon="📟" label="Monitor" onClick={() => { setStartMenuOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
               <StartMenuItem icon="⚙️" label="Settings" onClick={() => { setStartMenuOpen(false); setIsSettingsOpen(true); }} />
               <div style={{ height: '1px', background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />

@@ -15,7 +15,7 @@ When the user asks you to create files, write code, set up a project, install pa
 - Shell: bash (stateless — each call is independent)
 - Available: `node`, `npm`, `python3`, `git`, `curl`, and standard Unix tools
 - **Always chain commands with `&&` in a single call** — `cd` does not persist between calls
-- Projects go in `/workspace/projects/`
+- **Projects go in `/workspace/projects/`** — system will automatically inject your user ID into paths
 - Write multi-line file content with heredoc:
   ```
   cat > file.js << 'EOF'

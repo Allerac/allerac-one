@@ -8,6 +8,7 @@ import * as backupActions from '@/app/actions/backup';
 import BenchmarkPanel from './BenchmarkPanel';
 import GarminSettings from '../settings/GarminSettings';
 import InstagramSettings from '../settings/InstagramSettings';
+import ModelSelector from '../chat/ModelSelector';
 import { Model } from '@/app/types';
 
 interface SystemDashboardProps {
@@ -995,19 +996,16 @@ export default function SystemDashboardModal({
                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   AI Model
                 </label>
-                <select
-                  value={selectedModel}
-                  onChange={(e) => { setSelectedModel(e.target.value); localStorage.setItem('selected_model', e.target.value); }}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                >
-                  {MODELS.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.icon} {model.name}
-                    </option>
-                  ))}
-                </select>
+                <ModelSelector
+                  selectedModel={selectedModel}
+                  onModelChange={(modelId) => {
+                    setSelectedModel(modelId);
+                    localStorage.setItem('selected_model', modelId);
+                  }}
+                  isDarkMode={isDarkMode}
+                />
                 <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Choose the AI model used in your conversations. Saved automatically.
+                  Choose the AI model used in your conversations. For Ollama models, you can download them directly here.
                 </p>
               </div>
 

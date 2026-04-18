@@ -47,6 +47,17 @@ export const MODELS: Model[] = [
     shortName: 'GPT-4o',
   },
   {
+    id: 'gemma4',
+    name: 'Gemma 4 (Local)',
+    icon: '🔥',
+    description: 'High-performance open model from Google',
+    provider: 'ollama',
+    baseUrl: '/api/ollama',
+    requiresToken: false,
+    category: 'Pro',
+    shortName: 'Gemma 4',
+  },
+  {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     icon: '✨',

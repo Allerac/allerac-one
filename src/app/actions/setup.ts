@@ -135,6 +135,38 @@ export async function saveLocale(locale: string): Promise<void> {
 }
 
 /**
+ * Pull a model from Ollama (download/install)
+ */
+export async function pullOllamaModel(modelName: string): Promise<{ success: true; message: string } | { success: false; error: string }> {
+  try {
+    console.log(`[Setup] Pulling Ollama model: ${modelName}`);
+
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/pull`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: modelName,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { success: false, error: errorText || `Failed to pull model ${modelName}` };
+    }
+
+    const data = await response.json();
+    console.log(`[Setup] Successfully pulled model ${modelName}:`, data);
+    return { success: true, message: `Model ${modelName} downloaded successfully` };
+  } catch (error: any) {
+    console.error(`[Setup] Error pulling Ollama model ${modelName}:`, error);
+    return { success: false, error: error.message || `Failed to pull model ${modelName}` };
+  }
+}
+
+/**
  * Save default model preference
  */
 export async function saveDefaultModel(userId: string, model: string): Promise<{ success: boolean }> {

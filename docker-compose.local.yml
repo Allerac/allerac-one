@@ -192,6 +192,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    pull_policy: always
     container_name: allerac-ollama
     restart: unless-stopped
     volumes:
@@ -222,6 +223,7 @@ services:
   #   Allerac Pro:   OLLAMA_MODELS=qwen2.5:3b,deepseek-r1:7b
   ollama-setup:
     image: ollama/ollama:latest
+    pull_policy: always
     container_name: allerac-ollama-setup
     depends_on:
       ollama:

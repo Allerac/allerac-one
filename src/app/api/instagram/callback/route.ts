@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     // Subscribe this IG account to webhook message events
     try {
       const subRes = await fetch(
-        `https://graph.instagram.com/v21.0/${resolvedIgUserId}/subscribed_apps`,
+        `https://graph.instagram.com/v21.0/${webhookUserId}/subscribed_apps`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },

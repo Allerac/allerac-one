@@ -430,7 +430,8 @@ export default function ChatMessages({
                       {(() => {
                         const text = typeof message.content === 'string' ? message.content : '';
                         // Capture the project folder name (no extension = it's a directory)
-                        const matches = [...text.matchAll(/\/workspace\/projects\/([\w\-]+)(?:\/|$)/g)];
+                        // Handle both: /workspace/projects/NAME and /workspace/projects/{UUID}/NAME
+                        const matches = [...text.matchAll(/\/workspace\/projects\/(?:\w+-\w+-\w+-\w+-\w+\/)?([^\/\s]+)(?:\/|$)/g)];
                         const unique = [...new Set(matches.map(m => m[1]))];
                         if (unique.length === 0) return null;
                         return (

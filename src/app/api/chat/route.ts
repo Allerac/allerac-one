@@ -329,6 +329,24 @@ export async function POST(request: Request): Promise<Response> {
           enrichedSystemMessage += '\n\n' + relevantContext;
         }
 
+        // Inject user-scoped workspace path so the AI always writes to the right directory
+        const workspacePath = `/workspace/projects/${userId}`;
+        const beforePathInject = enrichedSystemMessage;
+        enrichedSystemMessage = enrichedSystemMessage.replace(
+          /\/workspace\/projects\//g,
+          `${workspacePath}/`
+        );
+        // Also handle cases where the path appears at end of string or without trailing slash
+        enrichedSystemMessage = enrichedSystemMessage.replace(
+          /\/workspace\/projects(?=\s|$|["'])/g,
+          workspacePath
+        );
+
+        const pathReplacements = (beforePathInject.match(/\/workspace\/projects/g) || []).length;
+        if (pathReplacements > 0) {
+          console.log(`[ChatRoute] Injected workspace path: replaced ${pathReplacements} instances of /workspace/projects with ${workspacePath}`);
+        }
+
         // Load conversation history and build messages array
         const history = await chatService.loadMessages(convId);
         const conversationMessages: Array<{
