@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { AuthService } from '@/app/services/auth/auth.service';
-import { getRecentActivities } from '@/app/actions/health';
+import { getDailyHealth } from '@/app/actions/health';
 
 const authService = new AuthService();
 
@@ -19,10 +19,14 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const url = new URL(request.url);
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '10'), 50);
-    const date = url.searchParams.get('date') || undefined;
-    const activities = await getRecentActivities(user.id, limit, date || undefined);
-    return Response.json({ activities });
+    const date = url.searchParams.get('date');
+
+    if (!date) {
+      return Response.json({ error: 'Missing date parameter (YYYY-MM-DD)' }, { status: 400 });
+    }
+
+    const metrics = await getDailyHealth(user.id, date);
+    return Response.json(metrics);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return Response.json({ error: message }, { status: 500 });

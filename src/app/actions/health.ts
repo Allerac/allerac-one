@@ -215,18 +215,43 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
 
     await _upsertMetrics(userId, data.metrics);
 
-    await submitLog('Health', `Sync complete: ${data.metrics.length} days synced`);
+    // Also fetch and save activities for the sync period
+    const allActivities: any[] = [];
+    const current = new Date(startDate + 'T12:00:00');
+    const end = new Date(endDate + 'T12:00:00');
+
+    while (current <= end) {
+      const dateStr = current.toISOString().split('T')[0];
+      try {
+        const actData = await workerFetch('POST', '/activities', {
+          session_dump: sessionDump,
+          limit: 50,
+          date: dateStr,
+        });
+        const activities = actData.activities || [];
+        allActivities.push(...activities);
+      } catch (e) {
+        await submitLog('Health', `Warning: failed to fetch activities for ${dateStr} during sync`);
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    if (allActivities.length > 0) {
+      await _upsertActivities(userId, allActivities);
+    }
+
+    await submitLog('Health', `Sync complete: ${data.metrics.length} days + ${allActivities.length} activities synced`);
 
     await pool.query(
       `UPDATE health_sync_jobs SET status='completed', completed_at=NOW(), records_fetched=$2 WHERE id=$1`,
-      [jobId, data.metrics.length]
+      [jobId, data.metrics.length + allActivities.length]
     );
     await pool.query(
       `UPDATE garmin_credentials SET last_sync_at=NOW(), last_error=NULL, updated_at=NOW() WHERE user_id=$1`,
       [userId]
     );
 
-    return { success: true, records: data.metrics.length };
+    return { success: true, records: data.metrics.length + allActivities.length };
   } catch (e: any) {
     await submitLog('Health', `Sync failed: ${e.message}`);
     await pool.query(
@@ -244,16 +269,49 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
 // ─── Metrics queries ───────────────────────────────────────────────────────────
 
 export async function getHealthMetrics(userId: string, startDate: string, endDate: string) {
+  // Try from database first
   const res = await pool.query(
     `SELECT * FROM health_daily_metrics
      WHERE user_id = $1 AND date BETWEEN $2 AND $3
      ORDER BY date ASC`,
     [userId, startDate, endDate]
   );
-  return res.rows.map((row: any) => ({
+
+  const metrics = res.rows.map((row: any) => ({
     ...row,
     date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date).split('T')[0],
   }));
+
+  // If no data in database for this range, fetch from API
+  if (metrics.length === 0) {
+    await submitLog('Health', `No metrics in database for ${startDate} to ${endDate}, fetching from API`);
+    const garminRes = await pool.query(
+      'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
+      [userId]
+    );
+    if (garminRes.rows.length > 0 && garminRes.rows[0].is_connected) {
+      try {
+        const sessionDump = safeDecrypt(garminRes.rows[0].oauth1_token_encrypted);
+        const syncRes = await workerFetch('POST', '/sync', {
+          session_dump: sessionDump,
+          start_date: startDate,
+          end_date: endDate,
+        });
+        await _upsertMetrics(userId, syncRes.metrics || []);
+        await submitLog('Health', `Synced ${(syncRes.metrics || []).length} days and saved to database`);
+
+        // Return fetched metrics
+        return (syncRes.metrics || []).map((m: any) => ({
+          ...m,
+          date: String(m.date),
+        }));
+      } catch (e: any) {
+        await submitLog('Health', `Warning: could not sync metrics from API: ${e.message}`);
+      }
+    }
+  }
+
+  return metrics;
 }
 
 export async function getHealthSummary(userId: string, period: 'day' | '3days' | 'week' | 'month' | 'year') {
@@ -286,9 +344,49 @@ export async function getDailySnapshot(userId: string, date: string) {
   return res.rows[0] ?? null;
 }
 
-// ─── Activities ────────────────────────────────────────────────────────────
+async function getActivitiesFromDB(userId: string, startDate: string, endDate: string) {
+  const res = await pool.query(
+    `SELECT * FROM health_activities
+     WHERE user_id = $1 AND date BETWEEN $2 AND $3
+     ORDER BY date DESC, start_time_seconds DESC`,
+    [userId, startDate, endDate]
+  );
+  return res.rows.map((row: any) => {
+    // Start with raw_data which has all the original fields
+    const rawData = row.raw_data ? (typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data) : {};
+    return {
+      // Spread raw data to get all original fields (including summarizedExerciseSets, etc)
+      ...rawData,
+      // Override with normalized fields from DB
+      activityId: row.activity_id,
+      activityName: row.activity_name,
+      activityType: row.activity_type,
+      startTimeInSeconds: row.start_time_seconds ? Number(row.start_time_seconds) : null,
+      startTimeLocal: row.start_time_local,
+      duration: row.duration_seconds ? Number(row.duration_seconds) : null,
+      calories: row.calories ? Number(row.calories) : null,
+      distance: row.distance_meters ? Number(row.distance_meters) : null,
+      avgHeartRate: row.avg_heart_rate ? Number(row.avg_heart_rate) : null,
+      maxHeartRate: row.max_heart_rate ? Number(row.max_heart_rate) : null,
+      elevationGain: row.elevation_gain ? Number(row.elevation_gain) : null,
+      elevationLoss: row.elevation_loss ? Number(row.elevation_loss) : null,
+    };
+  });
+}
 
-export async function getRecentActivities(userId: string, limit: number = 10) {
+// ─── Daily Health ──────────────────────────────────────────────────────────
+
+export async function getDailyHealth(userId: string, date: string) {
+  await submitLog('Health', `Fetching daily health for ${date}`);
+
+  // Try cache first
+  const cached = await getDailySnapshot(userId, date);
+  if (cached) {
+    await submitLog('Health', `Daily health from cache for ${date}`);
+    return cached;
+  }
+
+  // Fetch from API
   const res = await pool.query(
     'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
     [userId]
@@ -298,13 +396,188 @@ export async function getRecentActivities(userId: string, limit: number = 10) {
   }
 
   const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
-  const data = await workerFetch('POST', '/activities', { session_dump: sessionDump, limit });
-  return data.activities ?? [];
+  const data = await workerFetch('POST', '/daily-health', {
+    session_dump: sessionDump,
+    date,
+  });
+
+  // Save to database
+  await _upsertMetrics(userId, [{ date, ...data }]);
+  await submitLog('Health', `Daily health retrieved and saved: ${Object.keys(data).length} fields`);
+  return data;
+}
+
+export async function getActivitiesRange(userId: string, startDate: string, endDate: string) {
+  await submitLog('Health', `Fetching activities from ${startDate} to ${endDate}`);
+
+  // Try to get from database first
+  const cachedActivities = await getActivitiesFromDB(userId, startDate, endDate);
+  if (cachedActivities.length > 0) {
+    await submitLog('Health', `Activities from cache: ${cachedActivities.length} activities`);
+    return { activities: cachedActivities };
+  }
+
+  const res = await pool.query(
+    'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
+    [userId]
+  );
+  if (res.rows.length === 0 || !res.rows[0].is_connected) {
+    throw new Error('Garmin not connected');
+  }
+
+  const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
+
+  // Fetch activities for each day in range
+  const allActivities: any[] = [];
+  const current = new Date(startDate + 'T12:00:00');
+  const end = new Date(endDate + 'T12:00:00');
+
+  while (current <= end) {
+    const dateStr = current.toISOString().split('T')[0];
+    try {
+      const data = await workerFetch('POST', '/activities', {
+        session_dump: sessionDump,
+        limit: 50,
+        date: dateStr,
+      });
+      const activities = data.activities || [];
+      allActivities.push(...activities);
+    } catch (e) {
+      await submitLog('Health', `Warning: failed to fetch activities for ${dateStr}`);
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Save to database
+  if (allActivities.length > 0) {
+    await _upsertActivities(userId, allActivities);
+  }
+
+  await submitLog('Health', `Activities retrieved and saved: ${allActivities.length} activities from ${startDate} to ${endDate}`);
+  return { activities: allActivities };
+}
+
+// ─── Activities ────────────────────────────────────────────────────────────
+
+export async function getRecentActivities(userId: string, limit: number = 10, filterDate?: string) {
+  const filterMsg = filterDate ? ` for ${filterDate}` : '';
+  await submitLog('Health', `Fetching recent activities (limit=${limit})${filterMsg}...`);
+
+  // Try cache first if filtering by date
+  let activities: any[] = [];
+  if (filterDate) {
+    const cached = await getActivitiesFromDB(userId, filterDate, filterDate);
+    if (cached.length > 0) {
+      await submitLog('Health', `Retrieved ${cached.length} activities from cache${filterMsg}`);
+      return cached.slice(0, limit);
+    }
+  }
+
+  const res = await pool.query(
+    'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
+    [userId]
+  );
+  if (res.rows.length === 0 || !res.rows[0].is_connected) {
+    throw new Error('Garmin not connected');
+  }
+
+  const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
+  await submitLog('Health', `Calling worker /activities endpoint${filterDate ? ` for ${filterDate}` : ''}...`);
+  const data = await workerFetch('POST', '/activities', {
+    session_dump: sessionDump,
+    limit,
+    date: filterDate || undefined
+  });
+  activities = data.activities ?? [];
+
+  // Save to database if filtering by date
+  if (filterDate && activities.length > 0) {
+    await _upsertActivities(userId, activities);
+  }
+
+  // Limit to requested amount
+  activities = activities.slice(0, limit);
+
+  await submitLog('Health', `Retrieved and saved ${activities.length} activities${filterMsg}`);
+
+  for (const activity of activities) {
+    const details = [
+      activity.activityName,
+      `(${activity.activityType})`,
+      activity.duration ? `${(activity.duration / 60000).toFixed(1)}min` : '',
+      activity.calories ? `${Math.round(activity.calories)}cal` : '',
+      activity.activeSets ? `${activity.activeSets} sets` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    await submitLog('Health', `  • ${details}`);
+
+    if (activity.summarizedExerciseSets && activity.summarizedExerciseSets.length > 0) {
+      for (const set of activity.summarizedExerciseSets.slice(0, 3)) {
+        await submitLog('Health', `    - ${set.category}: ${set.reps} reps × ${set.sets} sets`);
+      }
+      if (activity.summarizedExerciseSets.length > 3) {
+        await submitLog('Health', `    ... and ${activity.summarizedExerciseSets.length - 3} more exercises`);
+      }
+    }
+  }
+
+  return activities;
 }
 
 // ─── Internal ──────────────────────────────────────────────────────────────────
 
 const toInt = (v: any) => (v != null ? Math.round(Number(v)) : null);
+
+async function _upsertActivities(userId: string, activities: any[]) {
+  for (const a of activities) {
+    // Calculate date from startTimeLocal or startTimeInSeconds
+    let activityDate: string | null = null;
+    if (a.startTimeLocal) {
+      activityDate = a.startTimeLocal.split('T')[0];
+    } else if (a.startTimeInSeconds) {
+      const ms = typeof a.startTimeInSeconds === 'string'
+        ? parseInt(a.startTimeInSeconds) * 1000
+        : a.startTimeInSeconds * 1000;
+      activityDate = new Date(ms).toISOString().split('T')[0];
+    }
+
+    await pool.query(
+      `INSERT INTO health_activities (
+         user_id, activity_id, activity_name, activity_type, date,
+         start_time_seconds, start_time_local,
+         duration_seconds, calories, distance_meters,
+         avg_heart_rate, max_heart_rate,
+         elevation_gain, elevation_loss, raw_data
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       ON CONFLICT (user_id, activity_id) DO UPDATE SET
+         activity_name = COALESCE(EXCLUDED.activity_name, health_activities.activity_name),
+         activity_type = COALESCE(EXCLUDED.activity_type, health_activities.activity_type),
+         date = COALESCE(EXCLUDED.date, health_activities.date),
+         start_time_seconds = COALESCE(EXCLUDED.start_time_seconds, health_activities.start_time_seconds),
+         start_time_local = COALESCE(EXCLUDED.start_time_local, health_activities.start_time_local),
+         duration_seconds = COALESCE(EXCLUDED.duration_seconds, health_activities.duration_seconds),
+         calories = COALESCE(EXCLUDED.calories, health_activities.calories),
+         distance_meters = COALESCE(EXCLUDED.distance_meters, health_activities.distance_meters),
+         avg_heart_rate = COALESCE(EXCLUDED.avg_heart_rate, health_activities.avg_heart_rate),
+         max_heart_rate = COALESCE(EXCLUDED.max_heart_rate, health_activities.max_heart_rate),
+         elevation_gain = COALESCE(EXCLUDED.elevation_gain, health_activities.elevation_gain),
+         elevation_loss = COALESCE(EXCLUDED.elevation_loss, health_activities.elevation_loss),
+         raw_data = COALESCE(EXCLUDED.raw_data, health_activities.raw_data),
+         updated_at = NOW()`,
+      [
+        userId, a.activityId, a.activityName, a.activityType,
+        activityDate,
+        a.startTimeInSeconds, a.startTimeLocal,
+        a.duration, a.calories, a.distance,
+        a.avgHeartRate, a.maxHeartRate,
+        a.elevationGain, a.elevationLoss,
+        JSON.stringify(a)
+      ]
+    );
+  }
+}
 
 async function _upsertMetrics(userId: string, metrics: any[]) {
   for (const m of metrics) {

@@ -56,6 +56,12 @@ class SyncRequest(BaseModel):
 class ActivitiesRequest(BaseModel):
     session_dump: str
     limit: int = 10
+    date: str = None  # Optional: YYYY-MM-DD format
+
+
+class DailyHealthRequest(BaseModel):
+    session_dump: str
+    date: str  # YYYY-MM-DD format
 
 
 # ---------------------------------------------------------------------------
@@ -127,16 +133,72 @@ def sync(req: SyncRequest, x_worker_secret: str = Header(...)):
 @app.post("/activities")
 def activities(req: ActivitiesRequest, x_worker_secret: str = Header(...)):
     """
-    Fetches recent activities.
+    Fetches activities. If date is provided, fetches activities for that day.
     Returns { activities: [ { activityId, activityName, activityType, ... }, ... ] }.
     """
     _auth(x_worker_secret)
     try:
-        acts = garmin_service.fetch_recent_activities(req.session_dump, req.limit)
+        logger.info("=== ACTIVITIES REQUEST ===")
+        acts = garmin_service.fetch_recent_activities(req.session_dump, req.limit, req.date)
+        logger.info(f"=== ACTIVITIES RESULT: {acts} ===")
         return {"activities": acts}
     except Exception as e:
         logger.error(f"activities error: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@app.post("/daily-health")
+def daily_health(req: DailyHealthRequest, x_worker_secret: str = Header(...)):
+    """
+    Fetches daily health metrics for a specific date.
+    Returns { steps, calories, sleep, HR, body battery, stress, HRV, etc }.
+    """
+    _auth(x_worker_secret)
+    try:
+        logger.info(f"=== DAILY HEALTH REQUEST for {req.date} ===")
+        metrics = garmin_service.fetch_daily_health(req.session_dump, req.date)
+        logger.info(f"=== DAILY HEALTH RESULT: {metrics} ===")
+        return metrics
+    except Exception as e:
+        logger.error(f"daily_health error: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@app.post("/debug-activities")
+def debug_activities(req: ActivitiesRequest, x_worker_secret: str = Header(...)):
+    """DEBUG: Returns raw activity data from Garmin"""
+    _auth(x_worker_secret)
+    try:
+        from garminconnect import Garmin
+        garmin = Garmin()
+        garmin.garth.loads(req.session_dump)
+
+        last = garmin.get_last_activity()
+
+        result = {
+            "raw_last_activity": last,
+            "last_activity_keys": list(last.keys()) if last else [],
+            "activity_id": last.get("activityId") if last else None,
+        }
+
+        if last and last.get("activityId"):
+            act_id = str(last.get("activityId"))
+            try:
+                sets = garmin.get_activity_exercise_sets(act_id)
+                result["exercise_sets"] = sets
+            except Exception as e:
+                result["exercise_sets_error"] = str(e)
+
+            try:
+                details = garmin.get_activity_details(act_id)
+                result["activity_details"] = details
+            except Exception as e:
+                result["activity_details_error"] = str(e)
+
+        return result
+    except Exception as e:
+        logger.error(f"debug error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 if __name__ == "__main__":

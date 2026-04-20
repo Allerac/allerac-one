@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { AuthService } from '@/app/services/auth/auth.service';
-import { getRecentActivities } from '@/app/actions/health';
+import { getActivitiesRange } from '@/app/actions/health';
 
 const authService = new AuthService();
 
@@ -19,10 +19,15 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const url = new URL(request.url);
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '10'), 50);
-    const date = url.searchParams.get('date') || undefined;
-    const activities = await getRecentActivities(user.id, limit, date || undefined);
-    return Response.json({ activities });
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+
+    if (!startDate || !endDate) {
+      return Response.json({ error: 'Missing startDate or endDate parameter' }, { status: 400 });
+    }
+
+    const result = await getActivitiesRange(user.id, startDate, endDate);
+    return Response.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return Response.json({ error: message }, { status: 500 });

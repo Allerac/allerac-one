@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import * as healthActions from '@/app/actions/health';
 import GarminSettings from '../settings/GarminSettings';
 import RecentActivity from './RecentActivity';
+import DailyHealthMetrics from './DailyHealthMetrics';
+import ActivitiesList from './ActivitiesList';
 
 interface HealthDashboardProps {
   isOpen: boolean;
@@ -22,14 +24,6 @@ const PERIOD_CONFIG: Record<Period, { days: number; summaryPeriod: 'day' | '3day
   '30days': { days: 30, summaryPeriod: 'month' },
 };
 
-interface Summary {
-  avg_steps: number | null;
-  avg_calories: number | null;
-  avg_resting_hr: number | null;
-  avg_sleep_hours: number | null;
-  total_steps: number | null;
-  days_with_data: number | null;
-}
 
 interface DayMetric {
   date: string;
@@ -64,113 +58,6 @@ function fmtMins(mins: number | null) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-// ─── Spark chart — bars for ≤5 points, line for more ───────────────────────
-
-function SparkChart({
-  data,
-  color,
-  height = 48,
-  width = 80,
-}: {
-  data: (number | null)[];
-  color: string;
-  height?: number;
-  width?: number;
-}) {
-  if (data.length === 0) return null;
-
-  const values = data.map((v) => v ?? 0);
-  const max = Math.max(...values, 1);
-
-  if (values.length <= 5) {
-    const barW = Math.max(4, Math.floor((width - (values.length - 1) * 3) / values.length));
-    const gap = 3;
-    const totalW = values.length * barW + (values.length - 1) * gap;
-    return (
-      <svg width={totalW} height={height} className="overflow-visible">
-        {values.map((v, i) => {
-          const h = Math.max(2, (v / max) * height);
-          return (
-            <rect key={i} x={i * (barW + gap)} y={height - h}
-              width={barW} height={h} rx={2}
-              className={color} opacity={v === 0 ? 0.2 : 0.85} />
-          );
-        })}
-      </svg>
-    );
-  }
-
-  // Line chart
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * width;
-    const y = height - Math.max(2, (v / max) * (height - 4));
-    return `${x},${y}`;
-  });
-  const areaBottom = values.map((_v, i) => {
-    const x = (i / (values.length - 1)) * width;
-    return `${x},${height}`;
-  });
-  const fillPts = [...pts, ...areaBottom.reverse()].join(' ');
-  const strokeClass = color.replace('fill-', 'stroke-');
-
-  return (
-    <svg width={width} height={height} className="overflow-visible">
-      <polygon points={fillPts} className={color} opacity={0.15} />
-      <polyline points={pts.join(' ')} fill="none"
-        className={strokeClass} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-      {values.map((v, i) => {
-        const x = (i / (values.length - 1)) * width;
-        const y = height - Math.max(2, (v / max) * (height - 4));
-        return v > 0
-          ? <circle key={i} cx={x} cy={y} r={2} className={color} opacity={0.8} />
-          : null;
-      })}
-    </svg>
-  );
-}
-
-// ─── Summary card ───────────────────────────────────────────────────────────
-
-function MetricCard({
-  label,
-  value,
-  unit,
-  icon,
-  chartData,
-  chartColor,
-  isDarkMode,
-}: {
-  label: string;
-  value: string;
-  unit?: string;
-  icon: React.ReactNode;
-  chartData: (number | null)[];
-  chartColor: string;
-  isDarkMode: boolean;
-}) {
-  const card = isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
-  const hasChart = chartData.length > 0;
-  return (
-    <div className={`rounded-xl border p-4 ${card} flex flex-col gap-3`}>
-      <div className="flex items-center gap-2">
-        <span className="text-base">{icon}</span>
-        <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{label}</span>
-      </div>
-      <div className="flex items-end justify-between gap-2">
-        <div>
-          <span className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{value}</span>
-          {unit && <span className={`text-xs ml-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{unit}</span>}
-        </div>
-        {hasChart && (
-          <div className="hidden sm:block flex-shrink-0">
-            <SparkChart data={chartData} color={chartColor} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }: HealthDashboardProps) {
@@ -178,9 +65,8 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
 
   const [garminConnected, setGarminConnected] = useState<boolean | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
-  const [period, setPeriod] = useState<Period>('7days');
+  const [period, setPeriod] = useState<Period>('today');
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
-  const [summary, setSummary] = useState<Summary | null>(null);
   const [metrics, setMetrics] = useState<DayMetric[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -200,31 +86,12 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
       setLastSync(status.last_sync_at ? new Date(status.last_sync_at).toLocaleString() : null);
 
       if (status.is_connected) {
-        if (period === 'today') {
-          // Single day — no summary needed, just fetch the one day's metrics
-          const met = await healthActions.getHealthMetrics(userId, selectedDate, selectedDate);
-          setMetrics(met);
-          setSummary(null);
-        } else {
-          const { days, summaryPeriod } = PERIOD_CONFIG[period];
-          const endDate = getTodayStr();
-          const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const { days, summaryPeriod } = PERIOD_CONFIG[period];
+        const endDate = getTodayStr();
+        const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-          const [sum, met] = await Promise.all([
-            healthActions.getHealthSummary(userId, summaryPeriod),
-            healthActions.getHealthMetrics(userId, startDate, endDate),
-          ]);
-
-          setSummary({
-            avg_steps:      sum.avg_steps      ? Number(sum.avg_steps)      : null,
-            avg_calories:   sum.avg_calories   ? Number(sum.avg_calories)   : null,
-            avg_resting_hr: sum.avg_resting_hr ? Number(sum.avg_resting_hr) : null,
-            avg_sleep_hours: sum.avg_sleep_hours ? Number(sum.avg_sleep_hours) : null,
-            total_steps:    sum.total_steps    ? Number(sum.total_steps)    : null,
-            days_with_data: sum.days_with_data ? Number(sum.days_with_data) : null,
-          });
-          setMetrics(met);
-        }
+        const met = await healthActions.getHealthMetrics(userId, startDate, endDate);
+        setMetrics(met);
       }
     } finally {
       setLoading(false);
@@ -281,11 +148,6 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
   const isViewingToday = isSingleDay && selectedDate === getTodayStr();
   const dayMetric = isSingleDay ? (metrics[0] ?? null) : null;
 
-  // Charts only make sense for multi-day periods
-  const chartSteps   = isSingleDay ? [] : metrics.map((m) => m.steps);
-  const chartHr      = isSingleDay ? [] : metrics.map((m) => m.resting_hr);
-  const chartSleep   = isSingleDay ? [] : metrics.map((m) => m.sleep_duration_minutes ? m.sleep_duration_minutes / 60 : null);
-  const chartBattery = isSingleDay ? [] : metrics.map((m) => m.body_battery_end);
 
   // Sleep phases
   const sleepRows = metrics.filter(m => m.sleep_duration_minutes != null);
@@ -363,9 +225,6 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
             </div>
           ) : (
             <div className="p-5 space-y-4">
-              {/* Recent activity card */}
-              <RecentActivity isDarkMode={isDarkMode} />
-
               {/* Period selector */}
               <div className="flex gap-2 flex-wrap">
                 {(['today', '3days', '7days', '30days'] as Period[]).map((p) => (
@@ -389,7 +248,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
 
               {/* Day navigator — only in single-day mode */}
               {isSingleDay && (
-                <div className="flex items-center justify-center gap-3">
+                <div className="flex items-center justify-center gap-2">
                   {/* Prev button — circle */}
                   <button
                     onClick={goToPrevDay}
@@ -403,15 +262,17 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                     </svg>
                   </button>
 
-                  {/* Date card */}
-                  <div className={`flex items-center gap-2 px-4 py-1.5 rounded-xl border ${border} ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                    <svg className={`h-3.5 w-3.5 ${textMuted}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-                      {fmtNavDate(selectedDate)}
-                    </span>
-                  </div>
+                  {/* Date picker input */}
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    max={getTodayStr()}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors
+                      ${isDarkMode
+                        ? 'bg-gray-800 border-gray-700 text-gray-200 focus:border-brand-500 focus:outline-none'
+                        : 'bg-white border-gray-200 text-gray-900 focus:border-brand-500 focus:outline-none'}`}
+                  />
 
                   {/* Next button — circle (invisible when on today) */}
                   <button
@@ -439,84 +300,43 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                 </div>
               )}
 
-              {/* Summary cards */}
-              {metrics.length > 0 && (
-                <div className="grid grid-cols-2 gap-3">
-                  <MetricCard
-                    label={t('steps')}
-                    value={isSingleDay
-                      ? (dayMetric?.steps != null ? dayMetric.steps.toLocaleString() : '—')
-                      : (summary?.avg_steps ? summary.avg_steps.toLocaleString() : '—')}
-                    unit={isSingleDay ? undefined : t('avgDay')}
-                    icon="👟"
-                    chartData={chartSteps}
-                    chartColor="fill-brand-500"
-                    isDarkMode={isDarkMode}
-                  />
-                  <MetricCard
-                    label={t('sleep')}
-                    value={isSingleDay
-                      ? fmtMins(dayMetric?.sleep_duration_minutes ?? null)
-                      : (summary?.avg_sleep_hours ? summary.avg_sleep_hours.toFixed(1) + 'h' : '—')}
-                    unit={isSingleDay
-                      ? (dayMetric?.sleep_score != null ? `score ${dayMetric.sleep_score}` : undefined)
-                      : t('avgDay')}
-                    icon="😴"
-                    chartData={chartSleep}
-                    chartColor="fill-blue-400"
-                    isDarkMode={isDarkMode}
-                  />
-                  <MetricCard
-                    label={t('restingHr')}
-                    value={isSingleDay
-                      ? (dayMetric?.resting_hr != null ? String(dayMetric.resting_hr) : '—')
-                      : (summary?.avg_resting_hr ? String(summary.avg_resting_hr) : '—')}
-                    unit="bpm"
-                    icon="❤️"
-                    chartData={chartHr}
-                    chartColor="fill-red-400"
-                    isDarkMode={isDarkMode}
-                  />
-                  <MetricCard
-                    label={t('bodyBattery')}
-                    value={isSingleDay
-                      ? (dayMetric?.body_battery_end != null ? String(dayMetric.body_battery_end) : '—')
-                      : (metrics[metrics.length - 1]?.body_battery_end != null ? String(metrics[metrics.length - 1].body_battery_end) : '—')}
-                    unit={isSingleDay ? undefined : t('latest')}
-                    icon="⚡"
-                    chartData={chartBattery}
-                    chartColor="fill-yellow-400"
-                    isDarkMode={isDarkMode}
-                  />
-                </div>
-              )}
+              {/* Single day view */}
+              {isSingleDay && (
+                <>
+                  {/* Daily health metrics — on-demand detail view */}
+                  <DailyHealthMetrics isDarkMode={isDarkMode} selectedDate={selectedDate} />
 
-              {/* Sleep detail */}
-              {metrics.length > 0 && (sleepPhases.deep != null || sleepPhases.light != null || sleepPhases.rem != null) && (
-                <div className={`rounded-xl border ${border} p-4`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className={`text-xs font-semibold uppercase tracking-wide ${textMuted}`}>{t('sleepDetail')}</h3>
-                    {sleepPhases.score != null && (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-50 text-blue-600'}`}>
-                        {t('score')} {sleepPhases.score}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { label: t('sleepDeep'),  value: sleepPhases.deep,  color: isDarkMode ? 'text-indigo-400' : 'text-indigo-600', icon: '🌑' },
-                      { label: t('sleepLight'), value: sleepPhases.light, color: isDarkMode ? 'text-blue-400'   : 'text-blue-500',   icon: '🌙' },
-                      { label: t('sleepRem'),   value: sleepPhases.rem,   color: isDarkMode ? 'text-purple-400' : 'text-purple-600', icon: '💭' },
-                      { label: t('sleepAwake'), value: sleepPhases.awake, color: isDarkMode ? 'text-orange-400' : 'text-orange-500', icon: '👁️' },
-                    ].map(({ label, value, color, icon }) => (
-                      <div key={label} className={`rounded-lg p-2.5 ${isDarkMode ? 'bg-gray-800/60' : 'bg-gray-50'} flex flex-col gap-1`}>
-                        <span className="text-base">{icon}</span>
-                        <span className={`text-xs font-bold ${value != null ? color : textMuted}`}>{fmtMins(value)}</span>
-                        <span className={`text-xs ${textMuted}`}>{label}</span>
+                  {/* Sleep detail */}
+                  {metrics.length > 0 && (sleepPhases.deep != null || sleepPhases.light != null || sleepPhases.rem != null) && (
+                    <div className={`rounded-xl border ${border} p-4`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className={`text-xs font-semibold uppercase tracking-wide ${textMuted}`}>{t('sleepDetail')}</h3>
+                        {sleepPhases.score != null && (
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-50 text-blue-600'}`}>
+                            {t('score')} {sleepPhases.score}
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { label: t('sleepDeep'),  value: sleepPhases.deep,  color: isDarkMode ? 'text-indigo-400' : 'text-indigo-600', icon: '🌑' },
+                          { label: t('sleepLight'), value: sleepPhases.light, color: isDarkMode ? 'text-blue-400'   : 'text-blue-500',   icon: '🌙' },
+                          { label: t('sleepRem'),   value: sleepPhases.rem,   color: isDarkMode ? 'text-purple-400' : 'text-purple-600', icon: '💭' },
+                          { label: t('sleepAwake'), value: sleepPhases.awake, color: isDarkMode ? 'text-orange-400' : 'text-orange-500', icon: '👁️' },
+                        ].map(({ label, value, color, icon }) => (
+                          <div key={label} className={`rounded-lg p-2.5 ${isDarkMode ? 'bg-gray-800/60' : 'bg-gray-50'} flex flex-col gap-1`}>
+                            <span className="text-base">{icon}</span>
+                            <span className={`text-xs font-bold ${value != null ? color : textMuted}`}>{fmtMins(value)}</span>
+                            <span className={`text-xs ${textMuted}`}>{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent activity card */}
+                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} />
+                </>
               )}
 
               {/* Daily breakdown table — multi-day only */}
@@ -570,6 +390,14 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId }:
                   </div>
                 </div>
               )}
+
+              {/* Activities list — multi-day only */}
+              {!isSingleDay && (() => {
+                const { days } = PERIOD_CONFIG[period];
+                const endDate = getTodayStr();
+                const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                return <ActivitiesList isDarkMode={isDarkMode} startDate={startDate} endDate={endDate} />;
+              })()}
             </div>
           )}
         </div>

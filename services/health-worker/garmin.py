@@ -278,47 +278,190 @@ def fetch_metrics(session_dump: str, start_date: date, end_date: date) -> list[d
     return results
 
 
-def fetch_recent_activities(session_dump: str, limit: int = 10) -> list[dict]:
+def fetch_daily_health(session_dump: str, date: str) -> dict:
     """
-    Fetches recent activities from Garmin.
-    Returns a list of activity dicts with name, type, duration, calories, date, etc.
+    Fetches daily health metrics for a specific date (YYYY-MM-DD).
+    Returns dict with steps, sleep, HR, body battery, stress, HRV data.
     """
-    garmin = _garmin_from_session(session_dump)
-    results = []
-
     try:
-        # get_last_activity returns the most recent activity
-        last = garmin.get_last_activity()
-        if last:
-            activity_id = last.get("activityId")
-            if activity_id:
-                # For the most recent, get full details
-                activity = garmin.get_activity(str(activity_id))
-                results.append(_extract_activity_summary(activity))
+        logger.info(f"Fetching daily health metrics for {date}")
+        garmin = _garmin_from_session(session_dump)
 
-        # Fetch more activities if needed
-        # Note: garminconnect doesn't have a direct "get_activities" method,
-        # so we'd need to use the API directly or iterate via get_activity_types
-        # For now, we return what we can get from get_last_activity
+        result = {}
+
+        # Activity stats
+        try:
+            stats = garmin.get_stats(date)
+            if stats:
+                result["steps"] = stats.get("totalSteps")
+                result["calories"] = stats.get("totalKilocalories")
+                result["distance_meters"] = stats.get("totalDistanceMeters")
+                result["active_minutes"] = (
+                    (stats.get("moderateIntensityMinutes") or 0)
+                    + (stats.get("vigorousIntensityMinutes") or 0)
+                )
+                result["floors_climbed"] = stats.get("floorsAscended")
+                logger.info(f"  ✓ Activity stats: {result['steps']} steps, {result['calories']} cal")
+        except Exception as e:
+            logger.warning(f"  ✗ Activity stats error: {e}")
+
+        # Heart rate
+        try:
+            hr = garmin.get_heart_rates(date)
+            if hr:
+                result["resting_hr"] = hr.get("restingHeartRate")
+                result["avg_hr"] = hr.get("averageHeartRate")
+                result["max_hr"] = hr.get("maxHeartRate")
+                logger.info(f"  ✓ Heart rate: {result.get('avg_hr')} avg, {result.get('max_hr')} max")
+        except Exception as e:
+            logger.warning(f"  ✗ Heart rate error: {e}")
+
+        # Sleep
+        try:
+            sleep = garmin.get_sleep_data(date)
+            if sleep and sleep.get("dailySleepDTO"):
+                s = sleep["dailySleepDTO"]
+                secs = lambda k: int((s.get(k) or 0) / 60)  # seconds → minutes
+                result["sleep_duration_minutes"] = secs("sleepTimeSeconds")
+                result["sleep_deep_minutes"] = secs("deepSleepSeconds")
+                result["sleep_light_minutes"] = secs("lightSleepSeconds")
+                result["sleep_rem_minutes"] = secs("remSleepSeconds")
+                result["sleep_awake_minutes"] = secs("awakeSleepSeconds")
+                scores = s.get("sleepScores") or {}
+                result["sleep_score"] = (scores.get("overall") or {}).get("value")
+                logger.info(f"  ✓ Sleep: {result.get('sleep_duration_minutes')} min, score {result.get('sleep_score')}")
+        except Exception as e:
+            logger.warning(f"  ✗ Sleep error: {e}")
+
+        # Body battery
+        try:
+            bb = garmin.get_body_battery(date, date)
+            if bb and len(bb) > 0:
+                day_data = bb[0] if isinstance(bb[0], dict) else None
+                if day_data:
+                    levels = [
+                        v[1]
+                        for v in (day_data.get("bodyBatteryValuesArray") or [])
+                        if v and len(v) > 1 and v[1] is not None
+                    ]
+                    result["body_battery_max"] = max(levels) if levels else None
+                    result["body_battery_min"] = min(levels) if levels else None
+                    result["body_battery_end"] = levels[-1] if levels else None
+                    result["body_battery_charged"] = day_data.get("charged")
+                    result["body_battery_drained"] = day_data.get("drained")
+                    logger.info(f"  ✓ Body battery: {result.get('body_battery_min')}-{result.get('body_battery_max')}")
+        except Exception as e:
+            logger.warning(f"  ✗ Body battery error: {e}")
+
+        # Stress
+        try:
+            stress = garmin.get_stress_data(date)
+            if stress:
+                result["stress_avg"] = stress.get("avgStressLevel")
+                result["stress_max"] = stress.get("maxStressLevel")
+                rest_secs = stress.get("restStressDuration")
+                result["stress_rest_duration_minutes"] = int(rest_secs / 60) if rest_secs else None
+                logger.info(f"  ✓ Stress: {result.get('stress_avg')} avg")
+        except Exception as e:
+            logger.warning(f"  ✗ Stress error: {e}")
+
+        # HRV
+        try:
+            hrv = garmin.get_hrv_data(date)
+            if hrv:
+                summary = hrv.get("hrvSummary") or {}
+                result["hrv_weekly_avg"] = summary.get("weeklyAvg")
+                result["hrv_last_night"] = summary.get("lastNight")
+                result["hrv_status"] = summary.get("hrvStatusText")
+                logger.info(f"  ✓ HRV: {result.get('hrv_last_night')} last night")
+        except Exception as e:
+            logger.warning(f"  ✗ HRV error: {e}")
+
+        logger.info(f"Returning {len(result)} health metrics")
+        return result
+
     except Exception as e:
-        logger.warning(f"fetch_recent_activities failed: {e}")
+        logger.error(f"fetch_daily_health FAILED: {e}", exc_info=True)
+        raise
 
-    return results
 
+def fetch_recent_activities(session_dump: str, limit: int = 10, date: str = None) -> list[dict]:
+    """
+    Fetches activities from Garmin using garminconnect library.
 
-def _extract_activity_summary(activity: dict) -> dict:
-    """Extracts key fields from a Garmin activity dict."""
-    return {
-        "activityId": activity.get("activityId"),
-        "activityName": activity.get("activityName"),
-        "activityType": activity.get("activityType", {}).get("displayValue"),
-        "startTimeInSeconds": activity.get("startTimeInSeconds"),
-        "duration": activity.get("duration"),  # milliseconds
-        "calories": activity.get("calories"),
-        "distance": activity.get("distance"),
-        "movingDuration": activity.get("movingDuration"),
-        "avgHeartRate": activity.get("avgHeartRate"),
-        "maxHeartRate": activity.get("maxHeartRate"),
-        "elevationGain": activity.get("elevationGain"),
-        "elevationLoss": activity.get("elevationLoss"),
-    }
+    If date is provided (YYYY-MM-DD), fetches activities for that specific day.
+    Otherwise, fetches recent activities.
+
+    Returns a list of activity dicts with name, type, duration, calories, etc.
+    """
+    try:
+        logger.info("1. Loading Garmin session from dump")
+        garmin = _garmin_from_session(session_dump)
+        logger.info(f"2. Session loaded. display_name={getattr(garmin, 'display_name', 'N/A')}")
+        results = []
+
+        if date:
+            logger.info(f"3. Calling garmin.get_activities_by_date('{date}', '{date}')...")
+            activities_list = garmin.get_activities_by_date(date, date)
+            logger.info(f"4. ✓ get_activities_by_date() returned. Type: {type(activities_list)}, Length: {len(activities_list) if isinstance(activities_list, list) else 'N/A'}")
+        else:
+            logger.info(f"3. Calling garmin.get_activities(0, {limit})...")
+            activities_list = garmin.get_activities(0, limit)
+            logger.info(f"4. ✓ get_activities() returned. Type: {type(activities_list)}, Length: {len(activities_list) if isinstance(activities_list, list) else 'N/A'}")
+
+        if not isinstance(activities_list, list):
+            logger.warning(f"5. Expected list but got {type(activities_list)}")
+            activities_list = []
+
+        logger.info(f"6. Processing {len(activities_list)} activities")
+
+        # Process each activity
+        for idx, activity in enumerate(activities_list):
+            activity_id = activity.get("activityId")
+            if not activity_id:
+                logger.debug(f"7.{idx} Skipping activity without ID")
+                continue
+
+            logger.info(f"7.{idx} Processing activity {activity_id}: {activity.get('activityName')}")
+
+            try:
+                activity_detail = {
+                    "activityId": activity_id,
+                    "activityName": activity.get("activityName", "Unknown"),
+                    "activityType": (
+                        activity.get("activityType", {}).get("typeKey")
+                        or activity.get("activityType", {}).get("displayValue")
+                        or "Unknown"
+                    ),
+                    "startTimeInSeconds": int(
+                        datetime.fromisoformat(
+                            activity.get("startTimeLocal", "").replace(".0", "")
+                        ).timestamp()
+                    ) if activity.get("startTimeLocal") else None,
+                    "duration": activity.get("duration"),  # já em ms
+                    "calories": activity.get("calories"),
+                    "avgHeartRate": activity.get("averageHeartRate"),
+                    "maxHeartRate": activity.get("maxHeartRate"),
+                    "distance": activity.get("distance"),
+                    "elevationGain": activity.get("elevationGain"),
+                    "elevationLoss": activity.get("elevationLoss"),
+                }
+
+                # Strength training specific
+                if activity.get("activityType", {}).get("typeKey") == "strength_training":
+                    activity_detail["activeSets"] = activity.get("activeSets")
+                    activity_detail["totalExerciseReps"] = activity.get("totalExerciseReps")
+                    activity_detail["summarizedExerciseSets"] = activity.get("summarizedExerciseSets")
+
+                results.append(activity_detail)
+                logger.debug(f"7.{idx} ✓ Activity added to results")
+            except Exception as e:
+                logger.warning(f"7.{idx} Error processing activity {activity_id}: {e}", exc_info=True)
+                continue
+
+        logger.info(f"8. Returning {len(results)} activities")
+        return results
+
+    except Exception as e:
+        logger.error(f"fetch_recent_activities FAILED at unknown step: {e}", exc_info=True)
+        raise
