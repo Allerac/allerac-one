@@ -38,6 +38,7 @@ const chatService = new ChatService();
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434';
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 
 function encode(data: object): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`);
@@ -60,7 +61,7 @@ export async function POST(request: Request): Promise<Response> {
     message: string;
     conversationId: string | null;
     model: string;
-    provider: 'github' | 'ollama' | 'gemini';
+    provider: 'github' | 'ollama' | 'gemini' | 'anthropic';
     imageAttachments?: Array<{ url: string }>;
     preSelectedSkillId?: string;
     defaultSkillName?: string;
@@ -145,7 +146,18 @@ export async function POST(request: Request): Promise<Response> {
         const githubToken = settings?.github_token || process.env.GITHUB_TOKEN || '';
         const tavilyApiKey = settings?.tavily_api_key || process.env.TAVILY_API_KEY || undefined;
         const googleApiKey = settings?.google_api_key || '';
+        const anthropicApiKey = settings?.anthropic_api_key || '';
         const userLocation = settings?.location || null;
+
+        // Validate provider has required keys
+        if (provider === 'anthropic' && !anthropicApiKey) {
+          safeEnqueue(encode({
+            type: 'error',
+            message: '❌ **Anthropic API key not configured**\n\nPlease add your Anthropic API key in Settings → Developer API Keys.',
+          }));
+          controller.close();
+          return;
+        }
 
         // Always start from ALLERAC_SOUL, never replace it
         let systemMessage = ALLERAC_SOUL;
@@ -188,6 +200,7 @@ export async function POST(request: Request): Promise<Response> {
         // Server-side base URL (never goes through client-side proxy)
         const modelBaseUrl = provider === 'ollama' ? OLLAMA_BASE_URL
                            : provider === 'gemini' ? GEMINI_BASE_URL
+                           : provider === 'anthropic' ? ANTHROPIC_BASE_URL
                            : GITHUB_BASE_URL;
 
         // 4. Create or find conversation
@@ -378,7 +391,7 @@ export async function POST(request: Request): Promise<Response> {
           conversationMessages.push({ role: 'user', content: message });
         }
 
-        const llmService = new LLMService(provider, modelBaseUrl, { githubToken, geminiToken: googleApiKey });
+        const llmService = new LLMService(provider, modelBaseUrl, { githubToken, geminiToken: googleApiKey, anthropicToken: anthropicApiKey });
 
         // 10. First LLM call — non-streaming for tool detection
         {

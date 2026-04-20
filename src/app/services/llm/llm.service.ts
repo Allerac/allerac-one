@@ -1,6 +1,7 @@
 // LLM Service with automatic metrics tracking
-// Supports GitHub Models and Ollama providers
+// Supports GitHub Models, Ollama, Gemini, and Anthropic providers
 import * as metricActions from '@/app/actions/metrics';
+import Anthropic from '@anthropic-ai/sdk';
 
 export interface MessageContentPart {
   type: 'text' | 'image_url';
@@ -41,19 +42,30 @@ export interface LLMResponse {
   model: string;
 }
 
-type LLMProvider = 'github' | 'ollama' | 'gemini';
+type LLMProvider = 'github' | 'ollama' | 'gemini' | 'anthropic';
 
 export class LLMService {
   private provider: LLMProvider;
   private baseUrl: string;
   private githubToken?: string;
   private geminiToken?: string;
+  private anthropicToken?: string;
+  private anthropicClient?: Anthropic;
 
-  constructor(provider: LLMProvider, baseUrl: string, config?: { githubToken?: string; geminiToken?: string }) {
+  constructor(provider: LLMProvider, baseUrl: string, config?: { githubToken?: string; geminiToken?: string; anthropicToken?: string }) {
     this.provider = provider;
     this.baseUrl = baseUrl;
     this.githubToken = config?.githubToken;
     this.geminiToken = config?.geminiToken;
+    this.anthropicToken = config?.anthropicToken;
+
+    // Initialize Anthropic client if using anthropic provider
+    if (provider === 'anthropic') {
+      if (!this.anthropicToken) {
+        throw new Error('Anthropic API key is required for anthropic provider');
+      }
+      this.anthropicClient = new Anthropic({ apiKey: this.anthropicToken });
+    }
 
     // Validate token if required
     if (provider === 'github' && !this.githubToken) {
@@ -72,6 +84,8 @@ export class LLMService {
       return this.githubChatCompletion(request);
     } else if (this.provider === 'gemini') {
       return this.geminiChatCompletion(request);
+    } else if (this.provider === 'anthropic') {
+      return this.anthropicChatCompletion(request);
     } else {
       return this.ollamaChatCompletion(request);
     }
@@ -86,6 +100,8 @@ export class LLMService {
       yield* this.githubStreamChatCompletion(request);
     } else if (this.provider === 'gemini') {
       yield* this.geminiStreamChatCompletion(request);
+    } else if (this.provider === 'anthropic') {
+      yield* this.anthropicStreamChatCompletion(request);
     } else {
       yield* this.ollamaStreamChatCompletion(request);
     }
@@ -570,6 +586,157 @@ export class LLMService {
           errorType: error.name || 'Error',
         });
       }
+      throw error;
+    }
+  }
+
+  /**
+   * Stream Anthropic API response
+   */
+  private async *anthropicStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    // Convert OpenAI format to Anthropic format
+    let systemPrompt = '';
+    const messages: Anthropic.MessageParam[] = [];
+
+    for (const msg of request.messages) {
+      if (msg.role === 'system') {
+        systemPrompt = typeof msg.content === 'string' ? msg.content : '';
+      } else {
+        messages.push({
+          role: msg.role as 'user' | 'assistant',
+          content: typeof msg.content === 'string' ? msg.content : (msg.content as any),
+        });
+      }
+    }
+
+    // Convert tools from OpenAI to Anthropic format
+    const tools = request.tools?.map((tool: any) => ({
+      name: tool.function.name,
+      description: tool.function.description,
+      input_schema: tool.function.parameters,
+    })) || [];
+
+    try {
+      const stream = this.anthropicClient!.messages.stream({
+        model: request.model,
+        max_tokens: request.max_tokens || 4096,
+        system: systemPrompt || undefined,
+        tools: tools.length > 0 ? tools : undefined,
+        messages: messages,
+        temperature: request.temperature,
+      });
+
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          yield event.delta.text;
+        }
+      }
+    } catch (error: any) {
+      throw new Error(`Anthropic streaming error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Call Anthropic API (non-streaming)
+   */
+  private async anthropicChatCompletion(request: LLMRequest): Promise<LLMResponse> {
+    const startTime = Date.now();
+    let success = true;
+    let statusCode = 200;
+    let errorMessage: string | undefined;
+
+    try {
+      // Convert OpenAI format to Anthropic format
+      let systemPrompt = '';
+      const messages: Anthropic.MessageParam[] = [];
+
+      for (const msg of request.messages) {
+        if (msg.role === 'system') {
+          systemPrompt = typeof msg.content === 'string' ? msg.content : '';
+        } else {
+          messages.push({
+            role: msg.role as 'user' | 'assistant',
+            content: typeof msg.content === 'string' ? msg.content : (msg.content as any),
+          });
+        }
+      }
+
+      // Convert tools from OpenAI to Anthropic format
+      const tools = request.tools?.map((tool: any) => ({
+        name: tool.function.name,
+        description: tool.function.description,
+        input_schema: tool.function.parameters,
+      })) || [];
+
+      const response = await this.anthropicClient!.messages.create({
+        model: request.model,
+        max_tokens: request.max_tokens || 4096,
+        system: systemPrompt || undefined,
+        tools: tools.length > 0 ? tools : undefined,
+        messages: messages,
+        temperature: request.temperature,
+      });
+
+      // Convert Anthropic response to OpenAI format
+      let content = '';
+      const toolCalls: any[] = [];
+
+      for (const block of response.content) {
+        if (block.type === 'text') {
+          content += block.text;
+        } else if (block.type === 'tool_use') {
+          toolCalls.push({
+            id: block.id,
+            type: 'function',
+            function: {
+              name: block.name,
+              arguments: JSON.stringify(block.input),
+            },
+          });
+        }
+      }
+
+      const llmResponse: LLMResponse = {
+        choices: [{
+          message: {
+            role: 'assistant',
+            content: content,
+            tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+          },
+          finish_reason: response.stop_reason === 'tool_use' ? 'tool_calls' : 'stop',
+        }],
+        model: request.model,
+        usage: response.usage ? {
+          prompt_tokens: response.usage.input_tokens,
+          completion_tokens: response.usage.output_tokens,
+          total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+        } : undefined,
+      };
+
+      await this.logMetrics({
+        model: request.model,
+        provider: 'anthropic',
+        responseTime: Date.now() - startTime,
+        success: true,
+        statusCode: 200,
+      });
+
+      return llmResponse;
+    } catch (error: any) {
+      success = false;
+      statusCode = error.status || 500;
+      errorMessage = error.message || error.error?.message || 'Unknown error';
+
+      await this.logMetrics({
+        model: request.model,
+        provider: 'anthropic',
+        responseTime: Date.now() - startTime,
+        success: false,
+        statusCode: statusCode,
+        errorMessage: errorMessage,
+        errorType: error.name || 'Error',
+      });
+
       throw error;
     }
   }

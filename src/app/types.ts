@@ -37,7 +37,7 @@ export interface Model {
   name: string;
   icon: string;
   description?: string;
-  provider: 'github' | 'ollama' | 'gemini';
+  provider: 'github' | 'ollama' | 'gemini' | 'anthropic';
   baseUrl?: string;
   requiresToken?: boolean;
   category: 'Fast' | 'Thinking' | 'Pro';
