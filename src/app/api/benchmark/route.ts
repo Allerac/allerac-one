@@ -12,6 +12,7 @@
  */
 
 import { cookies } from 'next/headers';
+import Anthropic from '@anthropic-ai/sdk';
 import { AuthService } from '@/app/services/auth/auth.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import pool from '@/app/clients/db';
@@ -22,6 +23,7 @@ const userSettingsService = new UserSettingsService();
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 
 interface BenchmarkPrompt {
   name: string;
@@ -192,6 +194,53 @@ async function runOpenAICompatiblePrompt(
   return { ttft_ms: ttft, total_ms: totalMs, chars: content.length, tokens, tps };
 }
 
+async function runAnthropicPrompt(
+  token: string,
+  modelId: string,
+  prompt: string,
+): Promise<{ ttft_ms: number | null; total_ms: number; chars: number; tokens: number | null; tps: number | null }> {
+  const startTime = Date.now();
+  const client = new Anthropic({ apiKey: token });
+  let ttft: number | null = null;
+  let content = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  const stream = client.messages.stream({
+    model: modelId,
+    max_tokens: 400,
+    system: 'You are a helpful assistant. Be concise.',
+    messages: [
+      { role: 'user', content: prompt },
+    ],
+  });
+
+  let firstChunk = true;
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      if (firstChunk) {
+        ttft = Date.now() - startTime;
+        firstChunk = false;
+      }
+      content += event.delta.text;
+    }
+    if (event.type === 'message_start' && event.message.usage) {
+      inputTokens = event.message.usage.input_tokens;
+    }
+    if (event.type === 'message_delta' && event.usage) {
+      outputTokens = event.usage.output_tokens;
+    }
+  }
+
+  const totalMs = Date.now() - startTime;
+  const tokens = outputTokens || (content.length > 0 ? Math.round(content.length * 0.75) : null);
+  const tps = tokens && totalMs > 0
+    ? parseFloat((tokens / (totalMs / 1000)).toFixed(2))
+    : null;
+
+  return { ttft_ms: ttft, total_ms: totalMs, chars: content.length, tokens, tps };
+}
+
 export async function POST(request: Request) {
   // Auth and body must be read here — cookies()/headers() lose context inside ReadableStream callbacks
   const cookieStore = await cookies();
@@ -210,6 +259,7 @@ export async function POST(request: Request) {
   const settings = await userSettingsService.loadUserSettings(user.id);
   const githubToken = settings?.github_token || '';
   const geminiToken = settings?.google_api_key || '';
+  const anthropicToken = settings?.anthropic_api_key || '';
   const userId = user.id;
 
   const stream = new ReadableStream({
@@ -226,6 +276,8 @@ export async function POST(request: Request) {
             await runOllamaPrompt(modelId, 'Reply with only: OK', abortCtrl.signal);
           } else if (provider === 'gemini') {
             await runOpenAICompatiblePrompt(GEMINI_BASE_URL, geminiToken, modelId, 'Reply with only: OK', abortCtrl.signal);
+          } else if (provider === 'anthropic') {
+            await runAnthropicPrompt(anthropicToken, modelId, 'Reply with only: OK');
           } else {
             await runOpenAICompatiblePrompt(GITHUB_BASE_URL, githubToken, modelId, 'Reply with only: OK', abortCtrl.signal);
           }
@@ -242,6 +294,8 @@ export async function POST(request: Request) {
               result = await runOllamaPrompt(modelId, bench.prompt, abortCtrl.signal);
             } else if (provider === 'gemini') {
               result = await runOpenAICompatiblePrompt(GEMINI_BASE_URL, geminiToken, modelId, bench.prompt, abortCtrl.signal);
+            } else if (provider === 'anthropic') {
+              result = await runAnthropicPrompt(anthropicToken, modelId, bench.prompt);
             } else {
               result = await runOpenAICompatiblePrompt(GITHUB_BASE_URL, githubToken, modelId, bench.prompt, abortCtrl.signal);
             }

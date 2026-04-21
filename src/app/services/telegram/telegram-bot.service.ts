@@ -217,6 +217,7 @@ export class AlleracTelegramBot {
     return {
       userId: alleracUserId,
       githubToken: settings?.github_token || '',
+      anthropicToken: settings?.anthropic_api_key || '',
       tavilyApiKey: settings?.tavily_api_key || '',
       selectedModel: activeModel.id,
       modelProvider: activeModel.provider,

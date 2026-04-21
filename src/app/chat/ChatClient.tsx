@@ -167,10 +167,12 @@ export default function AdminChat({
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
+  const [anthropicApiKey, setAnthropicApiKey] = useState('');
   const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social'>(initialDashboardTab ?? 'preferences');
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
+  const [anthropicKeyInput, setAnthropicKeyInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [systemMessage, setSystemMessage] = useState('');
@@ -445,6 +447,7 @@ export default function AdminChat({
         if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
         if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
         if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
+        if (settings.anthropic_api_key) setAnthropicApiKey(settings.anthropic_api_key);
         if (settings.location) setLocationInput(settings.location);
         if (settings.system_message) setSystemMessage(settings.system_message);
         if (!settings.onboarding_completed) setShowOnboarding(true);
@@ -594,6 +597,7 @@ export default function AdminChat({
     setGithubToken('');
     setTavilyApiKey('');
     setGoogleApiKey('');
+    setAnthropicApiKey('');
     setIsAuthenticated(false);
     setUserId(null);
     setMessages([]);
@@ -612,9 +616,10 @@ export default function AdminChat({
     const newGithubToken = tokenInput.trim();
     const newTavilyKey = tavilyKeyInput.trim();
     const newGoogleKey = googleKeyInput.trim();
+    const newAnthropicKey = anthropicKeyInput.trim();
     const newLocation = locationInput.trim();
 
-    if (!newGithubToken && !newTavilyKey && !newGoogleKey && !newLocation) return;
+    if (!newGithubToken && !newTavilyKey && !newGoogleKey && !newAnthropicKey && !newLocation) return;
 
     try {
       // Save to localStorage
@@ -632,9 +637,13 @@ export default function AdminChat({
         setGoogleApiKey(newGoogleKey);
         setGoogleKeyInput('');
       }
+      if (newAnthropicKey) {
+        setAnthropicApiKey(newAnthropicKey);
+        setAnthropicKeyInput('');
+      }
 
       // Save to DB
-      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newLocation || undefined);
+      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined);
 
       if (!result?.success) {
         alert('Error saving keys to database. Please check server configuration.');
@@ -1095,12 +1104,15 @@ export default function AdminChat({
         githubToken={githubToken}
         tavilyApiKey={tavilyApiKey}
         googleApiKey={googleApiKey}
+        anthropicApiKey={anthropicApiKey}
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}
         tavilyKeyInput={tavilyKeyInput}
         setTavilyKeyInput={setTavilyKeyInput}
         googleKeyInput={googleKeyInput}
         setGoogleKeyInput={setGoogleKeyInput}
+        anthropicKeyInput={anthropicKeyInput}
+        setAnthropicKeyInput={setAnthropicKeyInput}
         locationInput={locationInput}
         setLocationInput={setLocationInput}
         onSaveToken={handleSaveToken}

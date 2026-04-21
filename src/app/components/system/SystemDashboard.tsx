@@ -24,12 +24,15 @@ interface SystemDashboardProps {
   githubToken: string;
   tavilyApiKey: string;
   googleApiKey: string;
+  anthropicApiKey: string;
   tokenInput: string;
   setTokenInput: (v: string) => void;
   tavilyKeyInput: string;
   setTavilyKeyInput: (v: string) => void;
   googleKeyInput: string;
   setGoogleKeyInput: (v: string) => void;
+  anthropicKeyInput: string;
+  setAnthropicKeyInput: (v: string) => void;
   locationInput: string;
   setLocationInput: (v: string) => void;
   onSaveToken: () => Promise<void>;
@@ -152,12 +155,15 @@ export default function SystemDashboardModal({
   githubToken,
   tavilyApiKey,
   googleApiKey,
+  anthropicApiKey,
   tokenInput,
   setTokenInput,
   tavilyKeyInput,
   setTavilyKeyInput,
   googleKeyInput,
   setGoogleKeyInput,
+  anthropicKeyInput,
+  setAnthropicKeyInput,
   locationInput,
   setLocationInput,
   onSaveToken,
@@ -928,6 +934,27 @@ export default function SystemDashboardModal({
                 </p>
               </div>
 
+              {/* Anthropic API Key */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Anthropic API Key <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — Claude models)</span>
+                </label>
+                <input
+                  type="password"
+                  value={anthropicKeyInput}
+                  onChange={(e) => setAnthropicKeyInput(e.target.value)}
+                  placeholder={anthropicApiKey ? '••••••••' : 'sk-ant-...'}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+                />
+                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Get a key at{' '}
+                  <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">
+                    console.anthropic.com
+                  </a>
+                  {' '}to use Claude (Haiku, Sonnet, Opus)
+                </p>
+              </div>
+
               {keySaveMessage && (
                 <div className={`p-2.5 rounded-lg text-sm ${
                   keySaveMessage.type === 'success'
@@ -940,7 +967,7 @@ export default function SystemDashboardModal({
 
               <button
                 onClick={handleSaveApiKeys}
-                disabled={isSavingKeys || (!tokenInput.trim() && !tavilyKeyInput.trim() && !googleKeyInput.trim())}
+                disabled={isSavingKeys || (!tokenInput.trim() && !tavilyKeyInput.trim() && !googleKeyInput.trim() && !anthropicKeyInput.trim())}
                 className="px-5 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
               >
                 {isSavingKeys && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>}

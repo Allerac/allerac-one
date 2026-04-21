@@ -9,12 +9,15 @@ interface TokenConfigurationProps {
   githubToken: string;
   tavilyApiKey: string;
   telegramBotToken: string;
+  anthropicApiKey: string;
   tokenInput: string;
   setTokenInput: (value: string) => void;
   tavilyKeyInput: string;
   setTavilyKeyInput: (value: string) => void;
   telegramBotTokenInput: string;
   setTelegramBotTokenInput: (value: string) => void;
+  anthropicApiKeyInput: string;
+  setAnthropicApiKeyInput: (value: string) => void;
   locationInput: string;
   setLocationInput: (value: string) => void;
   onSave: () => void;
@@ -27,12 +30,15 @@ export default function TokenConfiguration({
   githubToken,
   tavilyApiKey,
   telegramBotToken,
+  anthropicApiKey,
   tokenInput,
   setTokenInput,
   tavilyKeyInput,
   setTavilyKeyInput,
   telegramBotTokenInput,
   setTelegramBotTokenInput,
+  anthropicApiKeyInput,
+  setAnthropicApiKeyInput,
   locationInput,
   setLocationInput,
   onSave
@@ -132,6 +138,31 @@ export default function TokenConfiguration({
 
           <div>
             <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Anthropic API Key (Optional - for Claude models)
+            </label>
+            <input
+              type="password"
+              value={anthropicApiKeyInput}
+              onChange={(e) => setAnthropicApiKeyInput(e.target.value)}
+              placeholder={anthropicApiKey ? '••••••••' : 'sk-ant-...'}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+            />
+            <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Get an API key at{' '}
+              <a
+                href="https://console.anthropic.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand-600 hover:underline"
+              >
+                console.anthropic.com
+              </a>
+              {' '}to use Claude models (Haiku, Sonnet, Opus)
+            </p>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Telegram Bot Token (Optional - for Telegram access)
             </label>
             <input
@@ -194,7 +225,7 @@ export default function TokenConfiguration({
           <div className="flex gap-3">
             <button
               onClick={onSave}
-              disabled={!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim() && !locationInput.trim()}
+              disabled={!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim() && !anthropicApiKeyInput.trim() && !locationInput.trim()}
               className="flex-1 px-4 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Save Keys

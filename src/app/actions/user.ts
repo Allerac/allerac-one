@@ -9,8 +9,8 @@ export async function loadUserSettings(userId: string) {
     return await userSettingsService.loadUserSettings(userId);
 }
 
-export async function saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, location?: string) {
-    return await userSettingsService.saveUserSettings(userId, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, location);
+export async function saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string) {
+    return await userSettingsService.saveUserSettings(userId, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location);
 }
 
 export async function completeOnboarding(userId: string) {

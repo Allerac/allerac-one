@@ -12,7 +12,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, location, onboarding_completed FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, anthropic_api_key, location, onboarding_completed FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -29,6 +29,7 @@ export class UserSettingsService {
         telegram_bot_token: row.telegram_bot_token ? safeDecrypt(row.telegram_bot_token) : null,
         system_message: row.system_message || null,
         google_api_key: row.google_api_key ? safeDecrypt(row.google_api_key) : null,
+        anthropic_api_key: row.anthropic_api_key ? safeDecrypt(row.anthropic_api_key) : null,
         location: row.location || null,
         onboarding_completed: row.onboarding_completed ?? false,
       };
@@ -42,13 +43,14 @@ export class UserSettingsService {
    * Save or update user API keys
    * Encrypts sensitive fields before storing
    */
-  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, location?: string) {
+  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string) {
     try {
       // Encrypt tokens before storing
       const encryptedGithubToken = githubToken ? encrypt(githubToken) : undefined;
       const encryptedTavilyKey = tavilyApiKey ? encrypt(tavilyApiKey) : undefined;
       const encryptedTelegramToken = telegramBotToken ? encrypt(telegramBotToken) : undefined;
       const encryptedGoogleKey = googleApiKey ? encrypt(googleApiKey) : undefined;
+      const encryptedAnthropicKey = anthropicApiKey ? encrypt(anthropicApiKey) : undefined;
 
       // Check if settings already exist (query directly to avoid decrypt overhead)
       const existingCheck = await pool.query(
@@ -77,6 +79,10 @@ export class UserSettingsService {
           updateFields.push(`google_api_key = $${paramCount++}`);
           values.push(encryptedGoogleKey);
         }
+        if (encryptedAnthropicKey !== undefined) {
+          updateFields.push(`anthropic_api_key = $${paramCount++}`);
+          values.push(encryptedAnthropicKey);
+        }
         if (location !== undefined) {
           updateFields.push(`location = $${paramCount++}`);
           values.push(location || null);
@@ -91,9 +97,9 @@ export class UserSettingsService {
         }
       } else {
         await pool.query(
-          `INSERT INTO user_settings (user_id, github_token, tavily_api_key, telegram_bot_token, google_api_key)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [userId, encryptedGithubToken || '', encryptedTavilyKey || '', encryptedTelegramToken || '', encryptedGoogleKey || '']
+          `INSERT INTO user_settings (user_id, github_token, tavily_api_key, telegram_bot_token, google_api_key, anthropic_api_key)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [userId, encryptedGithubToken || '', encryptedTavilyKey || '', encryptedTelegramToken || '', encryptedGoogleKey || '', encryptedAnthropicKey || '']
         );
       }
 
