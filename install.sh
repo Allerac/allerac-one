@@ -561,6 +561,19 @@ EOF
 }
 
 # ============================================
+# Register CLI in PATH
+# ============================================
+register_cli() {
+    chmod +x "$INSTALL_DIR/allerac.sh"
+    local link="/usr/local/bin/allerac"
+    if [ -L "$link" ] || [ -f "$link" ]; then
+        sudo rm -f "$link"
+    fi
+    sudo ln -s "$INSTALL_DIR/allerac.sh" "$link"
+    log_success "CLI registered: type 'allerac help' from anywhere"
+}
+
+# ============================================
 # Start Services
 # ============================================
 start_services() {
@@ -678,10 +691,13 @@ print_success() {
     echo -e "  Installation directory: ${YELLOW}${INSTALL_DIR}${NC}"
     echo ""
     echo -e "  Useful commands:"
-    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml logs -f${NC}    # logs"
-    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml down${NC}        # stop"
-    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml up -d${NC}       # start"
-    echo -e "    ${YELLOW}./update.sh${NC}                                            # update"
+    echo -e "    ${YELLOW}allerac status${NC}      # show running services"
+    echo -e "    ${YELLOW}allerac logs${NC}        # follow logs"
+    echo -e "    ${YELLOW}allerac stop${NC}        # stop"
+    echo -e "    ${YELLOW}allerac start${NC}       # start"
+    echo -e "    ${YELLOW}allerac update${NC}      # update to latest version"
+    echo -e "    ${YELLOW}allerac backup${NC}      # back up the database"
+    echo -e "    ${YELLOW}allerac help${NC}        # all commands"
     echo ""
 
     if [ -n "$USE_SUDO" ]; then
@@ -711,6 +727,7 @@ main() {
     select_hardware_tier
     configure_features
     setup_environment
+    register_cli
     start_services
     follow_model_download
     wait_for_app
