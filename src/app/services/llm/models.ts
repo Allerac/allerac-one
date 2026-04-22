@@ -69,17 +69,6 @@ export const MODELS: Model[] = [
     shortName: 'Gemma 4 E2B',
   },
   {
-    id: 'kimi-k2.5',
-    name: 'Kimi K2.5 (Local)',
-    icon: '👁️',
-    description: 'Multimodal model with native vision understanding',
-    provider: 'ollama',
-    baseUrl: '/api/ollama',
-    requiresToken: false,
-    category: 'Pro',
-    shortName: 'Kimi',
-  },
-  {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     icon: '✨',
