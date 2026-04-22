@@ -36,6 +36,7 @@ const VISION_MODELS: VisionModel[] = [
   { model: 'claude-3-5-sonnet-20241022', provider: 'anthropic', label: 'Claude 3.5 Sonnet' },
   { model: 'llava', provider: 'ollama', label: 'Llava (Local)' },
   { model: 'llava:13b', provider: 'ollama', label: 'Llava 13B (Local)' },
+  { model: 'gemma4', provider: 'ollama', label: 'Gemma4 (Local)' },
   { model: 'gemma2:27b', provider: 'ollama', label: 'Gemma2 27B (Local)' },
 ];
 

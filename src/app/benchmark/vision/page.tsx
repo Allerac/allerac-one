@@ -40,6 +40,12 @@ export default function VisionBenchmarkPage() {
                 <strong>Llava (Local)</strong> - Open-source vision model via Ollama
               </li>
               <li>
+                <strong>Llava 13B (Local)</strong> - Larger Llava variant
+              </li>
+              <li>
+                <strong>Gemma4 (Local)</strong> - Google&apos;s latest local model
+              </li>
+              <li>
                 <strong>Gemma2 27B (Local)</strong> - Large local model
               </li>
             </ul>
