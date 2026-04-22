@@ -69,6 +69,17 @@ export const MODELS: Model[] = [
     shortName: 'Gemma 4 E2B',
   },
   {
+    id: 'gemma4:26b',
+    name: 'Gemma 4 26B (Local)',
+    icon: '👀',
+    description: 'Larger Gemma 4 with multimodal vision support',
+    provider: 'ollama',
+    baseUrl: '/api/ollama',
+    requiresToken: false,
+    category: 'Pro',
+    shortName: 'Gemma 4 26B',
+  },
+  {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     icon: '✨',

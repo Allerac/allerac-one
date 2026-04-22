@@ -33,6 +33,9 @@ export default function VisionBenchmarkPage() {
               <li>
                 <strong>Gemini 2.5 Flash</strong> - Google&apos;s fast vision model
               </li>
+              <li>
+                <strong>Gemma 4 26B (Local)</strong> - Larger multimodal model with vision support
+              </li>
             </ul>
             <p className="mt-4">
               <strong>Note:</strong> You need to configure API keys in your settings for cloud providers.
