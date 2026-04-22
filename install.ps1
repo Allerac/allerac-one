@@ -157,9 +157,10 @@ function Invoke-AlleracInstall {
 
     $localInstallSh = Join-Path (Split-Path -Parent $PSCommandPath) "install.sh"
     if (Test-Path $localInstallSh) {
-        $wslPath = (& wsl -- wslpath -a ($localInstallSh.Replace("\", "/"))).Trim()
+        $wslPath = (& wsl -d Ubuntu -- wslpath -a ($localInstallSh.Replace("\", "/"))).Trim()
         Log-Info "Using local install.sh: $wslPath"
-        $installCmd = "${envPrefix}bash `"$wslPath`""
+        # Convert CRLF to LF on-the-fly (Windows files have CRLF, bash needs LF)
+        $installCmd = "${envPrefix}bash <(sed 's/\r$//' `"$wslPath`")"
     } else {
         Log-Info "Downloading install.sh from repository..."
         $installCmd = "${envPrefix}bash <(curl -sSL $REPO_RAW)"
