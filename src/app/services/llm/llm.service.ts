@@ -147,9 +147,33 @@ export class LLMService {
   }
 
   private async *ollamaStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    // Convert multimodal messages to text-only for Ollama (doesn't support content arrays)
+    const normalizedMessages = request.messages.map(msg => {
+      if (Array.isArray(msg.content)) {
+        const textParts: string[] = [];
+        const imageParts: string[] = [];
+
+        for (const part of msg.content) {
+          if (part.type === 'text' && part.text) {
+            textParts.push(part.text);
+          } else if (part.type === 'image_url' && part.image_url?.url) {
+            imageParts.push(part.image_url.url);
+          }
+        }
+
+        let content = textParts.join('\n');
+        if (imageParts.length > 0) {
+          content += `\n\n[Image URLs: ${imageParts.join(', ')}]`;
+        }
+
+        return { ...msg, content };
+      }
+      return msg;
+    });
+
     const body = {
       model: request.model,
-      messages: request.messages,
+      messages: normalizedMessages,
       stream: true,
       tools: request.tools,
       options: {
@@ -431,9 +455,34 @@ export class LLMService {
     let errorMessage: string | undefined;
 
     try {
+      // Convert multimodal messages to text-only for Ollama (doesn't support content arrays)
+      const normalizedMessages = request.messages.map(msg => {
+        if (Array.isArray(msg.content)) {
+          // Convert content array to string with image URLs
+          const textParts: string[] = [];
+          const imageParts: string[] = [];
+
+          for (const part of msg.content) {
+            if (part.type === 'text' && part.text) {
+              textParts.push(part.text);
+            } else if (part.type === 'image_url' && part.image_url?.url) {
+              imageParts.push(part.image_url.url);
+            }
+          }
+
+          let content = textParts.join('\n');
+          if (imageParts.length > 0) {
+            content += `\n\n[Image URLs: ${imageParts.join(', ')}]`;
+          }
+
+          return { ...msg, content };
+        }
+        return msg;
+      });
+
       const ollamaBody = {
         model: request.model,
-        messages: request.messages,
+        messages: normalizedMessages,
         stream: true,  // Use streaming to send headers immediately
         tools: request.tools,
         options: {

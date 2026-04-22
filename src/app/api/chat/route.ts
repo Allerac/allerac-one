@@ -342,22 +342,25 @@ export async function POST(request: Request): Promise<Response> {
           enrichedSystemMessage += '\n\n' + relevantContext;
         }
 
-        // Inject user-scoped workspace path so the AI always writes to the right directory
-        const workspacePath = `/workspace/projects/${userId}`;
-        const beforePathInject = enrichedSystemMessage;
-        enrichedSystemMessage = enrichedSystemMessage.replace(
-          /\/workspace\/projects\//g,
-          `${workspacePath}/`
-        );
-        // Also handle cases where the path appears at end of string or without trailing slash
-        enrichedSystemMessage = enrichedSystemMessage.replace(
-          /\/workspace\/projects(?=\s|$|["'])/g,
-          workspacePath
-        );
+        // Only inject workspace path if skill needs it (e.g., programmer skill for file operations)
+        const WORKSPACE_SKILLS = ['programmer'];
+        if (activeSkill && WORKSPACE_SKILLS.includes(activeSkill.name)) {
+          const workspacePath = `/workspace/projects/${userId}`;
+          const beforePathInject = enrichedSystemMessage;
+          enrichedSystemMessage = enrichedSystemMessage.replace(
+            /\/workspace\/projects\//g,
+            `${workspacePath}/`
+          );
+          // Also handle cases where the path appears at end of string or without trailing slash
+          enrichedSystemMessage = enrichedSystemMessage.replace(
+            /\/workspace\/projects(?=\s|$|["'])/g,
+            workspacePath
+          );
 
-        const pathReplacements = (beforePathInject.match(/\/workspace\/projects/g) || []).length;
-        if (pathReplacements > 0) {
-          console.log(`[ChatRoute] Injected workspace path: replaced ${pathReplacements} instances of /workspace/projects with ${workspacePath}`);
+          const pathReplacements = (beforePathInject.match(/\/workspace\/projects/g) || []).length;
+          if (pathReplacements > 0) {
+            console.log(`[ChatRoute] Injected workspace path for ${activeSkill.name}: replaced ${pathReplacements} instances`);
+          }
         }
 
         // Load conversation history and build messages array
