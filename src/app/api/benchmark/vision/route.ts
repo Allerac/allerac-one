@@ -34,6 +34,7 @@ interface VisionModel {
 const VISION_MODELS: VisionModel[] = [
   { model: 'gpt-4o', provider: 'github', label: 'GPT-4o (GitHub)' },
   { model: 'gemini-2.5-flash', provider: 'gemini', label: 'Gemini 2.5 Flash' },
+  { model: 'qwen2.5-vl:3b', provider: 'ollama', label: 'Qwen2.5-VL 3B (Local)' },
 ];
 
 function encode(obj: object): Uint8Array {
