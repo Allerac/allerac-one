@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Model } from '@/app/types';
 import { getBenchmarkHistory, clearBenchmarkHistory, BenchmarkRun } from '@/app/actions/benchmark';
 
@@ -179,6 +180,22 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
+
+      {/* Vision Benchmark Link */}
+      <div className={`rounded-xl border p-4 ${cardBg} ${border}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className={`text-sm font-semibold ${textPrimary} mb-1`}>Vision Benchmark</h3>
+            <p className={`text-xs ${textMuted}`}>Test which models can see and describe images</p>
+          </div>
+          <Link
+            href="/benchmark/vision"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-brand-900 hover:bg-brand-800 text-white transition-all"
+          >
+            Open →
+          </Link>
+        </div>
+      </div>
 
       {/* Header — model selector + run button */}
       <div className={`rounded-xl border p-4 ${cardBg} ${border}`}>
