@@ -106,6 +106,7 @@ export function VisionBenchmark() {
                 ),
               );
             } else if (event.type === 'test_error') {
+              console.error(`[Benchmark] ${event.model} error:`, event.error);
               setResults((prev) =>
                 prev.map((r) =>
                   r.model === event.model
@@ -117,6 +118,12 @@ export function VisionBenchmark() {
                     : r,
                 ),
               );
+            } else if (event.type === 'test_done') {
+              if (!event.success) {
+                console.warn(`[Benchmark] ${event.model} failed:`, event.error);
+              } else {
+                console.log(`[Benchmark] ${event.model} success (${event.total_ms}ms)`);
+              }
             } else if (event.type === 'done') {
               setIsRunning(false);
             }
@@ -217,7 +224,12 @@ export function VisionBenchmark() {
                 </div>
               </div>
 
-              {result.error && <p className="text-xs text-red-400 mb-2">{result.error}</p>}
+              {result.error && (
+                <div className="text-xs text-red-400 mb-2 p-2 bg-red-950/30 rounded border border-red-700">
+                  <p className="font-semibold mb-1">Error:</p>
+                  <p className="break-words">{result.error}</p>
+                </div>
+              )}
 
               {result.description && (
                 <div className="mb-2">

@@ -15,6 +15,7 @@ import { cookies } from 'next/headers';
 import Anthropic from '@anthropic-ai/sdk';
 import { AuthService } from '@/app/services/auth/auth.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import * as metricActions from '@/app/actions/metrics';
 
 const authService = new AuthService();
 const userSettingsService = new UserSettingsService();
@@ -356,6 +357,26 @@ export async function POST(request: Request) {
             description: result.description.substring(0, 300), // Truncate for SSE
             error: result.error,
           }));
+
+          // Log to metrics
+          try {
+            await metricActions.logApiCall({
+              api_name: `vision-benchmark-${visionModel.provider}`,
+              endpoint: '/api/benchmark/vision',
+              method: 'POST',
+              response_time_ms: result.total_ms,
+              status_code: result.success ? 200 : 400,
+              success: result.success,
+              error_message: result.error,
+              metadata: {
+                model: visionModel.model,
+                ttft_ms: result.ttft_ms,
+                description_length: result.description.length,
+              },
+            });
+          } catch (logErr) {
+            console.error('[VisionBenchmark] Log failed:', logErr);
+          }
         }
 
         controller.enqueue(encode({ type: 'done' }));
