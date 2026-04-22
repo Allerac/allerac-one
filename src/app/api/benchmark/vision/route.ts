@@ -34,11 +34,6 @@ interface VisionModel {
 const VISION_MODELS: VisionModel[] = [
   { model: 'gpt-4o', provider: 'github', label: 'GPT-4o (GitHub)' },
   { model: 'gemini-2.5-flash', provider: 'gemini', label: 'Gemini 2.5 Flash' },
-  { model: 'claude-3-5-sonnet-20241022', provider: 'anthropic', label: 'Claude 3.5 Sonnet' },
-  { model: 'llava', provider: 'ollama', label: 'Llava (Local)' },
-  { model: 'llava:13b', provider: 'ollama', label: 'Llava 13B (Local)' },
-  { model: 'gemma4', provider: 'ollama', label: 'Gemma4 (Local)' },
-  { model: 'gemma2:27b', provider: 'ollama', label: 'Gemma2 27B (Local)' },
 ];
 
 function encode(obj: object): Uint8Array {

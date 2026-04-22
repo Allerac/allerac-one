@@ -33,21 +33,6 @@ export default function VisionBenchmarkPage() {
               <li>
                 <strong>Gemini 2.5 Flash</strong> - Google&apos;s fast vision model
               </li>
-              <li>
-                <strong>Claude 3.5 Sonnet</strong> - Anthropic&apos;s vision model
-              </li>
-              <li>
-                <strong>Llava (Local)</strong> - Open-source vision model via Ollama
-              </li>
-              <li>
-                <strong>Llava 13B (Local)</strong> - Larger Llava variant
-              </li>
-              <li>
-                <strong>Gemma4 (Local)</strong> - Google&apos;s latest local model
-              </li>
-              <li>
-                <strong>Gemma2 27B (Local)</strong> - Large local model
-              </li>
             </ul>
             <p className="mt-4">
               <strong>Note:</strong> You need to configure API keys in your settings for cloud providers.
