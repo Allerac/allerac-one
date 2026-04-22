@@ -69,15 +69,15 @@ export const MODELS: Model[] = [
     shortName: 'Gemma 4 E2B',
   },
   {
-    id: 'qwen2.5-vl:3b',
-    name: 'Qwen2.5-VL 3B (Local)',
+    id: 'qwen2.5vl:3b',
+    name: 'Qwen2.5VL 3B (Local)',
     icon: '👀',
     description: 'Compact multimodal model with vision understanding',
     provider: 'ollama',
     baseUrl: '/api/ollama',
     requiresToken: false,
     category: 'Fast',
-    shortName: 'Qwen2.5-VL',
+    shortName: 'Qwen2.5VL',
   },
   {
     id: 'gemini-2.5-flash',
