@@ -62,6 +62,11 @@ command_exists() { command -v "$1" >/dev/null 2>&1; }
 # OS Detection
 # ============================================
 detect_os() {
+    IS_WSL=false
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        IS_WSL=true
+    fi
+
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/debian_version ]; then
             OS="debian"
@@ -76,7 +81,12 @@ detect_os() {
         log_error "Unsupported OS: $OSTYPE"
         exit 1
     fi
-    log_info "Detected OS: $OS"
+
+    if [ "$IS_WSL" = true ]; then
+        log_info "Detected OS: $OS (WSL2)"
+    else
+        log_info "Detected OS: $OS"
+    fi
 }
 
 # ============================================
@@ -149,8 +159,14 @@ install_docker_debian() {
     sudo apt-get update -qq
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     sudo usermod -aG docker "$USER"
-    sudo systemctl start docker
-    sudo systemctl enable docker
+
+    # Start Docker - handle WSL without systemd
+    if [ "$IS_WSL" = true ] && ! pidof systemd >/dev/null 2>&1; then
+        sudo service docker start
+    else
+        sudo systemctl start docker
+        sudo systemctl enable docker
+    fi
     log_success "Docker installed"
 }
 
@@ -163,10 +179,16 @@ install_docker_macos() {
 }
 
 install_docker() {
-    if command_exists docker; then
+    # Check if docker command exists AND works (not just a broken symlink from Docker Desktop)
+    if command_exists docker && (docker info >/dev/null 2>&1 || sudo docker info >/dev/null 2>&1); then
         log_success "Docker already installed"
         return
     fi
+
+    if command_exists docker; then
+        log_warn "Docker command exists but is not functional - installing Docker Engine..."
+    fi
+
     case $OS in
         debian) install_docker_debian ;;
         macos)  install_docker_macos  ;;
@@ -288,7 +310,18 @@ check_docker_running() {
         USE_SUDO="sudo"
     else
         log_info "Starting Docker..."
-        sudo systemctl start docker
+        # WSL2 may not have systemd enabled - try both methods
+        if [ "$IS_WSL" = true ]; then
+            # Check if systemd is available in WSL
+            if pidof systemd >/dev/null 2>&1; then
+                sudo systemctl start docker
+            else
+                # WSL without systemd - use service command
+                sudo service docker start
+            fi
+        else
+            sudo systemctl start docker
+        fi
         sleep 3
         sudo docker info >/dev/null 2>&1 && USE_SUDO="sudo" || { log_error "Docker is not running."; exit 1; }
     fi
@@ -317,7 +350,7 @@ detect_gpu() {
 
     # Already set via env var (non-interactive / CI)
     if [ -n "$ENABLE_GPU" ]; then
-        [ "$ENABLE_GPU" = "true" ] && GPU_COMPOSE_FLAG="-f ${SCRIPT_DIR}/docker-compose.local.gpu.yml"
+        [ "$ENABLE_GPU" = "true" ] && GPU_COMPOSE_FLAG="-f ${INSTALL_DIR}/docker-compose.local.gpu.yml"
         return
     fi
 
@@ -335,7 +368,7 @@ detect_gpu() {
     if command_exists nvidia-container-cli; then
         log_success "nvidia-container-toolkit already installed"
         ENABLE_GPU="true"
-        GPU_COMPOSE_FLAG="-f ${SCRIPT_DIR}/docker-compose.local.gpu.yml"
+        GPU_COMPOSE_FLAG="-f ${INSTALL_DIR}/docker-compose.local.gpu.yml"
         log_info "GPU acceleration will be enabled for Ollama"
         return
     fi
@@ -351,7 +384,7 @@ detect_gpu() {
 
     install_nvidia_toolkit
     ENABLE_GPU="true"
-    GPU_COMPOSE_FLAG="-f ${SCRIPT_DIR}/docker-compose.local.gpu.yml"
+    GPU_COMPOSE_FLAG="-f ${INSTALL_DIR}/docker-compose.local.gpu.yml"
     log_success "GPU acceleration enabled"
 }
 
@@ -561,6 +594,19 @@ EOF
 }
 
 # ============================================
+# Register CLI in PATH
+# ============================================
+register_cli() {
+    chmod +x "$INSTALL_DIR/allerac.sh"
+    local link="/usr/local/bin/allerac"
+    if [ -L "$link" ] || [ -f "$link" ]; then
+        sudo rm -f "$link"
+    fi
+    sudo ln -s "$INSTALL_DIR/allerac.sh" "$link"
+    log_success "CLI registered: type 'allerac help' from anywhere"
+}
+
+# ============================================
 # Start Services
 # ============================================
 start_services() {
@@ -678,10 +724,13 @@ print_success() {
     echo -e "  Installation directory: ${YELLOW}${INSTALL_DIR}${NC}"
     echo ""
     echo -e "  Useful commands:"
-    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml logs -f${NC}    # logs"
-    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml down${NC}        # stop"
-    echo -e "    ${YELLOW}${DOCKER_CMD} compose -f docker-compose.local.yml up -d${NC}       # start"
-    echo -e "    ${YELLOW}./update.sh${NC}                                            # update"
+    echo -e "    ${YELLOW}allerac status${NC}      # show running services"
+    echo -e "    ${YELLOW}allerac logs${NC}        # follow logs"
+    echo -e "    ${YELLOW}allerac stop${NC}        # stop"
+    echo -e "    ${YELLOW}allerac start${NC}       # start"
+    echo -e "    ${YELLOW}allerac update${NC}      # update to latest version"
+    echo -e "    ${YELLOW}allerac backup${NC}      # back up the database"
+    echo -e "    ${YELLOW}allerac help${NC}        # all commands"
     echo ""
 
     if [ -n "$USE_SUDO" ]; then
@@ -711,6 +760,7 @@ main() {
     select_hardware_tier
     configure_features
     setup_environment
+    register_cli
     start_services
     follow_model_download
     wait_for_app
