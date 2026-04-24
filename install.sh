@@ -128,18 +128,24 @@ check_requirements() {
 setup_swap() {
     [[ "$OS" != "linux" && "$OS" != "debian" ]] && return
 
+    # WSL2 defaults to no swap, which causes SIGBUS crashes during large Docker
+    # image pulls (ollama is ~4GB).  Ensure at least 4GB swap is available.
+    local target_gb=4
+    [ "$IS_WSL" = "true" ] && target_gb=8
+
     SWAP_GB=$(free -g | awk '/Swap/ {print $2}')
-    if [ "${SWAP_GB:-0}" -lt 4 ]; then
-        log_info "Low swap (${SWAP_GB}GB). Creating 4GB swap file for model loading..."
+    if [ "${SWAP_GB:-0}" -lt "$target_gb" ]; then
+        log_info "Low swap (${SWAP_GB}GB). Creating ${target_gb}GB swap file..."
         if [ ! -f /swapfile ]; then
-            sudo fallocate -l 4G /swapfile
+            sudo fallocate -l "${target_gb}G" /swapfile
             sudo chmod 600 /swapfile
             sudo mkswap /swapfile
             sudo swapon /swapfile
             echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab > /dev/null
-            log_success "4GB swap created"
+            log_success "${target_gb}GB swap created"
         else
-            log_info "Swap file already exists"
+            sudo swapon /swapfile 2>/dev/null || true
+            log_info "Swap file already exists — activated"
         fi
     fi
 }
@@ -293,12 +299,53 @@ check_docker_conflicts() {
         echo -e "  To fix: kill the process using port 11434 and re-run this script."
     fi
 
-    # ── Stale Docker Desktop credentials ───────────────────────────────────
-    if [ -f "$HOME/.docker/config.json" ] && grep -q "docker-credential-desktop" "$HOME/.docker/config.json" 2>/dev/null; then
-        log_info "Removing stale Docker Desktop credentials config..."
-        sed -i '/"credsStore".*desktop/d' "$HOME/.docker/config.json"
-        log_success "Credentials config cleaned"
-    fi
+}
+
+# ============================================
+# Fix Docker credential helpers for WSL2
+# ============================================
+fix_docker_credentials_wsl() {
+    [ "$IS_WSL" = "true" ] || return 0
+
+    # WSL2 inherits Windows environment variables.  Docker Desktop sets
+    # DOCKER_CONFIG to the Windows user profile (e.g. /mnt/c/Users/foo/.docker).
+    # If that is the case our edits to /root/.docker have no effect.
+    # Override DOCKER_CONFIG unconditionally so every subsequent docker command
+    # uses a clean WSL-local config directory.
+    export DOCKER_CONFIG="$HOME/.docker"
+    mkdir -p "$DOCKER_CONFIG"
+
+    local cfg="$DOCKER_CONFIG/config.json"
+
+    # Remove credential helper binaries broken in WSL2 (no GNOME/libsecret).
+    # Use command -v to find the actual location rather than guessing the path.
+    for bin in docker-credential-secretservice docker-credential-pass; do
+        local bin_path
+        bin_path=$(command -v "$bin" 2>/dev/null || true)
+        if [ -n "$bin_path" ]; then
+            log_info "Removing broken WSL2 credential helper: $bin_path"
+            rm -f "$bin_path" 2>/dev/null || true
+        fi
+    done
+
+    # Write a clean Docker client config with no credential helpers.
+    # Absent key (not "") = plain-file auth; "" still triggers OS default.
+    python3 -c "
+import json
+path = '$cfg'
+try:
+    with open(path) as f:
+        c = json.load(f)
+except Exception:
+    c = {}
+c.pop('credsStore', None)
+c.pop('credHelpers', None)
+with open(path, 'w') as f:
+    json.dump(c, f, indent=2)
+" 2>/dev/null || printf '{}' > "$cfg"
+
+    log_success "Docker credentials configured for WSL2 (DOCKER_CONFIG=$DOCKER_CONFIG)"
+    log_info    "Active Docker config: $(cat "$cfg" 2>/dev/null | tr -d '\n')"
 }
 
 check_docker_running() {
@@ -622,7 +669,22 @@ start_services() {
     export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     log_info "Pulling base images..."
-    $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES pull --quiet
+    # WSL2 can crash docker compose (SIGBUS) during large concurrent pulls due
+    # to mmap issues.  Retry up to 3 times — Docker caches completed layers so
+    # subsequent attempts are fast.  Drop --quiet so output is not buffered.
+    local pull_ok=false
+    for attempt in 1 2 3; do
+        if $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES pull; then
+            pull_ok=true
+            break
+        fi
+        log_warn "Image pull attempt $attempt/3 failed — retrying in 10s..."
+        sleep 10
+    done
+    if [ "$pull_ok" = "false" ]; then
+        log_error "Failed to pull images after 3 attempts."
+        exit 1
+    fi
 
     log_info "Building application..."
     $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES build app health-worker
@@ -755,6 +817,7 @@ main() {
     check_docker_conflicts
     install_docker
     check_docker_running
+    fix_docker_credentials_wsl
     detect_gpu
     setup_repository
     select_hardware_tier
