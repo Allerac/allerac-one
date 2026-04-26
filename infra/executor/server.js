@@ -2,10 +2,43 @@
 
 const http = require('http');
 const { exec } = require('child_process');
+const path = require('path');
 
 const PORT = parseInt(process.env.EXECUTOR_PORT || '3001', 10);
 const SECRET = process.env.EXECUTOR_SECRET || '';
 const DEFAULT_CWD = process.env.DEFAULT_CWD || '/tmp';
+
+// Security: Blocked command patterns (dangerous operations)
+const BLOCKED_PATTERNS = [
+  /\brm\s+(-\w*\s+)*-[rf]/,           // rm -rf, rm -fr, rm -r
+  /\bmkfs\b/,                          // format filesystem
+  /\bdd\b.*\bof=\/dev/,               // write to raw device
+  /\b(shutdown|reboot|halt|poweroff)\b/, // system shutdown
+  /\bchmod\s+[0-7]*7[0-7]*\s+\//,    // chmod 777 on /
+  /\bchown\s+.*\s+\//,                // chown on /
+  /\bcurl\b.*\|\s*(bash|sh|zsh)/,    // curl | bash (script injection)
+  /\bwget\b.*-O\s*-.*\|\s*(bash|sh)/, // wget | bash
+  /\bdocker\b/,                        // any docker command
+  /\bsudo\b/,                          // sudo
+  /\bsu\s/,                            // su (switch user)
+  /\/etc\/passwd|\/etc\/shadow/,       // access password files
+  />\s*\/etc\//,                       // write to /etc
+  />\s*\/bin\//,                       // write to /bin
+  />\s*\/usr\//,                       // write to /usr
+];
+
+// Security: Only allow these base paths
+const ALLOWED_BASE_PATHS = ['/workspace', '/tmp'];
+
+function isCommandBlocked(command) {
+  return BLOCKED_PATTERNS.some(pattern => pattern.test(command));
+}
+
+function isPathAllowed(pathStr) {
+  if (!pathStr) return true; // null/undefined paths use DEFAULT_CWD
+  const normalized = path.normalize(pathStr);
+  return ALLOWED_BASE_PATHS.some(base => normalized.startsWith(base));
+}
 
 const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1 MB — commands should never be larger
 const MIN_TIMEOUT_MS = 1_000;           // 1 second
@@ -74,8 +107,43 @@ const server = http.createServer((req, res) => {
       }
     }
 
+    // Security: Block dangerous commands
+    if (isCommandBlocked(command)) {
+      console.log(`[executor][SECURITY] Blocked dangerous command: ${command}`);
+      // Return 200 so LLM can receive structured error and ask user what to do
+      respond(res, 200, {
+        stdout: '',
+        stderr: '',
+        exitCode: 1,
+        success: false,
+        command,
+        duration_ms: 0,
+        errorType: 'COMMAND_BLOCKED',
+        blockedCommand: command,
+      });
+      return;
+    }
+
+    // Security: Validate cwd is in allowed paths
+    if (cwd && !isPathAllowed(cwd)) {
+      console.log(`[executor][SECURITY] Access denied to path: ${cwd}`);
+      // Return 200 so LLM can receive structured error and ask user what to do
+      respond(res, 200, {
+        stdout: '',
+        stderr: '',
+        exitCode: 1,
+        success: false,
+        command,
+        duration_ms: 0,
+        errorType: 'PATH_BLOCKED',
+        requestedPath: cwd,
+        allowedPaths: ALLOWED_BASE_PATHS,
+      });
+      return;
+    }
+
     const startTime = Date.now();
-    console.log(`[executor] Running: ${command}`);
+    console.log(`[executor][${new Date().toISOString()}] cmd="${command}" cwd="${cwd || DEFAULT_CWD}"`);
 
     exec(command, {
       cwd: cwd || DEFAULT_CWD,
@@ -91,7 +159,7 @@ const server = http.createServer((req, res) => {
         command,
         duration_ms: Date.now() - startTime,
       };
-      console.log(`[executor] Exit ${result.exitCode} in ${result.duration_ms}ms: ${command}`);
+      console.log(`[executor][${new Date().toISOString()}] Exit ${result.exitCode} in ${result.duration_ms}ms`);
       respond(res, 200, result);
     });
   });

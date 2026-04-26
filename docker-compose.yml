@@ -86,14 +86,13 @@ services:
     container_name: allerac-executor
     restart: unless-stopped
     environment:
-      - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+      - EXECUTOR_SECRET=${EXECUTOR_SECRET:?EXECUTOR_SECRET is required}
       - DEFAULT_CWD=/workspace
       - ALLERAC_PRODUCT_LINE=${ALLERAC_PRODUCT_LINE:-local}
       - GITHUB_PAT=${GITHUB_PAT:-}
     volumes:
-      # For local: host bind mount; for cloud: docker volume
-      - ${HOST_WORKSPACE:-/home}:/workspace
-      - /var/run/docker.sock:/var/run/docker.sock
+      # Isolated workspace: only ./workspace directory (not /home)
+      - ${HOST_WORKSPACE:-./workspace}:/workspace
       - ${COMPOSE_DIR:-.}:/project
       # Workspace port management scripts
       - ./infra/executor/workspace-ports:/usr/local/bin/workspace-ports:ro
