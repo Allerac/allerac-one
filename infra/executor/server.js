@@ -27,36 +27,8 @@ const BLOCKED_PATTERNS = [
   />\s*\/usr\//,                       // write to /usr
 ];
 
-// Security: Only allow these base paths
-const ALLOWED_BASE_PATHS = ['/workspace', '/tmp'];
-
 function isCommandBlocked(command) {
   return BLOCKED_PATTERNS.some(pattern => pattern.test(command));
-}
-
-function isPathAllowed(pathStr) {
-  if (!pathStr) return true; // null/undefined paths use DEFAULT_CWD
-  const normalized = path.normalize(pathStr);
-  return ALLOWED_BASE_PATHS.some(base => normalized.startsWith(base));
-}
-
-// Extract absolute paths from command (e.g., /home/user/file.txt, /etc/passwd)
-// Matches patterns like: /path/to/file, /path/to/dir, etc.
-function extractAbsolutePaths(command) {
-  const pathPattern = /\/[^\s"'`<>|&;(){}[\]\\]*/g;
-  const matches = command.match(pathPattern) || [];
-  // Filter to only real paths (at least 2 chars like /a, /tmp, /home, etc)
-  return matches.filter(p => p.length > 1);
-}
-
-function checkCommandPaths(command) {
-  const paths = extractAbsolutePaths(command);
-  for (const pathStr of paths) {
-    if (!isPathAllowed(pathStr)) {
-      return { blocked: true, blockedPath: pathStr };
-    }
-  }
-  return { blocked: false };
 }
 
 const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1 MB — commands should never be larger
@@ -139,42 +111,6 @@ const server = http.createServer((req, res) => {
         duration_ms: 0,
         errorType: 'COMMAND_BLOCKED',
         blockedCommand: command,
-      });
-      return;
-    }
-
-    // Security: Check paths inside the command (e.g., /home/user/file.txt)
-    const pathCheck = checkCommandPaths(command);
-    if (pathCheck.blocked) {
-      console.log(`[executor][SECURITY] Access denied to path in command: ${pathCheck.blockedPath}`);
-      respond(res, 200, {
-        stdout: '',
-        stderr: '',
-        exitCode: 1,
-        success: false,
-        command,
-        duration_ms: 0,
-        errorType: 'PATH_BLOCKED',
-        requestedPath: pathCheck.blockedPath,
-        allowedPaths: ALLOWED_BASE_PATHS,
-      });
-      return;
-    }
-
-    // Security: Validate cwd is in allowed paths
-    if (cwd && !isPathAllowed(cwd)) {
-      console.log(`[executor][SECURITY] Access denied to cwd: ${cwd}`);
-      // Return 200 so LLM can receive structured error and ask user what to do
-      respond(res, 200, {
-        stdout: '',
-        stderr: '',
-        exitCode: 1,
-        success: false,
-        command,
-        duration_ms: 0,
-        errorType: 'PATH_BLOCKED',
-        requestedPath: cwd,
-        allowedPaths: ALLOWED_BASE_PATHS,
       });
       return;
     }

@@ -91,9 +91,11 @@ services:
       - ALLERAC_PRODUCT_LINE=${ALLERAC_PRODUCT_LINE:-local}
       - GITHUB_PAT=${GITHUB_PAT:-}
     volumes:
-      # Isolated workspace: only ./workspace directory (not /home)
+      # Workspace: read/write for project files
       - ${HOST_WORKSPACE:-./workspace}:/workspace
       - ${COMPOSE_DIR:-.}:/project
+      # Home directory: read-only access (each user sees their own /home)
+      - /home:/home:ro
       # Workspace port management scripts
       - ./infra/executor/workspace-ports:/usr/local/bin/workspace-ports:ro
       - ./infra/executor/workspace-kill-port:/usr/local/bin/workspace-kill-port:ro
