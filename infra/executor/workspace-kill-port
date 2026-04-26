@@ -1,0 +1,69 @@
+#!/bin/bash
+# workspace-kill-port — Kill a process running on a workspace port (3000-3010)
+# Run from inside the workspace terminal
+
+if [ -z "$1" ]; then
+    echo ""
+    echo "Usage: workspace-kill-port <port>"
+    echo ""
+    echo "Examples:"
+    echo "  workspace-kill-port 3000"
+    echo "  workspace-kill-port 3005"
+    echo ""
+    exit 1
+fi
+
+PORT="$1"
+
+# Validate port number
+if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+    echo ""
+    echo "Error: Port must be a number"
+    echo ""
+    exit 1
+fi
+
+if [ "$PORT" -lt 3000 ] || [ "$PORT" -gt 3010 ]; then
+    echo ""
+    echo "Error: Can only kill processes on ports 3000-3010"
+    echo ""
+    exit 1
+fi
+
+echo ""
+echo "Checking port :$PORT..."
+echo ""
+
+# Check if there's a process on that port
+pid=$(netstat -tulnp 2>/dev/null | grep ":$PORT " | awk '{print $NF}' | cut -d/ -f1 || echo "")
+
+if [ -z "$pid" ] || [ "$pid" = "?" ]; then
+    echo "  No process found on port :$PORT"
+    echo ""
+    exit 0
+fi
+
+# Show what we're about to kill
+cmd=$(ps -p "$pid" -o comm= 2>/dev/null || echo "process")
+echo "  Found: $cmd (PID $pid)"
+echo ""
+read -rp "  Kill this process? [y/N]: " CONFIRM
+
+if ! [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+    echo "  Cancelled."
+    echo ""
+    exit 0
+fi
+
+echo ""
+echo "Killing process on port :$PORT..."
+
+if kill "$pid" 2>/dev/null; then
+    echo "  Process killed successfully"
+    echo ""
+    exit 0
+else
+    echo "  Error: Failed to kill process"
+    echo ""
+    exit 1
+fi

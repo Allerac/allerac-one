@@ -44,8 +44,8 @@ export class DocumentService {
 
   /**
    * Extracts text content from a file.
-   * Supports plain text and PDF files.
-   * 
+   * Supports plain text, markdown and PDF files.
+   *
    * @param file - The uploaded file
    * @returns Promise with the extracted text
    */
@@ -53,8 +53,8 @@ export class DocumentService {
     const fileType = file.type;
     const fileName = file.name.toLowerCase();
 
-    // Handle plain text files
-    if (fileType === 'text/plain' || fileName.endsWith('.txt')) {
+    // Handle plain text and markdown files
+    if (fileType === 'text/plain' || fileName.endsWith('.txt') || fileName.endsWith('.md')) {
       return await this.extractTextFromPlainText(file);
     }
 
@@ -64,7 +64,7 @@ export class DocumentService {
     }
 
     // Unsupported format
-    throw new Error(`Unsupported file type: ${fileType}. Currently supports .txt and .pdf files.`);
+    throw new Error(`Unsupported file type: ${fileType}. Currently supports .txt, .pdf and .md files.`);
   }
 
   /**

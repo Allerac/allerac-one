@@ -10,7 +10,7 @@
 #
 # Non-interactive (CI/scripted):
 #   HARDWARE_TIER=lite ./install.sh
-#   HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
+#   HARDWARE_TIER=home ENABLE_GPU=true ./install.sh
 #
 # Tiers:
 #   lite   → N100, 16GB  → qwen2.5:3b
@@ -40,12 +40,10 @@ REPO_URL="https://github.com/Allerac/allerac-one.git"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/allerac-one}"
 HARDWARE_TIER="${HARDWARE_TIER:-}"
 OLLAMA_MODELS="${OLLAMA_MODELS:-}"
-ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
-ENABLE_MONITORING="${ENABLE_MONITORING:-false}"
 ENABLE_GPU="${ENABLE_GPU:-}"
 RECONFIGURE="${RECONFIGURE:-false}"
 USE_SUDO=""
-GPU_COMPOSE_FLAG=""
+OLLAMA_RUNTIME="runc"
 
 # ============================================
 # Logging
@@ -397,7 +395,7 @@ detect_gpu() {
 
     # Already set via env var (non-interactive / CI)
     if [ -n "$ENABLE_GPU" ]; then
-        [ "$ENABLE_GPU" = "true" ] && GPU_COMPOSE_FLAG="-f ${INSTALL_DIR}/docker-compose.local.gpu.yml"
+        [ "$ENABLE_GPU" = "true" ] && OLLAMA_RUNTIME="nvidia"
         return
     fi
 
@@ -415,7 +413,7 @@ detect_gpu() {
     if command_exists nvidia-container-cli; then
         log_success "nvidia-container-toolkit already installed"
         ENABLE_GPU="true"
-        GPU_COMPOSE_FLAG="-f ${INSTALL_DIR}/docker-compose.local.gpu.yml"
+        OLLAMA_RUNTIME="nvidia"
         log_info "GPU acceleration will be enabled for Ollama"
         return
     fi
@@ -431,7 +429,7 @@ detect_gpu() {
 
     install_nvidia_toolkit
     ENABLE_GPU="true"
-    GPU_COMPOSE_FLAG="-f ${INSTALL_DIR}/docker-compose.local.gpu.yml"
+    OLLAMA_RUNTIME="nvidia"
     log_success "GPU acceleration enabled"
 }
 
@@ -507,22 +505,9 @@ select_hardware_tier() {
 # Feature Selection (interactive)
 # ============================================
 configure_features() {
-    # Already set via env vars (non-interactive mode)
-    if [ "$ENABLE_NOTIFICATIONS" != "false" ] || [ "$ENABLE_MONITORING" != "false" ]; then
-        return
-    fi
-
-    echo ""
-    echo -e "${BOLD}Optional features:${NC}"
-    echo ""
-
-    read -rp "  Enable notifications? (Telegram bot + Redis) [y/N]: " OPT_NOTIF
-    [[ "$OPT_NOTIF" =~ ^[Yy]$ ]] && ENABLE_NOTIFICATIONS=true || ENABLE_NOTIFICATIONS=false
-
-    read -rp "  Enable monitoring? (Grafana + Prometheus)   [y/N]: " OPT_MON
-    [[ "$OPT_MON" =~ ^[Yy]$ ]] && ENABLE_MONITORING=true || ENABLE_MONITORING=false
-
-    echo ""
+    # All services now enabled by default (notifications, monitoring, etc)
+    # No configuration needed
+    :
 }
 
 # ============================================
@@ -553,12 +538,12 @@ setup_environment() {
     HEALTH_WORKER_SECRET=$(generate_secret | cut -c1-32)
 
     TELEGRAM_SECTION=""
-    if [ "$ENABLE_NOTIFICATIONS" = "true" ]; then
-        echo ""
-        echo -e "  ${BOLD}Telegram bot setup (optional — press Enter to skip):${NC}"
-        read -rp "  Telegram bot token (from @BotFather): " TG_TOKEN
-        read -rp "  Allowed Telegram user IDs (comma-separated, or Enter for all): " TG_USERS
+    echo ""
+    echo -e "  ${BOLD}Telegram bot setup (optional — press Enter to skip):${NC}"
+    read -rp "  Telegram bot token (from @BotFather): " TG_TOKEN
+    read -rp "  Allowed Telegram user IDs (comma-separated, or Enter for all): " TG_USERS
 
+    if [ -n "$TG_TOKEN" ]; then
         TELEGRAM_SECTION="
 # --------------------------------------------
 # Telegram Bot
@@ -661,12 +646,9 @@ start_services() {
 
     log_step "Starting Allerac One..."
 
-    PROFILES=""
-    [ "$ENABLE_NOTIFICATIONS" = "true" ] && PROFILES="$PROFILES --profile notifications"
-    [ "$ENABLE_MONITORING" = "true" ]    && PROFILES="$PROFILES --profile monitoring"
-
     export COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    export OLLAMA_RUNTIME
 
     log_info "Pulling base images..."
     # WSL2 can crash docker compose (SIGBUS) during large concurrent pulls due
@@ -674,7 +656,7 @@ start_services() {
     # subsequent attempts are fast.  Drop --quiet so output is not buffered.
     local pull_ok=false
     for attempt in 1 2 3; do
-        if $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES pull; then
+        if $USE_SUDO docker compose pull; then
             pull_ok=true
             break
         fi
@@ -687,10 +669,10 @@ start_services() {
     fi
 
     log_info "Building application..."
-    $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES build app health-worker
+    $USE_SUDO docker compose build app health-worker
 
     log_info "Starting containers..."
-    $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES up -d
+    $USE_SUDO docker compose up -d
 
     log_success "Services started"
 
@@ -700,7 +682,7 @@ start_services() {
     ollama_status=$($USE_SUDO docker inspect allerac-ollama --format='{{.State.Status}}' 2>/dev/null || echo "missing")
     if [ "$ollama_status" = "exited" ]; then
         log_warn "Ollama container exited — attempting restart (possible port conflict resolved)..."
-        $USE_SUDO docker compose -f docker-compose.local.yml $GPU_COMPOSE_FLAG $PROFILES up -d ollama
+        $USE_SUDO docker compose up -d ollama
         sleep 5
     fi
 }
@@ -755,7 +737,7 @@ wait_for_app() {
         sleep 3
     done
     echo ""
-    log_warn "App may still be starting. Check: docker compose -f docker-compose.local.yml logs -f"
+    log_warn "App may still be starting. Check: docker compose logs -f app"
 }
 
 # ============================================
@@ -777,11 +759,10 @@ print_success() {
     echo -e "  Open your browser:  ${BLUE}http://localhost:${APP_PORT_NUM}${NC}"
     echo ""
 
-    if [ "$ENABLE_MONITORING" = "true" ]; then
-        GRAFANA_PORT_NUM=$(grep "^GRAFANA_PORT=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "3001")
-        echo -e "  Monitoring:  ${BLUE}http://localhost:${GRAFANA_PORT_NUM}${NC}  (admin / see GRAFANA_PASSWORD in .env)"
-        echo ""
-    fi
+    GRAFANA_PORT_NUM=$(grep "^GRAFANA_PORT=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "3001")
+    echo -e "  Monitoring:  ${BLUE}http://localhost:${GRAFANA_PORT_NUM}${NC}  (admin / see GRAFANA_PASSWORD in .env)"
+    echo -e "  Portainer:   ${BLUE}http://localhost:9000${NC}"
+    echo ""
 
     echo -e "  Installation directory: ${YELLOW}${INSTALL_DIR}${NC}"
     echo ""

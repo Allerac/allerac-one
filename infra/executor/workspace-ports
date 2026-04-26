@@ -1,0 +1,26 @@
+#!/bin/bash
+# workspace-ports — List ports in use (3000-3010)
+# Run from inside the workspace terminal
+
+echo ""
+echo "Executor ports in use:"
+echo ""
+
+ports=$(netstat -tuln 2>/dev/null | grep LISTEN | awk '{print $4}' | sed 's/.*://g' | sort -n -u | awk '$1 >= 3000 && $1 <= 3010 {print}')
+
+if [ -z "$ports" ]; then
+    echo "  No ports in use (all available)"
+    echo ""
+    exit 0
+fi
+
+for port in $ports; do
+    pid=$(netstat -tulnp 2>/dev/null | grep ":$port " | awk '{print $NF}' | cut -d/ -f1 || echo "?")
+    echo "  :$port (PID: $pid)"
+done
+
+echo ""
+echo "To start a project on a port:"
+echo "  npm start --port 3005"
+echo "  python -m http.server 3006"
+echo ""

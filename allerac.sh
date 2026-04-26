@@ -18,6 +18,8 @@
 #   restore <file>      Restore the database from a backup file
 #   models              List installed Ollama models
 #   pull <model>        Pull an Ollama model (e.g. allerac pull qwen2.5:7b)
+#   ports               Show ports in use by running projects
+#   kill-port <port>    Kill a process running on a port (3000-3010)
 #   uninstall           Stop services (add --clean or --all for deeper removal)
 #   open                Open Allerac One in the browser
 #   version             Show current version (git commit)
@@ -27,7 +29,7 @@
 set -e
 
 INSTALL_DIR="${INSTALL_DIR:-$HOME/allerac-one}"
-COMPOSE_FILE="docker-compose.local.yml"
+COMPOSE_FILE="docker-compose.yml"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -277,6 +279,97 @@ cmd_version() {
     echo ""
 }
 
+cmd_ports() {
+    require_install_dir
+    echo ""
+    echo -e "${BOLD}Executor ports in use:${NC}"
+    echo ""
+
+    # Get all listening ports from the executor container
+    local ports
+    ports=$(docker exec allerac-executor sh -c 'netstat -tuln 2>/dev/null | grep LISTEN | awk "{print \$4}" | sed "s/.*://g" | sort -n -u' 2>/dev/null || true)
+
+    if [ -z "$ports" ]; then
+        echo -e "  ${YELLOW}No ports in use${NC}"
+        echo ""
+        return
+    fi
+
+    # Filter to just the executor range (3000-3010)
+    local executor_ports
+    executor_ports=$(echo "$ports" | awk '$1 >= 3000 && $1 <= 3010 {print}')
+
+    if [ -z "$executor_ports" ]; then
+        echo -e "  ${GREEN}No ports in use (3000-3010 all available)${NC}"
+        echo ""
+        return
+    fi
+
+    for port in $executor_ports; do
+        local pid
+        pid=$(docker exec allerac-executor sh -c "netstat -tulnp 2>/dev/null | grep :$port | awk '{print \$NF}' | cut -d/ -f1" 2>/dev/null || echo "?")
+
+        local cmd
+        cmd=$(docker exec allerac-executor sh -c "ps -p $pid -o comm= 2>/dev/null" 2>/dev/null || echo "unknown")
+
+        echo -e "  ${BLUE}:$port${NC}  PID=$pid  CMD=$cmd"
+    done
+    echo ""
+}
+
+cmd_kill_port() {
+    require_install_dir
+    local port="${1:-}"
+
+    if [ -z "$port" ]; then
+        echo ""
+        echo "Usage: allerac kill-port <port>"
+        echo ""
+        echo "Examples:"
+        echo "  allerac kill-port 3000"
+        echo "  allerac kill-port 3005"
+        echo ""
+        exit 1
+    fi
+
+    # Validate port number
+    if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 3000 ] || [ "$port" -gt 3010 ]; then
+        log_error "Port must be between 3000-3010"
+        exit 1
+    fi
+
+    echo ""
+    log_info "Checking port $port..."
+
+    # Get PID of process on that port
+    local pid
+    pid=$(docker exec allerac-executor sh -c "netstat -tulnp 2>/dev/null | grep :$port | awk '{print \$NF}' | cut -d/ -f1" 2>/dev/null || echo "")
+
+    if [ -z "$pid" ] || [ "$pid" = "?" ]; then
+        log_warn "No process found on port $port"
+        echo ""
+        return
+    fi
+
+    # Get process name
+    local cmd
+    cmd=$(docker exec allerac-executor sh -c "ps -p $pid -o comm= 2>/dev/null" || echo "process")
+
+    echo -e "  Found: ${YELLOW}$cmd${NC} (PID $pid)"
+    echo ""
+    read -rp "  Kill this process? [y/N]: " CONFIRM
+    [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "  Cancelled."; echo ""; exit 0; }
+
+    log_info "Killing process $pid..."
+    if docker exec allerac-executor kill $pid 2>/dev/null; then
+        log_ok "Process killed"
+    else
+        log_error "Failed to kill process"
+        exit 1
+    fi
+    echo ""
+}
+
 cmd_help() {
     echo ""
     echo -e "${BOLD}Allerac One CLI${NC}"
@@ -300,6 +393,10 @@ cmd_help() {
     echo -e "  ${BOLD}Models:${NC}"
     echo -e "    ${GREEN}models${NC}              List installed Ollama models"
     echo -e "    ${GREEN}pull${NC} <model>        Download an Ollama model"
+    echo ""
+    echo -e "  ${BOLD}Workspace ports:${NC}"
+    echo -e "    ${GREEN}ports${NC}               Show ports in use by running projects"
+    echo -e "    ${GREEN}kill-port${NC} <port>    Kill a process running on a port (3000-3010)"
     echo ""
     echo -e "  ${BOLD}Info:${NC}"
     echo -e "    ${GREEN}version${NC}             Show current version"
@@ -331,6 +428,8 @@ case "$COMMAND" in
     restore)    cmd_restore "$@" ;;
     models)     cmd_models "$@" ;;
     pull)       cmd_pull "$@" ;;
+    ports)      cmd_ports "$@" ;;
+    kill-port)  cmd_kill_port "$@" ;;
     uninstall)  cmd_uninstall "$@" ;;
     open)       cmd_open "$@" ;;
     version)    cmd_version "$@" ;;

@@ -163,6 +163,29 @@ export default function TokenConfiguration({
 
           <div>
             <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Google Models API Key (Optional - for Gemini models)
+            </label>
+            <input
+              type="password"
+              placeholder="Enter your Google API key..."
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+            />
+            <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Get an API key at{' '}
+              <a
+                href="https://aistudio.google.com/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand-600 hover:underline"
+              >
+                aistudio.google.com
+              </a>
+              {' '}to use Google Models (Gemini)
+            </p>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Telegram Bot Token (Optional - for Telegram access)
             </label>
             <input

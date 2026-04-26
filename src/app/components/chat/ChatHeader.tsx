@@ -35,6 +35,15 @@ export default function ChatHeader({
 }: ChatHeaderProps) {
   const t = useTranslations('system');
 
+  const handleNewChat = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      window.open('/chat', '_blank');
+    } else {
+      clearChat();
+    }
+  };
+
   return (
     <div>
       <div className="px-3 sm:px-6 pb-2" style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
@@ -138,11 +147,11 @@ export default function ChatHeader({
 
           {/* New Chat */}
           <button
-            onClick={clearChat}
+            onClick={handleNewChat}
             className={`p-2 rounded-lg transition-colors ${
               isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
             }`}
-            title={t('newChat')}
+            title={`${t('newChat')} (Ctrl+click para abrir em nova janela)`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />

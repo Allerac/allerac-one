@@ -102,10 +102,10 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
 
     // Validate file type
     const fileName = file.name.toLowerCase();
-    const isValidType = fileName.endsWith('.txt') || fileName.endsWith('.pdf');
+    const isValidType = fileName.endsWith('.txt') || fileName.endsWith('.pdf') || fileName.endsWith('.md');
 
     if (!isValidType) {
-      alert('Currently only .txt and .pdf files are supported');
+      alert('Currently only .txt, .pdf and .md files are supported');
       return;
     }
 
@@ -248,7 +248,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
         <input
           ref={fileInputRef}
           type="file"
-          accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp"
+          accept=".txt,.pdf,.md,.jpg,.jpeg,.png,.gif,.webp"
           onChange={handleFileSelect}
           className="hidden"
           disabled={isUploading}
@@ -272,7 +272,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
           {isUploading ? uploadProgress : 'Drag and drop a file here, or click to select'}
         </p>
         <p className={`mt-1 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-          Supported: .txt, .pdf, .jpg, .png, .gif, .webp
+          Supported: .txt, .pdf, .md, .jpg, .png, .gif, .webp
         </p>
       </div>
 
