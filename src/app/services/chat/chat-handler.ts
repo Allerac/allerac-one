@@ -14,7 +14,7 @@ import { ShellTool } from '../../tools/shell.tool';
 import { ChatService } from '../database/chat.service';
 import { skillsService } from '../skills/skills.service';
 import { TOOLS } from '../../tools/tools';
-import { ALLERAC_SOUL } from '../../config/allerac-soul';
+import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
 
 export interface ChatHandlerConfig {
   userId: string;

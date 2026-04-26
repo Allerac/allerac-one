@@ -14,6 +14,7 @@ COPY src/app/clients/ ./src/app/clients/
 COPY src/app/actions/ ./src/app/actions/
 COPY src/app/services/ ./src/app/services/
 COPY src/app/tools/ ./src/app/tools/
+COPY src/app/config/ ./src/app/config/
 COPY src/app/types.ts ./src/app/types.ts
 COPY src/app/constants.ts ./src/app/constants.ts
 COPY src/app/constants/ ./src/app/constants/
