@@ -40,6 +40,25 @@ function isPathAllowed(pathStr) {
   return ALLOWED_BASE_PATHS.some(base => normalized.startsWith(base));
 }
 
+// Extract absolute paths from command (e.g., /home/user/file.txt, /etc/passwd)
+// Matches patterns like: /path/to/file, /path/to/dir, etc.
+function extractAbsolutePaths(command) {
+  const pathPattern = /\/[^\s"'`<>|&;(){}[\]\\]*/g;
+  const matches = command.match(pathPattern) || [];
+  // Filter to only real paths (at least 2 chars like /a, /tmp, /home, etc)
+  return matches.filter(p => p.length > 1);
+}
+
+function checkCommandPaths(command) {
+  const paths = extractAbsolutePaths(command);
+  for (const pathStr of paths) {
+    if (!isPathAllowed(pathStr)) {
+      return { blocked: true, blockedPath: pathStr };
+    }
+  }
+  return { blocked: false };
+}
+
 const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1 MB — commands should never be larger
 const MIN_TIMEOUT_MS = 1_000;           // 1 second
 const MAX_TIMEOUT_MS = 5 * 60_000;      // 5 minutes
@@ -124,9 +143,27 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // Security: Check paths inside the command (e.g., /home/user/file.txt)
+    const pathCheck = checkCommandPaths(command);
+    if (pathCheck.blocked) {
+      console.log(`[executor][SECURITY] Access denied to path in command: ${pathCheck.blockedPath}`);
+      respond(res, 200, {
+        stdout: '',
+        stderr: '',
+        exitCode: 1,
+        success: false,
+        command,
+        duration_ms: 0,
+        errorType: 'PATH_BLOCKED',
+        requestedPath: pathCheck.blockedPath,
+        allowedPaths: ALLOWED_BASE_PATHS,
+      });
+      return;
+    }
+
     // Security: Validate cwd is in allowed paths
     if (cwd && !isPathAllowed(cwd)) {
-      console.log(`[executor][SECURITY] Access denied to path: ${cwd}`);
+      console.log(`[executor][SECURITY] Access denied to cwd: ${cwd}`);
       // Return 200 so LLM can receive structured error and ask user what to do
       respond(res, 200, {
         stdout: '',

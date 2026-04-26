@@ -43,30 +43,53 @@ After creating a project, tell the user:
 
 The executor runs in an isolated environment. Paths are restricted to `/workspace` and `/tmp` for security.
 
+**CRITICAL**: When you receive a tool result with `errorType: "PATH_BLOCKED"` or `errorType: "COMMAND_BLOCKED"`, you MUST handle it as shown below. DO NOT ignore the errorType or treat it as a regular command failure.
+
 ### When you get `errorType: "PATH_BLOCKED"`
 
-If a command returns `errorType: "PATH_BLOCKED"` (trying to access a path outside the workspace), **DO NOT try to bypass it**. Instead:
+**ALWAYS check the tool result for this field.** If present:
 
-1. **Inform the user** that the path is outside the secure workspace
-2. **Offer options**:
+1. **STOP** — Do not execute any commands on that blocked path
+2. **INFORM the user clearly** with this exact structure:
    ```
-   ⚠️ The path `/home/gianclaudiocarella/...` is outside the secure workspace.
-   
-   What would you like me to do?
-   **[a] Copy** — I'll copy the files/folder to /workspace/projects/ and analyze from there
-   **[b] Skip** — Ignore this path and continue
+   ⚠️ Security: Cannot access `/home/gianclaudiocarella/...`
+
+   This path is outside the secure workspace. I can help by:
+
+   **[a] Copy to workspace** — I'll copy the files to /workspace/projects/ and analyze them
+   **[b] Work elsewhere** — Ignore this path and do something else
+   **[c] Cancel** — Cancel this operation
+
+   What would you like?
    ```
-3. **Wait for the user's choice** (they'll respond in the next message)
-4. **If [a]**, execute: `cp -r /home/gianclaudiocarella/... /workspace/projects/{user}/imported-{name}` then analyze
-5. **If [b]**, continue with other work
+3. **WAIT** for the user's next message (they will choose a, b, or c)
+4. **IF user says "a" or "copy"**: Execute `cp -r /path/to/source /workspace/projects/user/{name}` then analyze files from the new location
+5. **IF user says "b" or "elsewhere"**: Continue with other available work
+6. **IF user says "c" or "cancel"**: Stop and explain what you were trying to do
 
 ### When you get `errorType: "COMMAND_BLOCKED"`
 
-If a command returns `errorType: "COMMAND_BLOCKED"` (dangerous commands like `rm -rf`, `docker`, `sudo`), the command was blocked for security. Explain to the user why it was blocked and suggest a safe alternative within the allowed operations.
+If any tool result contains `errorType: "COMMAND_BLOCKED"`, the command was blocked for security:
+
+1. **DO NOT retry it** or try to bypass it
+2. **Inform the user**: 
+   ```
+   ⚠️ Security: Command blocked — `{blockedCommand}`
+   
+   This command cannot be executed for security. It typically means:
+   - Destructive operations (rm -rf, mkfs, dd)
+   - Privilege escalation (sudo, su)
+   - Docker/container commands
+   - Script injection (curl | bash)
+   
+   How can I help you differently?
+   ```
+3. **Suggest alternatives** that work within allowed operations
 
 ## Workspace isolation
 
 - ✅ Can read/write files in `/workspace` and `/tmp`
 - ✅ Can install packages, run servers, build projects
-- ❌ Cannot execute `docker`, `sudo`, format filesystems, or destructive shell operations
-- ❌ Cannot access paths outside `/workspace` and `/tmp` — must ask user to copy files first
+- ✅ **Can ask user to copy files from restricted paths to workspace**
+- ❌ Cannot execute `docker`, `sudo`, format filesystems, or destructive operations
+- ❌ Cannot access paths outside `/workspace` and `/tmp` — **MUST ask user to copy first**
