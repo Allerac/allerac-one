@@ -6,6 +6,11 @@
 
 import { AlleracTelegramBot } from './app/services/telegram/telegram-bot.service';
 import { TelegramBotConfigService } from './app/services/telegram/telegram-bot-config.service';
+import { installLogInterceptor } from '@/lib/log-interceptor';
+
+// Install log interceptor to send all console logs to the API
+const logApiUrl = process.env.LOG_API_URL || 'http://allerac-app:3000/api/log-submit';
+installLogInterceptor(logApiUrl, 'telegram-bot');
 
 interface RunningBot {
   id: string;
@@ -16,61 +21,6 @@ interface RunningBot {
 
 const runningBots: Map<string, RunningBot> = new Map();
 let lastUpdateTimestamp: Date | null = null;
-
-/**
- * Send logs to the app's log API
- */
-async function sendLog(context: string, message: string, level: 'log' | 'warn' | 'error' | 'info' = 'log'): Promise<void> {
-  try {
-    const apiUrl = process.env.LOG_API_URL || 'http://allerac-app:8080/api/log-submit';
-    await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ context, message, level }),
-    });
-  } catch (err) {
-    // Fallback to console if API fails (don't infinitely loop)
-    console.error(`[Telegram] Failed to send log to API: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-// Intercept console.log to send to API
-const originalLog = console.log.bind(console);
-const originalError = console.error.bind(console);
-const originalWarn = console.warn.bind(console);
-
-console.log = (...args: any[]) => {
-  originalLog(...args);
-  const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-  const match = msg.match(/^\[([^\]]+)\]/);
-  if (match) {
-    const context = match[1];
-    const message = msg.slice(match[0].length).trim();
-    sendLog(context, message, 'log').catch(() => {});
-  }
-};
-
-console.error = (...args: any[]) => {
-  originalError(...args);
-  const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-  const match = msg.match(/^\[([^\]]+)\]/);
-  if (match) {
-    const context = match[1];
-    const message = msg.slice(match[0].length).trim();
-    sendLog(context, message, 'error').catch(() => {});
-  }
-};
-
-console.warn = (...args: any[]) => {
-  originalWarn(...args);
-  const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-  const match = msg.match(/^\[([^\]]+)\]/);
-  if (match) {
-    const context = match[1];
-    const message = msg.slice(match[0].length).trim();
-    sendLog(context, message, 'warn').catch(() => {});
-  }
-};
 
 /**
  * Start a bot instance

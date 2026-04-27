@@ -1,7 +1,8 @@
 # Allerac One — Container Reference
 
 All containers belong to the `allerac` Docker Compose project and are prefixed with `allerac-`.
-One-shot containers (migrations, ollama-setup) run and exit normally on every deploy.
+Allerac One is production-ready and can run on local hardware or cloud VMs.
+Some containers (migrations, ollama-setup) are one-shot services that run once on deploy and exit normally.
 
 ---
 
@@ -73,6 +74,18 @@ Skips models that are already downloaded. Controlled by `OLLAMA_MODELS` env var 
 **Role:** Cron scheduler and Redis Stream consumer. Evaluates scheduled jobs, generates LLM responses, and dispatches notifications via Telegram.
 **Memory limit:** 128 MB
 **Restart:** always
+
+---
+
+## Integrations & Data Sync
+
+### `allerac-health-worker`
+**Image:** custom build (`services/health-worker/Dockerfile`, Python)
+**Port:** `8001` (internal)
+**Role:** Syncs health data from Garmin Connect and other health platforms into the database.
+Handles authentication with external health APIs and stores activity metrics (steps, heart rate, etc).
+**Memory limit:** 256 MB
+**Restart:** unless-stopped
 
 ---
 
@@ -163,5 +176,6 @@ External volumes are created by `update.sh` on first run and never re-created em
 | `3100` | `allerac-loki` | Host |
 | `11434` | `allerac-ollama` | Internal only |
 | `6379` | `allerac-redis` | Internal only |
+| `8001` | `allerac-health-worker` | Internal only |
 | `3001` (internal) | `allerac-executor` | Internal only |
 | `3002` (internal) | `allerac-notifier` | Internal only |

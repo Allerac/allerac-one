@@ -1121,11 +1121,16 @@ export class AlleracTelegramBot {
         const botConfig = await this.getBotConfig(chatId);
         const chatConfig = await this.getChatConfig(mapping.user_id, userId, botConfig?.id);
 
+        console.log(`[Telegram] Message received from ${msg.from?.username || userId}`);
+        console.log(`[Telegram] Model: ${chatConfig.selectedModel}`);
+
         const result = await handleChatMessage(
           msg.text,
           mapping.current_conversation_id,
           chatConfig
         );
+
+        console.log(`[Telegram] Response generated, length: ${result.response.length} chars`);
 
         // Update conversation mapping if new
         if (result.conversationId !== mapping.current_conversation_id) {

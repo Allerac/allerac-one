@@ -4,6 +4,56 @@ const http = require('http');
 const { exec } = require('child_process');
 const path = require('path');
 
+// Install log interceptor to send logs to centralized API
+function installLogInterceptor(apiUrl, serviceName) {
+  if (global.__log_interceptor_installed) return;
+  global.__log_interceptor_installed = true;
+
+  const originalLog = console.log.bind(console);
+  const originalError = console.error.bind(console);
+  const originalWarn = console.warn.bind(console);
+
+  function parseLogArgs(args) {
+    const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    const match = msg.match(/^\[([^\]]+)\]/);
+    if (match) {
+      const context = match[1];
+      const message = msg.slice(match[0].length).trim();
+      return { context, message };
+    }
+    return null;
+  }
+
+  function sendLogToAPI(context, message, level) {
+    fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context, message, level }),
+    }).catch(() => {});
+  }
+
+  console.log = (...args) => {
+    originalLog(...args);
+    const parsed = parseLogArgs(args);
+    if (parsed) sendLogToAPI(parsed.context, parsed.message, 'log');
+  };
+
+  console.error = (...args) => {
+    originalError(...args);
+    const parsed = parseLogArgs(args);
+    if (parsed) sendLogToAPI(parsed.context, parsed.message, 'error');
+  };
+
+  console.warn = (...args) => {
+    originalWarn(...args);
+    const parsed = parseLogArgs(args);
+    if (parsed) sendLogToAPI(parsed.context, parsed.message, 'warn');
+  };
+}
+
+const LOG_API_URL = process.env.LOG_API_URL || 'http://allerac-app:3000/api/log-submit';
+installLogInterceptor(LOG_API_URL);
+
 const PORT = parseInt(process.env.EXECUTOR_PORT || '3001', 10);
 const SECRET = process.env.EXECUTOR_SECRET || '';
 const DEFAULT_CWD = process.env.DEFAULT_CWD || '/tmp';

@@ -32,9 +32,13 @@ Write operations are restricted to `/workspace/` and `/tmp/`.
 
 ## Examples
 
-✅ User: "Read /home/gianclaudiocarella/wsp/perceptron-1"
-✅ You: execute_shell("head -20 /home/gianclaudiocarella/wsp/perceptron-1/*.cs && ls -la /home/gianclaudiocarella/wsp/perceptron-1/")
-✅ Result: Files are read successfully
+✅ User: "Read /home/user/projects/my-project"
+✅ You: execute_shell("find /home/user/projects/my-project -type f \\( -name '*.cs' -o -name '*.json' -o -name '*.md' \\) | head -20 | xargs -I {} sh -c 'echo \"=== {} ===\"; cat \"{}\"'")
+✅ Result: Multiple files are read and displayed
+
+✅ User: "What's in the technical folder? Show me all relevant files"
+✅ You: execute_shell("find /path/technical -type f \\( -name '*.ts' -o -name '*.tsx' -o -name '*.md' -o -name '*.json' \\) | xargs -I {} sh -c 'echo \"=== {} ===\"; cat \"{}\"' | head -100")
+✅ Result: Key files are read with clear separation
 
 ✅ User: "Create a new Node project"
 ✅ You: execute_shell("mkdir -p /workspace/projects/my-app && cd /workspace/projects/my-app && npm init -y")
