@@ -3,7 +3,7 @@
  *
  * Usage in any Node.js service (Telegram, Health Worker, etc):
  *   import { installLogInterceptor } from '@/lib/log-interceptor';
- *   installLogInterceptor('http://allerac-app:3000/api/log-submit');
+ *   installLogInterceptor('http://allerac-app:8080/api/log-submit');
  *
  * After this, all console.log/warn/error with [Context] format
  * will be automatically sent to the log API.
@@ -18,31 +18,27 @@ export async function sendLogToAPI(
   level: 'log' | 'warn' | 'error' | 'info' = 'log'
 ): Promise<void> {
   try {
-    const response = await fetch(apiUrl, {
+    await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ context, message, level }),
     });
-    if (!response.ok) {
-      console.error(`[LogInterceptor] API error: ${response.status} ${response.statusText}`);
-    }
   } catch (err) {
-    // Don't infinite loop — just print to stderr
-    console.error(`[LogInterceptor] Failed to send log: ${err instanceof Error ? err.message : String(err)}`);
+    // Silently fail — don't log errors to avoid infinite loops
   }
 }
 
 /**
  * Install log interceptor for a service
  *
- * @param apiUrl - URL of the log API (default: http://allerac-app:3000/api/log-submit)
+ * @param apiUrl - URL of the log API (default: http://allerac-app:8080/api/log-submit)
  * @param serviceName - Optional service name for debugging (used in error messages)
  *
  * Example:
- *   installLogInterceptor('http://allerac-app:3000/api/log-submit', 'telegram-bot');
+ *   installLogInterceptor('http://allerac-app:8080/api/log-submit', 'telegram-bot');
  */
 export function installLogInterceptor(
-  apiUrl: string = 'http://allerac-app:3000/api/log-submit',
+  apiUrl: string = 'http://allerac-app:8080/api/log-submit',
   serviceName: string = 'Service'
 ): void {
   // Prevent double installation

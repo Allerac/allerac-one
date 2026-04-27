@@ -6,10 +6,10 @@
 
 import { AlleracTelegramBot } from './app/services/telegram/telegram-bot.service';
 import { TelegramBotConfigService } from './app/services/telegram/telegram-bot-config.service';
-import { installLogInterceptor } from '@/lib/log-interceptor';
+import { installLogInterceptor } from './lib/log-interceptor';
 
 // Install log interceptor to send all console logs to the API
-const logApiUrl = process.env.LOG_API_URL || 'http://allerac-app:3000/api/log-submit';
+const logApiUrl = process.env.LOG_API_URL || 'http://allerac-app:8080/api/log-submit';
 installLogInterceptor(logApiUrl, 'telegram-bot');
 
 interface RunningBot {
@@ -169,6 +169,8 @@ async function main() {
 
   if (runningBots.size === 0) {
     console.log('[Telegram] No bots configured yet. Waiting for configurations...');
+  } else {
+    console.log(`[Telegram] Multi-Bot Manager is running with ${runningBots.size} bot(s)`);
   }
 
   // Set up hot reload - check every 10 seconds

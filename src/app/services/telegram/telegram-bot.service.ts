@@ -217,6 +217,7 @@ export class AlleracTelegramBot {
     return {
       userId: alleracUserId,
       githubToken: settings?.github_token || '',
+      geminiToken: settings?.google_api_key || '',
       anthropicToken: settings?.anthropic_api_key || '',
       tavilyApiKey: settings?.tavily_api_key || '',
       selectedModel: activeModel.id,
@@ -1123,6 +1124,7 @@ export class AlleracTelegramBot {
 
         console.log(`[Telegram] Message received from ${msg.from?.username || userId}`);
         console.log(`[Telegram] Model: ${chatConfig.selectedModel}`);
+        console.log(`[Telegram] Message: "${msg.text?.slice(0, 50)}..."`);
 
         const result = await handleChatMessage(
           msg.text,

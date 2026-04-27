@@ -1,0 +1,69 @@
+#!/bin/bash
+#
+# Allerac One - CLI Wrapper
+# =========================
+# Universal entry point that works for any user and installation location.
+# Detects where allerac-one is installed and delegates to allerac.sh
+#
+
+set -e
+
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Find allerac-one installation
+find_allerac_installation() {
+    # Priority 1: Environment variable
+    if [ -n "$ALLERAC_HOME" ] && [ -f "$ALLERAC_HOME/allerac.sh" ]; then
+        echo "$ALLERAC_HOME"
+        return 0
+    fi
+
+    # Priority 2: Current directory or parent directories
+    local dir="$PWD"
+    while [ "$dir" != "/" ]; do
+        if [ -f "$dir/allerac.sh" ] && [ -f "$dir/docker-compose.yml" ]; then
+            echo "$dir"
+            return 0
+        fi
+        dir=$(dirname "$dir")
+    done
+
+    # Priority 3: Common installation paths
+    local common_paths=(
+        "$HOME/allerac-one"
+        "$HOME/Allerac"
+        "/opt/allerac-one"
+        "/usr/local/allerac-one"
+        "/srv/allerac-one"
+    )
+
+    for path in "${common_paths[@]}"; do
+        if [ -f "$path/allerac.sh" ] && [ -f "$path/docker-compose.yml" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+
+    # Not found
+    return 1
+}
+
+ALLERAC_HOME=$(find_allerac_installation) || {
+    echo -e "${RED}Error: Allerac One installation not found${NC}"
+    echo ""
+    echo "To fix this, either:"
+    echo "  1. Set ALLERAC_HOME environment variable:"
+    echo "     export ALLERAC_HOME=/path/to/allerac-one"
+    echo ""
+    echo "  2. Run allerac from your installation directory"
+    echo ""
+    echo "  3. Install Allerac One (it defaults to ~/allerac-one):"
+    echo "     curl -sSL https://get.allerac.com/install | bash"
+    echo ""
+    exit 1
+}
+
+# Delegate to allerac.sh
+exec bash "$ALLERAC_HOME/allerac.sh" "$@"

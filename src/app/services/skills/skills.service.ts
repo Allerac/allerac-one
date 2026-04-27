@@ -328,11 +328,16 @@ export class SkillsService {
     message: string,
     skills: Skill[]
   ): Promise<Skill | null> {
-    const routableSkills = skills.filter(s => s.auto_switch_rules);
-    if (routableSkills.length === 0) return null;
+    const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
+    console.log(`[SkillRouter] detectIntent called with OLLAMA_BASE_URL=${OLLAMA_BASE_URL}`);
 
-    const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434';
-    const ROUTER_MODEL = process.env.SKILL_ROUTER_MODEL || 'deepseek-r1:1.5b';
+    const routableSkills = skills.filter(s => s.auto_switch_rules);
+    if (routableSkills.length === 0) {
+      console.log(`[SkillRouter] No routable skills found`);
+      return null;
+    }
+    console.log(`[SkillRouter] Found ${routableSkills.length} routable skills`);
+    const ROUTER_MODEL = process.env.SKILL_ROUTER_MODEL || 'qwen2.5:3b';
 
     const skillList = routableSkills
       .map(s => `- ${s.name}: ${s.description}`)
@@ -352,6 +357,7 @@ No explanation. Just one word.`;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
 
+      console.log(`[SkillRouter] Attempting LLM routing with model: ${ROUTER_MODEL} at ${OLLAMA_BASE_URL}/api/chat`);
       const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

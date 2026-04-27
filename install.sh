@@ -630,11 +630,12 @@ EOF
 # ============================================
 register_cli() {
     chmod +x "$INSTALL_DIR/allerac.sh"
+    chmod +x "$INSTALL_DIR/allerac"
     local link="/usr/local/bin/allerac"
     if [ -L "$link" ] || [ -f "$link" ]; then
         sudo rm -f "$link"
     fi
-    sudo ln -s "$INSTALL_DIR/allerac.sh" "$link"
+    sudo cp "$INSTALL_DIR/allerac" "$link"
     log_success "CLI registered: type 'allerac help' from anywhere"
 }
 

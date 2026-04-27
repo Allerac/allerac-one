@@ -299,7 +299,7 @@ services:
         limits:
           memory: 128M
 
-  telegram-bot:
+  allerac-telegram:
     build:
       context: .
       dockerfile: Dockerfile.telegram

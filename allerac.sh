@@ -111,7 +111,7 @@ cmd_status() {
     echo -e "${BOLD}Allerac One — Status${NC}"
     echo ""
 
-    local services=("allerac-app" "allerac-db" "allerac-ollama" "allerac-health-worker" "allerac-notifier" "allerac-prometheus" "allerac-grafana")
+    local services=("allerac-app" "allerac-db" "allerac-ollama" "allerac-executor" "allerac-telegram" "allerac-health-worker" "allerac-notifier" "allerac-redis" "allerac-prometheus" "allerac-grafana" "allerac-loki" "allerac-promtail" "allerac-portainer" "allerac-node-exporter")
     for svc in "${services[@]}"; do
         local state
         state=$(docker inspect "$svc" --format='{{.State.Status}}' 2>/dev/null || echo "not found")

@@ -1,5 +1,11 @@
 import { submitLog } from '@/lib/submit-log';
 
+/**
+ * POST /api/log-submit — Accept logs from services (Telegram, Executor, Health Worker, etc)
+ *
+ * No authentication required — services are in the same Docker network.
+ * Logs are added to the in-memory buffer and streamed via /api/logs SSE.
+ */
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = await request.json();
