@@ -104,6 +104,53 @@ if [ ! -f "$COMPOSE_FILE" ]; then
     exit 1
 fi
 
+# Step 0: Local hostname + HTTPS certs (idempotent)
+setup_local_hostname() {
+    local hostname="allerac.home"
+    local cert_dir="$(pwd)/infra/caddy/certs"
+
+    # /etc/hosts entry
+    if ! grep -q "$hostname" /etc/hosts 2>/dev/null; then
+        echo "  Adding $hostname to /etc/hosts..."
+        echo "127.0.0.1 $hostname" | sudo tee -a /etc/hosts > /dev/null
+    fi
+
+    # Install mkcert if missing
+    if ! command -v mkcert &>/dev/null; then
+        echo "  Installing mkcert..."
+        if [ -f /etc/debian_version ]; then
+            sudo apt-get install -y -q mkcert libnss3-tools
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            brew install mkcert nss
+        else
+            echo -e "${YELLOW}  ⚠ Please install mkcert manually: https://github.com/FiloSottile/mkcert${NC}"
+            return
+        fi
+    elif [ -f /etc/debian_version ] && ! command -v certutil &>/dev/null; then
+        sudo apt-get install -y -q libnss3-tools
+    fi
+
+    # Install local CA into system + browser trust stores
+    mkcert -install
+
+    # Generate certs if missing or new install
+    if [ ! -f "$cert_dir/allerac.home.pem" ] || [ ! -f "$cert_dir/allerac.home-key.pem" ]; then
+        mkdir -p "$cert_dir"
+        mkcert \
+            -cert-file "$cert_dir/allerac.home.pem" \
+            -key-file  "$cert_dir/allerac.home-key.pem" \
+            allerac.home
+        echo -e "${GREEN}✓ HTTPS certificate generated${NC}"
+    fi
+}
+
+if [ "$PRODUCT_LINE" = "local" ]; then
+    echo -e "${YELLOW}[0/8]${NC} Configuring local hostname (allerac.home)..."
+    setup_local_hostname
+    echo -e "${GREEN}✓ Local hostname ready${NC}"
+    echo ""
+fi
+
 # Step 1: Pull latest changes
 echo -e "${YELLOW}[1/8]${NC} Pulling latest changes from GitHub..."
 git pull origin main || { echo -e "${RED}Failed to pull changes${NC}"; exit 1; }
@@ -205,6 +252,6 @@ if [ "$PRODUCT_LINE" = "cloud" ]; then
     echo "  Grafana: http://localhost:3001"
 else
     APP_PORT=$(grep "^APP_PORT=" .env 2>/dev/null | cut -d= -f2)
-    echo "  App: http://localhost:${APP_PORT:-8080}"
+    echo "  App: https://allerac.home  (or http://localhost:${APP_PORT:-8080})"
 fi
 echo ""
