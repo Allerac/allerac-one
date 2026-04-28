@@ -57,30 +57,35 @@ function decryptToken(encryptedToken: string): string {
   const parts = encryptedToken.split(':');
   const iv = Buffer.from(parts[0], 'hex');
   const encryptedText = parts[1];
-  
+
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  
+
   let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
-  
+
   return decrypted;
 }
 
 /**
- * Convert DB row to TelegramBotConfig
+ * Convert DB row to TelegramBotConfig, returns null if token cannot be decrypted
  */
-function dbToConfig(row: DbBotConfig): TelegramBotConfig {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    botName: row.bot_name,
-    botToken: decryptToken(row.bot_token),
-    botUsername: row.bot_username,
-    allowedTelegramIds: row.allowed_telegram_ids.map(id => parseInt(id)),
-    enabled: row.enabled,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+function dbToConfig(row: DbBotConfig): TelegramBotConfig | null {
+  try {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      botName: row.bot_name,
+      botToken: decryptToken(row.bot_token),
+      botUsername: row.bot_username,
+      allowedTelegramIds: row.allowed_telegram_ids.map(id => parseInt(id)),
+      enabled: row.enabled,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  } catch {
+    console.error(`[TelegramBotConfig] Failed to decrypt token for bot "${row.bot_name}" (id: ${row.id}) — skipping`);
+    return null;
+  }
 }
 
 export class TelegramBotConfigService {
@@ -104,7 +109,7 @@ export class TelegramBotConfigService {
       [userId, botName, encryptedToken, botUsername || null, allowedTelegramIds]
     );
     
-    return dbToConfig(result.rows[0]);
+    return dbToConfig(result.rows[0])!;
   }
 
   /**
@@ -118,7 +123,7 @@ export class TelegramBotConfigService {
       [userId]
     );
     
-    return result.rows.map(dbToConfig);
+    return result.rows.map(dbToConfig).filter((c): c is TelegramBotConfig => c !== null);
   }
 
   /**
@@ -145,7 +150,7 @@ export class TelegramBotConfigService {
        ORDER BY created_at`
     );
     
-    return result.rows.map(dbToConfig);
+    return result.rows.map(dbToConfig).filter((c): c is TelegramBotConfig => c !== null);
   }
 
   /**

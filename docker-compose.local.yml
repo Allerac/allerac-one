@@ -395,6 +395,23 @@ services:
         limits:
           memory: 256M
 
+  caddy:
+    image: caddy:alpine
+    container_name: allerac-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./infra/caddy/certs:/etc/caddy/certs:ro
+    depends_on:
+      - app
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
 volumes:
   db_data:
     name: allerac_db_data

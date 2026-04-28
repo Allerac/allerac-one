@@ -626,6 +626,49 @@ EOF
 }
 
 # ============================================
+# Configure local hostname + HTTPS (allerac.home via Caddy + mkcert)
+# ============================================
+setup_local_hostname() {
+    local hostname="allerac.home"
+
+    # /etc/hosts entry
+    if grep -q "$hostname" /etc/hosts 2>/dev/null; then
+        log_info "Hostname already in /etc/hosts: $hostname"
+    else
+        echo "127.0.0.1 $hostname" | sudo tee -a /etc/hosts > /dev/null
+        log_success "Hostname configured: $hostname"
+    fi
+
+    # Install mkcert + NSS tools (needed for Firefox/Chrome trust store)
+    if ! command -v mkcert &>/dev/null; then
+        log_info "Installing mkcert..."
+        case "$OS" in
+            debian) sudo apt-get install -y -q mkcert libnss3-tools ;;
+            macos)  brew install mkcert nss ;;
+            *)      log_warn "Please install mkcert manually: https://github.com/FiloSottile/mkcert" ; return ;;
+        esac
+    else
+        # Ensure libnss3-tools is present for Firefox support
+        if [ "$OS" = "debian" ] && ! command -v certutil &>/dev/null; then
+            sudo apt-get install -y -q libnss3-tools
+        fi
+    fi
+
+    # Install local CA into system + browser trust stores
+    mkcert -install
+
+    # Generate certificate for allerac.home
+    local cert_dir="$INSTALL_DIR/infra/caddy/certs"
+    mkdir -p "$cert_dir"
+    mkcert \
+        -cert-file "$cert_dir/allerac.home.pem" \
+        -key-file  "$cert_dir/allerac.home-key.pem" \
+        allerac.home
+
+    log_success "HTTPS certificate generated for $hostname"
+}
+
+# ============================================
 # Register CLI in PATH
 # ============================================
 register_cli() {
@@ -757,7 +800,7 @@ print_success() {
     echo -e "  Models:    ${OLLAMA_MODELS}"
     [ "$ENABLE_GPU" = "true" ] && echo -e "  GPU:       ${GREEN}enabled (NVIDIA)${NC}" || echo -e "  GPU:       CPU only"
     echo ""
-    echo -e "  Open your browser:  ${BLUE}http://localhost:${APP_PORT_NUM}${NC}"
+    echo -e "  Open your browser:  ${BLUE}https://allerac.home${NC}  ${YELLOW}(or http://localhost:${APP_PORT_NUM})${NC}"
     echo ""
 
     GRAFANA_PORT_NUM=$(grep "^GRAFANA_PORT=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "3001")
@@ -805,6 +848,7 @@ main() {
     select_hardware_tier
     configure_features
     setup_environment
+    setup_local_hostname
     register_cli
     start_services
     follow_model_download

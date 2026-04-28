@@ -1,0 +1,4 @@
+https://allerac.home {
+    tls /etc/caddy/certs/allerac.home.pem /etc/caddy/certs/allerac.home-key.pem
+    reverse_proxy allerac-app:8080
+}

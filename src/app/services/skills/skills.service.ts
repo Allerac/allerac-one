@@ -355,7 +355,7 @@ No explanation. Just one word.`;
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 30000);
 
       console.log(`[SkillRouter] Attempting LLM routing with model: ${ROUTER_MODEL} at ${OLLAMA_BASE_URL}/api/chat`);
       const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
