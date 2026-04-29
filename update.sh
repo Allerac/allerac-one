@@ -109,11 +109,13 @@ setup_local_hostname() {
     local hostname="allerac.home"
     local cert_dir="$(pwd)/infra/caddy/certs"
 
-    # /etc/hosts entry
-    if ! grep -q "$hostname" /etc/hosts 2>/dev/null; then
-        echo "  Adding $hostname to /etc/hosts..."
-        echo "127.0.0.1 $hostname" | sudo tee -a /etc/hosts > /dev/null
-    fi
+    # /etc/hosts entries
+    for h in allerac.home allerac.grafana allerac.portainer; do
+        if ! grep -q "$h" /etc/hosts 2>/dev/null; then
+            echo "  Adding $h to /etc/hosts..."
+            echo "127.0.0.1 $h" | sudo tee -a /etc/hosts > /dev/null
+        fi
+    done
 
     # Install mkcert if missing
     if ! command -v mkcert &>/dev/null; then
@@ -133,15 +135,19 @@ setup_local_hostname() {
     # Install local CA into system + browser trust stores
     mkcert -install
 
-    # Generate certs if missing or new install
-    if [ ! -f "$cert_dir/allerac.home.pem" ] || [ ! -f "$cert_dir/allerac.home-key.pem" ]; then
-        mkdir -p "$cert_dir"
-        mkcert \
-            -cert-file "$cert_dir/allerac.home.pem" \
-            -key-file  "$cert_dir/allerac.home-key.pem" \
-            allerac.home
-        echo -e "${GREEN}✓ HTTPS certificate generated${NC}"
-    fi
+    # Generate certs for any domain missing
+    mkdir -p "$cert_dir"
+    local generated=false
+    for domain in allerac.home allerac.grafana allerac.portainer; do
+        if [ ! -f "$cert_dir/${domain}.pem" ] || [ ! -f "$cert_dir/${domain}-key.pem" ]; then
+            mkcert \
+                -cert-file "$cert_dir/${domain}.pem" \
+                -key-file  "$cert_dir/${domain}-key.pem" \
+                "$domain"
+            generated=true
+        fi
+    done
+    [ "$generated" = true ] && echo -e "${GREEN}✓ HTTPS certificates generated${NC}"
 }
 
 if [ "$PRODUCT_LINE" = "local" ]; then

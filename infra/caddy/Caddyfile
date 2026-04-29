@@ -2,3 +2,13 @@ https://allerac.home {
     tls /etc/caddy/certs/allerac.home.pem /etc/caddy/certs/allerac.home-key.pem
     reverse_proxy allerac-app:8080
 }
+
+https://allerac.grafana {
+    tls /etc/caddy/certs/allerac.grafana.pem /etc/caddy/certs/allerac.grafana-key.pem
+    reverse_proxy allerac-grafana:3000
+}
+
+https://allerac.portainer {
+    tls /etc/caddy/certs/allerac.portainer.pem /etc/caddy/certs/allerac.portainer-key.pem
+    reverse_proxy allerac-portainer:9000
+}

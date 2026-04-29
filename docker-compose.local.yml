@@ -395,6 +395,16 @@ services:
         limits:
           memory: 256M
 
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: allerac-portainer
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    ports:
+      - "9000:9000"
+
   caddy:
     image: caddy:alpine
     container_name: allerac-caddy
@@ -415,6 +425,8 @@ services:
 volumes:
   db_data:
     name: allerac_db_data
+  portainer_data:
+    name: allerac_portainer_data
   ollama_data:
     name: allerac_ollama_data
   backups_data:
