@@ -5,7 +5,6 @@
 
 import pool from '@/app/clients/db';
 import type { Message } from '@/app/types';
-import { SkillMetadataParser, type SkillMetadata } from './skill-metadata.parser';
 
 export interface Skill {
   id: string;
@@ -56,10 +55,6 @@ export interface SkillUsage {
   user_rating: number | null;
   user_feedback: string | null;
 }
-
-// In-memory cache for skill metadata (keywords, file_types, etc.)
-// Updated as skills are loaded
-const skillMetadataCache = new Map<string, SkillMetadata>();
 
 export class SkillsService {
   /**
@@ -326,21 +321,6 @@ export class SkillsService {
   }
 
   /**
-   * Extract and cache skill metadata from content
-   */
-  private getSkillMetadata(skill: Skill): SkillMetadata {
-    // Check cache first
-    if (skillMetadataCache.has(skill.id)) {
-      return skillMetadataCache.get(skill.id)!;
-    }
-
-    // Parse from content (with fallback to hardcoded keywords by skill name)
-    const metadata = SkillMetadataParser.parseMetadata(skill.content, skill.name);
-    skillMetadataCache.set(skill.id, metadata);
-    return metadata;
-  }
-
-  /**
    * Detect intent using a small LLM model via Ollama.
    * Returns the matching skill or null. Falls back to keyword matching on failure.
    */
@@ -412,20 +392,33 @@ No explanation. Just one word.`;
       console.log(`[SkillRouter] LLM unavailable (${err.message}) — falling back to keywords`);
     }
 
-    // Keyword fallback - extract from skill content metadata
+    // Keyword fallback - check auto_switch_rules from database
+    console.error(`[SkillRouter] FALLBACK START`);
     for (const skill of routableSkills) {
-      const metadata = this.getSkillMetadata(skill);
+      console.error(`[SkillRouter] checking ${skill.name}`);
+      if (!skill.auto_switch_rules) continue;
+      const rules = skill.auto_switch_rules as any;
 
-      // Check keywords
-      if (metadata.keywords && SkillMetadataParser.matchesKeywords(message, metadata.keywords)) {
-        console.log(`[SkillRouter] Keyword match: ${skill.name}`);
-        return skill;
+      // Check keywords from database
+      if (rules.keywords && Array.isArray(rules.keywords)) {
+        const hasKeyword = rules.keywords.some((kw: string) =>
+          message.toLowerCase().includes(kw.toLowerCase())
+        );
+        if (hasKeyword) {
+          console.log(`[SkillRouter] Keyword fallback matched: ${skill.name}`);
+          return skill;
+        }
       }
 
       // Check file types
-      if (metadata.file_types && SkillMetadataParser.matchesFileTypes(message, metadata.file_types)) {
-        console.log(`[SkillRouter] File type match: ${skill.name}`);
-        return skill;
+      if (rules.file_types && Array.isArray(rules.file_types)) {
+        const hasFileType = rules.file_types.some((ft: string) =>
+          message.includes(ft)
+        );
+        if (hasFileType) {
+          console.log(`[SkillRouter] File type match: ${skill.name}`);
+          return skill;
+        }
       }
     }
 
