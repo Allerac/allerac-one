@@ -64,16 +64,33 @@ INSERT INTO skills (
   'Expert code analysis that learns from your feedback. Use when analyzing code, reviewing PRs, or requesting code feedback.',
   '---
 name: code-reviewer
+display_name: Code Reviewer
 description: Expert code analysis that learns from your feedback. Use when analyzing code, reviewing PRs, or requesting code feedback.
 category: enhancement
 license: MIT
 learning_enabled: true
 memory_scope: user
 rag_integration: true
-auto_switch_rules:
-  keywords: [review, code review, analyze code, check code, look at this code]
-  file_types: [.py, .js, .ts, .java, .go, .cpp, .c, .rs]
 version: 1.0.0
+keywords:
+  - review
+  - code review
+  - analyze code
+  - check code
+  - look at this code
+  - analisa
+  - analise
+  - revisar
+  - revisão
+file_types:
+  - .py
+  - .js
+  - .ts
+  - .java
+  - .go
+  - .cpp
+  - .c
+  - .rs
 ---
 
 # Code Reviewer
@@ -112,7 +129,7 @@ When user provides corrections:
   true,
   'user',
   true,
-  '{"keywords": ["review", "code review", "analyze code", "check code", "look at this code"], "file_types": [".py", ".js", ".ts", ".java", ".go", ".cpp", ".c", ".rs"]}'::jsonb,
+  '{"extract_from_content": true}'::jsonb,
   '1.0.0',
   'MIT',
   true,
@@ -131,15 +148,25 @@ INSERT INTO skills (
   'Academic research with web search and document analysis. Use for literature reviews, research synthesis, fact-checking, or deep research.',
   '---
 name: research-assistant
+display_name: Research Assistant
 description: Academic research with web search and document analysis. Use for literature reviews, research synthesis, fact-checking, or deep research.
 category: workflow
 license: MIT
 learning_enabled: false
 memory_scope: user
 rag_integration: true
-auto_switch_rules:
-  keywords: [research, find information, search for, look up, fact check]
 version: 1.0.0
+keywords:
+  - research
+  - find information
+  - search for
+  - look up
+  - fact check
+  - pesquisa
+  - pesquisar
+  - procura
+  - procurar
+  - verificar
 ---
 
 # Research Assistant
@@ -173,7 +200,7 @@ Academic research assistant with web search and document analysis capabilities.
   false,
   'user',
   true,
-  '{"keywords": ["research", "find information", "search for", "look up", "fact check"]}'::jsonb,
+  '{"extract_from_content": true}'::jsonb,
   '1.0.0',
   'MIT',
   true,

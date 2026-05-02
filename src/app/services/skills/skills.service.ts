@@ -5,6 +5,7 @@
 
 import pool from '@/app/clients/db';
 import type { Message } from '@/app/types';
+import { SkillMetadataParser, type SkillMetadata } from './skill-metadata.parser';
 
 export interface Skill {
   id: string;
@@ -55,6 +56,10 @@ export interface SkillUsage {
   user_rating: number | null;
   user_feedback: string | null;
 }
+
+// In-memory cache for skill metadata (keywords, file_types, etc.)
+// Updated as skills are loaded
+const skillMetadataCache = new Map<string, SkillMetadata>();
 
 export class SkillsService {
   /**
@@ -321,6 +326,21 @@ export class SkillsService {
   }
 
   /**
+   * Extract and cache skill metadata from content
+   */
+  private getSkillMetadata(skill: Skill): SkillMetadata {
+    // Check cache first
+    if (skillMetadataCache.has(skill.id)) {
+      return skillMetadataCache.get(skill.id)!;
+    }
+
+    // Parse from content (with fallback to hardcoded keywords by skill name)
+    const metadata = SkillMetadataParser.parseMetadata(skill.content, skill.name);
+    skillMetadataCache.set(skill.id, metadata);
+    return metadata;
+  }
+
+  /**
    * Detect intent using a small LLM model via Ollama.
    * Returns the matching skill or null. Falls back to keyword matching on failure.
    */
@@ -355,7 +375,7 @@ No explanation. Just one word.`;
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
+      const timeout = setTimeout(() => controller.abort(), 2000);
 
       console.log(`[SkillRouter] Attempting LLM routing with model: ${ROUTER_MODEL} at ${OLLAMA_BASE_URL}/api/chat`);
       const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
@@ -392,11 +412,19 @@ No explanation. Just one word.`;
       console.log(`[SkillRouter] LLM unavailable (${err.message}) — falling back to keywords`);
     }
 
-    // Keyword fallback
+    // Keyword fallback - extract from skill content metadata
     for (const skill of routableSkills) {
-      const matched = await this.shouldAutoActivate(skill, { message });
-      if (matched) {
-        console.log(`[SkillRouter] Keyword fallback matched: ${skill.name}`);
+      const metadata = this.getSkillMetadata(skill);
+
+      // Check keywords
+      if (metadata.keywords && SkillMetadataParser.matchesKeywords(message, metadata.keywords)) {
+        console.log(`[SkillRouter] Keyword match: ${skill.name}`);
+        return skill;
+      }
+
+      // Check file types
+      if (metadata.file_types && SkillMetadataParser.matchesFileTypes(message, metadata.file_types)) {
+        console.log(`[SkillRouter] File type match: ${skill.name}`);
         return skill;
       }
     }
@@ -404,41 +432,6 @@ No explanation. Just one word.`;
     return null;
   }
 
-  /**
-   * Check if skill should auto-activate based on rules
-   */
-  async shouldAutoActivate(
-    skill: Skill,
-    context: {
-      message: string;
-      conversationHistory?: Message[];
-    }
-  ): Promise<boolean> {
-    if (!skill.auto_switch_rules) return false;
-
-    const rules = skill.auto_switch_rules;
-    const message = context.message.toLowerCase();
-
-    // Check keyword triggers
-    if (rules.keywords) {
-      const hasKeyword = rules.keywords.some(kw => message.includes(kw.toLowerCase()));
-      if (hasKeyword) return true;
-    }
-
-    // Check file type triggers
-    if (rules.file_types) {
-      const hasFileType = rules.file_types.some(ft => message.includes(ft));
-      if (hasFileType) return true;
-    }
-
-    // Check time-based patterns
-    if (rules.time_pattern) {
-      const currentHour = new Date().getHours();
-      if (currentHour === rules.time_pattern.hour) return true;
-    }
-
-    return false;
-  }
 
   /**
    * Complete skill usage tracking with performance metrics

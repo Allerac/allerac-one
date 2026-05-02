@@ -169,6 +169,16 @@ export async function POST(request: Request): Promise<Response> {
         const contextLines: string[] = [];
         if (user.name) contextLines.push(`- Name: ${user.name}`);
         contextLines.push(`- Language: ${language} — always reply in this language`);
+
+        // Inject current date and time
+        const now = new Date();
+        const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const todayDate = now.toISOString().split('T')[0];
+        const todayTime = now.toTimeString().split(' ')[0];
+        const todayWeekday = weekdays[now.getDay()];
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        contextLines.push(`- Current date & time: ${todayDate} ${todayWeekday}, ${todayTime} (${timezone})`);
+
         if (userLocation) contextLines.push(`- Location: ${userLocation}`);
         systemMessage += `\n\n## User context\n${contextLines.join('\n')}`;
 
@@ -450,7 +460,10 @@ export async function POST(request: Request): Promise<Response> {
 
               try {
                 let toolResult: any;
-                if (toolName === 'search_web' && tavilyApiKey) {
+                if (toolName === 'get_today_info') {
+                  const { TodayTool } = await import('@/app/tools/today.tool');
+                  toolResult = new TodayTool().execute();
+                } else if (toolName === 'search_web' && tavilyApiKey) {
                   const searchTool = new SearchWebTool(tavilyApiKey, githubToken);
                   toolResult = await searchTool.execute(toolArgs.query);
                 } else if (toolName === 'execute_shell') {

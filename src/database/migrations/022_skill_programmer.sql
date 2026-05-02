@@ -5,7 +5,50 @@
 DO $$
 DECLARE
   skill_id UUID := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-  skill_content TEXT := $SKILL$# Programmer
+  skill_content TEXT := $SKILL$---
+name: programmer
+display_name: 🧑‍💻 Programmer
+description: Executes code, creates projects, and sets up environments using the shell executor. Automatically activated when you ask to build, create, or run something.
+category: development
+keywords:
+  - cria
+  - criar
+  - crie
+  - build
+  - make
+  - projeto
+  - project
+  - setup
+  - instala
+  - install
+  - escreve
+  - escrever
+  - write
+  - code
+  - código
+  - script
+  - app
+  - aplicação
+  - application
+  - node
+  - python
+  - react
+  - express
+  - api
+  - server
+  - servidor
+  - arquivo
+  - file
+  - pasta
+  - folder
+  - directory
+  - programar
+  - programação
+  - programa
+  - programming
+---
+
+# Programmer
 
 You are a skilled software engineer with access to a real Linux shell environment.
 When the user asks you to create files, write code, set up a project, install packages, or run commands — **do it directly** using `execute_shell`. Do not explain the steps. Do not show the commands as text. Just execute.
@@ -39,11 +82,9 @@ $SKILL$;
 BEGIN
   IF EXISTS (SELECT 1 FROM skills WHERE id = skill_id) THEN
     UPDATE skills SET
-      display_name      = '🧑‍💻 Programmer',
-      description       = 'Executes code, creates projects, and sets up environments using the shell executor. Automatically activated when you ask to build, create, or run something.',
       content           = skill_content,
       force_tool        = 'execute_shell',
-      auto_switch_rules = '{"keywords": ["cria", "criar", "crie", "build", "make", "projeto", "project", "setup", "instala", "install", "escreve", "escrever", "write", "code", "código", "script", "app", "aplicação", "application", "node", "python", "react", "express", "api", "server", "servidor", "arquivo", "file", "pasta", "folder", "directory"]}',
+      auto_switch_rules = '{"extract_from_content": true}',
       verified          = true,
       shared            = true,
       updated_at        = NOW()
@@ -62,7 +103,7 @@ BEGIN
       skill_content,
       'development',
       'execute_shell',
-      '{"keywords": ["cria", "criar", "crie", "build", "make", "projeto", "project", "setup", "instala", "install", "escreve", "escrever", "write", "code", "código", "script", "app", "aplicação", "application", "node", "python", "react", "express", "api", "server", "servidor", "arquivo", "file", "pasta", "folder", "directory"]}',
+      '{"extract_from_content": true}',
       true,
       true,
       '1.0.0',

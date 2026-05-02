@@ -138,6 +138,16 @@ export async function handleChatMessage(
   // 4. Build system message with context
   const isCustomSoul = systemMessage && systemMessage !== 'You are a helpful AI assistant.';
   let enrichedSystemMessage = ALLERAC_SOUL;
+
+  // Inject current date and time
+  const now = new Date();
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayDate = now.toISOString().split('T')[0];
+  const todayTime = now.toTimeString().split(' ')[0];
+  const todayWeekday = weekdays[now.getDay()];
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  enrichedSystemMessage += `\n\n## Context\n- Current date & time: ${todayDate} ${todayWeekday}, ${todayTime} (${timezone})`;
+
   if (isCustomSoul) {
     enrichedSystemMessage += `\n\n## About the user\n${systemMessage}`;
   }
@@ -275,7 +285,10 @@ export async function handleChatMessage(
 
       try {
         let toolResult: any;
-        if (toolName === 'search_web' && tavilyApiKey) {
+        if (toolName === 'get_today_info') {
+          const { TodayTool } = await import('@/app/tools/today.tool');
+          toolResult = new TodayTool().execute();
+        } else if (toolName === 'search_web' && tavilyApiKey) {
           const searchTool = new SearchWebTool(tavilyApiKey);
           toolResult = await searchTool.execute(toolArgs.query);
         } else if (toolName === 'execute_shell') {

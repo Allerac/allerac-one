@@ -93,6 +93,18 @@ export const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'get_today_info',
+      description: 'Get the current date, time, weekday, and timezone. Call this at the start of every conversation to know what day it is, before answering any time-sensitive question.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'search_web',
       description: 'Search the web for current information, news, facts, or any information not in your knowledge base. Use this when you need real-time or up-to-date information.',
       parameters: {
