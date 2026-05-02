@@ -171,16 +171,16 @@ export default function TokenConfiguration({
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
             />
             <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Get an API key at{' '}
+              Get your API key from{' '}
               <a
                 href="https://aistudio.google.com/apikey"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-brand-600 hover:underline"
               >
-                aistudio.google.com
+                Google AI Studio
               </a>
-              {' '}to use Google Models (Gemini)
+              {' '}(aistudio.google.com) to use Gemini models
             </p>
           </div>
 

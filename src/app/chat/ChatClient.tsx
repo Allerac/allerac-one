@@ -970,6 +970,31 @@ export default function AdminChat({
             </>
           )}
         </div>
+
+        {/* Health Dashboard — inline split view (desktop only) */}
+        {isHealthDashboardOpen && (
+          <div className={`hidden lg:flex lg:w-[520px] flex-col flex-shrink-0 border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <HealthDashboard
+              isOpen={isHealthDashboardOpen}
+              onClose={() => setIsHealthDashboardOpen(false)}
+              isDarkMode={isDarkMode}
+              userId={userId || undefined}
+              inline
+            />
+          </div>
+        )}
+
+        {/* Health Dashboard — overlay (mobile only) */}
+        {isHealthDashboardOpen && (
+          <div className="lg:hidden">
+            <HealthDashboard
+              isOpen={isHealthDashboardOpen}
+              onClose={() => setIsHealthDashboardOpen(false)}
+              isDarkMode={isDarkMode}
+              userId={userId || undefined}
+            />
+          </div>
+        )}
       </div>
 
       {/* My Allerac Modal */}
@@ -1043,14 +1068,6 @@ export default function AdminChat({
         />
       )}
 
-
-      {/* Health Dashboard */}
-      <HealthDashboard
-        isOpen={isHealthDashboardOpen}
-        onClose={() => setIsHealthDashboardOpen(false)}
-        isDarkMode={isDarkMode}
-        userId={userId || undefined}
-      />
 
       {/* Instagram DM Panel */}
       <InstagramDMPanel
