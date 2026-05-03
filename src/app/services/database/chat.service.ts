@@ -110,11 +110,12 @@ export class ChatService {
     /**
      * Save a message to a conversation
      */
-    async saveMessage(conversationId: string, role: string, content: string) {
+    async saveMessage(conversationId: string, role: string, content: string, options?: { agentRunId?: string }) {
         try {
+            const agentRunId = options?.agentRunId;
             await pool.query(
-                'INSERT INTO chat_messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-                [conversationId, role, content]
+                'INSERT INTO chat_messages (conversation_id, role, content, agent_run_id) VALUES ($1, $2, $3, $4)',
+                [conversationId, role, content, agentRunId || null]
             );
 
             // Update conversation timestamp
