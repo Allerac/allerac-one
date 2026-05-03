@@ -36,6 +36,9 @@ interface ChatInputProps {
   ollamaConnected?: boolean;
   ollamaModels?: any[];
   onDownloadModel?: (modelName: string) => void;
+  // Agent props
+  isAgentMode?: boolean;
+  onToggleAgentMode?: () => void;
 }
 
 export default function ChatInput({
@@ -63,6 +66,8 @@ export default function ChatInput({
   ollamaConnected = false,
   ollamaModels = [],
   onDownloadModel,
+  isAgentMode = false,
+  onToggleAgentMode,
 }: ChatInputProps) {
   const t = useTranslations('chat');
   const attachDropdownRef = useRef<HTMLDivElement>(null);
@@ -296,7 +301,28 @@ export default function ChatInput({
               </div>
             </div>
           </div>
-          
+
+          {/* Agents toggle button */}
+          {onToggleAgentMode && (
+            <button
+              onClick={onToggleAgentMode}
+              className={`w-11 h-11 rounded-lg transition-all flex items-center justify-center ${
+                isAgentMode
+                  ? isDarkMode
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-brand-500 text-white'
+                  : isDarkMode
+                  ? 'hover:bg-gray-600 text-gray-400'
+                  : 'hover:bg-gray-200 text-gray-600'
+              }`}
+              title="Agents mode"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h10v2H7z" />
+              </svg>
+            </button>
+          )}
+
         </div>
         
         {/* Right side: Send button */}

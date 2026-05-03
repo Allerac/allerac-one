@@ -163,21 +163,54 @@ const stream = orchestrator.aggregateResults(
 ✅ Agent run tracking in database
 ✅ Proper error handling and fallbacks
 
-## What's Not Yet Done
+## UI Integration (✅ COMPLETED)
+
+### What Was Done
+
+1. **types.ts** - Added `agent_run` action type to `MessageAction` union
+2. **useAgentRun.ts** - Complete rewrite:
+   - Changed from `EventSource` (GET) to `fetch` POST + `ReadableStream` (fixes protocol mismatch)
+   - Fixed stale closure bugs in `worker_completed/worker_failed` handlers
+   - New interface: `{ state, startRun, reset }`
+   - `startRun(message, conversationId, model, provider)` initiates background run
+3. **ChatInput.tsx** - Added Agents toggle button:
+   - Props: `isAgentMode`, `onToggleAgentMode`
+   - Button appears in left toolbar after attachments
+   - Lights up (brand color) when agent mode active
+4. **ChatClient.tsx** - Integrated agent mode:
+   - State: `isAgentMode`, `activeAgentRunId`
+   - `useAgentRun` hook integration
+   - Modified `handleSendMessage`:
+     - **Input unlocks IMMEDIATELY (Option A)** when agent mode
+     - Calls `startAgentRun` in background
+     - User message added to chat
+   - useEffect watches `agentRunState.runId` and injects assistant message with `agent_run` action
+5. **ChatMessages.tsx** - Renders AgentRunView:
+   - Detects `action.type === 'agent_run'`
+   - Renders `<AgentRunView runId={agentRunId}>` inline in message actions
+   - Live worker status visible to user
+
+### User Flow
+1. Click Agents toggle button (lights up)
+2. Type message → Send
+3. **Input becomes available immediately** (can type more while agents work)
+4. User message appears in chat
+5. `AgentRunView` appears showing:
+   - OrchestratorStatus (planning → running → aggregating → completed)
+   - WorkerCards with individual worker status
+   - Final aggregated result
+6. Workers execute in parallel via Promise.all()
+
+### What's Not Yet Done
 
 ⏸ **Auto-complexity Detection in /api/chat**
-- Currently /api/agents is a separate endpoint
-- No automatic detection of complex tasks in /api/chat
-- Could be added by checking complexity before starting LLM pipeline
-
-⏸ **UI Integration**
-- AgentRunView components are drafted but not connected
-- Need to wire up ChatMessageService to use /api/agents
-- AgentRunView needs to be rendered inline in conversations
+- Currently agents triggered manually via toggle button
+- Could add automatic detection by checking complexity before LLM pipeline
+- Would use complexity model (qwen2.5:3b) to decide whether to route to /api/agents
 
 ⏸ **Complexity Detection Threshold**
-- Current: not used in /api/chat (can be added later)
-- Could use score > 70 to trigger agent mode
+- Current: manual trigger only
+- Could implement: `if (complexity > 70) { useAgents() }`
 
 ## Database Schema
 
@@ -247,13 +280,26 @@ Default settings (can be adjusted):
 
 ## Testing Checklist
 
-- [ ] Migration runs without errors
-- [ ] /api/agents endpoint accepts requests
-- [ ] Authentication is required
-- [ ] Orchestrator can break down complex tasks
-- [ ] Workers execute in parallel
-- [ ] SSE events stream correctly to client
-- [ ] Results are aggregated and returned
-- [ ] Database records are created
-- [ ] Error cases are handled gracefully
-- [ ] Tool calls (search_web, shell) work in workers
+### Backend (from commit 729f820)
+- ✅ Migration runs without errors
+- ✅ /api/agents endpoint accepts requests
+- ✅ Authentication is required
+- ✅ Orchestrator can break down complex tasks
+- ✅ Workers execute in parallel
+- ✅ SSE events stream correctly to client
+- ✅ Results are aggregated and returned
+- ✅ Database records are created
+- ✅ Error cases are handled gracefully
+- ✅ Tool calls (search_web, shell) work in workers
+
+### Frontend UI (from this commit)
+- [ ] Agents toggle button appears in ChatInput
+- [ ] Button lights up when agent mode active
+- [ ] User message sends successfully with agent mode
+- [ ] Input unlocks immediately (can type while agents work)
+- [ ] AgentRunView renders inline in chat
+- [ ] OrchestratorStatus shows planning → running → aggregating → completed
+- [ ] WorkerCards show individual worker progress
+- [ ] Worker tokens stream in real-time
+- [ ] Final aggregation result displays
+- [ ] Tool calls (search_web, shell) visible in worker status

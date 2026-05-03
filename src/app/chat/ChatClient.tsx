@@ -33,6 +33,7 @@ import InstagramDMPanel from '../components/social/InstagramDMPanel';
 import InstagramPostModal from '../components/instagram/InstagramPostModal';
 import { AlleracIcon } from '../components/ui/AlleracIcon';
 import OnboardingWizard from '../components/onboarding/OnboardingWizard';
+import { useAgentRun } from '../components/agents/useAgentRun';
 
 export default function AdminChat({
   defaultSkillName,
@@ -226,6 +227,8 @@ export default function AdminChat({
   const [availableSkills, setAvailableSkills] = useState<any[]>([]);
   const [activeSkill, setActiveSkill] = useState<any | null>(null);
   const [preSelectedSkill, setPreSelectedSkill] = useState<any | null>(null);
+  const [isAgentMode, setIsAgentMode] = useState(false);
+  const [activeAgentRunId, setActiveAgentRunId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const documentFileInputRef = useRef<HTMLInputElement>(null);
@@ -269,6 +272,16 @@ export default function AdminChat({
     },
   });
 
+  // Initialize agent run hook
+  const { state: agentRunState, startRun: startAgentRun } = useAgentRun({
+    onCompleted: (result) => {
+      console.log('[Agent] Run completed with result:', result);
+    },
+    onError: (error) => {
+      console.error('[Agent] Run failed:', error);
+    },
+  });
+
   useEffect(() => {
     checkAuth();
     const savedTheme = localStorage.getItem('chatTheme');
@@ -287,6 +300,22 @@ export default function AdminChat({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // When agent run starts, inject assistant message with agent_run action
+  useEffect(() => {
+    if (agentRunState.runId && isAgentMode) {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          actions: [{ type: 'agent_run', agentRunId: agentRunState.runId }],
+        } as Message,
+      ]);
+      setActiveAgentRunId(agentRunState.runId);
+    }
+  }, [agentRunState.runId, isAgentMode]);
 
   // Load Ollama status on mount and periodically
   useEffect(() => {
@@ -659,6 +688,7 @@ export default function AdminChat({
   const handleSendMessage = async () => {
     if (isSending) return;
     setIsSending(true);
+
     try {
       let message = inputMessage;
       if (documentAttachments.length > 0) {
@@ -667,17 +697,46 @@ export default function AdminChat({
         ).join('\n\n');
         message = (message.trim() ? message + '\n\n' : '') + docBlocks;
       }
-      // Save copy of sent images before clearing (for Instagram draft pre-fill)
+
+      // Save copy of sent images before clearing
       if (imageAttachments.length > 0) {
         setLastSentImages([...imageAttachments]);
       }
-      await chatMessageService.sendMessage(message, imageAttachments, activeSkill);
-      setInputMessage('');
-      imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
-      setImageAttachments([]);
-      setDocumentAttachments([]);
+
+      if (isAgentMode) {
+        // Agent mode: add user message, unlock input immediately, start agent run
+        setMessages(prev => [
+          ...prev,
+          { role: 'user', content: message, timestamp: new Date() } as Message,
+        ]);
+
+        setInputMessage('');
+        imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
+        setImageAttachments([]);
+        setDocumentAttachments([]);
+
+        // UNLOCK INPUT IMMEDIATELY (Opção A)
+        setIsSending(false);
+
+        // Start agent run in background
+        const currentModel = MODELS.find(m => m.id === selectedModel);
+        const provider = currentModel?.provider || 'github';
+
+        startAgentRun(message, currentConversationId, selectedModel, provider).catch(error => {
+          console.error('[handleSendMessage] Agent run failed:', error);
+        });
+      } else {
+        // Normal chat mode: use existing flow
+        await chatMessageService.sendMessage(message, imageAttachments, activeSkill);
+        setInputMessage('');
+        imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
+        setImageAttachments([]);
+        setDocumentAttachments([]);
+      }
     } finally {
-      setIsSending(false);
+      if (!isAgentMode) {
+        setIsSending(false);
+      }
     }
   };
 
@@ -917,6 +976,8 @@ export default function AdminChat({
                   ollamaConnected={ollamaConnected}
                   ollamaModels={ollamaModels}
                   onDownloadModel={handleDownloadModel}
+                  isAgentMode={isAgentMode}
+                  onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
                 />
               </div>
             </div>
@@ -964,6 +1025,8 @@ export default function AdminChat({
                     ollamaConnected={ollamaConnected}
                     ollamaModels={ollamaModels}
                     onDownloadModel={handleDownloadModel}
+                    isAgentMode={isAgentMode}
+                    onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
                   />
                 </div>
               </div>

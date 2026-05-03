@@ -8,12 +8,17 @@ export interface MessageContentPart {
   };
 }
 
-export interface MessageAction {
-  type: 'instagram_draft';
-  caption: string;
-  tags: string;
-  image_url?: string;
-}
+export type MessageAction =
+  | {
+      type: 'instagram_draft';
+      caption: string;
+      tags: string;
+      image_url?: string;
+    }
+  | {
+      type: 'agent_run';
+      agentRunId: string;
+    };
 
 export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';

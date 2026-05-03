@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 export interface Worker {
   id: string;
@@ -19,17 +19,22 @@ export interface AgentRunState {
   error?: string;
 }
 
-export function useAgentRun(
-  runId: string,
-  options?: { onWorkerUpdate?: (worker: Worker) => void; onCompleted?: (result: string) => void }
-) {
+interface UseAgentRunOptions {
+  onWorkerUpdate?: (worker: Worker) => void;
+  onCompleted?: (result: string) => void;
+  onError?: (error: string) => void;
+}
+
+export function useAgentRun(options?: UseAgentRunOptions) {
   const [state, setState] = useState<AgentRunState>({
-    runId,
+    runId: '',
     orchestratorStatus: 'planning',
     workers: new Map(),
     aggregatorOutput: '',
     finalResult: '',
   });
+
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
   const updateWorker = useCallback((worker: Worker) => {
     setState((prev) => {
@@ -40,135 +45,214 @@ export function useAgentRun(
     options?.onWorkerUpdate?.(worker);
   }, [options]);
 
-  useEffect(() => {
-    const eventSource = new EventSource(`/api/agents?runId=${runId}`);
+  const handleEvent = useCallback((event: any) => {
+    switch (event.type) {
+      case 'agent_run_started':
+        console.log('[useAgentRun] Run started:', event.runId);
+        setState((prev) => ({ ...prev, runId: event.runId }));
+        break;
 
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
+      case 'orchestrator_planning':
+        setState((prev) => ({ ...prev, orchestratorStatus: 'planning' }));
+        break;
 
-        switch (data.type) {
-          case 'agent_run_started':
-            console.log('[useAgentRun] Run started:', data.runId);
-            break;
+      case 'orchestrator_planned':
+        const initialWorkers = new Map<string, Worker>();
+        event.workers.forEach((spec: any) => {
+          initialWorkers.set(spec.id, {
+            id: spec.id,
+            name: spec.name,
+            task: spec.task,
+            status: 'waiting',
+            output: '',
+          });
+        });
+        setState((prev) => ({ ...prev, workers: initialWorkers, orchestratorStatus: 'running' }));
+        break;
 
-          case 'orchestrator_planning':
-            setState((prev) => ({ ...prev, orchestratorStatus: 'planning' }));
-            break;
+      case 'worker_started':
+        updateWorker({
+          id: event.workerId,
+          name: event.name,
+          task: event.task,
+          status: 'running',
+          output: '',
+        });
+        break;
 
-          case 'orchestrator_planned':
-            // Initialize worker states
-            const initialWorkers = new Map<string, Worker>();
-            data.workers.forEach((spec: any) => {
-              initialWorkers.set(spec.id, {
-                id: spec.id,
-                name: spec.name,
-                task: spec.task,
-                status: 'waiting',
-                output: '',
-              });
-            });
-            setState((prev) => ({ ...prev, workers: initialWorkers, orchestratorStatus: 'running' }));
-            break;
+      case 'worker_token':
+        setState((prev) => {
+          const workers = new Map(prev.workers);
+          const worker = workers.get(event.workerId);
+          if (worker) {
+            worker.output += event.content;
+            workers.set(event.workerId, { ...worker });
+          }
+          return { ...prev, workers };
+        });
+        break;
 
-          case 'worker_started':
-            updateWorker({
-              id: data.workerId,
-              name: data.name,
-              task: data.task,
-              status: 'running',
-              output: '',
-            });
-            break;
+      case 'worker_tool_call':
+        setState((prev) => {
+          const workers = new Map(prev.workers);
+          const worker = workers.get(event.workerId);
+          if (worker) {
+            worker.tool = event.tool;
+            workers.set(event.workerId, { ...worker });
+          }
+          return { ...prev, workers };
+        });
+        break;
 
-          case 'worker_token':
-            setState((prev) => {
-              const workers = new Map(prev.workers);
-              const worker = workers.get(data.workerId);
-              if (worker) {
-                worker.output += data.content;
-                workers.set(data.workerId, { ...worker });
-              }
-              return { ...prev, workers };
-            });
-            break;
-
-          case 'worker_tool_call':
-            setState((prev) => {
-              const workers = new Map(prev.workers);
-              const worker = workers.get(data.workerId);
-              if (worker) {
-                worker.tool = data.tool;
-                workers.set(data.workerId, { ...worker });
-              }
-              return { ...prev, workers };
-            });
-            break;
-
-          case 'worker_completed':
-            updateWorker({
-              ...state.workers.get(data.workerId)!,
+      case 'worker_completed':
+        setState((prev) => {
+          const workers = new Map(prev.workers);
+          const currentWorker = workers.get(event.workerId);
+          if (currentWorker) {
+            workers.set(event.workerId, {
+              ...currentWorker,
               status: 'completed',
-              output: data.result,
+              output: event.result,
             });
-            break;
+          }
+          return { ...prev, workers };
+        });
+        break;
 
-          case 'worker_failed':
-            updateWorker({
-              ...state.workers.get(data.workerId)!,
+      case 'worker_failed':
+        setState((prev) => {
+          const workers = new Map(prev.workers);
+          const currentWorker = workers.get(event.workerId);
+          if (currentWorker) {
+            workers.set(event.workerId, {
+              ...currentWorker,
               status: 'failed',
-              error: data.error,
+              error: event.error,
               output: '',
             });
-            break;
+          }
+          return { ...prev, workers };
+        });
+        break;
 
-          case 'orchestrator_aggregating':
-            setState((prev) => ({ ...prev, orchestratorStatus: 'aggregating' }));
-            break;
+      case 'orchestrator_aggregating':
+        setState((prev) => ({ ...prev, orchestratorStatus: 'aggregating' }));
+        break;
 
-          case 'aggregator_token':
-            setState((prev) => ({
-              ...prev,
-              aggregatorOutput: prev.aggregatorOutput + data.content,
-            }));
-            break;
+      case 'aggregator_token':
+        setState((prev) => ({
+          ...prev,
+          aggregatorOutput: prev.aggregatorOutput + event.content,
+        }));
+        break;
 
-          case 'run_completed':
-            setState((prev) => ({
-              ...prev,
-              finalResult: data.result,
-              orchestratorStatus: 'completed',
-            }));
-            options?.onCompleted?.(data.result);
-            break;
+      case 'run_completed':
+        setState((prev) => ({
+          ...prev,
+          finalResult: event.result,
+          orchestratorStatus: 'completed',
+        }));
+        options?.onCompleted?.(event.result);
+        break;
 
-          case 'error':
-            setState((prev) => ({
-              ...prev,
-              error: data.message,
-              orchestratorStatus: 'failed',
-            }));
-            break;
-        }
-      } catch (err) {
-        console.error('[useAgentRun] Parse error:', err);
+      case 'error':
+        setState((prev) => ({
+          ...prev,
+          error: event.message,
+          orchestratorStatus: 'failed',
+        }));
+        options?.onError?.(event.message);
+        break;
+    }
+  }, [options]);
+
+  const startRun = useCallback(async (
+    message: string,
+    conversationId: string | null,
+    model: string,
+    provider: string
+  ) => {
+    setState({
+      runId: '',
+      orchestratorStatus: 'planning',
+      workers: new Map(),
+      aggregatorOutput: '',
+      finalResult: '',
+    });
+
+    try {
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          conversationId,
+          model,
+          provider,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        const text = await response.text().catch(() => `HTTP ${response.status}`);
+        throw new Error(text || `HTTP error ${response.status}`);
       }
-    };
 
-    eventSource.addEventListener('message', handleMessage);
-    eventSource.onerror = () => {
+      const reader = response.body.getReader();
+      readerRef.current = reader;
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            handleEvent(event);
+          } catch (err) {
+            console.error('[useAgentRun] Parse error:', err);
+          }
+        }
+      }
+    } catch (error: any) {
+      const errorMsg = error.message || 'Unknown error';
+      console.error('[useAgentRun] Error:', errorMsg);
       setState((prev) => ({
         ...prev,
-        error: 'Connection lost',
+        error: errorMsg,
         orchestratorStatus: 'failed',
       }));
-      eventSource.close();
-    };
+      options?.onError?.(errorMsg);
+    }
+  }, [handleEvent, options]);
 
+  const reset = useCallback(() => {
+    if (readerRef.current) {
+      readerRef.current.cancel();
+      readerRef.current = null;
+    }
+    setState({
+      runId: '',
+      orchestratorStatus: 'planning',
+      workers: new Map(),
+      aggregatorOutput: '',
+      finalResult: '',
+    });
+  }, []);
+
+  useEffect(() => {
     return () => {
-      eventSource.close();
+      if (readerRef.current) {
+        readerRef.current.cancel();
+      }
     };
-  }, [runId, updateWorker, options]);
+  }, []);
 
-  return state;
+  return { state, startRun, reset };
 }

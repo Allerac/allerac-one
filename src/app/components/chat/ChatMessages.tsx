@@ -8,6 +8,7 @@ import { Message, Model, MessageContentPart } from '../../types';
 import CorrectAndMemorize from '../memory/CorrectAndMemorize';
 import { AlleracIcon } from '../ui/AlleracIcon';
 import { AlleracAnimatedIcon } from '../ui/AlleracAnimatedIcon';
+import { AgentRunView } from '../agents/AgentRunView';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -513,6 +514,16 @@ export default function ChatMessages({
                               >
                                 <span>Revisar e Postar no Instagram</span>
                               </button>
+                            </div>
+                          );
+                        }
+                        if (action.type === 'agent_run') {
+                          return (
+                            <div key={idx} className="mt-3">
+                              <AgentRunView
+                                runId={(action as any).agentRunId}
+                                isDarkMode={isDarkMode}
+                              />
                             </div>
                           );
                         }
