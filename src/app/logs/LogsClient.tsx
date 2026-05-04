@@ -10,6 +10,7 @@ import type { Model } from '@/app/types';
 const MetricsTab      = dynamic(() => import('./MetricsTab'),    { ssr: false });
 const BenchmarkPanel  = dynamic(() => import('@/app/components/system/BenchmarkPanel'), { ssr: false });
 const SkillEvalPanel  = dynamic(() => import('@/app/components/system/SkillEvalPanel'), { ssr: false });
+const AgentRunsTab    = dynamic(() => import('@/app/components/agents/AgentRunsTab'),   { ssr: false });
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
 
@@ -81,7 +82,7 @@ interface LogsClientProps {
 
 export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientProps) {
   const router = useRouter();
-  const [tab, setTab] = useState<'logs' | 'metrics' | 'benchmark' | 'evals'>('logs');
+  const [tab, setTab] = useState<'logs' | 'metrics' | 'benchmark' | 'evals' | 'agents'>('logs');
 
   // Logs state
   const [entries, setEntries]       = useState<LogEntry[]>([]);
@@ -230,6 +231,9 @@ export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientP
         <button style={tabBtnStyle(tab === 'evals')}      onClick={() => setTab('evals')}>
           🧪 EVALS
         </button>
+        <button style={tabBtnStyle(tab === 'agents')}     onClick={() => setTab('agents')}>
+          🤖 AGENTS
+        </button>
       </div>
 
       {/* ── LOGS tab ── */}
@@ -329,6 +333,13 @@ export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientP
             MODELS={MODELS}
             selectedModel={defaultModel}
           />
+        </div>
+      )}
+
+      {/* ── AGENTS tab ── */}
+      {tab === 'agents' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <AgentRunsTab userId={userId} />
         </div>
       )}
 

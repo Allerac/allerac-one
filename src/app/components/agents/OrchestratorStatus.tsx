@@ -1,18 +1,11 @@
 interface OrchestratorStatusProps {
-  status: 'planning' | 'running' | 'aggregating' | 'completed' | 'failed';
+  status: 'pending' | 'planning' | 'running' | 'aggregating' | 'completed' | 'failed';
   isDarkMode?: boolean;
 }
 
 export function OrchestratorStatus({ status, isDarkMode = false }: OrchestratorStatusProps) {
-  const statusIcons: Record<string, string> = {
-    planning: '🔍',
-    running: '⚙️',
-    aggregating: '🔗',
-    completed: '✓',
-    failed: '✗',
-  };
-
   const statusLabels: Record<string, string> = {
+    pending: 'Waiting to start...',
     planning: 'Planning...',
     running: 'Delegating workers...',
     aggregating: 'Synthesizing results...',
@@ -29,6 +22,7 @@ export function OrchestratorStatus({ status, isDarkMode = false }: OrchestratorS
     <div className={`${bgColor} ${borderColor} border rounded-lg p-4 mb-4`}>
       <div className="flex items-center gap-3">
         <span className={`text-2xl ${status === 'failed' ? 'text-red-500' : status === 'completed' ? 'text-green-500' : 'text-blue-500'}`}>
+          {status === 'pending' && '⏳'}
           {status === 'planning' && '⟳'}
           {status === 'running' && '⟳'}
           {status === 'aggregating' && '🔗'}

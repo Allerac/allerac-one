@@ -138,7 +138,7 @@ export default function ChatMessages({
   currentConversationId,
   userId,
   githubToken,
-  messagesEndRef
+  messagesEndRef,
 }: ChatMessagesProps) {
   // Controla qual mensagem tem o menu aberto (índice)
   const [openMenuIdx, setOpenMenuIdx] = useState<number | null>(null);

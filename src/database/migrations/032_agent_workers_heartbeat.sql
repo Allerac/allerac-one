@@ -1,0 +1,1 @@
+ALTER TABLE agent_workers ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMPTZ;

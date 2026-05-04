@@ -33,7 +33,6 @@ import InstagramDMPanel from '../components/social/InstagramDMPanel';
 import InstagramPostModal from '../components/instagram/InstagramPostModal';
 import { AlleracIcon } from '../components/ui/AlleracIcon';
 import OnboardingWizard from '../components/onboarding/OnboardingWizard';
-import { useAgentRun } from '../components/agents/useAgentRun';
 
 export default function AdminChat({
   defaultSkillName,
@@ -228,7 +227,6 @@ export default function AdminChat({
   const [activeSkill, setActiveSkill] = useState<any | null>(null);
   const [preSelectedSkill, setPreSelectedSkill] = useState<any | null>(null);
   const [isAgentMode, setIsAgentMode] = useState(false);
-  const [activeAgentRunId, setActiveAgentRunId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const documentFileInputRef = useRef<HTMLInputElement>(null);
@@ -272,16 +270,6 @@ export default function AdminChat({
     },
   });
 
-  // Initialize agent run hook
-  const { state: agentRunState, startRun: startAgentRun } = useAgentRun({
-    onCompleted: (result) => {
-      console.log('[Agent] Run completed with result:', result);
-    },
-    onError: (error) => {
-      console.error('[Agent] Run failed:', error);
-    },
-  });
-
   useEffect(() => {
     checkAuth();
     const savedTheme = localStorage.getItem('chatTheme');
@@ -300,22 +288,6 @@ export default function AdminChat({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // When agent run starts, inject assistant message with agent_run action
-  useEffect(() => {
-    if (agentRunState.runId && isAgentMode) {
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: '',
-          timestamp: new Date(),
-          actions: [{ type: 'agent_run', agentRunId: agentRunState.runId }],
-        } as Message,
-      ]);
-      setActiveAgentRunId(agentRunState.runId);
-    }
-  }, [agentRunState.runId, isAgentMode]);
 
   // Load Ollama status on mount and periodically
   useEffect(() => {
@@ -346,10 +318,11 @@ export default function AdminChat({
       if (document.hidden || inputMessage.trim().length > 0) return;
       try {
         const data = await chatActions.loadMessages(currentConversationId);
-        const loadedMessages = data?.map((msg: any) => ({
+        const loadedMessages: Message[] = data?.map((msg: any) => ({
           role: msg.role as 'user' | 'assistant' | 'system',
           content: msg.content,
           timestamp: new Date(msg.created_at),
+          actions: msg.agent_run_id ? [{ type: 'agent_run' as const, agentRunId: msg.agent_run_id }] : undefined,
         })) || [];
 
         // Only update if there are new messages
@@ -554,10 +527,11 @@ export default function AdminChat({
 
     const data = await chatActions.loadMessages(conversationId);
 
-    const loadedMessages = data?.map((msg: any) => ({
+    const loadedMessages: Message[] = data?.map((msg: any) => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
       timestamp: new Date(msg.created_at),
+      actions: msg.agent_run_id ? [{ type: 'agent_run' as const, agentRunId: msg.agent_run_id }] : undefined,
     })) || [];
 
     setMessages(loadedMessages);
@@ -715,16 +689,40 @@ export default function AdminChat({
         setImageAttachments([]);
         setDocumentAttachments([]);
 
-        // UNLOCK INPUT IMMEDIATELY (Opção A)
+        // UNLOCK INPUT IMMEDIATELY
         setIsSending(false);
 
-        // Start agent run in background
-        const currentModel = MODELS.find(m => m.id === selectedModel);
-        const provider = currentModel?.provider || 'github';
+        // Start agent run via API, then begin polling
+        try {
+          const response = await fetch('/api/agents', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message,
+              conversationId: currentConversationId,
+              model: selectedModel,
+              provider: MODELS.find(m => m.id === selectedModel)?.provider || 'github',
+            }),
+          });
 
-        startAgentRun(message, currentConversationId, selectedModel, provider).catch(error => {
-          console.error('[handleSendMessage] Agent run failed:', error);
-        });
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(errorText || `HTTP ${response.status}`);
+          }
+
+          const data = await response.json();
+          setMessages(prev => [
+            ...prev,
+            {
+              role: 'assistant',
+              content: '',
+              timestamp: new Date(),
+              actions: [{ type: 'agent_run', agentRunId: data.runId }],
+            } as Message,
+          ]);
+        } catch (error: any) {
+          console.error('[handleSendMessage] Agent run creation failed:', error);
+        }
       } else {
         // Normal chat mode: use existing flow
         await chatMessageService.sendMessage(message, imageAttachments, activeSkill);
