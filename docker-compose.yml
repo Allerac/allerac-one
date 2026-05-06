@@ -91,14 +91,15 @@ services:
       - ALLERAC_PRODUCT_LINE=${ALLERAC_PRODUCT_LINE:-local}
       - GITHUB_PAT=${GITHUB_PAT:-}
     volumes:
-      # Workspace: read/write for project files
-      - ${HOST_WORKSPACE:-./workspace}:/workspace
+      - ${HOST_WORKSPACE:-/home}:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
       - ${COMPOSE_DIR:-.}:/project
-      # Home directory: read-only access (each user sees their own /home)
       - /home:/home:ro
-      # Workspace port management scripts
       - ./infra/executor/workspace-ports:/usr/local/bin/workspace-ports:ro
       - ./infra/executor/workspace-kill-port:/usr/local/bin/workspace-kill-port:ro
+    ports:
+      - "3000:3000"
+      - "3002-3010:3002-3010"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

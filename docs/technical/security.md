@@ -43,7 +43,7 @@ Allerac One is designed as a **private-first** AI agent. The default configurati
 By default, Allerac One only listens on localhost:
 
 ```yaml
-# docker-compose.local.yml
+# docker-compose.yml
 ports:
   - "127.0.0.1:8080:8080"  # Only localhost
 ```
@@ -53,7 +53,7 @@ ports:
 To access from other devices on your home network:
 
 ```yaml
-# docker-compose.local.yml
+# docker-compose.yml
 ports:
   - "0.0.0.0:8080:8080"  # All interfaces (LAN accessible)
 ```

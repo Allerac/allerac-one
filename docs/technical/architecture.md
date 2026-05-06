@@ -245,16 +245,16 @@ On use: crypto.decrypt(encrypted_token, ENCRYPTION_KEY) <-------------+
 
 ```bash
 # Core only (app + db + migrations)
-docker compose -f docker-compose.local.yml up -d
+docker compose up -d
 
 # With local LLM
-docker compose -f docker-compose.local.yml --profile ollama up -d
+docker compose --profile ollama up -d
 
 # With monitoring
-docker compose -f docker-compose.local.yml --profile monitoring up -d
+docker compose --profile monitoring up -d
 
 # Full stack
-docker compose -f docker-compose.local.yml --profile ollama --profile monitoring up -d
+docker compose --profile ollama --profile monitoring up -d
 ```
 
 ### Container Dependencies

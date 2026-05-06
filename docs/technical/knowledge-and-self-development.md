@@ -58,7 +58,7 @@ Usuário guia → Allerac entende o que é → propõe mudanças → aplica → 
 O Allerac funciona como um **agente de desenvolvimento auto-hospedado**. Para isso funcionar precisa de:
 
 ### O que já existe
-- Docker Compose (`docker-compose.local.yml`) ✅
+- Docker Compose (`docker-compose.yml`) ✅
 - RAG + pgvector (pode indexar o próprio código-fonte) ✅
 - Memory system (conversas persistentes) ✅
 - Install scripts Linux + Windows ✅

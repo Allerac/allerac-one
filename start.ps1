@@ -47,7 +47,7 @@ function Start-Allerac {
     } else {
         Log-Info "Starting containers..."
         & wsl -d Ubuntu -u root -- bash -c `
-            "cd ~/allerac-one && docker compose -f docker-compose.local.yml up -d 2>&1"
+            "cd ~/allerac-one && docker compose up -d 2>&1"
         if ($LASTEXITCODE -ne 0) {
             Log-Error "Failed to start containers. Run install.ps1 if this is a fresh install."
             Read-Host "Press Enter to exit"

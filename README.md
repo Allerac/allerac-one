@@ -107,10 +107,10 @@ HARDWARE_TIER=custom OLLAMA_MODELS=qwen2.5:14b,deepseek-r1:8b ./install.sh
 
 ```bash
 # Telegram bot + notifications
-docker compose -f docker-compose.local.yml --profile notifications up -d
+docker compose --profile notifications up -d
 
 # Grafana + Prometheus monitoring
-docker compose -f docker-compose.local.yml --profile monitoring up -d
+docker compose --profile monitoring up -d
 ```
 
 ---
@@ -190,7 +190,7 @@ Allerac One is MIT licensed. Contributions welcome.
 git clone https://github.com/allerac/allerac-one.git
 cd allerac-one
 cp .env.local.example .env   # fill in your keys
-docker compose -f docker-compose.local.yml up -d
+docker compose up -d
 ```
 
 Open an issue before large changes so we can align on direction.

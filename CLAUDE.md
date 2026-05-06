@@ -8,7 +8,7 @@ Private-first AI agent platform. Self-hosted, local LLM support via Ollama, with
 - **Language:** TypeScript (strict)
 - **Entry point:** `src/app/` (Next.js App Router)
 - **Database:** `src/database/` (init.sql + migrations/)
-- **Local deploy:** `docker-compose.local.yml`
+- **Local deploy:** `docker-compose.yml`
 - **i18n:** `src/i18n/` (multi-language support via next-intl)
 
 ## Project Structure

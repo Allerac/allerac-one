@@ -4,7 +4,7 @@ Checklists for validating both product line deployments before shipping to custo
 
 ---
 
-## Local Hardware Line (`docker-compose.local.yml`)
+## Local Hardware Line (`docker-compose.yml`)
 
 Target hardware: Allerac Lite, Home, Pro
 
@@ -20,12 +20,12 @@ cp .env.example .env
 ### T-L1: Core services (no profiles)
 
 ```bash
-docker compose -f docker-compose.local.yml up -d
+docker compose up -d
 ```
 
 | # | Check | Expected |
 |---|-------|----------|
-| 1 | `docker compose -f docker-compose.local.yml ps` | `allerac-db`, `allerac-migrations`, `allerac-executor`, `allerac-app` all `running` / `exited 0` for migrations |
+| 1 | `docker compose ps` | `allerac-db`, `allerac-migrations`, `allerac-executor`, `allerac-app` all `running` / `exited 0` for migrations |
 | 2 | `curl -s http://localhost:8080` | Returns HTML (login page) |
 | 3 | `docker logs allerac-app` | No `ENCRYPTION_KEY` error, no DB connection error |
 | 4 | `docker stats --no-stream` | `allerac-app` ≤ 1G RAM, `allerac-db` ≤ 512M |
@@ -37,7 +37,7 @@ docker compose -f docker-compose.local.yml up -d
 
 ```bash
 OLLAMA_MODELS=qwen2.5:3b \
-  docker compose -f docker-compose.local.yml up -d
+  docker compose up -d
 ```
 
 | # | Check | Expected |
@@ -54,7 +54,7 @@ OLLAMA_MODELS=qwen2.5:3b \
 
 ```bash
 OLLAMA_MODELS=qwen2.5:3b \
-  docker compose -f docker-compose.local.yml up -d
+  docker compose up -d
 ```
 
 | # | Check | Expected |
@@ -69,7 +69,7 @@ OLLAMA_MODELS=qwen2.5:3b \
 
 ```bash
 OLLAMA_MODELS=qwen2.5:3b \
-  docker compose -f docker-compose.local.yml up -d
+  docker compose up -d
 ```
 
 | # | Check | Expected |
@@ -84,7 +84,7 @@ OLLAMA_MODELS=qwen2.5:3b \
 ### T-L5: Notifications profile
 
 ```bash
-docker compose -f docker-compose.local.yml --profile notifications up -d
+docker compose --profile notifications up -d
 ```
 
 | # | Check | Expected |
@@ -100,7 +100,7 @@ docker compose -f docker-compose.local.yml --profile notifications up -d
 ### T-L6: Monitoring profile
 
 ```bash
-docker compose -f docker-compose.local.yml --profile monitoring up -d
+docker compose --profile monitoring up -d
 ```
 
 | # | Check | Expected |
@@ -116,13 +116,13 @@ docker compose -f docker-compose.local.yml --profile monitoring up -d
 ### T-L7: Full stack
 
 ```bash
-docker compose -f docker-compose.local.yml \
+docker compose \
   --profile notifications --profile monitoring up -d
 ```
 
 | # | Check | Expected |
 |---|-------|----------|
-| 1 | `docker compose -f docker-compose.local.yml ps` | All services `running` (migrations `exited 0`) |
+| 1 | `docker compose ps` | All services `running` (migrations `exited 0`) |
 | 2 | App accessible at `:8080` | Functional |
 | 3 | Grafana at `:3001` | Functional |
 | 4 | Ollama at `:11434` | Responds to `ollama list` |
@@ -144,7 +144,7 @@ docker compose -f docker-compose.local.yml \
 
 ```bash
 # Block outbound internet on the host, then:
-docker compose -f docker-compose.local.yml up -d
+docker compose up -d
 ```
 
 | # | Check | Expected |
@@ -286,7 +286,7 @@ docker compose up -d
 
 | # | Check | Expected |
 |---|-------|----------|
-| 1 | `docker compose -f docker-compose.local.yml config` | No YAML parse errors |
+| 1 | `docker compose config` | No YAML parse errors |
 | 2 | `docker compose config` | No YAML parse errors (will warn on missing required vars — expected) |
 | 3 | Volume names in local file have `allerac_` prefix | Prevents collision if both deploys run on same host |
 | 4 | Cloud volumes have no name prefix (default) | Cloud runs in isolation, no collision risk |

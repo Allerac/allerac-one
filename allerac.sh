@@ -61,9 +61,6 @@ get_app_port() {
 
 compose_flags() {
     local flags=""
-    local gpu
-    gpu=$(grep "^ENABLE_GPU=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "false")
-    [ "$gpu" = "true" ] && flags="$flags -f docker-compose.local.gpu.yml"
     docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-notifier"  && flags="$flags --profile notifications"
     docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-prometheus" && flags="$flags --profile monitoring"
     echo "$flags"

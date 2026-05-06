@@ -77,7 +77,7 @@ cp .env.local.example .env
 echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" >> .env
 
 # 4. Start services (with Ollama)
-docker compose -f docker-compose.local.yml --profile ollama up -d
+docker compose --profile ollama up -d
 
 # 5. Wait for model download (first time only)
 docker logs -f allerac-ollama-setup
@@ -97,7 +97,7 @@ cp .env.local.example .env
 # Change: OLLAMA_BASE_URL=http://host.docker.internal:11434
 
 # 3. Start without containerized Ollama
-docker compose -f docker-compose.local.yml up -d
+docker compose up -d
 ```
 
 ---
@@ -139,7 +139,7 @@ docker exec allerac-ollama ollama rm llama3.2
 
 1. Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
 
-2. Uncomment GPU section in `docker-compose.local.yml`:
+2. Uncomment GPU section in `docker-compose.yml`:
 ```yaml
 ollama:
   deploy:
@@ -153,8 +153,8 @@ ollama:
 
 3. Restart services:
 ```bash
-docker compose -f docker-compose.local.yml --profile ollama down
-docker compose -f docker-compose.local.yml --profile ollama up -d
+docker compose --profile ollama down
+docker compose --profile ollama up -d
 ```
 
 ---
@@ -167,24 +167,24 @@ docker compose -f docker-compose.local.yml --profile ollama up -d
 cd ~/allerac-one
 
 # Start all services
-docker compose -f docker-compose.local.yml --profile ollama up -d
+docker compose --profile ollama up -d
 
 # Stop all services
-docker compose -f docker-compose.local.yml --profile ollama down
+docker compose --profile ollama down
 
 # Restart
-docker compose -f docker-compose.local.yml --profile ollama restart
+docker compose --profile ollama restart
 ```
 
 ### Viewing Logs
 
 ```bash
 # All services
-docker compose -f docker-compose.local.yml logs -f
+docker compose logs -f
 
 # Specific service
-docker compose -f docker-compose.local.yml logs -f app
-docker compose -f docker-compose.local.yml logs -f ollama
+docker compose logs -f app
+docker compose logs -f ollama
 ```
 
 ### Updating
@@ -196,9 +196,9 @@ cd ~/allerac-one
 git pull origin main
 
 # Rebuild and restart
-docker compose -f docker-compose.local.yml --profile ollama down
-docker compose -f docker-compose.local.yml --profile ollama build
-docker compose -f docker-compose.local.yml --profile ollama up -d
+docker compose --profile ollama down
+docker compose --profile ollama build
+docker compose --profile ollama up -d
 ```
 
 ### Backup
@@ -238,7 +238,7 @@ DEFAULT_MODEL=llama3.2  # 3B model, needs only 4GB
 ```
 
 3. **Limit container memory:**
-Already configured in `docker-compose.local.yml`
+Already configured in `docker-compose.yml`
 
 ### Ollama Model Download Stuck
 
@@ -247,7 +247,7 @@ Already configured in `docker-compose.local.yml`
 docker logs -f allerac-ollama-setup
 
 # If stuck, restart
-docker compose -f docker-compose.local.yml --profile ollama restart ollama ollama-setup
+docker compose --profile ollama restart ollama ollama-setup
 ```
 
 ### Port Already in Use
@@ -274,12 +274,12 @@ newgrp docker
 
 ```bash
 # Check logs for errors
-docker compose -f docker-compose.local.yml logs app
+docker compose logs app
 
 # Common issues:
 # - Database not ready: wait and retry
 # - Migration failed: check migrations logs
-docker compose -f docker-compose.local.yml logs migrations
+docker compose logs migrations
 ```
 
 ---
@@ -308,7 +308,7 @@ docker compose -f docker-compose.local.yml logs migrations
 If you want to access from other devices on your home network:
 
 ```bash
-# Edit docker-compose.local.yml
+# Edit docker-compose.yml
 # Change "8080:8080" to "0.0.0.0:8080:8080"
 
 # Or use SSH tunnel from another device
@@ -322,7 +322,7 @@ ssh -L 8080:localhost:8080 user@your-server-ip
 ```bash
 # Stop and remove containers
 cd ~/allerac-one
-docker compose -f docker-compose.local.yml --profile ollama --profile monitoring down -v
+docker compose --profile ollama --profile monitoring down -v
 
 # Remove installation directory
 rm -rf ~/allerac-one
