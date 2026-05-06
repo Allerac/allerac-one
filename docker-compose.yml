@@ -7,9 +7,10 @@
 # With GPU support (NVIDIA):
 #   OLLAMA_RUNTIME=nvidia docker compose up -d
 #
-# With optional profiles:
-#   docker compose --profile tunnel up -d           # Enable Cloudflare Tunnel
-#   docker compose --profile webhook up -d          # Enable webhook auto-deploy
+# With optional profiles (set COMPOSE_PROFILES in .env):
+#   COMPOSE_PROFILES=local   - Caddy reverse proxy (local HTTPS, e.g. home.allerac)
+#   COMPOSE_PROFILES=cloud   - Cloudflare Tunnel (VM/cloud access, no open ports)
+#   COMPOSE_PROFILES=webhook - Auto-deploy on git push
 #
 # Required environment variables:
 #   ENCRYPTION_KEY                   - AES key for token encryption
@@ -441,6 +442,7 @@ services:
     ports:
       - "9000:9000"
 
+  # Local profile: Caddy reverse proxy for local HTTPS (e.g. https://home.allerac)
   caddy:
     image: caddy:alpine
     container_name: allerac-caddy
@@ -457,8 +459,10 @@ services:
       resources:
         limits:
           memory: 64M
+    profiles:
+      - local
 
-  # Cloudflare Tunnel - Optional, requires TUNNEL_TOKEN
+  # Cloud profile: Cloudflare Tunnel (no open ports needed)
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: allerac-tunnel
@@ -470,7 +474,7 @@ services:
     depends_on:
       - app
     profiles:
-      - tunnel
+      - cloud
 
   # Webhook - Optional, requires WEBHOOK_SECRET
   webhook:
