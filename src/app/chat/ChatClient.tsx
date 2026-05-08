@@ -31,6 +31,7 @@ import TelegramBotSettings from '../components/settings/TelegramBotSettings';
 import HealthDashboard from '../components/health/HealthDashboard';
 import InstagramDMPanel from '../components/social/InstagramDMPanel';
 import InstagramPostModal from '../components/instagram/InstagramPostModal';
+import InstagramPostStudio from '../components/instagram/InstagramPostStudio';
 import { AlleracIcon } from '../components/ui/AlleracIcon';
 import OnboardingWizard from '../components/onboarding/OnboardingWizard';
 
@@ -187,7 +188,10 @@ export default function AdminChat({
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
   const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
   const [isInstagramDMOpen, setIsInstagramDMOpen] = useState(false);
-  const [isInstagramPostOpen, setIsInstagramPostOpen] = useState(false);
+  const [isInstagramPostOpen, setIsInstagramPostOpen] = useState(showInstagramPost ?? false);
+  const [mobileTab, setMobileTab] = useState<'chat' | 'editor' | 'preview'>('editor');
+  const [studioExternalUpdate, setStudioExternalUpdate] = useState<{ caption?: string; tags?: string; price?: string; isProduct?: boolean; timestamp: number } | null>(null);
+  const postContextRef = useRef<string>('');
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
   const [memorySaveLoading, setMemorySaveLoading] = useState(false);
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
@@ -267,6 +271,9 @@ export default function AdminChat({
     onInstagramDraft: (draft) => {
       setInstagramDraft(draft);
       instagramDraftRef.current = draft;
+    },
+    onStudioUpdate: (fields) => {
+      setStudioExternalUpdate({ ...fields, timestamp: Date.now() });
     },
   });
 
@@ -725,7 +732,7 @@ export default function AdminChat({
         }
       } else {
         // Normal chat mode: use existing flow
-        await chatMessageService.sendMessage(message, imageAttachments, activeSkill);
+        await chatMessageService.sendMessage(message, imageAttachments, activeSkill, postContextRef.current || undefined);
         setInputMessage('');
         imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
         setImageAttachments([]);
@@ -893,10 +900,10 @@ export default function AdminChat({
           />
         </div>
 
-        {/* Main Chat Area */}
+        {/* Content wrapper — owns header + all columns */}
         <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
-          {/* Chat Header - always fixed at top */}
+          {/* Chat Header — spans all columns */}
           <ChatHeader
             isSidebarOpen={isSidebarOpen}
             setIsSidebarOpen={setIsSidebarOpen}
@@ -912,6 +919,27 @@ export default function AdminChat({
             isTerminalMode={effectiveChatMode === 'terminal'}
             onToggleChatMode={terminalTheme ? toggleChatMode : undefined}
           />
+
+          {/* Mobile tab bar — only on social page */}
+          {isInstagramPostOpen && (
+            <div className="lg:hidden flex-shrink-0 flex border-b border-gray-700">
+              {(['chat', 'editor', 'preview'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setMobileTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === tab ? 'text-white border-b-2 border-brand-500' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                  {tab === 'chat' ? 'Chat' : tab === 'editor' ? 'Post' : 'Preview'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Columns row */}
+          <div className="flex flex-1 overflow-hidden">
+
+          {/* Chat column */}
+          <div className={`flex flex-col overflow-hidden ${isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1 lg:flex-none' : 'hidden lg:flex lg:flex-none'} lg:w-[30%] lg:flex-shrink-0` : 'flex-1'}`}>
 
           {/* ── Terminal mode — full area replacement ── */}
           {effectiveChatMode === 'terminal' ? (
@@ -1032,6 +1060,37 @@ export default function AdminChat({
           )}
         </div>
 
+        {/* Instagram Post Studio — inline (desktop only) */}
+        {isInstagramPostOpen && userId && (
+          <div className={`${mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'} flex-1 min-w-0 overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <InstagramPostStudio
+              userId={userId}
+              conversationId={currentConversationId}
+              mobileView={mobileTab === 'preview' ? 'preview' : 'editor'}
+              externalUpdate={studioExternalUpdate}
+              onClose={showInstagramPost ? undefined : () => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
+              onSuccess={() => {
+                if (!showInstagramPost) { setIsInstagramPostOpen(false); setInstagramPreFill(null); }
+                setInstagramDraft(null);
+              }}
+              onPostStateChange={(state) => {
+                const parts: string[] = [];
+                if (state.caption) parts.push(`Caption: "${state.caption}"`);
+                if (state.tags) parts.push(`Hashtags: ${state.tags}`);
+                if (state.isProduct && state.price) parts.push(`Preço: €${state.price}`);
+                postContextRef.current = parts.length
+                  ? `## Post do Instagram em edição\n${parts.join('\n')}`
+                  : '';
+              }}
+              initialCaption={instagramPreFill?.caption}
+              initialTags={instagramPreFill?.tags}
+              initialImageBase64={instagramPreFill?.imageBase64}
+              initialImagePreview={instagramPreFill?.imagePreview}
+              initialImageUrl={instagramPreFill?.imageUrl}
+            />
+          </div>
+        )}
+
         {/* Health Dashboard — inline split view (desktop only) */}
         {isHealthDashboardOpen && (
           <div className={`hidden lg:flex lg:w-[520px] flex-col flex-shrink-0 border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
@@ -1056,6 +1115,8 @@ export default function AdminChat({
             />
           </div>
         )}
+          </div>{/* end columns row */}
+        </div>{/* end content wrapper */}
       </div>
 
       {/* My Allerac Modal */}
@@ -1137,22 +1198,24 @@ export default function AdminChat({
         isDarkMode={isDarkMode}
       />
 
-      {/* Instagram Post Modal */}
-      {isInstagramPostOpen && userId && (
-        <InstagramPostModal
-          userId={userId}
-          onClose={() => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
-          onSuccess={() => {
-            setIsInstagramPostOpen(false);
-            setInstagramPreFill(null);
-            setInstagramDraft(null);
-          }}
-          initialCaption={instagramPreFill?.caption}
-          initialTags={instagramPreFill?.tags}
-          initialImageBase64={instagramPreFill?.imageBase64}
-          initialImagePreview={instagramPreFill?.imagePreview}
-          initialImageUrl={instagramPreFill?.imageUrl}
-        />
+      {/* Instagram Post — overlay (mobile only, not on permanent social layout) */}
+      {isInstagramPostOpen && userId && !showInstagramPost && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <InstagramPostModal
+            userId={userId}
+            onClose={() => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
+            onSuccess={() => {
+              setIsInstagramPostOpen(false);
+              setInstagramPreFill(null);
+              setInstagramDraft(null);
+            }}
+            initialCaption={instagramPreFill?.caption}
+            initialTags={instagramPreFill?.tags}
+            initialImageBase64={instagramPreFill?.imageBase64}
+            initialImagePreview={instagramPreFill?.imagePreview}
+            initialImageUrl={instagramPreFill?.imageUrl}
+          />
+        </div>
       )}
 
       {/* Onboarding Wizard */}

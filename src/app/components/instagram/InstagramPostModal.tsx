@@ -29,6 +29,8 @@ export default function InstagramPostModal({
   const [imagePreview, setImagePreview] = useState<string | null>(initialImagePreview ?? null);
   const [caption, setCaption] = useState(initialCaption ?? '');
   const [tags, setTags] = useState(initialTags ?? '');
+  const [isProduct, setIsProduct] = useState(false);
+  const [price, setPrice] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [isGeneratingTags, setIsGeneratingTags] = useState(false);
@@ -105,9 +107,14 @@ export default function InstagramPostModal({
     }
   };
 
+  const buildFullCaption = () => {
+    const priceText = isProduct && price.trim() ? `\n\n💰 €${price.trim()}` : '';
+    return tags ? `${caption}${priceText}\n\n${tags}` : `${caption}${priceText}`;
+  };
+
   const handleCopyToClipboard = async () => {
     try {
-      const fullCaption = tags ? `${caption}\n\n${tags}` : caption;
+      const fullCaption = buildFullCaption();
       await navigator.clipboard.writeText(fullCaption);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
@@ -154,7 +161,7 @@ export default function InstagramPostModal({
         }
       }
 
-      const fullCaption = tags ? `${caption}\n\n${tags}` : caption;
+      const fullCaption = buildFullCaption();
       // If we have base64, use publishInstagramPost server action. Otherwise use imageUrl
       const result = base64ToPublish
         ? await publishInstagramPost(userId, base64ToPublish as string, fullCaption)
@@ -182,21 +189,20 @@ export default function InstagramPostModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-700">
-        {/* Header */}
-        <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-6 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-white">Post to Instagram</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl font-light"
-          >
-            ×
-          </button>
-        </div>
+    <div className="flex flex-col h-full bg-gray-800">
+      {/* Header */}
+      <div className="flex-shrink-0 border-b border-gray-700 px-5 py-4 flex justify-between items-center">
+        <h2 className="text-base font-semibold text-white">Post to Instagram</h2>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-white text-2xl font-light leading-none"
+        >
+          ×
+        </button>
+      </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6">
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* Image Section */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-3">
@@ -250,7 +256,7 @@ export default function InstagramPostModal({
               </label>
               <button
                 onClick={handleGenerateCaption}
-                disabled={isGeneratingCaption || !imageBase64}
+                disabled={isGeneratingCaption || (!imageBase64 && !imageUrl)}
                 className="text-sm px-3 py-1 rounded bg-brand-600 hover:bg-brand-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white transition"
               >
                 {isGeneratingCaption ? 'Generating...' : 'Generate with AI'}
@@ -291,6 +297,41 @@ export default function InstagramPostModal({
             <p className="text-xs text-gray-400 mt-1">
               Separate hashtags with spaces
             </p>
+          </div>
+
+          {/* Product Section */}
+          <div>
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div
+                onClick={() => { setIsProduct(v => !v); if (isProduct) setPrice(''); }}
+                className={`relative w-10 h-6 rounded-full transition-colors ${isProduct ? 'bg-brand-600' : 'bg-gray-600'}`}
+              >
+                <span
+                  className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${isProduct ? 'translate-x-5' : 'translate-x-1'}`}
+                />
+              </div>
+              <span className="text-sm font-medium text-gray-300">Este post é um produto?</span>
+            </label>
+            {isProduct && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Preço
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm font-medium">€</span>
+                  <input
+                    type="text"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0,00"
+                    className="flex-1 px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  O preço será adicionado automaticamente à caption.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Error Message */}
@@ -338,8 +379,8 @@ export default function InstagramPostModal({
               {isLoading ? 'Publishing...' : 'Post to Instagram'}
             </button>
           </div>
-        </div>
       </div>
     </div>
   );
 }
+

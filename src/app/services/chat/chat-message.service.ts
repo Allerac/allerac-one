@@ -20,6 +20,7 @@ interface ChatMessageServiceConfig {
   onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
   onSkillActivated?: (skill: { id: string; name: string; display_name: string }) => void;
   onInstagramDraft?: (draft: { caption: string; tags: string; image_url?: string }) => void;
+  onStudioUpdate?: (fields: { caption?: string; tags?: string; price?: string; isProduct?: boolean }) => void;
 }
 
 export class ChatMessageService {
@@ -29,7 +30,7 @@ export class ChatMessageService {
     this.config = config;
   }
 
-  async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>, activeSkill?: any | null) {
+  async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>, activeSkill?: any | null, postContext?: string) {
     if (!inputMessage.trim() && (!imageAttachments || imageAttachments.length === 0)) return;
     if (!this.config.userId) return;
 
@@ -98,6 +99,7 @@ export class ChatMessageService {
           defaultSkillName: !this.config.currentConversationId && !this.config.preSelectedSkill
             ? this.config.defaultSkillName
             : undefined,
+          postContext: postContext || undefined,
         }),
       });
 
@@ -190,6 +192,15 @@ export class ChatMessageService {
             });
             if (this.config.onInstagramDraft) {
               this.config.onInstagramDraft({ caption: event.caption, tags: event.tags, image_url: event.image_url });
+            }
+          } else if (event.type === 'studio_update') {
+            if (this.config.onStudioUpdate) {
+              this.config.onStudioUpdate({
+                caption: event.caption,
+                tags: event.tags,
+                price: event.price,
+                isProduct: event.isProduct,
+              });
             }
           } else if (event.type === 'error') {
             throw new Error(event.message || 'Server error');

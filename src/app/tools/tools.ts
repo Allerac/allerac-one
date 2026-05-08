@@ -148,6 +148,35 @@ export const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'update_instagram_form',
+      description: 'Update the Instagram post form fields the user is currently editing. Use this when the user asks you to improve, rewrite, or generate the caption or hashtags for their post. Only call this when post context is present in the system message.',
+      parameters: {
+        type: 'object',
+        properties: {
+          caption: {
+            type: 'string',
+            description: 'New caption text (omit to keep current)',
+          },
+          tags: {
+            type: 'string',
+            description: 'New hashtags, space-separated e.g. "#tag1 #tag2" (omit to keep current)',
+          },
+          price: {
+            type: 'string',
+            description: 'Product price in euros, digits only e.g. "29.99" (omit to keep current)',
+          },
+          is_product: {
+            type: 'boolean',
+            description: 'Whether this is a product post (omit to keep current)',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'instagram_create_post_draft',
       description: 'Prepare an Instagram post draft with caption and hashtags. The system will auto-generate caption and tags from the image if not provided. Shows a preview modal for user review before publishing.',
       parameters: {

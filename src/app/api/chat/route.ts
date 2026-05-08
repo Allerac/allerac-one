@@ -57,6 +57,7 @@ export async function POST(request: Request): Promise<Response> {
     preSelectedSkillId,
     defaultSkillName,
     domain,
+    postContext,
   }: {
     message: string;
     conversationId: string | null;
@@ -66,6 +67,7 @@ export async function POST(request: Request): Promise<Response> {
     preSelectedSkillId?: string;
     defaultSkillName?: string;
     domain?: string;
+    postContext?: string;
   } = body;
 
   const cookieStore = await cookies();
@@ -193,6 +195,10 @@ export async function POST(request: Request): Promise<Response> {
           systemMessage += '\n\nWhen the user asks about weather, temperature, or anything requiring real-time local information, use the search_web tool to find current data for their location.';
         } else if (tavilyApiKey) {
           systemMessage += '\n\nWhen the user asks about current weather, news, prices, or any real-time information, use the search_web tool.';
+        }
+
+        if (postContext) {
+          systemMessage += `\n\n${postContext}`;
         }
 
         if (!message && (!imageAttachments || imageAttachments.length === 0)) {
@@ -460,7 +466,16 @@ export async function POST(request: Request): Promise<Response> {
 
               try {
                 let toolResult: any;
-                if (toolName === 'get_today_info') {
+                if (toolName === 'update_instagram_form') {
+                  const { caption, tags, price, is_product } = toolArgs;
+                  const update: any = { type: 'studio_update' };
+                  if (caption !== undefined) update.caption = caption;
+                  if (tags !== undefined) update.tags = tags;
+                  if (price !== undefined) update.price = price;
+                  if (is_product !== undefined) update.isProduct = is_product;
+                  safeEnqueue(encode(update));
+                  toolResult = { success: true, message: 'Form updated.' };
+                } else if (toolName === 'get_today_info') {
                   const { TodayTool } = await import('@/app/tools/today.tool');
                   toolResult = new TodayTool().execute();
                 } else if (toolName === 'search_web' && tavilyApiKey) {
