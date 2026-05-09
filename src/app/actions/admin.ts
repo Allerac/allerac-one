@@ -27,6 +27,7 @@ export interface AdminDomain {
   id: string;
   slug: string;
   display_name: string;
+  is_active: boolean;
 }
 
 export async function listUsers(): Promise<AdminUser[]> {
@@ -46,9 +47,26 @@ export async function listUsers(): Promise<AdminUser[]> {
 export async function listActiveDomains(): Promise<AdminDomain[]> {
   await assertAdmin();
   const result = await pool.query(
-    `SELECT id, slug, display_name FROM domains WHERE is_active = true ORDER BY created_at ASC`
+    `SELECT id, slug, display_name, is_active FROM domains WHERE is_active = true ORDER BY created_at ASC`
   );
   return result.rows;
+}
+
+export async function listAllDomains(): Promise<AdminDomain[]> {
+  await assertAdmin();
+  const result = await pool.query(
+    `SELECT id, slug, display_name, is_active FROM domains ORDER BY created_at ASC`
+  );
+  return result.rows;
+}
+
+export async function toggleDomainActive(
+  domainId: string,
+  isActive: boolean
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  await pool.query('UPDATE domains SET is_active = $1 WHERE id = $2', [isActive, domainId]);
+  return { success: true };
 }
 
 export async function createDomainUser(

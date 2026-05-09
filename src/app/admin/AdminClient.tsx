@@ -7,12 +7,15 @@ import type { AdminUser, AdminDomain } from '@/app/actions/admin';
 interface AdminClientProps {
   initialUsers: AdminUser[];
   initialDomains: AdminDomain[];
+  initialAllDomains: AdminDomain[];
 }
 
-export default function AdminClient({ initialUsers, initialDomains }: AdminClientProps) {
+export default function AdminClient({ initialUsers, initialDomains, initialAllDomains }: AdminClientProps) {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [users, setUsers] = useState<AdminUser[]>(initialUsers);
   const [domains] = useState<AdminDomain[]>(initialDomains);
+  const [allDomains, setAllDomains] = useState<AdminDomain[]>(initialAllDomains);
+  const [domainTogglingId, setDomainTogglingId] = useState<string | null>(null);
 
   // Form state
   const [email, setEmail] = useState('');
@@ -142,6 +145,15 @@ export default function AdminClient({ initialUsers, initialDomains }: AdminClien
       setResetOpenId(null);
     } else {
       setResetMsg({ id: userId, ok: false, text: result.error });
+    }
+  };
+
+  const handleDomainToggle = async (domainId: string, isActive: boolean) => {
+    setDomainTogglingId(domainId);
+    const result = await adminActions.toggleDomainActive(domainId, isActive);
+    setDomainTogglingId(null);
+    if (result.success) {
+      setAllDomains(prev => prev.map(d => d.id === domainId ? { ...d, is_active: isActive } : d));
     }
   };
 
@@ -372,6 +384,53 @@ export default function AdminClient({ initialUsers, initialDomains }: AdminClien
                           )}
                         </div>
                       )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Domains */}
+        <section>
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Domains</h2>
+          <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
+                  <th className="px-4 py-3 text-left font-medium">Slug</th>
+                  <th className="px-4 py-3 text-left font-medium">Name</th>
+                  <th className="px-4 py-3 text-left font-medium">Status</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {allDomains.map((domain, i) => (
+                  <tr key={domain.id} className={`border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
+                    <td className="px-4 py-3 font-mono text-xs">{domain.slug}</td>
+                    <td className="px-4 py-3">{domain.display_name}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        domain.is_active
+                          ? d ? 'bg-green-900/40 text-green-400' : 'bg-green-50 text-green-700'
+                          : d ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {domain.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => handleDomainToggle(domain.id, !domain.is_active)}
+                        disabled={domainTogglingId === domain.id}
+                        className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                          domain.is_active
+                            ? d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            : d ? 'bg-green-900/40 text-green-400 hover:bg-green-900/60' : 'bg-green-50 text-green-700 hover:bg-green-100'
+                        }`}
+                      >
+                        {domainTogglingId === domain.id ? '...' : domain.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
                     </td>
                   </tr>
                 ))}
