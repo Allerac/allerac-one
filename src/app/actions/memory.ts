@@ -9,8 +9,8 @@ export async function generateConversationSummary(conversationId: string, userId
     return await memoryService.generateConversationSummary(conversationId, userId);
 }
 
-export async function getRecentSummaries(userId: string, githubToken: string, limit?: number, minImportance?: number) {
-    const memoryService = new ConversationMemoryService(githubToken);
+export async function getRecentSummaries(userId: string, githubToken: string, limit?: number, minImportance?: number, domainSlug?: string | null) {
+    const memoryService = new ConversationMemoryService(githubToken, domainSlug);
     return await memoryService.getRecentSummaries(userId, limit, minImportance);
 }
 
@@ -24,8 +24,8 @@ export async function formatMemoryContext(summaries: ConversationSummary[], gith
     return memoryService.formatMemoryContext(summaries);
 }
 
-export async function getSummaryStats(userId: string, githubToken: string) {
-    const memoryService = new ConversationMemoryService(githubToken);
+export async function getSummaryStats(userId: string, githubToken: string, domainSlug?: string | null) {
+    const memoryService = new ConversationMemoryService(githubToken, domainSlug);
     return await memoryService.getSummaryStats(userId);
 }
 
@@ -39,7 +39,8 @@ export async function saveCorrectionMemory(
     userId: string,
     content: string,
     importance: number,
-    emotion: number
+    emotion: number,
+    domainSlug?: string | null
 ) {
     try {
         const res = await pool.query(
@@ -52,8 +53,8 @@ export async function saveCorrectionMemory(
         if (existing) {
             const updatedSummary = `${existing.summary}\n\n${content}`;
             await pool.query(
-                `UPDATE conversation_summaries 
-                  SET summary = $1, 
+                `UPDATE conversation_summaries
+                  SET summary = $1,
                       key_topics = array_cat(key_topics, ARRAY['preference', 'correction']),
                       importance_score = $2,
                       emotion = $3
@@ -62,9 +63,9 @@ export async function saveCorrectionMemory(
             );
         } else {
             await pool.query(
-                `INSERT INTO conversation_summaries 
-                  (user_id, conversation_id, summary, key_topics, importance_score, message_count, emotion)
-                  VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                `INSERT INTO conversation_summaries
+                  (user_id, conversation_id, summary, key_topics, importance_score, message_count, emotion, domain_slug)
+                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
                 [
                     userId,
                     conversationId,
@@ -72,7 +73,8 @@ export async function saveCorrectionMemory(
                     ['preference', 'correction'],
                     importance,
                     1,
-                    emotion
+                    emotion,
+                    domainSlug ?? null,
                 ]
             );
         }

@@ -3,9 +3,12 @@
 import crypto from 'crypto';
 import pool from '@/app/clients/db';
 import { AuthService } from '@/app/services/auth/auth.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+import type { SystemSettings } from '@/app/services/system/system-settings.service';
 import { getCurrentUser } from './auth';
 
 const authService = new AuthService();
+const systemSettingsService = new SystemSettingsService();
 
 async function assertAdmin() {
   const user = await getCurrentUser();
@@ -199,4 +202,124 @@ export async function resetUserPassword(
 
   if (result.rowCount === 0) return { success: false, error: 'User not found or is an admin' };
   return { success: true };
+}
+
+// ─── System Settings ──────────────────────────────────────────────────────────
+
+export async function getSystemSettings(): Promise<SystemSettings> {
+  await assertAdmin();
+  return systemSettingsService.loadAll();
+}
+
+export async function saveSystemSettings(
+  settings: Partial<SystemSettings>
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  try {
+    await systemSettingsService.saveAll(settings);
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Failed to save settings' };
+  }
+}
+
+// ─── Instagram Accounts ───────────────────────────────────────────────────────
+
+export interface InstagramAccountEntry {
+  id: string;
+  label: string;
+  owner_user_id: string;
+  owner_email: string;
+  username: string | null;
+  is_connected: boolean;
+  assigned_users: Array<{ id: string; email: string }>;
+}
+
+export async function listInstagramAccounts(): Promise<InstagramAccountEntry[]> {
+  await assertAdmin();
+  const result = await pool.query(`
+    SELECT
+      ia.id,
+      ia.label,
+      ia.owner_user_id,
+      u.email AS owner_email,
+      ic.username,
+      ic.is_connected,
+      COALESCE(
+        json_agg(json_build_object('id', au.id, 'email', au.email))
+        FILTER (WHERE au.id IS NOT NULL), '[]'
+      ) AS assigned_users
+    FROM instagram_accounts ia
+    JOIN users u ON ia.owner_user_id = u.id
+    LEFT JOIN instagram_credentials ic ON ic.user_id = ia.owner_user_id
+    LEFT JOIN user_instagram_account uia ON uia.instagram_account_id = ia.id
+    LEFT JOIN users au ON uia.user_id = au.id
+    GROUP BY ia.id, ia.label, ia.owner_user_id, u.email, ic.username, ic.is_connected
+    ORDER BY ia.created_at ASC
+  `);
+  return result.rows;
+}
+
+export async function registerInstagramAccount(
+  ownerUserId: string,
+  label: string
+): Promise<{ success: true; id: string } | { success: false; error: string }> {
+  await assertAdmin();
+  if (!label.trim()) return { success: false, error: 'Label is required' };
+
+  // Verify the owner has connected Instagram
+  const cred = await pool.query(
+    `SELECT is_connected FROM instagram_credentials WHERE user_id = $1 AND is_connected = true`,
+    [ownerUserId]
+  );
+  if (!cred.rows.length) return { success: false, error: 'This user has no active Instagram connection' };
+
+  const result = await pool.query(
+    `INSERT INTO instagram_accounts (label, owner_user_id) VALUES ($1, $2) RETURNING id`,
+    [label.trim(), ownerUserId]
+  );
+  return { success: true, id: result.rows[0].id };
+}
+
+export async function deleteInstagramAccount(
+  accountId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  await pool.query('DELETE FROM instagram_accounts WHERE id = $1', [accountId]);
+  return { success: true };
+}
+
+export async function assignInstagramAccount(
+  userId: string,
+  accountId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  await pool.query(
+    `INSERT INTO user_instagram_account (user_id, instagram_account_id)
+     VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET instagram_account_id = EXCLUDED.instagram_account_id, created_at = NOW()`,
+    [userId, accountId]
+  );
+  return { success: true };
+}
+
+export async function unassignInstagramAccount(
+  userId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  await pool.query('DELETE FROM user_instagram_account WHERE user_id = $1', [userId]);
+  return { success: true };
+}
+
+// Returns admin users who have an active Instagram connection (candidates for registering an account)
+export async function listInstagramConnectedAdmins(): Promise<Array<{ id: string; email: string; username: string }>> {
+  await assertAdmin();
+  const result = await pool.query(`
+    SELECT u.id, u.email, ic.username
+    FROM users u
+    JOIN instagram_credentials ic ON ic.user_id = u.id
+    WHERE u.is_admin = true AND ic.is_connected = true
+    ORDER BY u.email ASC
+  `);
+  return result.rows;
 }

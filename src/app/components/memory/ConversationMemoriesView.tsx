@@ -8,12 +8,14 @@ interface ConversationMemoriesViewProps {
   githubToken: string;
   userId: string;
   isDarkMode: boolean;
+  domainSlug?: string | null;
 }
 
 export default function ConversationMemoriesView({
   githubToken,
   userId,
-  isDarkMode
+  isDarkMode,
+  domainSlug,
 }: ConversationMemoriesViewProps) {
   const t = useTranslations('memoriesModal');
   const [memories, setMemories] = useState<any[]>([]);
@@ -33,8 +35,8 @@ export default function ConversationMemoriesView({
       if (!githubToken) return;
 
       const [summaries, statistics] = await Promise.all([
-        memoryActions.getRecentSummaries(userId, githubToken, 10, 1),
-        memoryActions.getSummaryStats(userId, githubToken),
+        memoryActions.getRecentSummaries(userId, githubToken, 10, 1, domainSlug),
+        memoryActions.getSummaryStats(userId, githubToken, domainSlug),
       ]);
 
       setMemories(summaries);

@@ -32,9 +32,11 @@ export interface Message {
 
 export class ConversationMemoryService {
   private githubToken: string;
+  private domainSlug: string | null;
 
-  constructor(githubToken: string) {
+  constructor(githubToken: string, domainSlug?: string | null) {
     this.githubToken = githubToken;
+    this.domainSlug = domainSlug ?? null;
   }
 
   /**
@@ -137,9 +139,9 @@ ${conversationText}`;
 
       // Step 5: Save summary to database
       const saveRes = await pool.query(
-        `INSERT INTO conversation_summaries 
-         (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO conversation_summaries
+         (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion, domain_slug)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
         [
           conversationId,
@@ -148,7 +150,8 @@ ${conversationText}`;
           summaryData.key_topics || [],
           summaryData.importance_score || 5,
           messages.length,
-          summaryData.emotion || null
+          summaryData.emotion || null,
+          this.domainSlug || null,
         ]
       );
 
@@ -174,13 +177,19 @@ ${conversationText}`;
     minImportance: number = 3
   ): Promise<ConversationSummary[]> {
     try {
-      const res = await pool.query(
-        `SELECT * FROM conversation_summaries
-         WHERE user_id = $1 AND importance_score >= $2
-         ORDER BY created_at DESC
-         LIMIT $3`,
-        [userId, minImportance, limit]
-      );
+      const res = this.domainSlug
+        ? await pool.query(
+            `SELECT * FROM conversation_summaries
+             WHERE user_id = $1 AND importance_score >= $2 AND domain_slug = $4
+             ORDER BY created_at DESC LIMIT $3`,
+            [userId, minImportance, limit, this.domainSlug]
+          )
+        : await pool.query(
+            `SELECT * FROM conversation_summaries
+             WHERE user_id = $1 AND importance_score >= $2
+             ORDER BY created_at DESC LIMIT $3`,
+            [userId, minImportance, limit]
+          );
 
       return (res.rows || []) as ConversationSummary[];
     } catch (error) {
@@ -278,10 +287,15 @@ ${memoryItems.join('\n\n')}
     averageImportance: number;
   }> {
     try {
-      const res = await pool.query(
-        'SELECT importance_score, message_count FROM conversation_summaries WHERE user_id = $1',
-        [userId]
-      );
+      const res = this.domainSlug
+        ? await pool.query(
+            'SELECT importance_score, message_count FROM conversation_summaries WHERE user_id = $1 AND domain_slug = $2',
+            [userId, this.domainSlug]
+          )
+        : await pool.query(
+            'SELECT importance_score, message_count FROM conversation_summaries WHERE user_id = $1',
+            [userId]
+          );
 
       const data = res.rows;
 

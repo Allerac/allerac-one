@@ -15,6 +15,7 @@
 import { cookies } from 'next/headers';
 import { AuthService } from '@/app/services/auth/auth.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { LLMService } from '@/app/services/llm/llm.service';
 import { ChatService } from '@/app/services/database/chat.service';
 import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
@@ -27,12 +28,14 @@ import { HealthTool } from '@/app/tools/health.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { TOOLS } from '@/app/tools/tools';
+import { getSkillTools } from '@/app/actions/skills';
 import pool from '@/app/clients/db';
 import * as instagramActions from '@/app/actions/instagram';
 import { getImageUploadService } from '@/app/services/image-upload';
 
 const authService = new AuthService();
 const userSettingsService = new UserSettingsService();
+const systemSettingsService = new SystemSettingsService();
 const chatService = new ChatService();
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434';
@@ -143,12 +146,15 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
-        // 2. Load user settings (API keys stay server-side)
-        const settings = await userSettingsService.loadUserSettings(userId);
-        const githubToken = settings?.github_token || process.env.GITHUB_TOKEN || '';
-        const tavilyApiKey = settings?.tavily_api_key || process.env.TAVILY_API_KEY || undefined;
-        const googleApiKey = settings?.google_api_key || '';
-        const anthropicApiKey = settings?.anthropic_api_key || '';
+        // 2. Load user settings — fallback chain: user_settings → system_settings → env vars
+        const [settings, sysSettings] = await Promise.all([
+          userSettingsService.loadUserSettings(userId),
+          systemSettingsService.loadAll(),
+        ]);
+        const githubToken = settings?.github_token || sysSettings.github_token || process.env.GITHUB_TOKEN || '';
+        const tavilyApiKey = settings?.tavily_api_key || sysSettings.tavily_api_key || process.env.TAVILY_API_KEY || undefined;
+        const googleApiKey = settings?.google_api_key || sysSettings.google_api_key || '';
+        const anthropicApiKey = settings?.anthropic_api_key || sysSettings.anthropic_api_key || '';
         const userLocation = settings?.location || null;
 
         // Validate provider has required keys
@@ -184,11 +190,27 @@ export async function POST(request: Request): Promise<Response> {
         if (userLocation) contextLines.push(`- Location: ${userLocation}`);
         systemMessage += `\n\n## User context\n${contextLines.join('\n')}`;
 
-        // Inject user's About Me as instructions (if set)
-        const aboutMe = settings?.system_message;
-        const hasAboutMe = aboutMe && aboutMe !== 'You are a helpful AI assistant.';
-        if (hasAboutMe) {
-          systemMessage += `\n\n## User instructions\n${aboutMe}`;
+        // Inject user instructions — domain-specific first, fall back to global system_message
+        let userInstructions = '';
+        if (domain) {
+          try {
+            const instrRes = await pool.query(
+              `SELECT content FROM user_domain_instructions WHERE user_id = $1 AND domain_slug = $2`,
+              [userId, domain]
+            );
+            if (instrRes.rows[0]?.content?.trim()) {
+              userInstructions = instrRes.rows[0].content.trim();
+            }
+          } catch { /* ignore */ }
+        }
+        if (!userInstructions) {
+          const fallback = settings?.system_message;
+          if (fallback && fallback !== 'You are a helpful AI assistant.') {
+            userInstructions = fallback;
+          }
+        }
+        if (userInstructions) {
+          systemMessage += `\n\n## User instructions\n${userInstructions}`;
         }
 
         if (userLocation) {
@@ -223,7 +245,7 @@ export async function POST(request: Request): Promise<Response> {
         let convId = inputConversationId ?? null;
         if (!convId) {
           const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
-          convId = await chatService.createConversation(userId, title);
+          convId = await chatService.createConversation(userId, title, domain ?? 'chat');
           if (!convId) throw new Error('Failed to create conversation');
         }
 
@@ -303,10 +325,10 @@ export async function POST(request: Request): Promise<Response> {
           : message;
         await chatService.saveMessage(convId, 'user', messageToSave);
 
-        // 7. Load memory context
+        // 7. Load memory context (domain-scoped)
         let conversationMemories = '';
         try {
-          const memoryService = new ConversationMemoryService(githubToken);
+          const memoryService = new ConversationMemoryService(githubToken, domain ?? null);
           const summaries = await memoryService.getRecentSummaries(userId, 3, 4);
           if (summaries && summaries.length > 0) {
             conversationMemories = memoryService.formatMemoryContext(summaries);
@@ -315,12 +337,12 @@ export async function POST(request: Request): Promise<Response> {
           console.log('[ChatRoute] Memory load failed:', e);
         }
 
-        // 8. Load RAG context
+        // 8. Load RAG context (domain-scoped)
         let relevantContext = '';
         try {
           const embeddingService = new EmbeddingService(githubToken);
           const vectorService = new VectorSearchService(embeddingService);
-          relevantContext = await vectorService.getRelevantContext(message, userId);
+          relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: domain ?? null });
         } catch (e) {
           console.log('[ChatRoute] RAG search failed:', e);
         }
@@ -338,17 +360,14 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
-        // Filter tools based on active skill — avoid confusing the model with irrelevant tools
-        const SHELL_SKILLS = ['programmer'];
-        const HEALTH_TOOL_NAMES = ['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'];
-        const INSTAGRAM_TOOL_NAMES = ['instagram_publish_post', 'instagram_get_profile', 'instagram_get_recent_posts'];
-        const activeSkillName = activeSkill?.name ?? '';
-        const activeTools = TOOLS.filter(t => {
-          if (t.function.name === 'execute_shell') return SHELL_SKILLS.includes(activeSkillName);
-          if (HEALTH_TOOL_NAMES.includes(t.function.name)) return activeSkillName === 'health';
-          if (INSTAGRAM_TOOL_NAMES.includes(t.function.name)) return activeSkillName === 'social';
-          return true;
-        });
+        // Load tools from DB skill assignment, fall back to universal tools
+        let activeTools = TOOLS;
+        if (activeSkill?.id) {
+          const allowedToolNames = await getSkillTools(activeSkill.id);
+          if (allowedToolNames.length > 0) {
+            activeTools = TOOLS.filter(t => allowedToolNames.includes(t.function.name));
+          }
+        }
 
         if (conversationMemories) {
           enrichedSystemMessage = conversationMemories + '\n\n' + enrichedSystemMessage;
@@ -485,7 +504,7 @@ export async function POST(request: Request): Promise<Response> {
                 } else if (toolName === 'execute_shell') {
                   const shellTool = new ShellTool();
                   toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
-                } else if (INSTAGRAM_TOOL_NAMES.includes(toolName)) {
+                } else if (['update_instagram_form','instagram_publish_post','instagram_get_profile','instagram_get_recent_posts','instagram_create_post_draft'].includes(toolName)) {
                   const igTool = new InstagramTool();
                   if (toolName === 'instagram_create_post_draft') {
                     let { caption, tags, image_url } = toolArgs;

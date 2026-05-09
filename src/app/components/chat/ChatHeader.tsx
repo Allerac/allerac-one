@@ -1,6 +1,8 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useState, useRef, useEffect } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
+import LanguageSelector from '@/app/components/LanguageSelector';
 
 interface ChatHeaderProps {
   isSidebarOpen: boolean;
@@ -17,6 +19,9 @@ interface ChatHeaderProps {
   isTerminalMode?: boolean;
   onToggleChatMode?: () => void;
   hideHomeButton?: boolean;
+  userName?: string;
+  userEmail?: string;
+  onLogout?: () => void;
 }
 
 export default function ChatHeader({
@@ -34,8 +39,24 @@ export default function ChatHeader({
   isTerminalMode,
   onToggleChatMode,
   hideHomeButton,
+  userName,
+  userEmail,
+  onLogout,
 }: ChatHeaderProps) {
   const t = useTranslations('system');
+  const locale = useLocale();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
+  }, []);
 
   const handleNewChat = (e: React.MouseEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -45,6 +66,12 @@ export default function ChatHeader({
       clearChat();
     }
   };
+
+  const initials = userName
+    ? userName.slice(0, 2).toUpperCase()
+    : userEmail
+      ? userEmail.slice(0, 2).toUpperCase()
+      : '?';
 
   return (
     <div>
@@ -112,7 +139,7 @@ export default function ChatHeader({
             </button>
           )}
 
-          {/* Terminal mode toggle — only for domains with terminal support */}
+          {/* Terminal mode toggle */}
           {onToggleChatMode && (
             <button
               onClick={onToggleChatMode}
@@ -173,6 +200,69 @@ export default function ChatHeader({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
             </button>
+          )}
+
+          {/* User avatar + dropdown */}
+          {(userName || userEmail) && (
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setUserMenuOpen(v => !v)}
+                className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 hover:bg-indigo-500 transition-colors"
+                title={userEmail}
+              >
+                {initials}
+              </button>
+
+              {userMenuOpen && (
+                <div className={`absolute right-0 top-full mt-2 w-60 rounded-xl shadow-xl border z-50 overflow-hidden ${
+                  isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'
+                }`}>
+                  {/* User info */}
+                  <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        {userName && (
+                          <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                            {userName}
+                          </p>
+                        )}
+                        {userEmail && (
+                          <p className={`text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {userEmail}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Language */}
+                  <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+                    <p className={`text-xs font-medium mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Language
+                    </p>
+                    <LanguageSelector currentLocale={locale} isDarkMode={isDarkMode} />
+                  </div>
+
+                  {/* Logout */}
+                  {onLogout && (
+                    <div className="px-4 py-2">
+                      <button
+                        onClick={() => { setUserMenuOpen(false); onLogout(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-600/20 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Log out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
         </div>

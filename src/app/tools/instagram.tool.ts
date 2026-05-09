@@ -7,21 +7,20 @@ const instagramService = new InstagramGraphService();
 
 export class InstagramTool {
   async publishPost(userId: string, caption: string, imageUrl?: string, imageBuffer?: Buffer): Promise<object> {
-    const status = await credService.getStatus(userId);
+    const effectiveUserId = await credService.resolveCredentialsUserId(userId);
+    const status = await credService.getStatus(effectiveUserId);
     if (!status.is_connected) {
-      return { error: 'Instagram not connected. Ask the user to connect their Instagram account in Settings → Social.' };
+      return { error: 'Instagram not connected. Ask the admin to connect an Instagram account.' };
     }
 
-    const accessToken = await credService.getAccessToken(userId);
+    const accessToken = await credService.getAccessToken(effectiveUserId);
     if (!accessToken) {
       return { error: 'Could not retrieve Instagram access token.' };
     }
 
-    // Determine the final image URL — either provided or auto-upload
     let finalImageUrl = imageUrl;
 
     if (!finalImageUrl && imageBuffer) {
-      // Auto-upload image buffer
       try {
         const uploadService = getImageUploadService();
         const uploaded = await uploadService.upload(imageBuffer, 'instagram-post.jpg');
@@ -33,12 +32,10 @@ export class InstagramTool {
     }
 
     if (!finalImageUrl) {
-      // Text-only posts are not supported by Instagram Graph API — return helpful error
       return { error: 'Instagram requires an image or video to publish a post. Please provide an image or image data.' };
     }
 
     try {
-      // Use ig_business_user_id for publishing (Graph API), fall back to ig_user_id if not available
       const businessUserId = status.ig_business_user_id || status.ig_user_id;
       if (!businessUserId) {
         return { error: 'No Instagram user ID available for publishing' };
@@ -51,12 +48,13 @@ export class InstagramTool {
   }
 
   async getProfile(userId: string): Promise<object> {
-    const status = await credService.getStatus(userId);
+    const effectiveUserId = await credService.resolveCredentialsUserId(userId);
+    const status = await credService.getStatus(effectiveUserId);
     if (!status.is_connected) {
       return { error: 'Instagram not connected.' };
     }
 
-    const accessToken = await credService.getAccessToken(userId);
+    const accessToken = await credService.getAccessToken(effectiveUserId);
     if (!accessToken) return { error: 'Could not retrieve Instagram access token.' };
 
     try {
@@ -68,10 +66,11 @@ export class InstagramTool {
   }
 
   async getRecentMedia(userId: string, limit = 6): Promise<object> {
-    const status = await credService.getStatus(userId);
+    const effectiveUserId = await credService.resolveCredentialsUserId(userId);
+    const status = await credService.getStatus(effectiveUserId);
     if (!status.is_connected) return { error: 'Instagram not connected.' };
 
-    const accessToken = await credService.getAccessToken(userId);
+    const accessToken = await credService.getAccessToken(effectiveUserId);
     if (!accessToken) return { error: 'Could not retrieve Instagram access token.' };
 
     try {

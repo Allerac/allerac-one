@@ -19,8 +19,6 @@ interface SidebarMobileProps {
   showInstagramDM?: boolean;
   onOpenInstagramPost?: () => void;
   instagramConnected?: boolean;
-  hideConfiguration?: boolean;
-  onLogout?: () => void;
 }
 
 export default function SidebarMobile({
@@ -38,8 +36,6 @@ export default function SidebarMobile({
   showInstagramDM,
   onOpenInstagramPost,
   instagramConnected,
-  hideConfiguration,
-  onLogout,
 }: SidebarMobileProps) {
   const d = isDarkMode;
   return (
@@ -75,8 +71,6 @@ export default function SidebarMobile({
         showInstagramDM={showInstagramDM}
         onOpenInstagramPost={onOpenInstagramPost}
         instagramConnected={instagramConnected}
-        hideConfiguration={hideConfiguration}
-        onLogout={onLogout}
       />
     </div>
   );

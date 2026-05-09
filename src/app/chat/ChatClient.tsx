@@ -43,6 +43,7 @@ export default function AdminChat({
   showInstagramDM = false,
   showInstagramPost = false,
   defaultSidebarCollapsed = false,
+  isAdmin = false,
   chatMode = 'default',
   terminalTheme,
   systemDashboardInitialTab: initialDashboardTab,
@@ -54,6 +55,7 @@ export default function AdminChat({
   showInstagramDM?: boolean;
   showInstagramPost?: boolean;
   defaultSidebarCollapsed?: boolean;
+  isAdmin?: boolean;
   chatMode?: 'default' | 'terminal';
   terminalTheme?: TerminalTheme;
   systemDashboardInitialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social';
@@ -68,7 +70,6 @@ export default function AdminChat({
     const openTokenModal = () => { setSystemDashboardInitialTab('apiKeys'); setIsSystemDashboardOpen(true); };
     const openUserSettingsModal = () => setIsUserSettingsOpen(true);
     const openSkillsLibrary = () => setIsSkillsLibraryOpen(true);
-    const openSystemDashboard = () => { setSystemDashboardInitialTab('preferences'); setIsSystemDashboardOpen(true); };
     const openHealthDashboard = () => setIsHealthDashboardOpen(true);
     const openInstagramDM = () => setIsInstagramDMOpen(true);
     const openInstagramPost = async (event?: Event) => {
@@ -127,7 +128,6 @@ export default function AdminChat({
     window.addEventListener('openTokenModal', openTokenModal);
     window.addEventListener('openUserSettingsModal', openUserSettingsModal);
     window.addEventListener('openSkillsLibrary', openSkillsLibrary);
-    window.addEventListener('openSystemDashboard', openSystemDashboard);
     window.addEventListener('openHealthDashboard', openHealthDashboard);
     window.addEventListener('openInstagramDM', openInstagramDM);
     window.addEventListener('openInstagramPost', openInstagramPost);
@@ -142,7 +142,6 @@ export default function AdminChat({
       window.removeEventListener('openTokenModal', openTokenModal);
       window.removeEventListener('openUserSettingsModal', openUserSettingsModal);
       window.removeEventListener('openSkillsLibrary', openSkillsLibrary);
-      window.removeEventListener('openSystemDashboard', openSystemDashboard);
       window.removeEventListener('openHealthDashboard', openHealthDashboard);
       window.removeEventListener('openInstagramDM', openInstagramDM);
       window.removeEventListener('openInstagramPost', openInstagramPost);
@@ -179,7 +178,6 @@ export default function AdminChat({
   const [locationInput, setLocationInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [systemMessage, setSystemMessage] = useState('');
-  const [systemMessageEdit, setSystemMessageEdit] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(defaultSidebarCollapsed);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
@@ -261,7 +259,7 @@ export default function AdminChat({
     activeSkill,
     preSelectedSkill,
     defaultSkillName,
-    domain: domainName,
+    domain: domainName?.toLowerCase() ?? 'chat',
     onConversationCreated: () => {
       if (userId) loadConversations(userId);
     },
@@ -292,12 +290,12 @@ export default function AdminChat({
     if (savedModel) setSelectedModel(savedModel);
   }, []);
 
-  // Load system message when userId becomes available
+  // Load domain-scoped instructions when userId or domain changes
   useEffect(() => {
     if (userId) {
       loadSystemMessage();
     }
-  }, [userId]);
+  }, [userId, domainName]);
 
   useEffect(() => {
     scrollToBottom();
@@ -465,7 +463,6 @@ export default function AdminChat({
         if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
         if (settings.anthropic_api_key) setAnthropicApiKey(settings.anthropic_api_key);
         if (settings.location) setLocationInput(settings.location);
-        if (settings.system_message) setSystemMessage(settings.system_message);
         if (!settings.onboarding_completed) setShowOnboarding(true);
       } else {
         setShowOnboarding(true);
@@ -491,30 +488,15 @@ export default function AdminChat({
 
   const loadSystemMessage = async () => {
     if (!userId) return;
-    const message = await chatActions.loadSystemMessage(userId);
-    setSystemMessage(message);
-    setSystemMessageEdit(message);
-  };
-
-  const saveSystemMessage = async () => {
-    if (!userId) return;
-
-    const result = await chatActions.saveSystemMessage(userId, systemMessageEdit);
-
-    if (result.success) {
-      setSystemMessage(systemMessageEdit);
-      setIsMyAlleracOpen(false);
-      // Reload from database to ensure sync
-      await loadSystemMessage();
-      alert('Settings saved successfully!');
-    } else {
-      console.error('Error saving system message:', result.error);
-      alert('Error saving settings');
-    }
+    const slug = domainName?.toLowerCase() ?? 'chat';
+    const message = await userActions.getDomainInstructions(userId, slug);
+    if (message) setSystemMessage(message);
   };
 
   const loadConversations = async (uid: string) => {
-    const data = await chatActions.loadConversations(uid);
+    // chat (no domainName) = hub, shows all conversations; other domains filter by their own slug
+    const slug = domainName ? domainName.toLowerCase() : null;
+    const data = await chatActions.loadConversations(uid, slug);
     setConversations(data);
   };
 
@@ -897,10 +879,7 @@ export default function AdminChat({
             showWorkspace={showWorkspace}
             showHealth={showHealth}
             showInstagramDM={showInstagramDM}
-            onOpenInstagramPost={showInstagramPost ? undefined : () => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
             instagramConnected={showInstagramPost}
-            hideConfiguration={showInstagramPost}
-            onLogout={handleLogout}
           />
         </div>
 
@@ -919,10 +898,7 @@ export default function AdminChat({
             showWorkspace={showWorkspace}
             showHealth={showHealth}
             showInstagramDM={showInstagramDM}
-            onOpenInstagramPost={showInstagramPost ? undefined : () => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
             instagramConnected={showInstagramPost}
-            hideConfiguration={showInstagramPost}
-            onLogout={handleLogout}
           />
         </div>
 
@@ -944,7 +920,10 @@ export default function AdminChat({
             handleGenerateSummary={handleGenerateSummary}
             isTerminalMode={effectiveChatMode === 'terminal'}
             onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
-            hideHomeButton={showInstagramPost}
+            hideHomeButton={showInstagramPost || !isAdmin}
+            userName={userName}
+            userEmail={userEmail}
+            onLogout={handleLogout}
           />
 
           {/* Mobile tab bar — only on social page */}
@@ -1155,11 +1134,8 @@ export default function AdminChat({
         isDarkMode={isDarkMode}
         userId={userId}
         githubToken={githubToken}
-        systemMessageEdit={systemMessageEdit}
-        setSystemMessageEdit={setSystemMessageEdit}
-        systemMessage={systemMessage}
         userName={userName}
-        onSaveInstructions={saveSystemMessage}
+        domainSlug={domainName?.toLowerCase() ?? 'chat'}
         defaultTab={myAlleracTab}
         defaultMemoryTab={myAlleracMemoryTab}
       />

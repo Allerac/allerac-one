@@ -49,12 +49,17 @@ export class ChatService {
     /**
      * Load all conversations for a user
      */
-    async loadConversations(userId: string) {
+    async loadConversations(userId: string, domainSlug?: string | null) {
         try {
-            const res = await pool.query(
-                'SELECT * FROM chat_conversations WHERE user_id = $1 ORDER BY pinned DESC, updated_at DESC',
-                [userId]
-            );
+            const res = domainSlug
+                ? await pool.query(
+                    'SELECT * FROM chat_conversations WHERE user_id = $1 AND domain_slug = $2 ORDER BY pinned DESC, updated_at DESC',
+                    [userId, domainSlug]
+                  )
+                : await pool.query(
+                    'SELECT * FROM chat_conversations WHERE user_id = $1 ORDER BY pinned DESC, updated_at DESC',
+                    [userId]
+                  );
             return res.rows;
         } catch (error) {
             console.error('[DB] loadConversations failed:', error);
@@ -94,11 +99,11 @@ export class ChatService {
     /**
      * Create a new conversation
      */
-    async createConversation(userId: string, title: string) {
+    async createConversation(userId: string, title: string, domainSlug?: string | null) {
         try {
             const res = await pool.query(
-                'INSERT INTO chat_conversations (user_id, title) VALUES ($1, $2) RETURNING id',
-                [userId, title]
+                'INSERT INTO chat_conversations (user_id, title, domain_slug) VALUES ($1, $2, $3) RETURNING id',
+                [userId, title, domainSlug ?? 'chat']
             );
             return res.rows[0]?.id || null;
         } catch (error) {

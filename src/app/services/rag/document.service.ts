@@ -189,13 +189,13 @@ export class DocumentService {
   /**
    * Creates a document record in the database (public for async workflow).
    */
-  async createDocumentRecord(file: File, userId: string): Promise<string> {
+  async createDocumentRecord(file: File, userId: string, domainSlug?: string | null): Promise<string> {
     try {
       const res = await pool.query(
-        `INSERT INTO documents (filename, file_type, file_size, uploaded_by, status)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO documents (filename, file_type, file_size, uploaded_by, status, domain_slug)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id`,
-        [file.name, file.type || 'text/plain', file.size, userId, 'processing']
+        [file.name, file.type || 'text/plain', file.size, userId, 'processing', domainSlug ?? null]
       );
       return res.rows[0].id;
     } catch (error: any) {
@@ -288,12 +288,17 @@ export class DocumentService {
   /**
    * Retrieves all documents for a specific user from the database.
    */
-  async getAllDocuments(userId: string): Promise<any[]> {
+  async getAllDocuments(userId: string, domainSlug?: string | null): Promise<any[]> {
     try {
-      const res = await pool.query(
-        'SELECT * FROM documents WHERE uploaded_by = $1 ORDER BY uploaded_at DESC',
-        [userId]
-      );
+      const res = domainSlug
+        ? await pool.query(
+            'SELECT * FROM documents WHERE uploaded_by = $1 AND domain_slug = $2 ORDER BY uploaded_at DESC',
+            [userId, domainSlug]
+          )
+        : await pool.query(
+            'SELECT * FROM documents WHERE uploaded_by = $1 ORDER BY uploaded_at DESC',
+            [userId]
+          );
       return res.rows;
     } catch (error: any) {
       throw new Error(`Failed to fetch documents: ${error.message}`);

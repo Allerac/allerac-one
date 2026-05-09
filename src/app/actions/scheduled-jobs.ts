@@ -27,7 +27,7 @@ export async function getScheduledJobs(
 
 export async function createScheduledJob(
   userId: string,
-  data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean }
+  data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null }
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (!data.name?.trim()) {
     return { success: false, error: 'Name is required' };

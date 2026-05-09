@@ -24,11 +24,12 @@ interface DocumentUploadProps {
   userId: string;
   isDarkMode: boolean;
   onDocumentsChange?: () => void;
+  domainSlug?: string | null;
 }
 
-const POLLING_INTERVAL = 3000; // 3 seconds
+const POLLING_INTERVAL = 3000;
 
-export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocumentsChange }: DocumentUploadProps) {
+export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocumentsChange, domainSlug }: DocumentUploadProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>('');
@@ -42,7 +43,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
   const loadDocuments = useCallback(async (): Promise<Document[]> => {
     try {
       if (!githubToken || !userId) return [];
-      const data = await docActions.getAllDocuments(userId, githubToken);
+      const data = await docActions.getAllDocuments(userId, githubToken, domainSlug);
       setDocuments(data || []);
       return data || [];
     } catch (error) {
@@ -117,7 +118,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
       formData.append('file', file);
 
       // Use async upload - returns immediately while processing continues in background
-      await docActions.uploadDocument(formData, userId, githubToken);
+      await docActions.uploadDocument(formData, userId, githubToken, domainSlug);
 
       setUploadProgress('Document uploaded! Processing in background...');
 

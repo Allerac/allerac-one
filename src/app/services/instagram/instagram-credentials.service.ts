@@ -82,6 +82,22 @@ export class InstagramCredentialsService {
     );
   }
 
+  /**
+   * Resolves the effective user ID whose instagram_credentials should be used.
+   * Domain users may have an assigned instagram_account whose owner_user_id holds the real credentials.
+   * Admins (or users with no assignment) use their own credentials.
+   */
+  async resolveCredentialsUserId(userId: string): Promise<string> {
+    const result = await pool.query(
+      `SELECT ia.owner_user_id
+       FROM user_instagram_account uia
+       JOIN instagram_accounts ia ON uia.instagram_account_id = ia.id
+       WHERE uia.user_id = $1`,
+      [userId]
+    );
+    return result.rows[0]?.owner_user_id ?? userId;
+  }
+
   /** Look up credentials by Instagram user ID (for webhook — no Allerac session available) */
   async getByIgUserId(igUserId: string): Promise<{ userId: string; accessToken: string } | null> {
     const result = await pool.query(

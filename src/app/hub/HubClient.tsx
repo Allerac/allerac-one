@@ -3,8 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as authActions from '@/app/actions/auth';
+import * as userActions from '@/app/actions/user';
 import UserSettingsModal from '@/app/components/auth/UserSettingsModal';
 import HubTour from '@/app/components/hub/HubTour';
+import SystemDashboard from '@/app/components/system/SystemDashboard';
+import DomainSkillsModal from '@/app/components/hub/DomainSkillsModal';
+import { MODELS } from '@/app/services/llm/models';
 
 const DOMAINS_ALL = [
   { id: 'chat',    label: 'Chat',    icon: '💬', path: '/chat',     desc: 'General assistant' },
@@ -32,6 +36,18 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
   const [startMenuOpen, setStartMenuOpen] = useState(false);
   const [shutdownPhase, setShutdownPhase] = useState<ShutdownPhase>('running');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isDomainSkillsOpen, setIsDomainSkillsOpen] = useState(false);
+  const [githubToken, setGithubToken] = useState('');
+  const [tavilyApiKey, setTavilyApiKey] = useState('');
+  const [googleApiKey, setGoogleApiKey] = useState('');
+  const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [tokenInput, setTokenInput] = useState('');
+  const [tavilyKeyInput, setTavilyKeyInput] = useState('');
+  const [googleKeyInput, setGoogleKeyInput] = useState('');
+  const [anthropicKeyInput, setAnthropicKeyInput] = useState('');
+  const [locationInput, setLocationInput] = useState('');
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [showTour, setShowTour] = useState(() => {
     if (typeof window === 'undefined') return false;
     return !completedHubTour;
@@ -102,6 +118,51 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+
+  const loadSettings = async () => {
+    try {
+      const savedToken = localStorage.getItem('github_token') || '';
+      const savedTavilyKey = localStorage.getItem('tavily_api_key') || '';
+      const settings = await userActions.loadUserSettings(userId);
+      if (settings) {
+        if (!savedToken && settings.github_token) setGithubToken(settings.github_token);
+        else setGithubToken(savedToken);
+        if (!savedTavilyKey && settings.tavily_api_key) setTavilyApiKey(settings.tavily_api_key);
+        else setTavilyApiKey(savedTavilyKey);
+        if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
+        if (settings.anthropic_api_key) setAnthropicApiKey(settings.anthropic_api_key);
+        if (settings.location) setLocationInput(settings.location);
+      } else {
+        setGithubToken(savedToken);
+        setTavilyApiKey(savedTavilyKey);
+      }
+    } catch (error) {
+      console.error('[HubClient] loadSettings error:', error);
+    }
+  };
+
+  const handleSaveToken = async () => {
+    const newGithubToken = tokenInput.trim();
+    const newTavilyKey = tavilyKeyInput.trim();
+    const newGoogleKey = googleKeyInput.trim();
+    const newAnthropicKey = anthropicKeyInput.trim();
+    const newLocation = locationInput.trim();
+
+    if (!newGithubToken && !newTavilyKey && !newGoogleKey && !newAnthropicKey && !newLocation) return;
+
+    try {
+      if (newGithubToken) { localStorage.setItem('github_token', newGithubToken); setGithubToken(newGithubToken); setTokenInput(''); }
+      if (newTavilyKey) { localStorage.setItem('tavily_api_key', newTavilyKey); setTavilyApiKey(newTavilyKey); setTavilyKeyInput(''); }
+      if (newGoogleKey) { setGoogleApiKey(newGoogleKey); setGoogleKeyInput(''); }
+      if (newAnthropicKey) { setAnthropicApiKey(newAnthropicKey); setAnthropicKeyInput(''); }
+
+      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined);
+      if (!result?.success) alert('Error saving settings to database.');
+    } catch (error) {
+      console.error('Error saving API keys:', error);
+      alert('Error saving settings. Please try again.');
+    }
+  };
 
   const handleDesktopClick = () => {
     setSelected(null);
@@ -306,6 +367,8 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
               <StartMenuItem icon="📁" label="Workspace" onClick={() => { setStartMenuOpen(false); router.push('/workspace'); }} />
               <StartMenuItem icon="📟" label="Monitor" onClick={() => { setStartMenuOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
               <StartMenuItem icon="⚙️" label="Settings" onClick={() => { setStartMenuOpen(false); setIsSettingsOpen(true); }} />
+              <StartMenuItem icon="🔧" label="Configuration" onClick={() => { setStartMenuOpen(false); loadSettings(); setIsConfigOpen(true); }} />
+              <StartMenuItem icon="🌐" label="Domains" onClick={() => { setStartMenuOpen(false); setIsDomainSkillsOpen(true); }} />
               <StartMenuItem icon="👥" label="Admin" onClick={() => { setStartMenuOpen(false); router.push('/admin'); }} />
               <div style={{ height: '1px', background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
               <StartMenuItem icon="🔌" label="Shut Down..." onClick={handleShutDown} />
@@ -400,6 +463,40 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
         userEmail={userEmail}
         userId={userId}
         onLogout={handleShutDown}
+      />
+
+      {/* Domain Skills Modal */}
+      <DomainSkillsModal
+        isOpen={isDomainSkillsOpen}
+        onClose={() => setIsDomainSkillsOpen(false)}
+        userId={userId}
+      />
+
+      {/* Configuration Modal */}
+      <SystemDashboard
+        isOpen={isConfigOpen}
+        onClose={() => setIsConfigOpen(false)}
+        isDarkMode={false}
+        userId={userId}
+        initialTab="preferences"
+        githubToken={githubToken}
+        tavilyApiKey={tavilyApiKey}
+        googleApiKey={googleApiKey}
+        anthropicApiKey={anthropicApiKey}
+        tokenInput={tokenInput}
+        setTokenInput={setTokenInput}
+        tavilyKeyInput={tavilyKeyInput}
+        setTavilyKeyInput={setTavilyKeyInput}
+        googleKeyInput={googleKeyInput}
+        setGoogleKeyInput={setGoogleKeyInput}
+        anthropicKeyInput={anthropicKeyInput}
+        setAnthropicKeyInput={setAnthropicKeyInput}
+        locationInput={locationInput}
+        setLocationInput={setLocationInput}
+        onSaveToken={handleSaveToken}
+        MODELS={MODELS}
+        selectedModel={selectedModel}
+        setSelectedModel={setSelectedModel}
       />
     </>
   );

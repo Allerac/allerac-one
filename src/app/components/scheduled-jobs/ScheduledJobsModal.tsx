@@ -174,11 +174,12 @@ interface Props {
   isDarkMode: boolean;
   userId: string | null;
   inline?: boolean;
+  domainSlug?: string | null;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId, inline = false }: Props) {
+export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId, inline = false, domainSlug }: Props) {
   const t = useTranslations('scheduledJobs');
   const DAYS = t.raw('days') as string[];
   const [activeTab, setActiveTab] = useState<Tab>('list');
@@ -292,6 +293,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
         prompt: formData.prompt,
         channels: formData.channels,
         enabled: formData.enabled,
+        domainSlug: domainSlug ?? null,
       });
       setLoading(false);
       if (res.success) {

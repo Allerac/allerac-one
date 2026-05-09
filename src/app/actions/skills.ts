@@ -1,6 +1,7 @@
 'use server';
 
 import { SkillsService } from '../services/skills/skills.service';
+import pool from '@/app/clients/db';
 import { TelegramBotConfigService } from '../services/telegram/telegram-bot-config.service';
 
 const skillsService = new SkillsService();
@@ -190,5 +191,84 @@ export async function getUserTelegramBot(userId: string) {
   } catch (error) {
     console.error('[Actions] Error getting user telegram bot:', error);
     return null;
+  }
+}
+
+// Skill → Tool assignments
+export async function getSkillTools(skillId: string): Promise<string[]> {
+  try {
+    const res = await pool.query(
+      'SELECT tool_name FROM skill_tools WHERE skill_id = $1 ORDER BY tool_name',
+      [skillId]
+    );
+    return res.rows.map((r: { tool_name: string }) => r.tool_name);
+  } catch (error) {
+    console.error('[Actions] getSkillTools failed:', error);
+    return [];
+  }
+}
+
+export async function setSkillTools(skillId: string, toolNames: string[]): Promise<{ success: boolean; error?: string }> {
+  try {
+    await pool.query('DELETE FROM skill_tools WHERE skill_id = $1', [skillId]);
+    if (toolNames.length > 0) {
+      await pool.query(
+        `INSERT INTO skill_tools (skill_id, tool_name)
+         SELECT $1, unnest($2::text[])
+         ON CONFLICT DO NOTHING`,
+        [skillId, toolNames]
+      );
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('[Actions] setSkillTools failed:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// Domain → Skill default bindings
+export async function getDomainSkillDefault(domainSlug: string): Promise<{ skill_id: string; skill_name: string; display_name: string } | null> {
+  try {
+    const res = await pool.query(
+      `SELECT dsd.skill_id, s.name AS skill_name, s.display_name
+       FROM domain_skill_defaults dsd
+       JOIN skills s ON s.id = dsd.skill_id
+       WHERE dsd.domain_slug = $1`,
+      [domainSlug]
+    );
+    return res.rows[0] ?? null;
+  } catch (error) {
+    console.error('[Actions] getDomainSkillDefault failed:', error);
+    return null;
+  }
+}
+
+export async function getAllDomainSkillDefaults(): Promise<Array<{ domain_slug: string; skill_id: string | null; skill_name: string | null; display_name: string | null }>> {
+  try {
+    const res = await pool.query(
+      `SELECT dsd.domain_slug, dsd.skill_id, s.name AS skill_name, s.display_name
+       FROM domain_skill_defaults dsd
+       LEFT JOIN skills s ON s.id = dsd.skill_id
+       ORDER BY dsd.domain_slug`
+    );
+    return res.rows;
+  } catch (error) {
+    console.error('[Actions] getAllDomainSkillDefaults failed:', error);
+    return [];
+  }
+}
+
+export async function setDomainSkillDefault(domainSlug: string, skillId: string | null): Promise<{ success: boolean; error?: string }> {
+  try {
+    await pool.query(
+      `INSERT INTO domain_skill_defaults (domain_slug, skill_id, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (domain_slug) DO UPDATE SET skill_id = $2, updated_at = NOW()`,
+      [domainSlug, skillId]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('[Actions] setDomainSkillDefault failed:', error);
+    return { success: false, error: String(error) };
   }
 }

@@ -2,20 +2,41 @@
 
 import { useState, useEffect, useTransition } from 'react';
 import * as adminActions from '@/app/actions/admin';
-import type { AdminUser, AdminDomain } from '@/app/actions/admin';
+import type { AdminUser, AdminDomain, InstagramAccountEntry } from '@/app/actions/admin';
+import type { SystemSettings } from '@/app/services/system/system-settings.service';
 
 interface AdminClientProps {
   initialUsers: AdminUser[];
   initialDomains: AdminDomain[];
   initialAllDomains: AdminDomain[];
+  initialSystemSettings: SystemSettings;
+  initialInstagramAccounts: InstagramAccountEntry[];
+  initialConnectedAdmins: Array<{ id: string; email: string; username: string }>;
 }
 
-export default function AdminClient({ initialUsers, initialDomains, initialAllDomains }: AdminClientProps) {
+export default function AdminClient({
+  initialUsers, initialDomains, initialAllDomains,
+  initialSystemSettings, initialInstagramAccounts, initialConnectedAdmins,
+}: AdminClientProps) {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [users, setUsers] = useState<AdminUser[]>(initialUsers);
   const [domains] = useState<AdminDomain[]>(initialDomains);
   const [allDomains, setAllDomains] = useState<AdminDomain[]>(initialAllDomains);
   const [domainTogglingId, setDomainTogglingId] = useState<string | null>(null);
+
+  // System settings state
+  const [sysSettings, setSysSettings] = useState<SystemSettings>(initialSystemSettings);
+  const [sysSettingsPending, setSysSettingsPending] = useState(false);
+  const [sysSettingsMsg, setSysSettingsMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Instagram accounts state
+  const [igAccounts, setIgAccounts] = useState<InstagramAccountEntry[]>(initialInstagramAccounts);
+  const [connectedAdmins] = useState(initialConnectedAdmins);
+  const [igNewLabel, setIgNewLabel] = useState('');
+  const [igNewOwner, setIgNewOwner] = useState('');
+  const [igRegisterPending, setIgRegisterPending] = useState(false);
+  const [igRegisterError, setIgRegisterError] = useState('');
+  const [igAssignPending, setIgAssignPending] = useState<string | null>(null);
 
   // Form state
   const [email, setEmail] = useState('');
@@ -146,6 +167,42 @@ export default function AdminClient({ initialUsers, initialDomains, initialAllDo
     } else {
       setResetMsg({ id: userId, ok: false, text: result.error });
     }
+  };
+
+  const handleSaveSystemSettings = async () => {
+    setSysSettingsPending(true);
+    setSysSettingsMsg(null);
+    const result = await adminActions.saveSystemSettings(sysSettings);
+    setSysSettingsPending(false);
+    setSysSettingsMsg(result.success ? { ok: true, text: 'Saved.' } : { ok: false, text: (result as any).error });
+  };
+
+  const refreshIgAccounts = async () => {
+    const updated = await adminActions.listInstagramAccounts();
+    setIgAccounts(updated);
+  };
+
+  const handleRegisterIgAccount = async () => {
+    if (!igNewLabel || !igNewOwner) return;
+    setIgRegisterPending(true);
+    setIgRegisterError('');
+    const result = await adminActions.registerInstagramAccount(igNewOwner, igNewLabel);
+    setIgRegisterPending(false);
+    if (result.success) { setIgNewLabel(''); setIgNewOwner(''); refreshIgAccounts(); }
+    else setIgRegisterError((result as any).error);
+  };
+
+  const handleDeleteIgAccount = async (accountId: string) => {
+    await adminActions.deleteInstagramAccount(accountId);
+    refreshIgAccounts();
+  };
+
+  const handleAssignIgAccount = async (userId: string, accountId: string) => {
+    setIgAssignPending(userId);
+    if (accountId) await adminActions.assignInstagramAccount(userId, accountId);
+    else await adminActions.unassignInstagramAccount(userId);
+    setIgAssignPending(null);
+    refreshIgAccounts();
   };
 
   const handleDomainToggle = async (domainId: string, isActive: boolean) => {
@@ -436,6 +493,124 @@ export default function AdminClient({ initialUsers, initialDomains, initialAllDo
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        {/* System Settings */}
+        <section>
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>System Settings</h2>
+          <div className={`border rounded-lg p-6 ${cardBg} space-y-4`}>
+            {(['github_token', 'anthropic_api_key', 'tavily_api_key', 'google_api_key'] as const).map(key => (
+              <div key={key}>
+                <label className={labelCls}>{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</label>
+                <input
+                  type="password"
+                  value={sysSettings[key] ?? ''}
+                  onChange={e => setSysSettings(prev => ({ ...prev, [key]: e.target.value }))}
+                  disabled={sysSettingsPending}
+                  placeholder="••••••••"
+                  className={inputCls}
+                />
+              </div>
+            ))}
+            <div className="flex items-center gap-3 pt-1">
+              <button onClick={handleSaveSystemSettings} disabled={sysSettingsPending} className={btnPrimary}>
+                {sysSettingsPending ? 'Saving...' : 'Save Settings'}
+              </button>
+              {sysSettingsMsg && (
+                <p className={`text-sm ${sysSettingsMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{sysSettingsMsg.text}</p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Instagram Accounts */}
+        <section>
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Instagram Accounts</h2>
+          <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
+            {/* Registered accounts */}
+            {igAccounts.length > 0 && (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
+                    <th className="px-4 py-3 text-left font-medium">Label</th>
+                    <th className="px-4 py-3 text-left font-medium">Account</th>
+                    <th className="px-4 py-3 text-left font-medium">Assigned users</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {igAccounts.map((acc, i) => (
+                    <tr key={acc.id} className={`border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
+                      <td className="px-4 py-3 font-medium">{acc.label}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <span className="font-mono text-xs">{acc.username ? `@${acc.username}` : acc.owner_email}</span>
+                          <span className={`text-xs ${acc.is_connected ? 'text-green-400' : 'text-red-400'}`}>
+                            {acc.is_connected ? 'Connected' : 'Disconnected'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          {/* Current assigned users */}
+                          <div className="flex flex-wrap gap-1">
+                            {acc.assigned_users.map(u => (
+                              <span key={u.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                                {u.email}
+                                <button onClick={() => handleAssignIgAccount(u.id, '')} className="ml-0.5 opacity-60 hover:opacity-100">×</button>
+                              </span>
+                            ))}
+                          </div>
+                          {/* Assign new user */}
+                          <select
+                            disabled={igAssignPending !== null}
+                            onChange={e => { if (e.target.value) handleAssignIgAccount(e.target.value, acc.id); e.target.value = ''; }}
+                            className={`text-xs px-2 py-1 rounded border w-fit ${d ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-300 text-gray-700'}`}
+                          >
+                            <option value="">+ Assign user…</option>
+                            {users.filter(u => !u.is_admin && !acc.assigned_users.find(a => a.id === u.id)).map(u => (
+                              <option key={u.id} value={u.id}>{u.email}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => handleDeleteIgAccount(acc.id)} className={btnDanger}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {/* Register new account */}
+            <div className={`p-4 ${igAccounts.length > 0 ? `border-t ${d ? 'border-gray-700' : 'border-gray-200'}` : ''}`}>
+              <p className={`text-xs font-medium mb-3 ${textMuted}`}>Register a connected Instagram account as shared</p>
+              {connectedAdmins.length === 0 ? (
+                <p className={`text-sm ${textMuted}`}>No admin has an active Instagram connection yet. Connect Instagram in Settings first.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2 items-end">
+                  <div>
+                    <label className={labelCls}>Label</label>
+                    <input value={igNewLabel} onChange={e => setIgNewLabel(e.target.value)} placeholder="@loja_principal" disabled={igRegisterPending} className={`${inputCls} w-48`} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Account owner</label>
+                    <select value={igNewOwner} onChange={e => setIgNewOwner(e.target.value)} disabled={igRegisterPending} className={`px-3 py-2 rounded-md border text-sm ${d ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}>
+                      <option value="">Select admin…</option>
+                      {connectedAdmins.map(a => (
+                        <option key={a.id} value={a.id}>{a.email} (@{a.username})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button onClick={handleRegisterIgAccount} disabled={igRegisterPending || !igNewLabel || !igNewOwner} className={btnPrimary}>
+                    {igRegisterPending ? 'Registering...' : 'Register'}
+                  </button>
+                </div>
+              )}
+              {igRegisterError && <p className="text-sm text-red-400 mt-2">{igRegisterError}</p>}
+            </div>
           </div>
         </section>
 

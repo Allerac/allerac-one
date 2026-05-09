@@ -19,8 +19,9 @@ export interface SearchResult {
 }
 
 export interface SearchOptions {
-  limit?: number; // Maximum number of results to return
-  similarityThreshold?: number; // Minimum similarity score (0-1)
+  limit?: number;
+  similarityThreshold?: number;
+  domainSlug?: string | null;
 }
 
 export class VectorSearchService {
@@ -69,13 +70,15 @@ export class VectorSearchService {
       // Now includes user_id parameter for security filtering
       console.log('[RAG] Querying DB with:', { userId, threshold: 1 - similarityThreshold, limit });
 
+      const domainSlug = options.domainSlug ?? null;
       const res = await pool.query(
-        'SELECT * FROM search_document_chunks($1, $2, $3, $4)',
+        'SELECT * FROM search_document_chunks($1, $2, $3, $4, $5)',
         [
           embeddingString,
-          userId, // search_user_id
-          1 - similarityThreshold, // match_threshold (distance)
-          limit, // match_count
+          userId,
+          1 - similarityThreshold,
+          limit,
+          domainSlug,
         ]
       );
 

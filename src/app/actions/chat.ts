@@ -12,16 +12,16 @@ export async function saveSystemMessage(userId: string, systemMessage: string) {
     return await chatService.saveSystemMessage(userId, systemMessage);
 }
 
-export async function loadConversations(userId: string) {
-    return await chatService.loadConversations(userId);
+export async function loadConversations(userId: string, domainSlug?: string | null) {
+    return await chatService.loadConversations(userId, domainSlug);
 }
 
 export async function loadMessages(conversationId: string) {
     return await chatService.loadMessages(conversationId);
 }
 
-export async function createConversation(userId: string, title: string) {
-    return await chatService.createConversation(userId, title);
+export async function createConversation(userId: string, title: string, domainSlug?: string | null) {
+    return await chatService.createConversation(userId, title, domainSlug);
 }
 
 export async function saveMessage(conversationId: string, role: string, content: string) {

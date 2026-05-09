@@ -8,7 +8,7 @@ import { EmbeddingService } from '@/app/services/rag/embedding.service';
  * Returns immediately after creating the document record.
  * The document will be in 'processing' status until embeddings are generated.
  */
-export async function uploadDocument(formData: FormData, userId: string, githubToken: string) {
+export async function uploadDocument(formData: FormData, userId: string, githubToken: string, domainSlug?: string | null) {
     const file = formData.get('file') as File;
     if (!file) throw new Error('No file provided');
 
@@ -16,7 +16,7 @@ export async function uploadDocument(formData: FormData, userId: string, githubT
     const docService = new DocumentService(embeddingService);
 
     // Step 1: Create document record
-    const documentId = await docService.createDocumentRecord(file, userId);
+    const documentId = await docService.createDocumentRecord(file, userId, domainSlug);
 
     // Step 2: Extract text from file (needed before we can fire-and-forget)
     const text = await docService.extractTextFromFile(file);
@@ -44,11 +44,10 @@ export async function processDocument(formData: FormData, userId: string, github
     return await docService.processDocument(file, userId);
 }
 
-export async function getAllDocuments(userId: string, githubToken: string) {
-    // DocumentService constructor REQUIRES embeddingService which REQUIRES token.
+export async function getAllDocuments(userId: string, githubToken: string, domainSlug?: string | null) {
     const embeddingService = new EmbeddingService(githubToken);
     const docService = new DocumentService(embeddingService);
-    return await docService.getAllDocuments(userId);
+    return await docService.getAllDocuments(userId, domainSlug);
 }
 
 export async function deleteDocument(documentId: string, userId: string, githubToken: string) {

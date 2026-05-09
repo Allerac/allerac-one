@@ -60,13 +60,13 @@ export class ScheduledJobsService {
 
   async createScheduledJob(
     userId: string,
-    data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean }
+    data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null }
   ): Promise<ScheduledJob> {
     const result = await pool.query<DBScheduledJob>(
-      `INSERT INTO scheduled_jobs (user_id, name, cron_expr, prompt, channels, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO scheduled_jobs (user_id, name, cron_expr, prompt, channels, enabled, domain_slug)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [userId, data.name, data.cronExpr, data.prompt, data.channels, data.enabled]
+      [userId, data.name, data.cronExpr, data.prompt, data.channels, data.enabled, data.domainSlug ?? null]
     );
     return mapJob(result.rows[0]);
   }

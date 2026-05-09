@@ -1,5 +1,21 @@
 // AI Tool definitions for function calling
 
+// Static registry of all available tools for admin UI
+export const TOOL_REGISTRY: Array<{ name: string; label: string; description: string; group: string }> = [
+  { name: 'get_today_info',             label: 'Date & Time',         description: 'Current date, time and timezone',                group: 'Core'      },
+  { name: 'search_web',                 label: 'Web Search',          description: 'Search the web via Tavily',                      group: 'Core'      },
+  { name: 'execute_shell',              label: 'Shell',               description: 'Execute bash commands in sandbox',               group: 'Dev'       },
+  { name: 'get_health_summary',         label: 'Health Summary',      description: 'Aggregated health metrics (steps, sleep…)',       group: 'Health'    },
+  { name: 'get_health_metrics',         label: 'Health Metrics',      description: 'Detailed health metrics for a date range',       group: 'Health'    },
+  { name: 'get_daily_snapshot',         label: 'Daily Snapshot',      description: 'All health metrics for a single day',            group: 'Health'    },
+  { name: 'get_garmin_status',          label: 'Garmin Status',       description: 'Check Garmin device connection',                 group: 'Health'    },
+  { name: 'get_recent_activities',      label: 'Recent Activities',   description: 'Recent workouts from Garmin',                    group: 'Health'    },
+  { name: 'update_instagram_form',      label: 'Update Post Form',    description: 'Update the Instagram post draft form',           group: 'Instagram' },
+  { name: 'instagram_publish_post',     label: 'Publish Post',        description: 'Publish a post to Instagram',                    group: 'Instagram' },
+  { name: 'instagram_get_profile',      label: 'Get Profile',         description: 'Fetch Instagram account profile info',           group: 'Instagram' },
+  { name: 'instagram_get_recent_posts', label: 'Recent Posts',        description: 'Get recent posts from Instagram account',        group: 'Instagram' },
+];
+
 // Health tools are conditionally included based on HEALTH_WORKER_SECRET being set.
 const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
   {
