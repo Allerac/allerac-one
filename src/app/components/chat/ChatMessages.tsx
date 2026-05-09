@@ -24,6 +24,20 @@ interface ChatMessagesProps {
 
 import React, { useState, useEffect, useRef } from 'react';
 
+// Strips [Image URLs: ...] and [Image attached: N file(s)] annotations from saved messages,
+// returning clean display text and the list of image filenames.
+function stripImageAnnotations(text: string): { clean: string; filenames: string[] } {
+  const urlMatch = text.match(/\[Image URLs?: ([^\]]+)\]/);
+  const filenames: string[] = urlMatch
+    ? urlMatch[1].split(',').map(u => u.trim().split('/').pop() ?? 'image')
+    : [];
+  const clean = text
+    .replace(/\n*\[Image URLs?: [^\]]+\]/g, '')
+    .replace(/\s*\[Image attached: \d+ file\(s\)\]/g, '')
+    .trim();
+  return { clean, filenames };
+}
+
 // Splits a user message into document blocks and remaining text
 // Format: <attachment name="filename">\ncontent\n</attachment>
 function parseDocBlocks(text: string): Array<{ type: 'doc'; name: string; content: string } | { type: 'text'; content: string }> {
@@ -245,15 +259,33 @@ export default function ChatMessages({
                 }`}>
                   <div className="text-sm leading-relaxed">
                     {typeof message.content === 'string' ? (() => {
-                      const parts = parseDocBlocks(message.content);
+                      const { clean, filenames } = stripImageAnnotations(message.content);
+                      const parts = parseDocBlocks(clean);
                       const hasDoc = parts.some(p => p.type === 'doc');
-                      if (!hasDoc) return <p className="whitespace-pre-wrap break-words">{message.content}</p>;
                       return (
-                        <div>
-                          {parts.map((part, i) =>
-                            part.type === 'doc'
-                              ? <CollapsibleDocBlock key={i} name={part.name} content={part.content} isDarkMode={isDarkMode} />
-                              : <p key={i} className="whitespace-pre-wrap break-words">{part.content}</p>
+                        <div className="space-y-1.5">
+                          {hasDoc ? (
+                            <div>
+                              {parts.map((part, i) =>
+                                part.type === 'doc'
+                                  ? <CollapsibleDocBlock key={i} name={part.name} content={part.content} isDarkMode={isDarkMode} />
+                                  : part.content ? <p key={i} className="whitespace-pre-wrap break-words">{part.content}</p> : null
+                              )}
+                            </div>
+                          ) : clean ? (
+                            <p className="whitespace-pre-wrap break-words">{clean}</p>
+                          ) : null}
+                          {filenames.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {filenames.map((name, i) => (
+                                <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>
+                                  <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
                           )}
                         </div>
                       );

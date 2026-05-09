@@ -149,7 +149,7 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'update_instagram_form',
-      description: 'Update the Instagram post form fields the user is currently editing. Use this when the user asks you to improve, rewrite, or generate the caption or hashtags for their post. Only call this when post context is present in the system message.',
+      description: 'Update the Instagram post form fields directly. Call this tool EVERY TIME you generate, write, improve, or rewrite content for the user\'s post. IMPORTANT: when the user sends an image and asks to generate a post, call this tool ONCE with image_url + caption + tags all together in a single call — do not call it multiple times or write content only in chat.',
       parameters: {
         type: 'object',
         properties: {
@@ -169,33 +169,12 @@ export const TOOLS = [
             type: 'boolean',
             description: 'Whether this is a product post (omit to keep current)',
           },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'instagram_create_post_draft',
-      description: 'Prepare an Instagram post draft with caption and hashtags. The system will auto-generate caption and tags from the image if not provided. Shows a preview modal for user review before publishing.',
-      parameters: {
-        type: 'object',
-        properties: {
           image_url: {
             type: 'string',
-            description: 'Public URL of the image to post, OR base64-encoded image data (data:image/jpeg;base64,...). The system will auto-generate caption and tags from this image.',
-          },
-          caption: {
-            type: 'string',
-            description: 'The caption text for the Instagram post (optional - will be auto-generated from image if not provided)',
-          },
-          tags: {
-            type: 'string',
-            description: 'Hashtags for the post, space-separated (e.g. "#tag1 #tag2 #tag3") (optional - will be auto-generated if not provided)',
+            description: 'Image URL or base64 data URI to set in the form (omit to keep current image). Use the image the user attached to this message.',
           },
         },
-        required: ['image_url'],
+        required: [],
       },
     },
   },

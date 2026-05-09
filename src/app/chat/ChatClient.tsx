@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { Message, Conversation, MemorySaveResult, Model } from '../types';
 import { MODELS } from '../services/llm/models';
 import { TOOLS } from '../tools/tools';
@@ -59,6 +59,8 @@ export default function AdminChat({
   systemDashboardInitialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social';
 }) {
   const t = useTranslations('home');
+  const tStudio = useTranslations('instagramStudio');
+  const locale = useLocale();
   const router = useRouter();
 
   // Modal/event listeners for sidebar configuration actions
@@ -190,7 +192,7 @@ export default function AdminChat({
   const [isInstagramDMOpen, setIsInstagramDMOpen] = useState(false);
   const [isInstagramPostOpen, setIsInstagramPostOpen] = useState(showInstagramPost ?? false);
   const [mobileTab, setMobileTab] = useState<'chat' | 'editor' | 'preview'>('editor');
-  const [studioExternalUpdate, setStudioExternalUpdate] = useState<{ caption?: string; tags?: string; price?: string; isProduct?: boolean; timestamp: number } | null>(null);
+  const [studioExternalUpdate, setStudioExternalUpdate] = useState<{ caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; timestamp: number } | null>(null);
   const postContextRef = useRef<string>('');
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
   const [memorySaveLoading, setMemorySaveLoading] = useState(false);
@@ -237,6 +239,11 @@ export default function AdminChat({
   const handleLogoutRef = useRef<() => void>(() => {});
   const instagramDraftRef = useRef<{ caption: string; tags: string } | null>(null);
 
+  // When instagram studio is open, exclude the old draft tool so the model uses update_instagram_form instead
+  const activeTools = isInstagramPostOpen
+    ? TOOLS.filter((t: any) => t.function?.name !== 'instagram_create_post_draft')
+    : TOOLS;
+
   // Initialize chatMessageService
   // Note: we re-create it when dependencies change, which is acceptable for this simple app
   const chatMessageService = new ChatMessageService({
@@ -250,7 +257,7 @@ export default function AdminChat({
     messages,
     setMessages,
     MODELS,
-    TOOLS,
+    TOOLS: activeTools,
     activeSkill,
     preSelectedSkill,
     defaultSkillName,
@@ -543,6 +550,21 @@ export default function AdminChat({
 
     setMessages(loadedMessages);
     setCurrentConversationId(conversationId);
+
+    // Restore studio image from conversation history (blob URLs survive page refresh)
+    if (showInstagramPost) {
+      const blobUrlPattern = /https:\/\/[^\s"'<>]+\.blob\.core\.windows\.net\/[^\s"'<>]+\.(?:png|jpg|jpeg|gif|webp)/i;
+      let foundImageUrl: string | null = null;
+      for (let i = loadedMessages.length - 1; i >= 0; i--) {
+        const content = loadedMessages[i].content;
+        const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+        const match = contentStr.match(blobUrlPattern);
+        if (match) { foundImageUrl = match[0]; break; }
+      }
+      if (foundImageUrl) {
+        setStudioExternalUpdate({ imageUrl: foundImageUrl, timestamp: Date.now() });
+      }
+    }
 
     // Load active skill for this conversation
     await loadActiveSkill(conversationId);
@@ -875,8 +897,9 @@ export default function AdminChat({
             showWorkspace={showWorkspace}
             showHealth={showHealth}
             showInstagramDM={showInstagramDM}
-            onOpenInstagramPost={() => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
+            onOpenInstagramPost={showInstagramPost ? undefined : () => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
             instagramConnected={showInstagramPost}
+            hideConfiguration={showInstagramPost}
           />
         </div>
 
@@ -895,8 +918,9 @@ export default function AdminChat({
             showWorkspace={showWorkspace}
             showHealth={showHealth}
             showInstagramDM={showInstagramDM}
-            onOpenInstagramPost={() => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
+            onOpenInstagramPost={showInstagramPost ? undefined : () => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
             instagramConnected={showInstagramPost}
+            hideConfiguration={showInstagramPost}
           />
         </div>
 
@@ -917,7 +941,8 @@ export default function AdminChat({
             currentConversationHasMemory={currentConversationHasMemory}
             handleGenerateSummary={handleGenerateSummary}
             isTerminalMode={effectiveChatMode === 'terminal'}
-            onToggleChatMode={terminalTheme ? toggleChatMode : undefined}
+            onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
+            hideHomeButton={showInstagramPost}
           />
 
           {/* Mobile tab bar — only on social page */}
@@ -929,7 +954,7 @@ export default function AdminChat({
                   onClick={() => setMobileTab(tab)}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === tab ? 'text-white border-b-2 border-brand-500' : 'text-gray-400 hover:text-gray-200'}`}
                 >
-                  {tab === 'chat' ? 'Chat' : tab === 'editor' ? 'Post' : 'Preview'}
+                  {tab === 'chat' ? tStudio('tabChat') : tab === 'editor' ? tStudio('tabPost') : tStudio('tabPreview')}
                 </button>
               ))}
             </div>
@@ -939,7 +964,7 @@ export default function AdminChat({
           <div className="flex flex-1 overflow-hidden">
 
           {/* Chat column */}
-          <div className={`flex flex-col overflow-hidden ${isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1 lg:flex-none' : 'hidden lg:flex lg:flex-none'} lg:w-[30%] lg:flex-shrink-0` : 'flex-1'}`}>
+          <div className={`flex flex-col overflow-hidden ${isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1' : 'hidden lg:flex'} lg:flex-1` : 'flex-1'}`}>
 
           {/* ── Terminal mode — full area replacement ── */}
           {effectiveChatMode === 'terminal' ? (
@@ -1062,11 +1087,12 @@ export default function AdminChat({
 
         {/* Instagram Post Studio — inline (desktop only) */}
         {isInstagramPostOpen && userId && (
-          <div className={`${mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'} flex-1 min-w-0 overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className={`${mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'} flex-1 lg:flex-[2] min-w-0 overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
             <InstagramPostStudio
               userId={userId}
               conversationId={currentConversationId}
               mobileView={mobileTab === 'preview' ? 'preview' : 'editor'}
+              isDarkMode={isDarkMode}
               externalUpdate={studioExternalUpdate}
               onClose={showInstagramPost ? undefined : () => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
               onSuccess={() => {
@@ -1078,9 +1104,10 @@ export default function AdminChat({
                 if (state.caption) parts.push(`Caption: "${state.caption}"`);
                 if (state.tags) parts.push(`Hashtags: ${state.tags}`);
                 if (state.isProduct && state.price) parts.push(`Preço: €${state.price}`);
-                postContextRef.current = parts.length
-                  ? `## Post do Instagram em edição\n${parts.join('\n')}`
-                  : '';
+                const stateStr = parts.length ? `\n${parts.join('\n')}` : ' (empty)';
+                const langMap: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English' };
+                const lang = langMap[locale] ?? 'English';
+                postContextRef.current = `## Instagram Post Studio is open${stateStr}\n\nLANGUAGE: Generate all captions and hashtags in ${lang}.\n\nRULES:\n- Whenever the user asks you to generate, write, or improve the post content, call \`update_instagram_form\` immediately.\n- When the user sends an image and asks to generate a post, call \`update_instagram_form\` ONCE with image_url + caption + tags all filled in a single call. Never call it first with only the image and then again with the text.\n- Never write caption or hashtags only in the chat — always use the tool.`;
               }}
               initialCaption={instagramPreFill?.caption}
               initialTags={instagramPreFill?.tags}

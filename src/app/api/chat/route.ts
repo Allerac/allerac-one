@@ -341,13 +341,13 @@ export async function POST(request: Request): Promise<Response> {
         // Filter tools based on active skill — avoid confusing the model with irrelevant tools
         const SHELL_SKILLS = ['programmer'];
         const HEALTH_TOOL_NAMES = ['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'];
-        const INSTAGRAM_TOOL_NAMES = ['instagram_create_post_draft', 'instagram_publish_post', 'instagram_get_profile', 'instagram_get_recent_posts'];
+        const INSTAGRAM_TOOL_NAMES = ['instagram_publish_post', 'instagram_get_profile', 'instagram_get_recent_posts'];
         const activeSkillName = activeSkill?.name ?? '';
         const activeTools = TOOLS.filter(t => {
           if (t.function.name === 'execute_shell') return SHELL_SKILLS.includes(activeSkillName);
           if (HEALTH_TOOL_NAMES.includes(t.function.name)) return activeSkillName === 'health';
           if (INSTAGRAM_TOOL_NAMES.includes(t.function.name)) return activeSkillName === 'social';
-          return true; // search_web always available
+          return true;
         });
 
         if (conversationMemories) {
@@ -467,12 +467,13 @@ export async function POST(request: Request): Promise<Response> {
               try {
                 let toolResult: any;
                 if (toolName === 'update_instagram_form') {
-                  const { caption, tags, price, is_product } = toolArgs;
+                  const { caption, tags, price, is_product, image_url } = toolArgs;
                   const update: any = { type: 'studio_update' };
                   if (caption !== undefined) update.caption = caption;
                   if (tags !== undefined) update.tags = tags;
                   if (price !== undefined) update.price = price;
                   if (is_product !== undefined) update.isProduct = is_product;
+                  if (image_url !== undefined) update.imageUrl = image_url;
                   safeEnqueue(encode(update));
                   toolResult = { success: true, message: 'Form updated.' };
                 } else if (toolName === 'get_today_info') {

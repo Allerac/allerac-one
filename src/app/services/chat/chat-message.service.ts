@@ -20,7 +20,7 @@ interface ChatMessageServiceConfig {
   onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
   onSkillActivated?: (skill: { id: string; name: string; display_name: string }) => void;
   onInstagramDraft?: (draft: { caption: string; tags: string; image_url?: string }) => void;
-  onStudioUpdate?: (fields: { caption?: string; tags?: string; price?: string; isProduct?: boolean }) => void;
+  onStudioUpdate?: (fields: { caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string }) => void;
 }
 
 export class ChatMessageService {
@@ -200,6 +200,7 @@ export class ChatMessageService {
                 tags: event.tags,
                 price: event.price,
                 isProduct: event.isProduct,
+                imageUrl: event.imageUrl,
               });
             }
           } else if (event.type === 'error') {

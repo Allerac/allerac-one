@@ -19,6 +19,7 @@ interface SidebarDesktopProps {
   showInstagramDM?: boolean;
   onOpenInstagramPost?: () => void;
   instagramConnected?: boolean;
+  hideConfiguration?: boolean;
 }
 
 export default function SidebarDesktop({
@@ -36,6 +37,7 @@ export default function SidebarDesktop({
   showInstagramDM,
   onOpenInstagramPost,
   instagramConnected,
+  hideConfiguration,
 }: SidebarDesktopProps) {
   const d = isDarkMode;
   return (
@@ -80,6 +82,7 @@ export default function SidebarDesktop({
         showInstagramDM={showInstagramDM}
         onOpenInstagramPost={onOpenInstagramPost}
         instagramConnected={instagramConnected}
+        hideConfiguration={hideConfiguration}
       />
     </div>
   );
