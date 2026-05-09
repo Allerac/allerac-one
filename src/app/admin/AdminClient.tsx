@@ -33,6 +33,11 @@ export default function AdminClient({ initialUsers, initialDomains }: AdminClien
   // Active toggle state
   const [activeChangingId, setActiveChangingId] = useState<string | null>(null);
 
+  // Domain editor state
+  const [domainEditId, setDomainEditId] = useState<string | null>(null);
+  const [domainEditSelection, setDomainEditSelection] = useState<string[]>([]);
+  const [domainSavePending, setDomainSavePending] = useState(false);
+
   // Reset password state
   const [resetOpenId, setResetOpenId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState('');
@@ -88,6 +93,26 @@ export default function AdminClient({ initialUsers, initialDomains }: AdminClien
         setFormError(result.error);
       }
     });
+  };
+
+  const openDomainEditor = (user: AdminUser) => {
+    setDomainEditId(user.id);
+    // Convert slugs back to domain ids for the selection
+    setDomainEditSelection(
+      domains.filter(d => user.domains.includes(d.slug)).map(d => d.id)
+    );
+  };
+
+  const handleSaveDomains = async (userId: string) => {
+    setDomainSavePending(true);
+    const result = await adminActions.updateUserDomains(userId, domainEditSelection);
+    setDomainSavePending(false);
+    if (result.success) {
+      setDomainEditId(null);
+      refreshUsers();
+    } else {
+      setDeleteError(result.error);
+    }
   };
 
   const handleActiveToggle = async (userId: string, isActive: boolean) => {
@@ -204,15 +229,65 @@ export default function AdminClient({ initialUsers, initialDomains }: AdminClien
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {user.domains.length > 0 ? user.domains.map(slug => (
-                          <span key={slug} className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
-                            d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                          }`}>{slug}</span>
-                        )) : (
-                          <span className={textMuted}>—</span>
-                        )}
-                      </div>
+                      {!user.is_admin && domainEditId === user.id ? (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-wrap gap-1">
+                            {domains.map(domain => {
+                              const selected = domainEditSelection.includes(domain.id);
+                              return (
+                                <button
+                                  key={domain.id}
+                                  type="button"
+                                  onClick={() => setDomainEditSelection(prev =>
+                                    selected ? prev.filter(id => id !== domain.id) : [...prev, domain.id]
+                                  )}
+                                  disabled={domainSavePending}
+                                  className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors ${
+                                    selected
+                                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                                      : d ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {domain.slug}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSaveDomains(user.id)}
+                              disabled={domainSavePending}
+                              className="px-2 py-0.5 rounded text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
+                            >
+                              {domainSavePending ? '...' : 'Save'}
+                            </button>
+                            <button
+                              onClick={() => setDomainEditId(null)}
+                              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {user.domains.length > 0 ? user.domains.map(slug => (
+                            <span key={slug} className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
+                              d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                            }`}>{slug}</span>
+                          )) : (
+                            <span className={textMuted}>—</span>
+                          )}
+                          {!user.is_admin && (
+                            <button
+                              onClick={() => openDomainEditor(user)}
+                              className={`ml-1 px-2 py-0.5 rounded text-xs transition-colors ${d ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className={`px-4 py-3 text-xs ${textMuted}`}>
                       {new Date(user.created_at).toLocaleDateString()}

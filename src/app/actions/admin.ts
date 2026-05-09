@@ -113,6 +113,33 @@ export async function deleteUser(
   return { success: true };
 }
 
+export async function updateUserDomains(
+  userId: string,
+  domainIds: string[]
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM user_domain_access WHERE user_id = $1', [userId]);
+    for (const domainId of domainIds) {
+      await client.query(
+        `INSERT INTO user_domain_access (user_id, domain_id) VALUES ($1, $2)`,
+        [userId, domainId]
+      );
+    }
+    await client.query('COMMIT');
+    return { success: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[admin] updateUserDomains error:', error);
+    return { success: false, error: 'Failed to update domains' };
+  } finally {
+    client.release();
+  }
+}
+
 export async function toggleUserActive(
   userId: string,
   isActive: boolean
