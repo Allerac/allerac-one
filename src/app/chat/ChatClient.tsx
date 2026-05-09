@@ -900,6 +900,7 @@ export default function AdminChat({
             onOpenInstagramPost={showInstagramPost ? undefined : () => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
             instagramConnected={showInstagramPost}
             hideConfiguration={showInstagramPost}
+            onLogout={handleLogout}
           />
         </div>
 
@@ -921,6 +922,7 @@ export default function AdminChat({
             onOpenInstagramPost={showInstagramPost ? undefined : () => window.dispatchEvent(new CustomEvent('openInstagramPost'))}
             instagramConnected={showInstagramPost}
             hideConfiguration={showInstagramPost}
+            onLogout={handleLogout}
           />
         </div>
 

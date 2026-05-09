@@ -19,6 +19,7 @@ interface SidebarContentProps {
   onOpenInstagramPost?: () => void;
   instagramConnected?: boolean;
   hideConfiguration?: boolean;
+  onLogout?: () => void;
 }
 
 function SidebarButton({
@@ -68,6 +69,7 @@ export default function SidebarContent({
   onOpenInstagramPost,
   instagramConnected = false,
   hideConfiguration = false,
+  onLogout,
 }: SidebarContentProps & { isSidebarCollapsed?: boolean }) {
   const t = useTranslations('sidebar');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -293,6 +295,19 @@ export default function SidebarContent({
             />
           )}
         </div>
+
+        {onLogout && (
+          <div className={`px-2 pb-3 border-t ${d ? 'border-gray-800' : 'border-gray-200'} pt-2`}>
+            <SidebarButton
+              onClick={onLogout}
+              collapsed={isSidebarCollapsed}
+              label="Log out"
+              isDarkMode={isDarkMode}
+              variant="danger"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>}
+            />
+          </div>
+        )}
 
       </div>
     </>
