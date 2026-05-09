@@ -16,6 +16,7 @@ interface ChatMessageServiceConfig {
   preSelectedSkill?: any | null;
   defaultSkillName?: string;
   domain?: string;
+  isAdmin?: boolean;
   onConversationCreated?: () => void;
   onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
   onSkillActivated?: (skill: { id: string; name: string; display_name: string }) => void;
@@ -210,17 +211,18 @@ export class ChatMessageService {
       }
     } catch (error: any) {
       console.error('❌ Error sending message:', error);
-      // Replace empty assistant placeholder with the error
+      const raw = error.message || '';
+      const isRateLimit = raw.includes('Rate Limit') || raw.includes('rate limit') || raw.includes('429');
+      const displayMessage = isRateLimit && this.config.isAdmin
+        ? raw
+        : 'Ocorreu um erro. Tente novamente em alguns minutos ou contacte o administrador.';
       this.config.setMessages(prev => {
         const msgs = [...prev];
         const last = msgs[msgs.length - 1];
         if (last && last.role === 'assistant' && last.content === '') {
-          msgs[msgs.length - 1] = {
-            ...last,
-            content: error.message,
-          };
+          msgs[msgs.length - 1] = { ...last, content: displayMessage };
         } else {
-          msgs.push({ role: 'assistant', content: error.message, timestamp: new Date() } as Message);
+          msgs.push({ role: 'assistant', content: displayMessage, timestamp: new Date() } as Message);
         }
         return msgs;
       });

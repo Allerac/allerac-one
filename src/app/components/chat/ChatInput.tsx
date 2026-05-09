@@ -225,16 +225,6 @@ export default function ChatInput({
         style={{ minHeight: '48px', maxHeight: '200px', lineHeight: '28px' }}
       />
       
-      {/* Provider hint */}
-      {providerHint && (
-        <div className={`mx-3 mb-1 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${isDarkMode ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-50 text-amber-700'}`}>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
-          </svg>
-          {providerHint}
-        </div>
-      )}
-
       {/* Line 2: Action buttons */}
       <div className="flex items-center justify-between px-2 pb-2">
         {/* Left side: Tool buttons */}

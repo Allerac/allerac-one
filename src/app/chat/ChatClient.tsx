@@ -260,6 +260,7 @@ export default function AdminChat({
     preSelectedSkill,
     defaultSkillName,
     domain: domainName?.toLowerCase() ?? 'chat',
+    isAdmin,
     onConversationCreated: () => {
       if (userId) loadConversations(userId);
     },
@@ -1052,8 +1053,8 @@ export default function AdminChat({
                     selectedModel={selectedModel}
                     setSelectedModel={setSelectedModel}
                     MODELS={MODELS}
-                    githubConfigured={!!githubToken}
-                    googleConfigured={!!googleApiKey}
+                    githubConfigured={providerFlags.githubConfigured || !!githubToken}
+                    googleConfigured={providerFlags.googleConfigured || !!googleApiKey}
                     ollamaConnected={ollamaConnected}
                     ollamaModels={ollamaModels}
                     onDownloadModel={handleDownloadModel}
