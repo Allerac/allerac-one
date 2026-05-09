@@ -152,6 +152,17 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 /**
+ * Returns the URL the user should be redirected to after login.
+ * Admins go to the desktop (/). Domain users go to their first assigned domain.
+ * If no domain is assigned, falls back to /.
+ */
+export async function getLoginRedirect(userId: string, isAdmin: boolean): Promise<string> {
+  if (isAdmin) return '/';
+  const slug = await authService.getFirstDomainSlug(userId);
+  return slug ? `/${slug}` : '/';
+}
+
+/**
  * Check if this is the first run (no users exist)
  * Used to show setup wizard on initial installation
  */

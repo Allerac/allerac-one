@@ -11,6 +11,7 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
+  is_admin: boolean;
   created_at: Date;
 }
 
@@ -87,7 +88,7 @@ export class AuthService {
       const result = await pool.query(
         `INSERT INTO users (email, password_hash, name)
          VALUES ($1, $2, $3)
-         RETURNING id, email, name, created_at`,
+         RETURNING id, email, name, is_admin, created_at`,
         [email.toLowerCase(), passwordHash, name || null]
       );
 
@@ -117,7 +118,7 @@ export class AuthService {
     try {
       // Find user by email (include password_hash and version for verification)
       const result = await pool.query(
-        'SELECT id, email, name, password_hash, password_hash_version, created_at FROM users WHERE email = $1',
+        'SELECT id, email, name, is_admin, password_hash, password_hash_version, created_at FROM users WHERE email = $1',
         [email.toLowerCase()]
       );
 
@@ -152,6 +153,7 @@ export class AuthService {
         id: row.id,
         email: row.email,
         name: row.name,
+        is_admin: row.is_admin,
         created_at: row.created_at,
       };
 
@@ -201,6 +203,7 @@ export class AuthService {
         id: row.id,
         email: row.email,
         name: row.name,
+        is_admin: row.is_admin,
         created_at: row.created_at,
       };
 
@@ -219,10 +222,10 @@ export class AuthService {
   async validateSession(token: string): Promise<User | null> {
     try {
       const result = await pool.query(
-        `SELECT u.id, u.email, u.name, u.created_at
+        `SELECT u.id, u.email, u.name, u.is_admin, u.created_at
          FROM user_sessions s
          JOIN users u ON s.user_id = u.id
-         WHERE s.token = $1 AND s.expires_at > NOW()`,
+         WHERE s.token = $1 AND s.expires_at > NOW() AND u.is_active = true`,
         [token]
       );
 
@@ -261,6 +264,50 @@ export class AuthService {
       await pool.query('DELETE FROM user_sessions WHERE expires_at < NOW()');
     } catch (error) {
       console.error('Session cleanup error:', error);
+    }
+  }
+
+  /**
+   * Returns the slug of the first active domain a non-admin user can access,
+   * or null if none is assigned.
+   */
+  async getFirstDomainSlug(userId: string): Promise<string | null> {
+    try {
+      const result = await pool.query(
+        `SELECT d.slug
+         FROM user_domain_access uda
+         JOIN domains d ON uda.domain_id = d.id
+         WHERE uda.user_id = $1 AND d.is_active = true
+         ORDER BY d.created_at ASC
+         LIMIT 1`,
+        [userId]
+      );
+      return result.rows[0]?.slug ?? null;
+    } catch (error) {
+      console.error('getFirstDomainSlug error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Checks whether a user has access to a specific domain slug.
+   * Admins always have access. Non-admins need an entry in user_domain_access.
+   */
+  async canAccessDomain(userId: string, isAdmin: boolean, slug: string): Promise<boolean> {
+    if (isAdmin) return true;
+    try {
+      const result = await pool.query(
+        `SELECT 1
+         FROM user_domain_access uda
+         JOIN domains d ON uda.domain_id = d.id
+         WHERE uda.user_id = $1 AND d.slug = $2 AND d.is_active = true
+         LIMIT 1`,
+        [userId, slug]
+      );
+      return result.rows.length > 0;
+    } catch (error) {
+      console.error('canAccessDomain error:', error);
+      return false;
     }
   }
 }

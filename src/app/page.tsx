@@ -1,17 +1,9 @@
 import HubClient from './hub/HubClient';
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
-import { redirect } from 'next/navigation';
+import { requireAdmin } from '@/app/lib/domain-access';
 import pool from '@/app/clients/db';
 
-const authService = new AuthService();
-
 export default async function RootPage() {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) redirect('/login');
-  const user = await authService.validateSession(sessionToken);
-  if (!user) redirect('/login');
+  const user = await requireAdmin();
 
   // Fetch hub tour completion status
   let completedHubTour = false;

@@ -10,7 +10,14 @@ export default async function LoginPage() {
   const sessionToken = cookieStore.get('session_token')?.value;
   if (sessionToken) {
     const user = await authService.validateSession(sessionToken);
-    if (user) redirect('/');
+    if (user) {
+      if (user.is_admin) {
+        redirect('/');
+      } else {
+        const slug = await authService.getFirstDomainSlug(user.id);
+        redirect(slug ? `/${slug}` : '/');
+      }
+    }
   }
 
   return <LoginClient />;

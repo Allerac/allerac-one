@@ -50,7 +50,8 @@ export default function LoginClient() {
       const hashed = await hashPassword(password);
       const result = await authActions.login(email, hashed);
       if (result.success) {
-        router.push('/');
+        const redirectTo = await authActions.getLoginRedirect(result.user.id, result.user.is_admin);
+        router.push(redirectTo);
       } else if ('needsMigration' in result && result.needsMigration) {
         setMigrationEmail(email);
         setPassword('');
@@ -77,7 +78,8 @@ export default function LoginClient() {
       const hashed = await hashPassword(password);
       const result = await authActions.register(email, hashed, name || undefined);
       if (result.success) {
-        router.push('/');
+        const redirectTo = await authActions.getLoginRedirect(result.user.id, result.user.is_admin);
+        router.push(redirectTo);
       } else {
         setError(result.error || 'Registration failed.');
       }
@@ -98,7 +100,8 @@ export default function LoginClient() {
       const hashed = await hashPassword(password);
       const result = await authActions.migratePassword(migrationEmail, hashed);
       if (result.success) {
-        router.push('/');
+        const redirectTo = await authActions.getLoginRedirect(result.user.id, result.user.is_admin);
+        router.push(redirectTo);
       } else {
         setError(result.error || 'Migration failed.');
       }

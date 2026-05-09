@@ -1,15 +1,14 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import pool from '@/app/clients/db';
 
 export async function GET() {
   try {
-    const configPath = join(process.cwd(), 'config', 'domains.json');
-    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
-    return Response.json({ visible: config.visible });
-  } catch (error) {
-    // Fallback to all domains if config not found
-    return Response.json({
-      visible: ['chat', 'code', 'recipes', 'finance', 'health', 'write', 'social'],
-    });
+    const result = await pool.query(
+      `SELECT slug FROM domains WHERE is_active = true ORDER BY created_at ASC`
+    );
+    const visible = result.rows.map((r: { slug: string }) => r.slug);
+    return Response.json({ visible });
+  } catch {
+    // Fallback if DB query fails
+    return Response.json({ visible: ['chat', 'code', 'social', 'health'] });
   }
 }
