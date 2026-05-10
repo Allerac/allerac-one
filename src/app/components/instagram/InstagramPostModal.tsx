@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useLocale } from 'next-intl';
 import { generateCaption, generateTags, publishInstagramPost } from '@/app/actions/instagram';
 
 interface InstagramPostModalProps {
@@ -24,6 +25,7 @@ export default function InstagramPostModal({
   initialImagePreview,
   initialImageUrl,
 }: InstagramPostModalProps) {
+  const locale = useLocale();
   const [imageBase64, setImageBase64] = useState<string | null>(initialImageBase64 ?? null);
   const [imageUrl, setImageUrl] = useState<string | null>(initialImageUrl ?? null);
   const [imagePreview, setImagePreview] = useState<string | null>(initialImagePreview ?? null);
@@ -77,7 +79,7 @@ export default function InstagramPostModal({
     setIsGeneratingCaption(true);
     setError('');
     try {
-      const result = await generateCaption(imageInput, userId);
+      const result = await generateCaption(imageInput, userId, undefined, locale);
       if (result.success) {
         setCaption(result.caption);
       } else {
@@ -94,7 +96,7 @@ export default function InstagramPostModal({
     setIsGeneratingTags(true);
     setError('');
     try {
-      const result = await generateTags(userId, caption);
+      const result = await generateTags(userId, caption, locale);
       if (result.success) {
         setTags(result.tags);
       } else {

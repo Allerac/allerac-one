@@ -6,11 +6,14 @@ import { LLMService } from '@/app/services/llm/llm.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { InstagramTool } from '@/app/tools/instagram.tool';
+import pool from '@/app/clients/db';
 
 const credService = new InstagramCredentialsService();
 const igTool = new InstagramTool();
 const userSettingsService = new UserSettingsService();
 const systemSettingsService = new SystemSettingsService();
+
+const LOCALE_NAMES: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English', fr: 'French', de: 'German', it: 'Italian' };
 
 async function resolveGithubToken(userId: string): Promise<string> {
   const [settings, sysSettings] = await Promise.all([
@@ -18,6 +21,20 @@ async function resolveGithubToken(userId: string): Promise<string> {
     systemSettingsService.loadAll(),
   ]);
   return settings?.github_token || sysSettings.github_token || process.env.GITHUB_TOKEN || '';
+}
+
+async function buildSocialSystemPrompt(userId: string, locale: string): Promise<string> {
+  const language = LOCALE_NAMES[locale] ?? 'English';
+  const res = await pool.query(
+    `SELECT content FROM user_domain_instructions WHERE user_id = $1 AND domain_slug = 'social'`,
+    [userId]
+  );
+  const userInstructions = res.rows[0]?.content?.trim() || '';
+  const parts = [
+    `You are a social media expert. Always respond in ${language}.`,
+    userInstructions,
+  ].filter(Boolean);
+  return parts.join('\n\n');
 }
 
 export async function getInstagramStatus(userId: string) {
@@ -35,10 +52,14 @@ export async function disconnectInstagram(userId: string) {
 export async function generateCaption(
   imageInput: string,
   userId: string,
-  topic?: string
+  topic?: string,
+  locale = 'en'
 ): Promise<{ success: true; caption: string } | { success: false; error: string }> {
   try {
-    const githubToken = await resolveGithubToken(userId);
+    const [githubToken, systemPrompt] = await Promise.all([
+      resolveGithubToken(userId),
+      buildSocialSystemPrompt(userId, locale),
+    ]);
     if (!githubToken) {
       return { success: false, error: 'GitHub token is required. Please configure it in Settings → API Keys.' };
     }
@@ -63,6 +84,7 @@ export async function generateCaption(
 
     const response = await llmService.chatCompletion({
       messages: [
+        { role: 'system', content: systemPrompt },
         {
           role: 'user',
           content: [
@@ -92,10 +114,14 @@ export async function generateCaption(
  */
 export async function generateTags(
   userId: string,
-  caption?: string
+  caption?: string,
+  locale = 'en'
 ): Promise<{ success: true; tags: string } | { success: false; error: string }> {
   try {
-    const githubToken = await resolveGithubToken(userId);
+    const [githubToken, systemPrompt] = await Promise.all([
+      resolveGithubToken(userId),
+      buildSocialSystemPrompt(userId, locale),
+    ]);
     if (!githubToken) {
       return { success: false, error: 'GitHub token is required. Please configure it in Settings → API Keys.' };
     }
@@ -106,7 +132,10 @@ export async function generateTags(
       : `Generate 10-15 relevant Instagram hashtags for general engagement. Return only hashtags separated by spaces, no numbering.`;
 
     const response = await llmService.chatCompletion({
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
+      ],
       model: 'gpt-4o-mini',
       temperature: 0.6,
       max_tokens: 150,

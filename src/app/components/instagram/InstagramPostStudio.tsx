@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { generateCaption, generateTags, publishInstagramPost } from '@/app/actions/instagram';
 
 interface PostState {
@@ -65,6 +65,7 @@ export default function InstagramPostStudio({
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [isGeneratingTags, setIsGeneratingTags] = useState(false);
   const t = useTranslations('instagramStudio');
+  const locale = useLocale();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
@@ -92,7 +93,7 @@ export default function InstagramPostStudio({
     setIsGeneratingCaption(true);
     setError('');
     try {
-      const result = await generateCaption(imageInput, userId);
+      const result = await generateCaption(imageInput, userId, undefined, locale);
       if (result.success) setCaption(result.caption);
       else setError(result.error);
     } catch (err: any) { setError(err.message); }
@@ -103,7 +104,7 @@ export default function InstagramPostStudio({
     setIsGeneratingTags(true);
     setError('');
     try {
-      const result = await generateTags(userId, caption);
+      const result = await generateTags(userId, caption, locale);
       if (result.success) setTags(result.tags);
       else setError(result.error);
     } catch (err: any) { setError(err.message); }
