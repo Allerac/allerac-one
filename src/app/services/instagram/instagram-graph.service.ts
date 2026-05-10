@@ -194,7 +194,11 @@ export class InstagramGraphService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(createBody),
     });
-    if (!createRes.ok) throw new Error(`Instagram createMedia error: ${await createRes.text()}`);
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      console.error(`[Instagram] createMedia failed (${createRes.status}):`, errText);
+      throw new Error(`Instagram createMedia error: ${errText}`);
+    }
     const { id: creationId } = await createRes.json();
 
     // Step 2: Wait for container to be ready (poll up to 30s)
@@ -208,7 +212,10 @@ export class InstagramGraphService {
         const { status_code } = await statusRes.json() as { status_code: string };
         console.log(`[Instagram] Media container status: ${status_code}`);
         if (status_code === 'FINISHED') break;
-        if (status_code === 'ERROR') throw new Error('Instagram media container processing failed');
+        if (status_code === 'ERROR') {
+          console.error(`[Instagram] Media container ${creationId} status: ERROR`);
+          throw new Error('Instagram media container processing failed');
+        }
       }
     }
 
@@ -223,8 +230,8 @@ export class InstagramGraphService {
     if (!publishRes.ok) {
       const errorText = await publishRes.text();
       console.log(`[Instagram] Publish error response:`, errorText);
+      throw new Error(`Instagram publishMedia error: ${errorText}`);
     }
-    if (!publishRes.ok) throw new Error(`Instagram publishMedia error: ${await publishRes.text()}`);
     return publishRes.json();
   }
 
