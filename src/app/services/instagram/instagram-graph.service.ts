@@ -182,16 +182,16 @@ export class InstagramGraphService {
     // Note: igUserId here is the Business User ID (for Graph API), not the legacy webhook ID
     const businessUserId = igUserId;
 
+    const authHeader = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+
     // Step 1: Create media container
-    const createUrl = `${GRAPH_URL}/${businessUserId}/media?access_token=${accessToken}`;
     const createBody = { image_url: imageUrl, caption };
     console.log(`[Instagram] Publishing POST to: ${GRAPH_URL}/${businessUserId}/media`);
     console.log(`[Instagram] Body:`, JSON.stringify(createBody, null, 2));
-    console.log(`[Instagram] Image URL accessible:`, imageUrl);
 
-    const createRes = await fetch(createUrl, {
+    const createRes = await fetch(`${GRAPH_URL}/${businessUserId}/media`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeader,
       body: JSON.stringify(createBody),
     });
     if (!createRes.ok) {
@@ -206,7 +206,8 @@ export class InstagramGraphService {
     for (let i = 0; i < 10; i++) {
       await sleep(3000);
       const statusRes = await fetch(
-        `${GRAPH_URL}/${creationId}?fields=status_code&access_token=${accessToken}`
+        `${GRAPH_URL}/${creationId}?fields=status_code`,
+        { headers: authHeader }
       );
       if (statusRes.ok) {
         const { status_code } = await statusRes.json() as { status_code: string };
@@ -221,15 +222,15 @@ export class InstagramGraphService {
 
     // Step 3: Publish
     console.log(`[Instagram] Publishing with creation_id: ${creationId}, businessUserId: ${businessUserId}`);
-    const publishRes = await fetch(`${GRAPH_URL}/${businessUserId}/media_publish?access_token=${accessToken}`, {
+    const publishRes = await fetch(`${GRAPH_URL}/${businessUserId}/media_publish`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeader,
       body: JSON.stringify({ creation_id: creationId }),
     });
     console.log(`[Instagram] Publish response status: ${publishRes.status}`);
     if (!publishRes.ok) {
       const errorText = await publishRes.text();
-      console.log(`[Instagram] Publish error response:`, errorText);
+      console.error(`[Instagram] Publish error response:`, errorText);
       throw new Error(`Instagram publishMedia error: ${errorText}`);
     }
     return publishRes.json();
