@@ -4,10 +4,21 @@ import { InstagramCredentialsService } from '@/app/services/instagram/instagram-
 import { getImageUploadService } from '@/app/services/image-upload';
 import { LLMService } from '@/app/services/llm/llm.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 
 const credService = new InstagramCredentialsService();
 const igTool = new InstagramTool();
+const userSettingsService = new UserSettingsService();
+const systemSettingsService = new SystemSettingsService();
+
+async function resolveGithubToken(userId: string): Promise<string> {
+  const [settings, sysSettings] = await Promise.all([
+    userSettingsService.loadUserSettings(userId),
+    systemSettingsService.loadAll(),
+  ]);
+  return settings?.github_token || sysSettings.github_token || process.env.GITHUB_TOKEN || '';
+}
 
 export async function getInstagramStatus(userId: string) {
   return credService.getStatus(userId);
@@ -27,9 +38,7 @@ export async function generateCaption(
   topic?: string
 ): Promise<{ success: true; caption: string } | { success: false; error: string }> {
   try {
-    const userSettingsService = new UserSettingsService();
-    const settings = await userSettingsService.loadUserSettings(userId);
-    const githubToken = settings?.github_token || '';
+    const githubToken = await resolveGithubToken(userId);
     if (!githubToken) {
       return { success: false, error: 'GitHub token is required. Please configure it in Settings → API Keys.' };
     }
@@ -86,9 +95,7 @@ export async function generateTags(
   caption?: string
 ): Promise<{ success: true; tags: string } | { success: false; error: string }> {
   try {
-    const userSettingsService = new UserSettingsService();
-    const settings = await userSettingsService.loadUserSettings(userId);
-    const githubToken = settings?.github_token || '';
+    const githubToken = await resolveGithubToken(userId);
     if (!githubToken) {
       return { success: false, error: 'GitHub token is required. Please configure it in Settings → API Keys.' };
     }
