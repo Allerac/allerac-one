@@ -157,7 +157,13 @@ export class WorkerRunnerService {
 
       if (await this.checkCancelled(run.id)) return;
 
-      const plan = await this.orchestrator.createPlan(run.prompt, modelName, modelProvider, modelBaseUrl);
+      const orchestrator = new OrchestratorService({
+        githubToken: settings.github_token || undefined,
+        geminiToken: settings.google_api_key || undefined,
+        anthropicToken: settings.anthropic_api_key || undefined,
+      });
+
+      const plan = await orchestrator.createPlan(run.prompt, modelName, modelProvider, modelBaseUrl);
       await this.repository.updateRunStatus(run.id, 'planning', { plan });
 
       if (await this.checkCancelled(run.id)) return;
@@ -201,7 +207,7 @@ export class WorkerRunnerService {
       await this.repository.updateRunStatus(run.id, 'aggregating');
 
       let finalResult = '';
-      const aggregateStream = this.orchestrator.aggregateResults(
+      const aggregateStream = orchestrator.aggregateResults(
         run.prompt,
         plan,
         workerResults.map(w => ({ workerId: w.workerId, name: w.name, task: w.task, result: w.result })),
