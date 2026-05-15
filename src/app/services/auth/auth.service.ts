@@ -84,12 +84,16 @@ export class AuthService {
       // Hash password
       const passwordHash = await this.hashPassword(password);
 
+      // First user ever created becomes admin automatically
+      const userCount = await pool.query('SELECT COUNT(*) FROM users');
+      const isFirstUser = parseInt(userCount.rows[0].count) === 0;
+
       // Create user
       const result = await pool.query(
-        `INSERT INTO users (email, password_hash, name)
-         VALUES ($1, $2, $3)
+        `INSERT INTO users (email, password_hash, name, is_admin)
+         VALUES ($1, $2, $3, $4)
          RETURNING id, email, name, is_admin, created_at`,
-        [email.toLowerCase(), passwordHash, name || null]
+        [email.toLowerCase(), passwordHash, name || null, isFirstUser]
       );
 
       const user = result.rows[0] as User;
