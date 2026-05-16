@@ -20,24 +20,14 @@ output "chat_url" {
   value       = "https://chat.${var.domain}"
 }
 
-output "home_url" {
-  description = "Homepage dashboard URL"
-  value       = "https://home.${var.domain}"
-}
-
 output "portainer_url" {
   description = "Portainer URL"
-  value       = "https://portainer.${var.domain}"
-}
-
-output "landing_url" {
-  description = "Landing page URL"
-  value       = "https://landing.${var.domain}"
+  value       = "https://portainer.chat.${var.domain}"
 }
 
 output "grafana_url" {
   description = "Grafana monitoring URL"
-  value       = "https://grafana.${var.domain}"
+  value       = "https://grafana.chat.${var.domain}"
 }
 
 # --- Backup Outputs ---
@@ -46,15 +36,20 @@ output "backup_bucket" {
   value       = google_storage_bucket.backups.name
 }
 
+output "tfstate_bucket" {
+  description = "GCS bucket for Terraform remote state"
+  value       = google_storage_bucket.tfstate.name
+}
+
 # --- Cloudflare Outputs ---
 output "tunnel_id" {
   description = "Cloudflare Tunnel ID"
-  value       = cloudflare_tunnel.allerac_tunnel.id
+  value       = cloudflare_zero_trust_tunnel_cloudflared.allerac_tunnel.id
 }
 
 output "tunnel_token" {
   description = "Cloudflare Tunnel Token (for cloudflared)"
-  value       = cloudflare_tunnel.allerac_tunnel.tunnel_token
+  value       = cloudflare_zero_trust_tunnel_cloudflared.allerac_tunnel.tunnel_token
   sensitive   = true
 }
 

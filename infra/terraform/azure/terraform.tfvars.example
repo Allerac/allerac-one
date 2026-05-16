@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and fill in values
+# cp terraform.tfvars.example terraform.tfvars
+
+subscription_id    = "2efffeac-6ee8-4f82-9c8c-1c177077c0f8"
+location           = "North Europe"
+resource_group_name = "allerac-one"
+ssh_user           = "allerac-adm"
+ssh_public_key     = "ssh-rsa AAAA..."
+
+# Restrict to your IP for hardening:
+# ssh_source_range = "203.0.113.10/32"

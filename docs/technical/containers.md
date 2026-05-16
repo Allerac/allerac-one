@@ -91,18 +91,25 @@ Handles authentication with external health APIs and stores activity metrics (st
 
 ## Infrastructure
 
-### `allerac-tunnel`
+### `allerac-tunnel` *(profile: `cloud`)*
 **Image:** `cloudflare/cloudflared:latest`
-**Role:** Cloudflare Zero Trust tunnel. Routes public traffic from `allerac.cloud` to the local app without opening firewall ports.
-Runs in host network mode.
+**Role:** Cloudflare Zero Trust tunnel. Routes public traffic from `allerac.ai` subdomains to the local app without opening firewall ports. Runs in host network mode.
+**Start with:** `COMPOSE_PROFILES=cloud docker compose up -d`
 **Restart:** always
 
-### `allerac-webhook`
+### `allerac-caddy` *(profile: `local`)*
+**Image:** `caddy:alpine`
+**Ports:** `80`, `443`
+**Role:** Local development reverse proxy. Serves `https://home.allerac` (and similar local domains) with self-signed TLS so the browser doesn't need to type `localhost:8080`.
+**Memory limit:** 64 MB
+**Start with:** `COMPOSE_PROFILES=local docker compose up -d`
+**Restart:** unless-stopped
+
+### `allerac-webhook` *(profile: `webhook`)*
 **Image:** custom build (`infra/webhook/Dockerfile`)
 **Port:** `9999` → `9000` (internal)
-**Role:** GitHub push webhook receiver. Validates HMAC-SHA256 signatures and triggers `update.sh` on pushes to `main`. Sends email notifications on deploy success/failure via Resend.
-**Memory limit:** 128 MB
-**Restart:** always
+**Role:** GitHub push webhook receiver. Validates HMAC-SHA256 signatures and triggers `update.sh` on pushes to `main`. Sends Telegram notifications on deploy success/failure.
+**Restart:** unless-stopped
 
 ### `allerac-portainer`
 **Image:** `portainer/portainer-ce:latest`
@@ -164,6 +171,19 @@ External volumes are created by `update.sh` on first run and never re-created em
 
 ---
 
+## Profiles
+
+| Profile | Services | Use case |
+|---------|----------|----------|
+| *(none)* | all except caddy, tunnel, webhook | base stack always started |
+| `cloud` | + `allerac-tunnel` | cloud VMs — Cloudflare tunnel for public access |
+| `local` | + `allerac-caddy` | local development — `https://home.allerac` |
+| `webhook` | + `allerac-webhook` | CI/CD — GitHub push webhook |
+
+Start with multiple profiles: `COMPOSE_PROFILES=cloud,webhook docker compose up -d`
+
+---
+
 ## Port Summary
 
 | Port | Container | Exposed to |
@@ -174,6 +194,8 @@ External volumes are created by `update.sh` on first run and never re-created em
 | `9100` | `allerac-node-exporter` | Host |
 | `3001` | `allerac-grafana` | Host (Cloudflare Zero Trust) |
 | `3100` | `allerac-loki` | Host |
+| `80`, `443` | `allerac-caddy` | Host (local only) |
+| `9999` | `allerac-webhook` | Host (GitHub webhook) |
 | `11434` | `allerac-ollama` | Internal only |
 | `6379` | `allerac-redis` | Internal only |
 | `8001` | `allerac-health-worker` | Internal only |

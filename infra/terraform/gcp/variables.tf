@@ -1,0 +1,83 @@
+# --- GCP Variables ---
+variable "project_id" {
+  description = "Google Cloud project ID"
+  type        = string
+}
+
+variable "region" {
+  description = "Google Cloud region"
+  type        = string
+  default     = "europe-southwest1"
+}
+
+variable "zone" {
+  description = "Google Cloud zone"
+  type        = string
+  default     = "europe-southwest1-a"
+}
+
+variable "machine_type" {
+  description = "Machine type (e2-micro is free tier, e2-small recommended, e2-medium for production)"
+  type        = string
+  default     = "e2-small"
+}
+
+variable "ssh_user" {
+  description = "SSH user to access the VM"
+  type        = string
+  default     = "allerac"
+}
+
+variable "ssh_public_key_path" {
+  description = "Path to the SSH public key"
+  type        = string
+  default     = "~/.ssh/id_rsa.pub"
+}
+
+# --- Cloudflare Variables ---
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token with Zone and Tunnel permissions"
+  type        = string
+  sensitive   = true
+}
+
+variable "cloudflare_account_id" {
+  description = "Cloudflare account ID"
+  type        = string
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare zone ID for the domain"
+  type        = string
+}
+
+variable "domain" {
+  description = "Domain name for the application"
+  type        = string
+  default     = "allerac.ai"
+}
+
+# --- GitHub Variables ---
+variable "github_token" {
+  description = "GitHub Personal Access Token with 'repo' scope for Actions Runner"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_repo_owner" {
+  description = "GitHub repository owner"
+  type        = string
+  default     = "Allerac"
+}
+
+variable "github_repo_name" {
+  description = "GitHub repository name"
+  type        = string
+  default     = "allerac-one"
+}
+
+variable "ssh_source_ranges" {
+  description = "CIDR ranges allowed to SSH into the VM. Restrict to your IP for hardening (e.g. [\"203.0.113.10/32\"]). Defaults to open for convenience."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}

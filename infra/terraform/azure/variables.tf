@@ -1,42 +1,47 @@
-# --- GCP Variables ---
-variable "project_id" {
-  description = "Google Cloud project ID"
+variable "subscription_id" {
+  description = "Azure subscription ID"
   type        = string
+  sensitive   = true
 }
 
-variable "region" {
-  description = "Google Cloud region"
+variable "location" {
+  description = "Azure region"
   type        = string
-  default     = "southamerica-east1"
+  default     = "North Europe"
 }
 
-variable "zone" {
-  description = "Google Cloud zone"
+variable "resource_group_name" {
+  description = "Azure resource group name"
   type        = string
-  default     = "southamerica-east1-a"
+  default     = "allerac-one"
 }
 
 variable "machine_type" {
-  description = "Machine type (e2-micro is free tier, e2-small recommended, e2-medium for production)"
+  description = "Azure VM size"
   type        = string
-  default     = "e2-small"
+  default     = "Standard_F4ads_v7"
 }
 
 variable "ssh_user" {
-  description = "SSH user to access the VM"
+  description = "VM admin username"
   type        = string
-  default     = "allerac"
+  default     = "allerac-adm"
 }
 
-variable "ssh_public_key_path" {
-  description = "Path to the SSH public key"
+variable "ssh_public_key" {
+  description = "SSH public key content for VM access"
   type        = string
-  default     = "~/.ssh/id_rsa.pub"
+  sensitive   = true
 }
 
-# --- Cloudflare Variables ---
+variable "ssh_source_range" {
+  description = "CIDR allowed to SSH. Restrict to your IP for hardening (e.g. \"203.0.113.10/32\"). Defaults to open."
+  type        = string
+  default     = "*"
+}
+
 variable "cloudflare_api_token" {
-  description = "Cloudflare API token with Zone and Tunnel permissions"
+  description = "Cloudflare API token"
   type        = string
   sensitive   = true
 }
@@ -47,17 +52,16 @@ variable "cloudflare_account_id" {
 }
 
 variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID for the domain"
+  description = "Cloudflare zone ID for allerac.ai"
   type        = string
 }
 
 variable "domain" {
-  description = "Domain name for the application"
+  description = "Base domain"
   type        = string
   default     = "allerac.ai"
 }
 
-# --- GitHub Variables ---
 variable "github_token" {
   description = "GitHub Personal Access Token with 'repo' scope for Actions Runner"
   type        = string
