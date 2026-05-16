@@ -393,9 +393,9 @@ No explanation. Just one word.`;
     }
 
     // Keyword fallback - check auto_switch_rules from database
-    console.error(`[SkillRouter] FALLBACK START`);
+    console.log(`[SkillRouter] FALLBACK START`);
     for (const skill of routableSkills) {
-      console.error(`[SkillRouter] checking ${skill.name}`);
+      console.log(`[SkillRouter] checking ${skill.name}`);
       if (!skill.auto_switch_rules) continue;
       const rules = skill.auto_switch_rules as any;
 

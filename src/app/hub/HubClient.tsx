@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as authActions from '@/app/actions/auth';
 import * as userActions from '@/app/actions/user';
-import UserSettingsModal from '@/app/components/auth/UserSettingsModal';
 import HubTour from '@/app/components/hub/HubTour';
 import SystemDashboard from '@/app/components/system/SystemDashboard';
 import DomainSkillsModal from '@/app/components/hub/DomainSkillsModal';
@@ -35,7 +34,6 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
   const [clickCount, setClickCount] = useState<Record<string, number>>({});
   const [startMenuOpen, setStartMenuOpen] = useState(false);
   const [shutdownPhase, setShutdownPhase] = useState<ShutdownPhase>('running');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isDomainSkillsOpen, setIsDomainSkillsOpen] = useState(false);
   const [githubToken, setGithubToken] = useState('');
@@ -366,8 +364,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
               <StartMenuItem icon="💬" label="Chat" onClick={() => { setStartMenuOpen(false); router.push('/chat'); }} />
               <StartMenuItem icon="📁" label="Workspace" onClick={() => { setStartMenuOpen(false); router.push('/workspace'); }} />
               <StartMenuItem icon="📟" label="Monitor" onClick={() => { setStartMenuOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
-              <StartMenuItem icon="⚙️" label="Settings" onClick={() => { setStartMenuOpen(false); setIsSettingsOpen(true); }} />
-              <StartMenuItem icon="🔧" label="Configuration" onClick={() => { setStartMenuOpen(false); loadSettings(); setIsConfigOpen(true); }} />
+              <StartMenuItem icon="⚙️" label="Configuration" onClick={() => { setStartMenuOpen(false); loadSettings(); setIsConfigOpen(true); }} />
               <StartMenuItem icon="🌐" label="Domains" onClick={() => { setStartMenuOpen(false); setIsDomainSkillsOpen(true); }} />
               <StartMenuItem icon="👥" label="Admin" onClick={() => { setStartMenuOpen(false); router.push('/admin'); }} />
               <div style={{ height: '1px', background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
@@ -454,17 +451,6 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
         />
       )}
 
-      {/* User Settings Modal */}
-      <UserSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        isDarkMode={false}
-        userName={userName}
-        userEmail={userEmail}
-        userId={userId}
-        onLogout={handleShutDown}
-      />
-
       {/* Domain Skills Modal */}
       <DomainSkillsModal
         isOpen={isDomainSkillsOpen}
@@ -497,6 +483,8 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
         MODELS={MODELS}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
+        userName={userName}
+        userEmail={userEmail}
       />
     </>
   );

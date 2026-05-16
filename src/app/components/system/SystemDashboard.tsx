@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import * as systemActions from '@/app/actions/system';
-import * as updateActions from '@/app/actions/updates';
-import * as backupActions from '@/app/actions/backup';
 import BenchmarkPanel from './BenchmarkPanel';
 import GarminSettings from '../settings/GarminSettings';
 import InstagramSettings from '../settings/InstagramSettings';
-import ModelSelector from '../chat/ModelSelector';
+import SystemTab from './SystemTab';
+import ApiKeysTab from './ApiKeysTab';
+import PreferencesTab from './PreferencesTab';
 import { Model } from '@/app/types';
 
 interface SystemDashboardProps {
@@ -20,7 +19,6 @@ interface SystemDashboardProps {
   MODELS?: Model[];
   selectedModel?: string;
   setSelectedModel: (modelId: string) => void;
-  // API Keys props
   githubToken: string;
   tavilyApiKey: string;
   googleApiKey: string;
@@ -37,114 +35,18 @@ interface SystemDashboardProps {
   setLocationInput: (v: string) => void;
   onSaveToken: () => Promise<void>;
   onOpenTelegramSettings?: () => void;
+  userName?: string;
+  userEmail?: string;
 }
 
-interface SystemDashboard {
-  system: {
-    hostname: string;
-    platform: string;
-    arch: string;
-    uptime: number;
-    nodeVersion: string;
-  };
-  memory: {
-    total: number;
-    free: number;
-    used: number;
-    usedPercent: number;
-  };
-  cpu: {
-    cores: number;
-    model: string;
-    loadAvg: number[];
-  };
-  aiModels: {
-    github: {
-      configured: boolean;
-      connected: boolean;
-      models: Array<{
-        id: string;
-        name: string;
-        icon: string;
-        description: string;
-      }>;
-      error?: string;
-    };
-    ollama: {
-      connected: boolean;
-      version?: string;
-      models: Array<{
-        name: string;
-        size: number;
-        modified_at: string;
-      }>;
-      error?: string;
-    };
-  };
-  database: {
-    connected: boolean;
-    version?: string;
-    tables: {
-      conversations: number;
-      messages: number;
-      memories: number;
-      documents: number;
-      backups: number;
-    };
-    error?: string;
-  };
-  timestamp: string;
-}
-
-interface CommitInfo {
-  sha: string;
-  shortSha: string;
-  message: string;
-  date: string;
-  author: string;
-  url: string;
-}
-
-interface UpdateStatus {
-  currentCommit: string;
-  currentDate: string;
-  latestCommit: string | null;
-  latestDate: string | null;
-  updateAvailable: boolean;
-  newCommits: CommitInfo[];
-  error?: string;
-}
-
-interface BackupInfo {
-  filename: string;
-  path: string;
-  size: number;
-  sizeFormatted: string;
-  createdAt: Date;
-  createdAtFormatted: string;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-
-  if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m`;
-  }
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
-}
+const TABS = [
+  { id: 'preferences' as const, label: 'preferences' },
+  { id: 'apiKeys'     as const, label: 'api-keys'    },
+  { id: 'health'      as const, label: 'health'      },
+  { id: 'social'      as const, label: 'social'      },
+  { id: 'system'      as const, label: 'system'      },
+  { id: 'benchmark'   as const, label: 'benchmark'   },
+];
 
 export default function SystemDashboardModal({
   isOpen,
@@ -171,280 +73,32 @@ export default function SystemDashboardModal({
   MODELS = [],
   selectedModel = '',
   setSelectedModel,
+  userName,
+  userEmail,
 }: SystemDashboardProps) {
   const t = useTranslations('system');
-  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark' | 'social'>(initialTab ?? 'system');
-  const [data, setData] = useState<SystemDashboard | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
-  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [updateMessage, setUpdateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark' | 'social'>(initialTab ?? 'preferences');
+  const [retroMode, setRetroMode] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('cfg-retro') !== 'off' : true
+  );
   const [isSavingKeys, setIsSavingKeys] = useState(false);
   const [keySaveMessage, setKeySaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [detectingLocation, setDetectingLocation] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Backup state
-  const [backups, setBackups] = useState<BackupInfo[]>([]);
-  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
-  const [isImportingBackup, setIsImportingBackup] = useState(false);
-  const [isRestoringBackup, setIsRestoringBackup] = useState<string | null>(null);
-  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const tBackup = useTranslations('backup');
+  const toggleRetro = () => setRetroMode(prev => {
+    const next = !prev;
+    localStorage.setItem('cfg-retro', next ? 'on' : 'off');
+    return next;
+  });
 
   useEffect(() => {
-    if (isOpen) {
-      setActiveTab(initialTab ?? 'system');
-      loadDashboard();
-      checkUpdates();
-      loadBackups();
-      // Auto-refresh every 30 seconds
-      const interval = setInterval(loadDashboard, 30000);
-      return () => clearInterval(interval);
-    }
+    if (isOpen) setActiveTab(initialTab ?? 'preferences');
   }, [isOpen]);
 
-  // Auto-dismiss backup message after 4 seconds
   useEffect(() => {
-    if (backupMessage) {
-      const timer = setTimeout(() => {
-        setBackupMessage(null);
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [backupMessage]);
-
-  // Auto-dismiss key save message after 3 seconds
-  useEffect(() => {
-    if (keySaveMessage) {
-      const timer = setTimeout(() => setKeySaveMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
+    if (!keySaveMessage) return;
+    const timer = setTimeout(() => setKeySaveMessage(null), 3000);
+    return () => clearTimeout(timer);
   }, [keySaveMessage]);
-
-  const loadDashboard = async () => {
-    try {
-      setIsLoading(true);
-      const dashboard = await systemActions.getSystemDashboard(userId);
-      setData(dashboard);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load system status');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const checkUpdates = async () => {
-    setIsCheckingUpdates(true);
-    try {
-      const status = await updateActions.checkForUpdates();
-      setUpdateStatus(status);
-    } catch (err: any) {
-      console.error('Failed to check updates:', err);
-    } finally {
-      setIsCheckingUpdates(false);
-    }
-  };
-
-  const handleUpdate = async () => {
-    setIsUpdating(true);
-    setUpdateMessage(null);
-
-    try {
-      const result = await updateActions.applyUpdate();
-      if (result.success) {
-        setUpdateMessage({
-          type: 'success',
-          text: result.message
-        });
-        setTimeout(() => {
-          checkUpdates();
-        }, 10000);
-      } else {
-        setUpdateMessage({
-          type: 'error',
-          text: result.message
-        });
-      }
-    } catch (err: any) {
-      setUpdateMessage({
-        type: 'error',
-        text: err.message || 'Failed to apply update'
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const loadBackups = async () => {
-    try {
-      const list = await backupActions.listBackups();
-      setBackups(list);
-    } catch (err: any) {
-      console.error('Failed to load backups:', err);
-    }
-  };
-
-  const handleCreateBackup = async () => {
-    setIsCreatingBackup(true);
-    setBackupMessage(null);
-
-    try {
-      const result = await backupActions.createBackup();
-      if (result.success) {
-        setBackupMessage({ type: 'success', text: tBackup('backupCreated') });
-        await loadBackups();
-      } else {
-        setBackupMessage({ type: 'error', text: result.message });
-      }
-    } catch (err: any) {
-      setBackupMessage({ type: 'error', text: err.message || tBackup('backupFailed') });
-    } finally {
-      setIsCreatingBackup(false);
-    }
-  };
-
-  const handleRestoreBackup = async (filename: string) => {
-    if (!confirm(tBackup('confirmRestore'))) return;
-
-    setIsRestoringBackup(filename);
-    setBackupMessage(null);
-
-    try {
-      const result = await backupActions.restoreBackup(filename);
-      if (result.success) {
-        setBackupMessage({ type: 'success', text: tBackup('backupRestored') });
-      } else {
-        setBackupMessage({ type: 'error', text: result.message });
-      }
-    } catch (err: any) {
-      setBackupMessage({ type: 'error', text: err.message || tBackup('restoreFailed') });
-    } finally {
-      setIsRestoringBackup(null);
-    }
-  };
-
-  const handleDeleteBackup = async (filename: string) => {
-    if (!confirm(tBackup('confirmDelete'))) return;
-
-    try {
-      const result = await backupActions.deleteBackup(filename);
-      if (result.success) {
-        setBackupMessage({ type: 'success', text: tBackup('backupDeleted') });
-        await loadBackups();
-      } else {
-        setBackupMessage({ type: 'error', text: result.message });
-      }
-    } catch (err: any) {
-      setBackupMessage({ type: 'error', text: err.message });
-    }
-  };
-
-  const handleDownloadBackup = async (filename: string) => {
-    try {
-      const result = await backupActions.downloadBackup(filename);
-      if (result.success && result.data) {
-        const byteCharacters = atob(result.data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/sql' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      } else {
-        setBackupMessage({ type: 'error', text: result.message || 'Download failed' });
-      }
-    } catch (err: any) {
-      setBackupMessage({ type: 'error', text: err.message });
-    }
-  };
-
-  const handleImportBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsImportingBackup(true);
-    setBackupMessage(null);
-
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const content = e.target?.result as string;
-          const base64 = content.includes(',') ? content.split(',')[1] : content;
-
-          const result = await backupActions.uploadBackup(base64, file.name);
-          if (result.success) {
-            setBackupMessage({ type: 'success', text: tBackup('backupImported') });
-            await loadBackups();
-          } else {
-            setBackupMessage({ type: 'error', text: result.message });
-          }
-        } catch (err: any) {
-          setBackupMessage({ type: 'error', text: err.message || tBackup('importFailed') });
-        } finally {
-          setIsImportingBackup(false);
-        }
-      };
-      reader.onerror = () => {
-        setBackupMessage({ type: 'error', text: tBackup('importFailed') });
-        setIsImportingBackup(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (err: any) {
-      setBackupMessage({ type: 'error', text: err.message || tBackup('importFailed') });
-      setIsImportingBackup(false);
-    }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const detectLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationError('Geolocation is not supported by your browser.');
-      return;
-    }
-    setDetectingLocation(true);
-    setLocationError(null);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords;
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-            { headers: { 'Accept-Language': 'en' } }
-          );
-          const data = await res.json();
-          const city = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
-          const country = data.address?.country || '';
-          setLocationInput(city && country ? `${city}, ${country}` : city || country || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
-        } catch {
-          setLocationError('Could not resolve your location. Please enter it manually.');
-        } finally {
-          setDetectingLocation(false);
-        }
-      },
-      () => {
-        setLocationError('Location access denied. Please enter your city manually.');
-        setDetectingLocation(false);
-      }
-    );
-  };
 
   const handleSaveApiKeys = async () => {
     setIsSavingKeys(true);
@@ -462,656 +116,277 @@ export default function SystemDashboardModal({
   if (!isOpen) return null;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
+    if (e.target === e.currentTarget) onClose();
   };
 
-  const tabClass = (tab: 'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark' | 'social') =>
-    `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-      activeTab === tab
-        ? isDarkMode
-          ? 'border-brand-400 text-brand-400'
-          : 'border-brand-600 text-brand-600'
-        : isDarkMode
-          ? 'border-transparent text-gray-400 hover:text-gray-200'
-          : 'border-transparent text-gray-500 hover:text-gray-800'
-    }`;
-
   return (
-    <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4"
-      onClick={handleBackdropClick}
-    >
+    <>
+      <style>{`
+        .allerac-cfg {
+          font-family: 'Courier New', Courier, monospace;
+          color: #c9d1d9;
+        }
+        .allerac-cfg label {
+          color: #8b949e !important;
+          font-size: 0.72rem;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          font-weight: 600;
+        }
+        .allerac-cfg input:not([type=range]),
+        .allerac-cfg textarea,
+        .allerac-cfg select {
+          background: #161b22 !important;
+          border: 1px solid #30363d !important;
+          color: #c9d1d9 !important;
+          border-radius: 4px !important;
+          font-family: inherit !important;
+          font-size: 0.82rem !important;
+        }
+        .allerac-cfg input:focus,
+        .allerac-cfg textarea:focus,
+        .allerac-cfg select:focus {
+          border-color: #818cf8 !important;
+          outline: none !important;
+          box-shadow: 0 0 0 1px #818cf820 !important;
+        }
+        .allerac-cfg input::placeholder,
+        .allerac-cfg textarea::placeholder {
+          color: #484f58 !important;
+        }
+        .allerac-cfg p.hint {
+          color: #8b949e;
+          font-size: 0.72rem;
+          margin-top: 6px;
+        }
+        .allerac-cfg hr, .allerac-cfg [class*="border-b"], .allerac-cfg [class*="border-t"] {
+          border-color: #21262d !important;
+        }
+        .allerac-cfg h3 {
+          color: #8b949e !important;
+          font-size: 0.72rem !important;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          font-weight: 700;
+        }
+        .allerac-cfg [class*="bg-gray-700"], .allerac-cfg [class*="bg-gray-700/50"] {
+          background-color: #161b22 !important;
+        }
+        .allerac-cfg [class*="bg-gray-600/50"] {
+          background-color: #21262d !important;
+        }
+        .allerac-cfg [class*="text-gray-100"], .allerac-cfg [class*="text-gray-200"] {
+          color: #e6edf3 !important;
+        }
+        .allerac-cfg [class*="text-gray-300"] {
+          color: #c9d1d9 !important;
+        }
+        .allerac-cfg [class*="text-gray-400"], .allerac-cfg [class*="text-gray-500"] {
+          color: #8b949e !important;
+        }
+        .allerac-cfg [class*="rounded-lg"], .allerac-cfg [class*="rounded-md"] {
+          border-radius: 4px !important;
+        }
+        .allerac-cfg [class*="rounded-full"] {
+          border-radius: 2px !important;
+        }
+        .allerac-cfg [class*="bg-green-900"] { background-color: #0a2218 !important; }
+        .allerac-cfg [class*="text-green-300"], .allerac-cfg [class*="text-green-400"] { color: #3fb950 !important; }
+        .allerac-cfg [class*="bg-red-900"] { background-color: #2a0a0a !important; }
+        .allerac-cfg [class*="text-red-300"], .allerac-cfg [class*="text-red-400"] { color: #f85149 !important; }
+        .allerac-cfg [class*="text-brand-400"], .allerac-cfg [class*="text-brand-500"] { color: #818cf8 !important; }
+        .allerac-cfg [class*="bg-brand-900"], .allerac-cfg [class*="bg-brand-600"],
+        .allerac-cfg [class*="bg-brand-700"], .allerac-cfg [class*="bg-indigo"] {
+          background-color: #1e1b4b !important;
+          color: #818cf8 !important;
+        }
+        .allerac-cfg a { color: #818cf8 !important; }
+        .allerac-cfg [class*="border-brand"] { border-color: #818cf8 !important; }
+        .allerac-cfg [class*="animate-spin"] { border-bottom-color: #818cf8 !important; }
+        .allerac-cfg [class*="bg-gray-50"] { background-color: #161b22 !important; }
+        .allerac-cfg [class*="bg-gray-100"] { background-color: #21262d !important; }
+        .allerac-cfg [class*="bg-gray-200"] { background-color: #30363d !important; }
+        .allerac-cfg [class*="bg-white"] { background-color: #0d0d0d !important; }
+        .allerac-cfg [class*="text-gray-900"] { color: #e6edf3 !important; }
+        .allerac-cfg [class*="text-gray-800"] { color: #c9d1d9 !important; }
+        .allerac-cfg [class*="text-gray-700"] { color: #8b949e !important; }
+        .allerac-cfg [class*="text-gray-600"] { color: #8b949e !important; }
+        .allerac-cfg [class*="border-gray-200"] { border-color: #21262d !important; }
+        .allerac-cfg [class*="border-gray-300"] { border-color: #30363d !important; }
+        .allerac-cfg [class*="bg-green-50"] { background-color: #0a2218 !important; }
+        .allerac-cfg [class*="text-green-700"] { color: #3fb950 !important; }
+        .allerac-cfg [class*="bg-red-50"] { background-color: #2a0a0a !important; }
+        .allerac-cfg [class*="text-red-600"] { color: #f85149 !important; }
+        .allerac-cfg [class*="text-brand-600"] { color: #818cf8 !important; }
+        .allerac-cfg [class*="border-brand-600"] { border-color: #818cf8 !important; }
+        .allerac-cfg [class*="hover:bg-gray-100"]:hover { background-color: #21262d !important; }
+        .allerac-cfg [class*="hover:bg-gray-200"]:hover { background-color: #30363d !important; }
+      `}</style>
+
       <div
-        className={`backdrop-blur-md shadow-xl w-full sm:max-w-4xl sm:rounded-lg rounded-t-2xl max-h-[95dvh] sm:max-h-[90dvh] overflow-hidden ${
-          isDarkMode
-            ? 'bg-gray-800/95 border-t sm:border border-gray-700'
-            : 'bg-white/95 border-t sm:border border-gray-200'
-        }`}
+        className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 sm:p-4"
+        onClick={handleBackdropClick}
       >
-        {/* Mobile drag indicator */}
-        <div className="flex justify-center pt-2 sm:hidden">
-          <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`} />
-        </div>
-
-        {/* Header */}
         <div
-          className={`px-4 py-3 sm:p-4 border-b flex items-center justify-between ${
-            isDarkMode ? 'border-gray-700' : 'border-gray-200'
-          }`}
+          className={`${retroMode ? 'allerac-cfg' : `backdrop-blur-md ${isDarkMode ? 'bg-gray-800/95 border-t sm:border border-gray-700' : 'bg-white/95 border-t sm:border border-gray-200'}`} w-full sm:max-w-4xl rounded-t-sm sm:rounded max-h-[95dvh] sm:max-h-[90dvh] overflow-hidden shadow-2xl`}
+          style={retroMode ? { background: '#0d0d0d', border: '1px solid #30363d' } : undefined}
         >
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <h2 className={`text-base sm:text-lg font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                {t('title')}
-              </h2>
-              {activeTab === 'system' && data && (
-                <p className={`text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {new Date(data.timestamp).toLocaleTimeString()}
-                </p>
-              )}
-            </div>
+          {/* Mobile drag indicator */}
+          <div className="flex justify-center pt-2 sm:hidden">
+            {retroMode
+              ? <div style={{ width: 32, height: 3, background: '#30363d', borderRadius: 2 }} />
+              : <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`} />
+            }
           </div>
-          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+
+          {/* Header */}
+          {retroMode ? (
+            <div style={{ borderBottom: '1px solid #21262d', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: '#818cf8', fontSize: '0.75rem' }}>▸</span>
+                <span style={{ color: '#e6edf3', fontSize: '0.82rem', fontWeight: 700, letterSpacing: '0.06em' }}>{t('title')}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button onClick={toggleRetro} title="Switch to modern UI"
+                  style={{ background: 'none', border: 'none', color: '#484f58', cursor: 'pointer', fontSize: '0.72rem', fontFamily: 'inherit', padding: '2px 6px' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#8b949e')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#484f58')}
+                >[modern]</button>
+                <button onClick={onClose}
+                  style={{ background: 'none', border: 'none', color: '#484f58', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', padding: '2px 8px' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#f85149')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#484f58')}
+                >[×]</button>
+              </div>
+            </div>
+          ) : (
+            <div className={`px-4 py-3 sm:p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <h2 className={`text-base sm:text-lg font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('title')}</h2>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                <button onClick={toggleRetro} title="Switch to retro UI"
+                  className={`px-2 py-1 rounded text-xs transition-colors ${isDarkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
+                >retro</button>
+                <button onClick={onClose}
+                  className={`p-1.5 sm:p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Tabs */}
+          {retroMode ? (
+            <div style={{ borderBottom: '1px solid #21262d', padding: '0 20px', display: 'flex', overflowX: 'auto' }}>
+              {TABS.map(tab => {
+                const active = activeTab === tab.id;
+                return (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                    style={{
+                      background: 'none', border: 'none',
+                      borderBottom: active ? '1px solid #818cf8' : '1px solid transparent',
+                      color: active ? '#818cf8' : '#484f58',
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      fontSize: '0.72rem', letterSpacing: '0.05em',
+                      padding: '10px 14px', whiteSpace: 'nowrap',
+                      transition: 'color 0.15s', marginBottom: -1,
+                    }}
+                    onMouseEnter={e => { if (!active) e.currentTarget.style.color = '#8b949e'; }}
+                    onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#484f58'; }}
+                  >{active ? `[${tab.label}]` : tab.label}</button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={`flex overflow-x-auto border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {TABS.map(tab => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? isDarkMode ? 'border-brand-400 text-brand-400' : 'border-brand-600 text-brand-600'
+                      : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-800'
+                  }`}
+                >{tab.label}</button>
+              ))}
+            </div>
+          )}
+
+          {/* Tab content */}
+          <div className={`${retroMode ? 'p-3 sm:p-5' : 'p-3 sm:p-4'} overflow-y-auto max-h-[calc(95dvh-120px)] sm:max-h-[calc(90dvh-140px)]`}
+            style={retroMode ? { color: '#c9d1d9' } : undefined}
+          >
             {activeTab === 'system' && (
-              <button
-                onClick={loadDashboard}
-                disabled={isLoading}
-                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
-                  isDarkMode
-                    ? 'hover:bg-gray-700 text-gray-400'
-                    : 'hover:bg-gray-100 text-gray-500'
-                }`}
-              >
-                <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
+              <SystemTab isDarkMode={retroMode || isDarkMode} userId={userId} />
             )}
-            <button
-              onClick={onClose}
-              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
-                isDarkMode
-                  ? 'hover:bg-gray-700 text-gray-400'
-                  : 'hover:bg-gray-100 text-gray-500'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+
+            {activeTab === 'apiKeys' && (
+              <ApiKeysTab
+                isDarkMode={retroMode || isDarkMode}
+                githubToken={githubToken}
+                tavilyApiKey={tavilyApiKey}
+                googleApiKey={googleApiKey}
+                anthropicApiKey={anthropicApiKey}
+                tokenInput={tokenInput}
+                setTokenInput={setTokenInput}
+                tavilyKeyInput={tavilyKeyInput}
+                setTavilyKeyInput={setTavilyKeyInput}
+                googleKeyInput={googleKeyInput}
+                setGoogleKeyInput={setGoogleKeyInput}
+                anthropicKeyInput={anthropicKeyInput}
+                setAnthropicKeyInput={setAnthropicKeyInput}
+                onSave={handleSaveApiKeys}
+                isSavingKeys={isSavingKeys}
+                keySaveMessage={keySaveMessage}
+              />
+            )}
+
+            {activeTab === 'preferences' && (
+              <PreferencesTab
+                isDarkMode={retroMode || isDarkMode}
+                MODELS={MODELS}
+                selectedModel={selectedModel}
+                setSelectedModel={setSelectedModel}
+                locationInput={locationInput}
+                setLocationInput={setLocationInput}
+                onOpenTelegramSettings={onOpenTelegramSettings}
+                onSave={handleSaveApiKeys}
+                isSavingKeys={isSavingKeys}
+                keySaveMessage={keySaveMessage}
+                userName={userName}
+                userEmail={userEmail}
+              />
+            )}
+
+            {activeTab === 'health' && (
+              <GarminSettings userId={userId} isDarkMode={retroMode || isDarkMode} />
+            )}
+
+            {activeTab === 'social' && (
+              <InstagramSettings userId={userId} isDarkMode={retroMode || isDarkMode} />
+            )}
+
+            {activeTab === 'benchmark' && (
+              <BenchmarkPanel
+                isDarkMode={retroMode || isDarkMode}
+                userId={userId}
+                MODELS={MODELS}
+                selectedModel={selectedModel}
+              />
+            )}
           </div>
-        </div>
-
-        {/* Tabs */}
-        <div className={`flex overflow-x-auto border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <button className={`${tabClass('preferences')} whitespace-nowrap`} onClick={() => setActiveTab('preferences')}>
-            Preferences
-          </button>
-          <button className={tabClass('apiKeys')} onClick={() => setActiveTab('apiKeys')}>
-            {t('tabApiKeys')}
-          </button>
-          <button className={tabClass('health')} onClick={() => setActiveTab('health')}>
-            Health
-          </button>
-          <button className={tabClass('social')} onClick={() => setActiveTab('social')}>
-            Social
-          </button>
-          <button className={tabClass('system')} onClick={() => setActiveTab('system')}>
-            {t('tabSystem')}
-          </button>
-          <button className={tabClass('benchmark')} onClick={() => setActiveTab('benchmark')}>
-            Benchmark
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-3 sm:p-4 overflow-y-auto max-h-[calc(95dvh-120px)] sm:max-h-[calc(90dvh-140px)]">
-
-          {/* System Tab */}
-          {activeTab === 'system' && (
-            <>
-              {isLoading && !data ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-500"></div>
-                </div>
-              ) : error ? (
-                <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
-                  {error}
-                </div>
-              ) : data ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Combined System Card */}
-                  <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                    <h3 className={`text-sm font-medium mb-4 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      {t('systemInfo')}
-                    </h3>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                        <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('hostname')}</div>
-                        <div className={`font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.system.hostname}</div>
-                      </div>
-                      <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                        <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('platform')}</div>
-                        <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.system.platform}</div>
-                      </div>
-                      <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                        <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('uptime')}</div>
-                        <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{formatUptime(data.system.uptime)}</div>
-                      </div>
-                      <div className={`p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                        <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>CPU</div>
-                        <div className={`font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{data.cpu.cores} {t('cores')}</div>
-                      </div>
-                    </div>
-
-                    {/* Memory bar */}
-                    <div className="mt-4">
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>{t('memory')}</span>
-                        <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>
-                          {formatBytes(data.memory.used)} / {formatBytes(data.memory.total)} ({data.memory.usedPercent}%)
-                        </span>
-                      </div>
-                      <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
-                        <div
-                          className={`h-full rounded-full ${
-                            data.memory.usedPercent > 90 ? 'bg-red-500' :
-                            data.memory.usedPercent > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                          }`}
-                          style={{ width: `${data.memory.usedPercent}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Version & Updates */}
-                    <div className={`mt-4 pt-4 border-t ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`}>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
-                          <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
-                            Build: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                              {updateStatus?.currentCommit || 'unknown'}
-                            </span>
-                          </span>
-                          {updateStatus?.updateAvailable && (
-                            <span className="px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-400">
-                              {updateStatus.newCommits.length} {t('updateAvailable')}
-                            </span>
-                          )}
-                          {updateStatus?.error && (
-                            <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
-                              {updateStatus.error}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={checkUpdates}
-                            disabled={isCheckingUpdates}
-                            className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-1 ${
-                              isDarkMode
-                                ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
-                                : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                            }`}
-                          >
-                            {isCheckingUpdates ? (
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
-                            ) : (
-                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                            )}
-                            {t('checkNow')}
-                          </button>
-                          {updateStatus?.updateAvailable && (
-                            <button
-                              onClick={handleUpdate}
-                              className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs bg-brand-900 hover:bg-brand-800 text-white transition-colors flex items-center justify-center gap-1"
-                            >
-                              {t('prepareUpdate')}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {updateStatus?.updateAvailable && updateStatus.newCommits.length > 0 && (
-                        <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-                          {updateStatus.newCommits.map((commit) => (
-                            <div key={commit.sha} className={`text-xs px-2 py-1 rounded flex items-start gap-2 ${isDarkMode ? 'bg-gray-600/50 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-                              <span className={`font-mono flex-shrink-0 ${isDarkMode ? 'text-brand-400' : 'text-brand-600'}`}>{commit.shortSha}</span>
-                              <span className="truncate">{commit.message}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {updateMessage && (
-                        <div className={`mt-2 p-2 rounded text-xs break-all ${
-                          updateMessage.type === 'success'
-                            ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-700'
-                            : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {updateMessage.text}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Database */}
-                  <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                    <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                      </svg>
-                      {t('database')}
-                      <span className={`ml-auto px-2 py-0.5 rounded-full text-xs ${
-                        data.database.connected
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-red-500/20 text-red-400'
-                      }`}>
-                        {data.database.connected ? t('connected') : t('disconnected')}
-                      </span>
-                    </h3>
-                    {data.database.connected ? (
-                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-4">
-                        {Object.entries(data.database.tables).map(([table, count]) => (
-                          <div key={table} className={`text-center p-2 sm:p-3 rounded ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}>
-                            <div className={`text-lg sm:text-2xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
-                              {count.toLocaleString()}
-                            </div>
-                            <div className={`text-[10px] sm:text-xs capitalize truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {table}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className={`text-sm ${isDarkMode ? 'text-red-400' : 'text-red-500'}`}>
-                        {data.database.error || t('notConnected')}
-                      </p>
-                    )}
-                    {data.database.version && (
-                      <p className={`text-xs mt-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                        {data.database.version}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Backups */}
-                  <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                      <h3 className={`text-sm font-medium flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                        </svg>
-                        {tBackup('title')}
-                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>
-                          {backups.length}
-                        </span>
-                      </h3>
-                      <div className="flex gap-2">
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          accept=".sql"
-                          onChange={handleImportBackup}
-                          className="hidden"
-                        />
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={isImportingBackup}
-                          className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 ${
-                            isDarkMode
-                              ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
-                              : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                          } disabled:opacity-50`}
-                        >
-                          {isImportingBackup && (
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
-                          )}
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                          </svg>
-                          <span className="hidden sm:inline">{isImportingBackup ? tBackup('importing') : tBackup('import')}</span>
-                        </button>
-                        <button
-                          onClick={handleCreateBackup}
-                          disabled={isCreatingBackup}
-                          className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-sm bg-brand-900 hover:bg-brand-800 text-white transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
-                        >
-                          {isCreatingBackup && (
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                          )}
-                          <span className="hidden sm:inline">{isCreatingBackup ? tBackup('creating') : tBackup('create')}</span>
-                          <span className="sm:hidden">+</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {backupMessage && (
-                      <div className={`mb-3 p-2 rounded-lg text-sm ${
-                        backupMessage.type === 'success'
-                          ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
-                          : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
-                      }`}>
-                        {backupMessage.text}
-                      </div>
-                    )}
-
-                    {backups.length === 0 ? (
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {tBackup('noBackups')}
-                      </p>
-                    ) : (
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {backups.map((backup) => (
-                          <div
-                            key={backup.filename}
-                            className={`p-2.5 sm:p-3 rounded-lg ${isDarkMode ? 'bg-gray-600/50' : 'bg-gray-100'}`}
-                          >
-                            <div className="flex items-start sm:items-center justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                                  {backup.filename}
-                                </div>
-                                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  {backup.sizeFormatted} • {backup.createdAtFormatted}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
-                                <button
-                                  onClick={() => handleDownloadBackup(backup.filename)}
-                                  className={`p-1.5 sm:p-2 rounded transition-colors ${
-                                    isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
-                                  }`}
-                                  title={tBackup('download')}
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => handleRestoreBackup(backup.filename)}
-                                  disabled={isRestoringBackup === backup.filename}
-                                  className={`p-1.5 sm:p-2 rounded transition-colors ${
-                                    isDarkMode ? 'hover:bg-gray-500 text-gray-300' : 'hover:bg-gray-200 text-gray-600'
-                                  }`}
-                                  title={tBackup('restore')}
-                                >
-                                  {isRestoringBackup === backup.filename ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                                  ) : (
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteBackup(backup.filename)}
-                                  className={`p-1.5 sm:p-2 rounded transition-colors ${
-                                    isDarkMode ? 'hover:bg-red-900/50 text-red-400' : 'hover:bg-red-100 text-red-500'
-                                  }`}
-                                  title={tBackup('delete')}
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-            </>
-          )}
-
-          {/* API Keys Tab */}
-          {activeTab === 'apiKeys' && (
-            <div className="max-w-lg space-y-5">
-              {/* Allerac API Key */}
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Allerac API Key
-                </label>
-                <input
-                  type="password"
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  placeholder={githubToken ? '••••••••' : 'Enter your Allerac API key...'}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                />
-                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Your API key unlocks Pro models (GPT-4o, Ministral, Gemini). Contact Allerac to get yours.
-                </p>
-              </div>
-
-              {/* Tavily */}
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Tavily API Key <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — web search)</span>
-                </label>
-                <input
-                  type="password"
-                  value={tavilyKeyInput}
-                  onChange={(e) => setTavilyKeyInput(e.target.value)}
-                  placeholder={tavilyApiKey ? '••••••••' : 'tvly-...'}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                />
-                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Get a free key at{' '}
-                  <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">
-                    tavily.com
-                  </a>
-                </p>
-              </div>
-
-              {/* Google API Key */}
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {t('googleApiKey')} <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — Gemini models)</span>
-                </label>
-                <input
-                  type="password"
-                  value={googleKeyInput}
-                  onChange={(e) => setGoogleKeyInput(e.target.value)}
-                  placeholder={googleApiKey ? '••••••••' : t('googleApiKeyPlaceholder')}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                />
-                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {t('googleApiKeyHint')}
-                </p>
-              </div>
-
-              {/* Anthropic API Key */}
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Anthropic API Key <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — Claude models)</span>
-                </label>
-                <input
-                  type="password"
-                  value={anthropicKeyInput}
-                  onChange={(e) => setAnthropicKeyInput(e.target.value)}
-                  placeholder={anthropicApiKey ? '••••••••' : 'sk-ant-...'}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                />
-                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Get a key at{' '}
-                  <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">
-                    console.anthropic.com
-                  </a>
-                  {' '}to use Claude (Haiku, Sonnet, Opus)
-                </p>
-              </div>
-
-              {keySaveMessage && (
-                <div className={`p-2.5 rounded-lg text-sm ${
-                  keySaveMessage.type === 'success'
-                    ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
-                    : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
-                }`}>
-                  {keySaveMessage.text}
-                </div>
-              )}
-
-              <button
-                onClick={handleSaveApiKeys}
-                disabled={isSavingKeys || (!tokenInput.trim() && !tavilyKeyInput.trim() && !googleKeyInput.trim() && !anthropicKeyInput.trim())}
-                className="px-5 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-              >
-                {isSavingKeys && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>}
-                {t('saveKeys')}
-              </button>
-            </div>
-          )}
-
-          {/* User Preferences Tab */}
-          {activeTab === 'preferences' && (
-            <div className="max-w-lg space-y-5">
-              {/* Location */}
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Your Location <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — weather &amp; local context)</span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={locationInput}
-                    onChange={(e) => { setLocationInput(e.target.value); setLocationError(null); }}
-                    placeholder="e.g. Lisbon, Portugal"
-                    className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                  />
-                  <button
-                    onClick={detectLocation}
-                    disabled={detectingLocation}
-                    title="Detect my location"
-                    className={`px-3 py-2 rounded-md border transition-colors disabled:opacity-50 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600' : 'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
-                  >
-                    {detectingLocation ? (
-                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    ) : (
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                {locationError && <p className="text-xs mt-1 text-red-500">{locationError}</p>}
-                {!locationError && (
-                  <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Used to answer questions like &quot;what&apos;s the weather here?&quot;. Click the pin to detect automatically.
-                  </p>
-                )}
-              </div>
-
-              {/* AI Model */}
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  AI Model
-                </label>
-                <ModelSelector
-                  selectedModel={selectedModel}
-                  onModelChange={(modelId) => {
-                    setSelectedModel(modelId);
-                    localStorage.setItem('selected_model', modelId);
-                  }}
-                  isDarkMode={isDarkMode}
-                />
-                <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Choose the AI model used in your conversations. For Ollama models, you can download them directly here.
-                </p>
-              </div>
-
-              {/* Telegram Bot */}
-              {onOpenTelegramSettings && (
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Telegram Bot
-                  </label>
-                  <button
-                    onClick={onOpenTelegramSettings}
-                    className={`w-full px-4 py-3 rounded-lg border transition-colors flex items-center justify-between ${
-                      isDarkMode
-                        ? 'border-gray-600 bg-gray-700/50 hover:bg-gray-700 text-gray-200'
-                        : 'border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <svg className="w-5 h-5 text-brand-400" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
-                      </svg>
-                      <span className="text-sm font-medium">Manage Telegram Bots</span>
-                    </div>
-                    <svg className="w-4 h-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                  <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Configure bots and allowed Telegram users.
-                  </p>
-                </div>
-              )}
-
-              {keySaveMessage && (
-                <div className={`p-2.5 rounded-lg text-sm ${
-                  keySaveMessage.type === 'success'
-                    ? isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
-                    : isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
-                }`}>
-                  {keySaveMessage.text}
-                </div>
-              )}
-
-              <button
-                onClick={handleSaveApiKeys}
-                disabled={isSavingKeys}
-                className="px-5 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-              >
-                {isSavingKeys && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>}
-                Save Preferences
-              </button>
-            </div>
-          )}
-
-          {/* Health Tab */}
-          {activeTab === 'health' && (
-            <div className="max-w-lg">
-              <GarminSettings userId={userId} isDarkMode={isDarkMode} />
-            </div>
-          )}
-
-          {/* Social Tab */}
-          {activeTab === 'social' && (
-            <div className="max-w-lg">
-              <InstagramSettings userId={userId} isDarkMode={isDarkMode} />
-            </div>
-          )}
-
-          {/* Benchmark Tab */}
-          {activeTab === 'benchmark' && (
-            <BenchmarkPanel
-              isDarkMode={isDarkMode}
-              userId={userId}
-              MODELS={MODELS}
-              selectedModel={selectedModel}
-            />
-          )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

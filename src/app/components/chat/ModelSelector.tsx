@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { MODELS } from '@/app/services/llm/models';
 import * as setupActions from '@/app/actions/setup';
 
@@ -33,6 +34,8 @@ export default function ModelSelector({ selectedModel, onModelChange, isDarkMode
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Check which models are available on startup
   useEffect(() => {
@@ -150,11 +153,31 @@ export default function ModelSelector({ selectedModel, onModelChange, isDarkMode
   const selectedModelObj = MODELS.find(m => m.id === selectedModel);
   const isSelectedAvailable = selectedModelObj ? isModelAvailable(selectedModelObj) : true;
 
+  const openDropdown = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setDropdownStyle({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    setIsDropdownOpen(true);
+  }, []);
+
+  const closeDropdown = useCallback(() => setIsDropdownOpen(false), []);
+
+  // Close on outside click (not on scroll — dropdown is fixed-position so scrolling is fine)
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+    const handler = () => closeDropdown();
+    document.addEventListener('pointerdown', handler);
+    return () => {
+      document.removeEventListener('pointerdown', handler);
+    };
+  }, [isDropdownOpen, closeDropdown]);
+
   return (
     <div className="relative">
       {/* Main dropdown button */}
       <button
-        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+        ref={triggerRef}
+        onClick={() => isDropdownOpen ? closeDropdown() : openDropdown()}
         className={`w-full px-3 py-2 rounded-lg border transition-colors flex items-center justify-between ${
           isDarkMode
             ? 'border-gray-600 bg-gray-700 hover:bg-gray-650 text-gray-100'
@@ -177,10 +200,12 @@ export default function ModelSelector({ selectedModel, onModelChange, isDarkMode
         </svg>
       </button>
 
-      {/* Dropdown menu */}
-      {isDropdownOpen && (
+      {/* Dropdown menu — rendered in portal so it escapes overflow:hidden parents */}
+      {isDropdownOpen && typeof document !== 'undefined' && createPortal(
         <div
-          className={`absolute top-full left-0 right-0 mt-1 rounded-lg border shadow-lg z-50 max-h-80 overflow-y-auto ${
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ position: 'fixed', top: dropdownStyle.top, left: dropdownStyle.left, width: dropdownStyle.width, zIndex: 9999 }}
+          className={`rounded-lg border shadow-lg max-h-72 overflow-y-auto ${
             isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white'
           }`}
         >
@@ -292,7 +317,8 @@ export default function ModelSelector({ selectedModel, onModelChange, isDarkMode
               ❌ {downloadError}
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
