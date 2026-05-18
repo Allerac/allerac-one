@@ -2,6 +2,7 @@
 // Used by the AI in conversations to surface Garmin health data.
 
 import pool from '@/app/clients/db';
+import { getRecentActivities as fetchRecentActivities, getActivitiesInRange } from '@/app/actions/health';
 
 export interface HealthUser {
   id: string;
@@ -62,9 +63,48 @@ export interface Activity {
   elevationLoss?: number;
 }
 
+export interface ActivitySummary {
+  date: string;
+  name: string;
+  type: string;
+  duration_min: number;
+  calories: number;
+  distance_km?: number;
+  avg_hr?: number;
+  exercises?: string;
+}
+
 export interface RecentActivitiesResult {
-  activities?: Activity[];
+  activities?: ActivitySummary[];
   error?: string;
+}
+
+function compressActivity(a: any): ActivitySummary {
+  const summary: ActivitySummary = {
+    date: a.startTimeLocal ?? (a.startTimeInSeconds ? new Date(a.startTimeInSeconds * 1000).toISOString().split('T')[0] : '?'),
+    name: a.activityName ?? a.activityType ?? 'Activity',
+    type: a.activityType ?? 'unknown',
+    duration_min: a.duration ? Math.round(a.duration / 60) : 0,
+    calories: a.calories ? Math.round(a.calories) : 0,
+  };
+  if (a.distance && a.distance > 0) summary.distance_km = Math.round(a.distance / 100) / 10;
+  if (a.avgHeartRate) summary.avg_hr = a.avgHeartRate;
+
+  const sets: Array<{ category?: string; exercises?: Array<{ category?: string; reps?: number; sets?: number }> }> =
+    a.summarizedExerciseSets ?? a.raw_data?.summarizedExerciseSets ?? [];
+  if (sets.length > 0) {
+    const counts: Record<string, number> = {};
+    for (const s of sets) {
+      const name = s.category ?? 'UNKNOWN';
+      counts[name] = (counts[name] ?? 0) + 1;
+    }
+    summary.exercises = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k, v]) => `${k}×${v}`)
+      .join(', ');
+  }
+  return summary;
 }
 
 export class HealthTool {
@@ -171,17 +211,15 @@ export class HealthTool {
     }
   }
 
-  async getRecentActivities(user: HealthUser, limit: number = 10): Promise<RecentActivitiesResult> {
+  async getRecentActivities(user: HealthUser, limit: number = 10, startDate?: string, endDate?: string): Promise<RecentActivitiesResult> {
     try {
-      const endpoint = `/api/health/activities?limit=${Math.min(limit, 50)}`;
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}${endpoint}`, {
-        headers: {
-          Cookie: `session_token=${user.id}`,
-        },
-      });
-      if (!response.ok) return { error: `API error: ${response.status}` };
-      const data = await response.json();
-      return { activities: data.activities };
+      let raw: any[];
+      if (startDate && endDate) {
+        raw = await getActivitiesInRange(user.id, startDate, endDate, Math.min(limit, 50));
+      } else {
+        raw = await fetchRecentActivities(user.id, Math.min(limit, 50));
+      }
+      return { activities: raw.map(compressActivity) };
     } catch (e: any) {
       return { error: e.message };
     }
