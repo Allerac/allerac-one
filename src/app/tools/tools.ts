@@ -90,13 +90,21 @@ const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
     type: 'function',
     function: {
       name: 'get_recent_activities',
-      description: 'Get recent activities from the user\'s Garmin device (workouts, exercises, etc.). Use this when the user asks about their recent activities, latest workout, or recent exercise sessions.',
+      description: 'Get recent activities from the user\'s Garmin device (workouts, exercises, etc.). Use this when the user asks about their recent activities, latest workout, or recent exercise sessions. When the health dashboard context provides a date range, pass those dates as start_date/end_date.',
       parameters: {
         type: 'object',
         properties: {
           limit: {
             type: 'number',
             description: 'Number of recent activities to retrieve (default 10, max 50). Use 1 to get just the most recent activity.',
+          },
+          start_date: {
+            type: 'string',
+            description: 'Filter activities from this date (YYYY-MM-DD). Use the start of the date range the user is currently viewing.',
+          },
+          end_date: {
+            type: 'string',
+            description: 'Filter activities up to this date (YYYY-MM-DD). Use the end of the date range the user is currently viewing.',
           },
         },
         required: [],

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 
 interface DailyMetrics {
   steps?: number;
@@ -36,9 +37,9 @@ interface DailyHealthMetricsProps {
 }
 
 export default function DailyHealthMetrics({ isDarkMode, selectedDate }: DailyHealthMetricsProps) {
+  const t = useTranslations('health');
   const [metrics, setMetrics] = useState<DailyMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedDate) {
@@ -61,88 +62,43 @@ export default function DailyHealthMetrics({ isDarkMode, selectedDate }: DailyHe
 
       const data = await response.json();
       setMetrics(data);
-      setError(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      setError(message);
+    } catch {
       setMetrics(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const bgColor = isDarkMode ? 'bg-gray-900' : 'bg-gray-50';
   const textColor = isDarkMode ? 'text-gray-100' : 'text-gray-900';
   const secondaryText = isDarkMode ? 'text-gray-400' : 'text-gray-600';
-  const borderColor = isDarkMode ? 'border-gray-700' : 'border-gray-200';
 
-  if (loading) {
-    return (
-      <div className={`${bgColor} border ${borderColor} rounded-lg p-4`}>
-        <div className={`${secondaryText} text-sm`}>Loading metrics...</div>
-      </div>
-    );
-  }
-
-  if (error && !metrics) {
-    return (
-      <div className={`${bgColor} border ${borderColor} rounded-lg p-4`}>
-        <div className={`${secondaryText} text-sm`}>No data available for this date</div>
-      </div>
-    );
-  }
-
-  if (!metrics || Object.keys(metrics).length === 0) {
-    return (
-      <div className={`${bgColor} border ${borderColor} rounded-lg p-4`}>
-        <div className={`${secondaryText} text-sm`}>No health data for this date</div>
-      </div>
-    );
-  }
-
-  const formatMins = (mins: number | null | undefined) => {
-    if (mins == null) return '—';
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-  };
-
-  const MetricItem = ({ label, value, unit, icon }: { label: string; value: any; unit?: string; icon: string }) => {
-    if (value == null) return null;
-    return (
-      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-opacity-50 hover:bg-opacity-100 transition">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{icon}</span>
-          <span className={`text-sm font-medium ${secondaryText}`}>{label}</span>
-        </div>
-        <span className={`font-semibold ${textColor}`}>
-          {value}
-          {unit && <span className={`text-xs ml-1 ${secondaryText}`}>{unit}</span>}
-        </span>
-      </div>
-    );
-  };
+  const items = [
+    { label: t('calories'),  value: metrics?.calories != null ? metrics.calories.toFixed(0) : null,                      unit: 'kcal',    icon: '🔥' },
+    { label: t('battery'),   value: metrics?.body_battery_end != null ? String(metrics.body_battery_end) : null,          unit: '%',       icon: '🔋' },
+    { label: t('activeMin'), value: metrics?.active_minutes != null ? String(metrics.active_minutes) : null,              unit: 'min',     icon: '💪' },
+    { label: t('stress'),    value: metrics?.stress_avg != null ? String(metrics.stress_avg) : null,                      unit: '/100',    icon: '🧠' },
+    { label: t('floors'),    value: metrics?.floors_climbed != null ? String(Math.round(metrics.floors_climbed)) : null,  unit: undefined, icon: '🏢' },
+  ];
 
   return (
-    <div className={`${bgColor} border ${borderColor} rounded-lg p-4 space-y-3`}>
-      <h3 className={`font-semibold text-sm uppercase tracking-wide ${secondaryText}`}>Daily Metrics</h3>
-
-      <div className="grid grid-cols-2 gap-2">
-        <MetricItem label="Steps" value={metrics.steps?.toLocaleString()} icon="👟" />
-        <MetricItem label="Distance" value={metrics.distance_meters ? `${(metrics.distance_meters / 1000).toFixed(2)} km` : undefined} icon="📍" />
-        <MetricItem label="Calories" value={metrics.calories?.toFixed(0)} icon="🔥" />
-        <MetricItem label="Active Min" value={metrics.active_minutes} unit="min" icon="💪" />
-        <MetricItem label="Floors" value={metrics.floors_climbed ? Math.round(metrics.floors_climbed) : undefined} icon="🏢" />
-        <MetricItem label="Resting HR" value={metrics.resting_hr} unit="bpm" icon="❤️" />
-        <MetricItem label="Avg HR" value={metrics.avg_hr} unit="bpm" icon="💓" />
-        <MetricItem label="Max HR" value={metrics.max_hr} unit="bpm" icon="🏃" />
-        <MetricItem label="Sleep" value={formatMins(metrics.sleep_duration_minutes)} icon="😴" />
-        <MetricItem label="Sleep Score" value={metrics.sleep_score} icon="⭐" />
-        <MetricItem label="Battery End" value={metrics.body_battery_end} icon="⚡" />
-        <MetricItem label="Stress Avg" value={metrics.stress_avg?.toFixed(0)} icon="😰" />
-        <MetricItem label="HRV" value={metrics.hrv_last_night?.toFixed(0)} icon="📈" />
-        <MetricItem label="HRV Status" value={metrics.hrv_status} icon="🫀" />
-      </div>
+    <div className="flex flex-col gap-2 h-full">
+      {items.map(({ label, value, unit, icon }) => (
+        <div
+          key={label}
+          className={`flex-1 flex items-center gap-2.5 px-3 py-3 lg:py-0 rounded-lg border transition-colors ${
+            isDarkMode
+              ? 'border-gray-700 bg-gray-800/40 hover:bg-gray-800/70'
+              : 'border-gray-200 bg-white hover:bg-gray-50'
+          }`}
+        >
+          <span className="text-2xl flex-shrink-0">{icon}</span>
+          <p className={`text-xl font-bold leading-none ${value != null ? textColor : secondaryText}`}>
+            {value ?? '—'}
+            {value != null && unit && <span className={`text-sm font-normal ml-1 ${secondaryText}`}>{unit}</span>}
+            <span className={`text-sm font-normal ml-2 ${secondaryText}`}>{label}</span>
+          </p>
+        </div>
+      ))}
     </div>
   );
 }

@@ -526,6 +526,11 @@ export async function getRecentActivities(userId: string, limit: number = 10, fi
   return activities;
 }
 
+export async function getActivitiesInRange(userId: string, startDate: string, endDate: string, limit: number = 50) {
+  const cached = await getActivitiesFromDB(userId, startDate, endDate);
+  return cached.slice(0, limit);
+}
+
 // ─── Internal ──────────────────────────────────────────────────────────────────
 
 const toInt = (v: any) => (v != null ? Math.round(Number(v)) : null);

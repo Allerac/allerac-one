@@ -35,6 +35,18 @@ import InstagramPostStudio from '../components/instagram/InstagramPostStudio';
 import { AlleracIcon } from '../components/ui/AlleracIcon';
 import OnboardingWizard from '../components/onboarding/OnboardingWizard';
 
+type HealthPeriod = 'today' | '3days' | '7days' | '30days';
+function buildHealthViewContext(period: HealthPeriod, selectedDate: string): string {
+  const fmt = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  if (period === 'today') {
+    return `## Health dashboard context\nThe user is currently viewing their health data for ${fmt(selectedDate)}. Use this as the default date for health queries unless they specify otherwise.`;
+  }
+  const days = period === '3days' ? 3 : period === '7days' ? 7 : 30;
+  const endDate = new Date().toISOString().split('T')[0];
+  const startDate = new Date(Date.now() - (days - 1) * 86400000).toISOString().split('T')[0];
+  return `## Health dashboard context\nThe user is currently viewing their health dashboard for the last ${days} days (${fmt(startDate)} → ${fmt(endDate)}). Use this as the default date range for health queries unless they specify otherwise.`;
+}
+
 export default function AdminChat({
   defaultSkillName,
   domainName,
@@ -186,12 +198,15 @@ export default function AdminChat({
   const [myAlleracTab, setMyAlleracTab] = useState<MyAlleracTab>('instructions');
   const [myAlleracMemoryTab, setMyAlleracMemoryTab] = useState<MemorySubTab>('conversations');
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
-  const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
+  const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(showHealth);
+
   const [isInstagramDMOpen, setIsInstagramDMOpen] = useState(false);
   const [isInstagramPostOpen, setIsInstagramPostOpen] = useState(showInstagramPost ?? false);
   const [mobileTab, setMobileTab] = useState<'chat' | 'editor' | 'preview'>('editor');
+  const [mobileHealthTab, setMobileHealthTab] = useState<'dashboard' | 'chat'>('dashboard');
   const [studioExternalUpdate, setStudioExternalUpdate] = useState<{ caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; timestamp: number } | null>(null);
   const postContextRef = useRef<string>('');
+  const healthViewContextRef = useRef<string>('');
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
   const [memorySaveLoading, setMemorySaveLoading] = useState(false);
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
@@ -737,7 +752,8 @@ export default function AdminChat({
         }
       } else {
         // Normal chat mode: use existing flow
-        await chatMessageService.sendMessage(message, imageAttachments, activeSkill, postContextRef.current || undefined);
+        const extraContext = [postContextRef.current, healthViewContextRef.current].filter(Boolean).join('\n\n') || undefined;
+        await chatMessageService.sendMessage(message, imageAttachments, activeSkill, extraContext);
         setInputMessage('');
         imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
         setImageAttachments([]);
@@ -927,7 +943,7 @@ export default function AdminChat({
             onLogout={handleLogout}
           />
 
-          {/* Mobile tab bar — only on social page */}
+          {/* Mobile tab bar — social page */}
           {isInstagramPostOpen && (
             <div className="lg:hidden flex-shrink-0 flex border-b border-gray-700">
               {(['chat', 'editor', 'preview'] as const).map((tab) => (
@@ -942,11 +958,69 @@ export default function AdminChat({
             </div>
           )}
 
+          {/* Mobile tab bar — health page */}
+          {showHealth && (
+            <div className={`lg:hidden flex-shrink-0 flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {(['dashboard', 'chat'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setMobileHealthTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                    mobileHealthTab === tab
+                      ? `border-b-2 border-brand-500 ${isDarkMode ? 'text-white' : 'text-gray-900'}`
+                      : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab === 'dashboard' ? 'Dashboard' : 'Chat'}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Columns row */}
           <div className="flex flex-1 overflow-hidden">
 
+          {/* Health Dashboard — mobile inline (tab: dashboard) */}
+          {showHealth && mobileHealthTab === 'dashboard' && (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+              <HealthDashboard
+                isOpen
+                onClose={() => setMobileHealthTab('chat')}
+                isDarkMode={isDarkMode}
+                userId={userId || undefined}
+                inline
+                onViewChange={(period, date) => {
+                  healthViewContextRef.current = buildHealthViewContext(period, date);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Health Dashboard — desktop LEFT side */}
+          {isHealthDashboardOpen && (
+            <div className={`hidden lg:flex flex-1 flex-col overflow-hidden border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <HealthDashboard
+                isOpen={isHealthDashboardOpen}
+                onClose={() => setIsHealthDashboardOpen(false)}
+                isDarkMode={isDarkMode}
+                userId={userId || undefined}
+                inline
+                onViewChange={(period, date) => {
+                  healthViewContextRef.current = buildHealthViewContext(period, date);
+                }}
+              />
+            </div>
+          )}
+
           {/* Chat column */}
-          <div className={`flex flex-col overflow-hidden ${isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1' : 'hidden lg:flex'} lg:flex-1` : 'flex-1'}`}>
+          <div className={`flex flex-col overflow-hidden ${
+            isHealthDashboardOpen
+              ? mobileHealthTab === 'chat'
+                ? 'flex-1 lg:w-[560px] lg:flex-shrink-0'
+                : 'hidden lg:flex lg:w-[560px] flex-shrink-0'
+              : isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1' : 'hidden lg:flex'} lg:flex-1` : 'flex-1'
+          }`}>
+
 
           {/* ── Terminal mode — full area replacement ── */}
           {effectiveChatMode === 'terminal' ? (
@@ -1067,6 +1141,7 @@ export default function AdminChat({
           )}
         </div>
 
+
         {/* Instagram Post Studio — inline (desktop only) */}
         {isInstagramPostOpen && userId && (
           <div className={`${mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'} flex-1 lg:flex-[2] min-w-0 overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
@@ -1100,30 +1175,6 @@ export default function AdminChat({
           </div>
         )}
 
-        {/* Health Dashboard — inline split view (desktop only) */}
-        {isHealthDashboardOpen && (
-          <div className={`hidden lg:flex lg:w-[520px] flex-col flex-shrink-0 border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-            <HealthDashboard
-              isOpen={isHealthDashboardOpen}
-              onClose={() => setIsHealthDashboardOpen(false)}
-              isDarkMode={isDarkMode}
-              userId={userId || undefined}
-              inline
-            />
-          </div>
-        )}
-
-        {/* Health Dashboard — overlay (mobile only) */}
-        {isHealthDashboardOpen && (
-          <div className="lg:hidden">
-            <HealthDashboard
-              isOpen={isHealthDashboardOpen}
-              onClose={() => setIsHealthDashboardOpen(false)}
-              isDarkMode={isDarkMode}
-              userId={userId || undefined}
-            />
-          </div>
-        )}
           </div>{/* end columns row */}
         </div>{/* end content wrapper */}
       </div>

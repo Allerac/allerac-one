@@ -573,7 +573,7 @@ export async function POST(request: Request): Promise<Response> {
                   } else if (toolName === 'get_daily_snapshot') {
                     toolResult = await healthTool.getDailySnapshot(healthUser, toolArgs.date);
                   } else if (toolName === 'get_recent_activities') {
-                    toolResult = await healthTool.getRecentActivities(healthUser, toolArgs.limit || 10);
+                    toolResult = await healthTool.getRecentActivities(healthUser, toolArgs.limit || 10, toolArgs.start_date, toolArgs.end_date);
                   } else {
                     toolResult = await healthTool.getGarminStatus(healthUser);
                   }
