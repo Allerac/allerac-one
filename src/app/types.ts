@@ -92,3 +92,43 @@ export interface JobExecution {
   startedAt: string;
   completedAt: string | null;
 }
+
+export type TicketType     = 'task' | 'bug' | 'improvement' | 'question';
+export type TicketStatus   = 'open' | 'in_progress' | 'resolved' | 'cancelled';
+export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
+
+export interface Ticket {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  type: TicketType;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  cancelledAt: string | null;
+  priorityScore: number;
+  priorityLevel: TicketPriority;
+  priorityFactors: Record<string, unknown> | null;
+  createdByType: 'user' | 'agent';
+  createdByRunId: string | null;
+  assignedToType: 'user' | 'agent' | null;
+  resolvedByType: 'user' | 'agent' | null;
+  resolvedByRunId: string | null;
+  resolutionNotes: string | null;
+  tags: string[];
+  context: Record<string, unknown> | null;
+}
+
+export interface TicketEvent {
+  id: string;
+  ticketId: string;
+  createdAt: string;
+  eventType: string;
+  actorType: 'user' | 'agent' | 'system';
+  actorRunId: string | null;
+  previousValue: Record<string, unknown> | null;
+  newValue: Record<string, unknown> | null;
+  notes: string | null;
+}
