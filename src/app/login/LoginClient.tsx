@@ -30,6 +30,9 @@ export default function LoginClient() {
   const [loading, setLoading] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
 
+  const noAccess = typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('error') === 'no-access';
+
   useEffect(() => {
     authActions.checkFirstRun().then(result => {
       if (result.isFirstRun) setShowSetupWizard(true);
@@ -208,6 +211,12 @@ export default function LoginClient() {
               </Field>
             )}
           </div>
+
+          {noAccess && !error && (
+            <div style={{ fontSize: '10px', color: '#804000', background: '#fff8dc', border: '1px solid #c08000', padding: '6px 8px', marginBottom: '8px', lineHeight: 1.5 }}>
+              Your account is pending access. Please contact the administrator to get a domain assigned.
+            </div>
+          )}
 
           {error && (
             <div style={{ fontSize: '10px', color: '#cc0000', marginBottom: '8px' }}>{error}</div>

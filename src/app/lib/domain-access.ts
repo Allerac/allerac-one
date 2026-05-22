@@ -21,7 +21,7 @@ export async function requireDomainAccess(slug: string): Promise<User> {
   const allowed = await authService.canAccessDomain(user.id, user.is_admin, slug);
   if (!allowed) {
     const firstSlug = await authService.getFirstDomainSlug(user.id);
-    redirect(firstSlug ? `/${firstSlug}` : '/login');
+    redirect(firstSlug ? `/${firstSlug}` : '/login?error=no-access');
   }
 
   return user;
@@ -42,7 +42,7 @@ export async function requireAdmin(): Promise<User> {
 
   if (!user.is_admin) {
     const slug = await authService.getFirstDomainSlug(user.id);
-    redirect(slug ? `/${slug}` : '/login');
+    redirect(slug ? `/${slug}` : '/login?error=no-access');
   }
 
   return user;

@@ -159,7 +159,7 @@ export async function getCurrentUser(): Promise<User | null> {
 export async function getLoginRedirect(userId: string, isAdmin: boolean): Promise<string> {
   if (isAdmin) return '/';
   const slug = await authService.getFirstDomainSlug(userId);
-  return slug ? `/${slug}` : '/';
+  return slug ? `/${slug}` : '/login?error=no-access';
 }
 
 /**
