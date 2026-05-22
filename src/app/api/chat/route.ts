@@ -577,6 +577,9 @@ export async function POST(request: Request): Promise<Response> {
                   } else {
                     toolResult = await healthTool.getGarminStatus(healthUser);
                   }
+                } else if (toolName === 'draw_canvas') {
+                  // Client renders from the tool_call SSE event; just ack here
+                  toolResult = { success: true, rendered: (toolArgs.elements || []).length };
                 } else {
                   toolResult = { error: `Tool ${toolName} not available` };
                 }

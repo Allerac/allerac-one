@@ -23,6 +23,7 @@ interface SkillFrontmatter {
   auto_switch_rules?: Record<string, any>;
   version?: string;
   icon?: string;
+  domain?: string;
 }
 
 function parseFrontmatter(raw: string): { meta: Partial<SkillFrontmatter>; content: string } {
@@ -97,6 +98,15 @@ export async function syncSystemSkills(): Promise<void> {
         meta.version || '1.0.0',
         file,
       ]);
+
+      // Auto-bind domain_skill_defaults if frontmatter specifies a domain
+      if (meta.domain) {
+        await pool.query(`
+          INSERT INTO domain_skill_defaults (domain_slug, skill_id)
+          SELECT $1, id FROM skills WHERE source_file = $2 AND is_system = true LIMIT 1
+          ON CONFLICT (domain_slug) DO UPDATE SET skill_id = EXCLUDED.skill_id, updated_at = NOW()
+        `, [meta.domain, file]);
+      }
 
       synced++;
     } catch (err) {

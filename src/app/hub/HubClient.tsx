@@ -18,6 +18,7 @@ const DOMAINS_ALL = [
   { id: 'write',   label: 'Content', icon: '✍️', path: '/write',    desc: 'Content creator' },
   { id: 'social',  label: 'Social',  icon: '📸', path: '/social',   desc: 'Instagram manager' },
   { id: 'tickets', label: 'Tickets', icon: '🎫', path: '/tickets',  desc: 'Bug tracker & tasks' },
+  { id: 'design',  label: 'Design',  icon: '🎨', path: '/design',   desc: 'Design system assistant' },
 ];
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';

@@ -14,6 +14,7 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'instagram_publish_post',     label: 'Publish Post',        description: 'Publish a post to Instagram',                    group: 'Instagram' },
   { name: 'instagram_get_profile',      label: 'Get Profile',         description: 'Fetch Instagram account profile info',           group: 'Instagram' },
   { name: 'instagram_get_recent_posts', label: 'Recent Posts',        description: 'Get recent posts from Instagram account',        group: 'Instagram' },
+  { name: 'draw_canvas',               label: 'Draw Canvas',         description: 'Draw or update elements on the design canvas',   group: 'Design'    },
 ];
 
 // Health tools are conditionally included based on HEALTH_WORKER_SECRET being set.
@@ -232,6 +233,53 @@ export const TOOLS = [
         type: 'object',
         properties: {},
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'draw_canvas',
+      description: 'Draw or update elements on the design canvas. Call this whenever the user asks you to draw, design, wireframe, or visualize anything. Canvas dimensions are provided in context — use them to position and center elements correctly. You can call this multiple times to build the drawing incrementally.',
+      parameters: {
+        type: 'object',
+        properties: {
+          elements: {
+            type: 'array',
+            description: 'Array of canvas elements to render.',
+            items: {
+              type: 'object',
+              properties: {
+                type:        { type: 'string', enum: ['rect', 'circle', 'diamond', 'arrow', 'line', 'text'] },
+                x:           { type: 'number' },
+                y:           { type: 'number' },
+                width:       { type: 'number' },
+                height:      { type: 'number' },
+                cx:          { type: 'number' },
+                cy:          { type: 'number' },
+                r:           { type: 'number' },
+                x1:          { type: 'number' },
+                y1:          { type: 'number' },
+                x2:          { type: 'number' },
+                y2:          { type: 'number' },
+                label:       { type: 'string' },
+                fill:        { type: 'string' },
+                stroke:      { type: 'string' },
+                strokeWidth: { type: 'number' },
+                fontSize:    { type: 'number' },
+                bold:        { type: 'boolean' },
+                color:       { type: 'string' },
+              },
+              required: ['type'],
+            },
+          },
+          mode: {
+            type: 'string',
+            enum: ['replace', 'append'],
+            description: '"replace" clears the canvas and redraws (default). "append" adds to the existing drawing.',
+          },
+        },
+        required: ['elements'],
       },
     },
   },

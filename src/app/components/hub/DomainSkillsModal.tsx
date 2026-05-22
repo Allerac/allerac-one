@@ -33,6 +33,8 @@ const DOMAINS = [
   { slug: 'health',  label: 'Health',  icon: '❤️' },
   { slug: 'write',   label: 'Content', icon: '✍️' },
   { slug: 'social',  label: 'Social',  icon: '📸' },
+  { slug: 'tickets', label: 'Tickets', icon: '🎫' },
+  { slug: 'design',  label: 'Design',  icon: '🎨' },
 ];
 
 interface Props {
