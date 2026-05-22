@@ -12,6 +12,7 @@ const STALE_RUN_MAX_AGE_MINUTES = 5;
 const POLL_INTERVAL_MS = parseInt(process.env.AGENT_WORKER_POLL_MS || '3000', 10);
 const MAX_CONCURRENT_RUNS = parseInt(process.env.AGENT_WORKER_MAX_CONCURRENT || '5', 10);
 const WORKER_TIMEOUT_MS = parseInt(process.env.AGENT_WORKER_TIMEOUT_MS || '600000', 10); // 10 min
+const ORCHESTRATION_ENABLED = process.env.AGENT_ORCHESTRATION === 'true';
 
 interface WorkerRunnerConfig {
   repository?: WorkerRunRepository;
@@ -151,7 +152,30 @@ export class WorkerRunnerService {
               ? ANTHROPIC_BASE_URL
               : GITHUB_BASE_URL;
 
-      // Phase 1: Planning
+      // Skill-based runs always bypass the orchestrator
+      if (run.skill_id) {
+        const rawContent = await this.repository.getSkillContent(run.skill_id);
+        if (rawContent) {
+          const skillContent = rawContent.replace(/\{\{USER_ID\}\}/g, run.user_id);
+          console.log(`[WorkerRunner] ${tag} Skill run — bypassing orchestrator`);
+          await this.executeSkillRun(
+            run, settings, modelName, modelProvider, modelBaseUrl, skillContent, tag
+          );
+          return;
+        }
+      }
+
+      // Orchestration disabled — run as single worker with user system message
+      if (!ORCHESTRATION_ENABLED) {
+        const systemMessage = settings.system_message || 'You are a helpful AI assistant.';
+        console.log(`[WorkerRunner] ${tag} Orchestration disabled — single worker run`);
+        await this.executeSkillRun(
+          run, settings, modelName, modelProvider, modelBaseUrl, systemMessage, tag
+        );
+        return;
+      }
+
+      // Phase 1: Planning (AGENT_ORCHESTRATION=true)
       console.log(`[WorkerRunner] ${tag} Planning run`);
       await this.repository.updateRunStatus(run.id, 'planning');
 
@@ -187,6 +211,8 @@ export class WorkerRunnerService {
       console.log(`[WorkerRunner] ${tag} Executing ${workersWithIds.length} workers`);
       await this.repository.updateRunStatus(run.id, 'running');
 
+      const systemMessage = settings.system_message || 'You are a helpful AI assistant.';
+
       const workerResults = await this.executeWorkers(
         workersForExecution,
         run.id,
@@ -195,7 +221,7 @@ export class WorkerRunnerService {
         modelName,
         modelProvider,
         modelBaseUrl,
-        settings.system_message || 'You are a helpful AI assistant.',
+        systemMessage,
         tag,
         () => this.checkCancelled(run.id)
       );
@@ -230,6 +256,82 @@ export class WorkerRunnerService {
     } finally {
       stopHeartbeat();
     }
+  }
+
+  private async executeSkillRun(
+    run: AgentRunRecord,
+    settings: UserSettings,
+    modelName: string,
+    modelProvider: string,
+    modelBaseUrl: string,
+    skillContent: string,
+    tag: string
+  ): Promise<void> {
+    await this.repository.updateRunStatus(run.id, 'running');
+
+    if (await this.checkCancelled(run.id)) return;
+
+    const workerId = uuid();
+    await this.repository.createWorkers(run.id, [
+      { id: workerId, name: 'Skill Worker', task: run.prompt },
+    ]);
+
+    const spec: WorkerSpec = {
+      id: workerId,
+      name: 'Skill Worker',
+      task: run.prompt,
+      tools: [],  // empty = all tools available
+    };
+
+    const config: WorkerExecutionConfig = {
+      userId: run.user_id,
+      githubToken: settings.github_token || '',
+      geminiToken: settings.google_api_key || undefined,
+      anthropicToken: settings.anthropic_api_key || '',
+      tavilyApiKey: settings.tavily_api_key || undefined,
+      selectedModel: modelName,
+      modelProvider: modelProvider as any,
+      modelBaseUrl,
+      systemMessage: skillContent,
+    };
+
+    await this.repository.updateWorkerStatus(workerId, 'running', { progress_log: 'Starting skill run...' });
+
+    try {
+      const result = await this.withTimeout(
+        this.worker.executeWorker(
+          spec,
+          config,
+          (token) => {
+            this.repository.appendWorkerProgress(workerId, `output:${token}`).catch(() => {});
+          },
+          (tool, args) => {
+            const query = args.query ? `: "${args.query}"` : '';
+            const command = args.command ? `: "${args.command.substring(0, 80)}"` : '';
+            console.log(`[WorkerRunner] ${tag} Skill tool call: ${tool}${query || command}`);
+            this.repository.appendWorkerProgress(workerId, `tool:${tool}${query || command}`).catch(() => {});
+          }
+        ),
+        WORKER_TIMEOUT_MS,
+        `Skill worker timed out after ${WORKER_TIMEOUT_MS / 1000}s`
+      );
+
+      if (result.success) {
+        await this.repository.updateWorkerStatus(workerId, 'completed', {
+          result: result.result,
+          tokens_used: result.tokensUsed || 0,
+        });
+        await this.repository.updateRunStatus(run.id, 'completed', { result: result.result });
+      } else {
+        await this.repository.updateWorkerStatus(workerId, 'failed', { result: result.error });
+        await this.failRun(run.id, result.error || 'Skill worker failed');
+      }
+    } catch (error: any) {
+      await this.repository.updateWorkerStatus(workerId, 'failed', { result: error.message });
+      throw error;
+    }
+
+    console.log(`[WorkerRunner] ${tag} Skill run completed`);
   }
 
   private async executeWorkers(

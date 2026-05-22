@@ -1,12 +1,29 @@
----
+-- Migration 042: Tickets skill seed + domain binding
+
+DO $$
+DECLARE
+  skill_id UUID := 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
+  skill_content TEXT := $SKILL$---
 name: tickets
 display_name: 🎫 Tickets
 description: Manages the Allerac ticket system. Open, list, update, and resolve tickets via natural language.
 category: workflow
-version: 1.0.0
+keywords:
+  - ticket
+  - bug
+  - task
+  - issue
+  - problema
+  - tarefa
+  - abrir ticket
+  - criar ticket
+  - listar tickets
+  - resolver
+  - fechar
+  - reabrir
 ---
 
-# Tickets Skill
+# Tickets
 
 You manage the Allerac ticket system. Users can open, list, update, and resolve tickets via natural language.
 
@@ -61,3 +78,43 @@ User: "what bugs are open?"
 
 User: "mark the login ticket as done"
 → update ticket matching "login": { status: "resolved", resolvedByType: "user" }
+$SKILL$;
+BEGIN
+  IF EXISTS (SELECT 1 FROM skills WHERE id = skill_id) THEN
+    UPDATE skills SET
+      content      = skill_content,
+      verified     = true,
+      shared       = true,
+      updated_at   = NOW()
+    WHERE id = skill_id;
+  ELSE
+    INSERT INTO skills (
+      id, user_id, name, display_name, description, content, category,
+      verified, shared, version, learning_enabled, memory_scope, rag_integration
+    ) VALUES (
+      skill_id,
+      NULL,
+      'tickets',
+      '🎫 Tickets',
+      'Manages the Allerac ticket system. Open, list, update, and resolve tickets via natural language.',
+      skill_content,
+      'workflow',
+      true,
+      true,
+      '1.0.0',
+      false,
+      'user',
+      false
+    );
+  END IF;
+END $$;
+
+-- Register tickets domain (active by default)
+INSERT INTO domains (slug, display_name, is_active)
+VALUES ('tickets', 'Tickets', true)
+ON CONFLICT (slug) DO NOTHING;
+
+-- Bind tickets domain → tickets skill
+INSERT INTO domain_skill_defaults (domain_slug, skill_id)
+SELECT 'tickets', id FROM skills WHERE name = 'tickets' LIMIT 1
+ON CONFLICT (domain_slug) DO UPDATE SET skill_id = EXCLUDED.skill_id, updated_at = NOW();

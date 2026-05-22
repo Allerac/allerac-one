@@ -15,6 +15,7 @@ export interface AgentRunRecord {
   last_heartbeat: Date | null;
   llm_model: string | null;
   llm_provider: string | null;
+  skill_id: string | null;
 }
 
 export interface AgentWorkerRecord {
@@ -240,5 +241,21 @@ export class WorkerRunRepository {
       [runId]
     );
     return result.rows.length > 0 && result.rows[0].cancelled_at !== null;
+  }
+
+  async getSkillContent(skillId: string): Promise<string | null> {
+    const result = await pool.query(
+      `SELECT content FROM skills WHERE id = $1`,
+      [skillId]
+    );
+    return result.rows[0]?.content ?? null;
+  }
+
+  async resolveSkillIdByName(name: string): Promise<string | null> {
+    const result = await pool.query(
+      `SELECT id FROM skills WHERE name = $1 AND (user_id IS NULL OR is_system = true) LIMIT 1`,
+      [name]
+    );
+    return result.rows[0]?.id ?? null;
   }
 }

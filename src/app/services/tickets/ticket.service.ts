@@ -68,6 +68,7 @@ export interface UpdateTicketInput {
   resolvedByType?: 'user' | 'agent';
   resolvedByRunId?: string;
   assignedToType?: 'user' | 'agent' | null;
+  contextPatch?: Record<string, unknown>;
 }
 
 function rowToTicket(row: Record<string, unknown>): Ticket {
@@ -211,6 +212,11 @@ export class TicketService {
 
     if (input.assignedToType !== undefined) {
       sets.push(`assigned_to_type = $${idx++}`); values.push(input.assignedToType);
+    }
+
+    if (input.contextPatch) {
+      sets.push(`context = COALESCE(context, '{}'::jsonb) || $${idx++}::jsonb`);
+      values.push(JSON.stringify(input.contextPatch));
     }
 
     values.push(id, userId);

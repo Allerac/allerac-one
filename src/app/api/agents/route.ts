@@ -24,11 +24,12 @@ const repo = new WorkerRunRepository();
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = await request.json();
-    const { message, conversationId: inputConversationId, model, provider }: {
+    const { message, conversationId: inputConversationId, model, provider, skillName }: {
       message: string;
       conversationId: string | null;
       model: string;
       provider: string;
+      skillName?: string;
     } = body;
 
     if (!message) {
@@ -60,12 +61,24 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
+    // Resolve skill name → skill_id if provided
+    let skillId: string | null = null;
+    if (skillName) {
+      const skillResult = await pool.query(
+        `SELECT id FROM skills WHERE name = $1 AND (user_id IS NULL OR is_system = true) LIMIT 1`,
+        [skillName]
+      );
+      skillId = skillResult.rows[0]?.id ?? null;
+      if (skillId) console.log(`[AgentRoute] Resolved skill "${skillName}" → ${skillId}`);
+      else console.warn(`[AgentRoute] Skill "${skillName}" not found, running without skill`);
+    }
+
     // Create agent_run with pending status (worker picks it up)
     const runId = uuid();
     await pool.query(
-      `INSERT INTO agent_runs (id, conversation_id, user_id, status, prompt, llm_model, llm_provider)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [runId, convId, userId, 'pending', message, llmModel, llmProvider]
+      `INSERT INTO agent_runs (id, conversation_id, user_id, status, prompt, llm_model, llm_provider, skill_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [runId, convId, userId, 'pending', message, llmModel, llmProvider, skillId]
     );
 
     // Save user message to conversation

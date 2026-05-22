@@ -51,13 +51,14 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { status, resolutionNotes, resolvedByType, assignedToType } = body;
+    const { status, resolutionNotes, resolvedByType, assignedToType, contextPatch } = body;
 
     const ticket = await ticketService.update(id, user.id, {
       status,
       resolutionNotes,
       resolvedByType,
       assignedToType,
+      contextPatch,
     });
 
     if (!ticket) return Response.json({ error: 'Not found' }, { status: 404 });
