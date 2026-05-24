@@ -8,6 +8,8 @@ import { useDomainContext } from '@/app/context/DomainContext';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
+import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
+import * as memoryActions from '@/app/actions/memory';
 
 interface Props {
   userId: string;
@@ -37,10 +39,17 @@ export default function DomainChatPanel({
   const [convId, setConvId]       = useState<string | null>(currentConvId);
   const [isAgentMode, setIsAgentMode] = useState(false);
   const messagesEndRef            = useRef<HTMLDivElement>(null);
+  const [githubToken, setGithubToken] = useState('');
+
+  const [memoryModalOpen, setMemoryModalOpen]   = useState(false);
+  const [memoryLoading, setMemoryLoading]       = useState(false);
+  const [memoryResult, setMemoryResult]         = useState<{ success: boolean; message: string; summary?: string; importance?: number; topics?: string[] } | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('selected_model');
     if (saved) setModel(saved);
+    const token = localStorage.getItem('github_token') || '';
+    setGithubToken(token);
   }, []);
 
   useEffect(() => { setConvId(currentConvId); }, [currentConvId]);
@@ -132,6 +141,25 @@ export default function DomainChatPanel({
     }
   }, [input, sending, convId, selectedModel, domainSlug, defaultSkillName, postContext, setLastToolCall, onConversationCreated, setMessages]);
 
+  const handleSaveToMemory = useCallback(async () => {
+    if (!convId || !userId) return;
+    setMemoryModalOpen(true);
+    setMemoryLoading(true);
+    setMemoryResult(null);
+    try {
+      const summary = await memoryActions.generateConversationSummary(convId, userId, undefined, domainSlug);
+      if (summary) {
+        setMemoryResult({ success: true, message: 'Summary generated successfully!', summary: summary.summary, topics: summary.key_topics });
+      } else {
+        setMemoryResult({ success: false, message: 'Could not generate summary (possibly not enough messages)' });
+      }
+    } catch {
+      setMemoryResult({ success: false, message: 'An unexpected error occurred' });
+    } finally {
+      setMemoryLoading(false);
+    }
+  }, [convId, userId, githubToken]);
+
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   };
@@ -181,6 +209,17 @@ export default function DomainChatPanel({
           </button>
         )}
         <div className="flex-1" />
+        {convId && (
+          <button
+            onClick={handleSaveToMemory}
+            title="Save to memory"
+            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${d ? 'text-gray-500 hover:bg-gray-800 hover:text-gray-300' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
+        )}
         <select
           value={selectedModel}
           onChange={e => { setModel(e.target.value); localStorage.setItem('selected_model', e.target.value); }}
@@ -266,6 +305,14 @@ export default function DomainChatPanel({
           </div>
         </>
       )}
+
+      <MemorySaveModal
+        isOpen={memoryModalOpen}
+        onClose={() => { setMemoryModalOpen(false); setMemoryResult(null); }}
+        loading={memoryLoading}
+        result={memoryResult}
+        isDarkMode={d}
+      />
     </div>
   );
 }

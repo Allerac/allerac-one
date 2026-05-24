@@ -75,10 +75,12 @@ export async function PUT(request: Request): Promise<Response> {
   const safePath = sanitizePath(inputPath || '', user.id);
   if (!safePath) return Response.json({ error: 'Invalid path' }, { status: 400 });
 
-  // Base64-encode to safely pass arbitrary content through the shell
   const b64 = Buffer.from(content, 'utf8').toString('base64');
   const shell = new ShellTool();
-  const result = await shell.execute(`printf '%s' '${b64}' | base64 -d > '${safePath}'`);
+  const tmpFile = `/tmp/allerac-write-${Date.now()}`;
+  const result = await shell.execute(
+    `printf '%s' '${b64}' > '${tmpFile}.b64' && base64 -d '${tmpFile}.b64' > '${tmpFile}' && mv '${tmpFile}' '${safePath}' && rm -f '${tmpFile}.b64'`
+  );
   if (!result.success) {
     return Response.json({ error: result.stderr || 'Write failed' }, { status: 500 });
   }

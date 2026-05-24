@@ -58,13 +58,11 @@ ON CONFLICT (slug) DO NOTHING;
 
 ## Step 3 — Create the page route
 
-Create `src/app/<name>/page.tsx`. You have two options:
+Two layout patterns exist. See **[layout-patterns.md](./layout-patterns.md)** for complete code templates, visual diagrams, and when to use each.
 
-### Option A — Generic chat interface (fast)
-
-Use this when the domain is purely conversational with no custom UI needs.
-
-```typescript
+**Pattern A — Chat only** (Finance, Write, Recipes):
+```tsx
+// src/app/<name>/page.tsx
 import { requireDomainAccess } from '@/app/lib/domain-access';
 import { getDomainSkillDefault } from '@/app/actions/skills';
 import ChatClient from '../chat/ChatClient';
@@ -76,80 +74,16 @@ export default async function <Name>Page() {
 }
 ```
 
-### Option B — Custom domain page (when the domain has its own UI)
-
-Use this when the domain needs a specific layout or visual experience (like the Design canvas, or the Tickets board).
-
-**`src/app/<name>/page.tsx`** — server component, handles auth:
-```typescript
-import { requireDomainAccess } from '@/app/lib/domain-access';
-import <Name>Client from './<Name>Client';
-
-export default async function <Name>Page() {
-  const user = await requireDomainAccess('<name>');
-  return <<Name>Client userId={user.id} />;
-}
+**Pattern B — Chat + Component** (Design, Health, Tickets):
 ```
-
-**`src/app/<name>/<Name>Client.tsx`** — client component, the actual UI:
-```typescript
-'use client';
-
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { MODELS } from '@/app/services/llm/models';
-
-export default function <Name>Client({ userId }: { userId: string }) {
-  const [selectedModel, setSelectedModel] = useState('qwen2.5:3b');
-
-  // Read user's saved model preference (same as chat)
-  useEffect(() => {
-    const saved = localStorage.getItem('selected_model');
-    if (saved) setSelectedModel(saved);
-  }, []);
-
-  const sendMessage = async (text: string) => {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        conversationId: null,
-        model: selectedModel,
-        provider: MODELS.find(m => m.id === selectedModel)?.provider || 'ollama',
-        defaultSkillName: '<name>',
-        domain: '<name>',
-      }),
-    });
-    // Read SSE stream: data: {"type":"token","content":"..."}
-    // data: {"type":"done","conversationId":"..."}
-    // data: {"type":"error","message":"..."}
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const event = JSON.parse(line.slice(6));
-        if (event.type === 'token') { /* append event.content */ }
-        if (event.type === 'done')  { /* event.conversationId */ }
-      }
-    }
-  };
-
-  return (
-    <div>
-      {/* your custom UI here */}
-    </div>
-  );
-}
+src/app/<name>/
+  page.tsx          ← server auth + props
+  <Name>Client.tsx  ← full layout (copy from design/DesignClient.tsx)
+  <Name>Component.tsx ← the domain's main UI
 ```
+Copy `src/app/design/DesignClient.tsx`, replace `DesignCanvas` with your component and `'design'` with your domain slug.
 
-See `src/app/design/DesignClient.tsx` for a complete real-world example (canvas + chat panel, dark/light mode, SVG rendering).
+> **Required:** Pattern B clients must mount `MyAlleracModal` and register the `openMyAlleracModal` window event — it is not included automatically. See `DesignClient.tsx` for the pattern.
 
 ---
 

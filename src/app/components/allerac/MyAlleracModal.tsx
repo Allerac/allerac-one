@@ -184,14 +184,14 @@ export default function MyAlleracModal({
           )}
 
           {/* ── Memory ── */}
-          {tab === 'memory' && userId && githubToken && (
+          {tab === 'memory' && userId && (
             <div className="p-6 flex flex-col gap-4">
               <div className="flex gap-2">
                 <button onClick={() => setMemoryTab('conversations')} className={subTabCls(memoryTab === 'conversations')}>Conversations</button>
                 <button onClick={() => setMemoryTab('documents')} className={subTabCls(memoryTab === 'documents')}>Documents</button>
               </div>
               {memoryTab === 'conversations' && (
-                <ConversationMemoriesView githubToken={githubToken} userId={userId} isDarkMode={isDarkMode} domainSlug={domainSlug} />
+                <ConversationMemoriesView githubToken={githubToken} userId={userId} isDarkMode={isDarkMode} domainSlug={domainSlug === 'chat' ? null : domainSlug} />
               )}
               {memoryTab === 'documents' && (
                 <DocumentUpload githubToken={githubToken} userId={userId} isDarkMode={isDarkMode} domainSlug={domainSlug} />

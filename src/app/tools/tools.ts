@@ -4,6 +4,7 @@
 export const TOOL_REGISTRY: Array<{ name: string; label: string; description: string; group: string }> = [
   { name: 'get_today_info',             label: 'Date & Time',         description: 'Current date, time and timezone',                group: 'Core'      },
   { name: 'search_web',                 label: 'Web Search',          description: 'Search the web via Tavily',                      group: 'Core'      },
+  { name: 'read_url',                   label: 'Read URL',            description: 'Fetch and read the content of a URL',            group: 'Core'      },
   { name: 'execute_shell',              label: 'Shell',               description: 'Execute bash commands in sandbox',               group: 'Dev'       },
   { name: 'get_health_summary',         label: 'Health Summary',      description: 'Aggregated health metrics (steps, sleep…)',       group: 'Health'    },
   { name: 'get_health_metrics',         label: 'Health Metrics',      description: 'Detailed health metrics for a date range',       group: 'Health'    },
@@ -15,6 +16,7 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'instagram_get_profile',      label: 'Get Profile',         description: 'Fetch Instagram account profile info',           group: 'Instagram' },
   { name: 'instagram_get_recent_posts', label: 'Recent Posts',        description: 'Get recent posts from Instagram account',        group: 'Instagram' },
   { name: 'draw_canvas',               label: 'Draw Canvas',         description: 'Draw or update elements on the design canvas',   group: 'Design'    },
+  { name: 'edit_file',                 label: 'Edit File',           description: 'Propose a file edit — user reviews and accepts', group: 'Dev'       },
 ];
 
 // Health tools are conditionally included based on HEALTH_WORKER_SECRET being set.
@@ -141,6 +143,23 @@ export const TOOLS = [
           },
         },
         required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_url',
+      description: 'Fetch and read the full text content of a URL (article, blog post, newsletter, documentation, etc.). Use this when the user shares a link and wants a summary, analysis, or information from the page. Also use it automatically when a message contains a URL and the user clearly wants to know about its content.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'The full URL to fetch and read (must start with http:// or https://)',
+          },
+        },
+        required: ['url'],
       },
     },
   },
@@ -280,6 +299,22 @@ export const TOOLS = [
           },
         },
         required: ['elements'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'edit_file',
+      description: 'Propose changes to an existing file in the workspace. The user will see a diff and can accept or reject before anything is saved. Use this instead of execute_shell when modifying files the user already has open.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path:        { type: 'string', description: 'Absolute path to the file (e.g. /workspace/projects/userId/my-app/src/index.ts)' },
+          new_content: { type: 'string', description: 'Complete new content for the file' },
+          explanation: { type: 'string', description: 'One-line summary of what was changed and why' },
+        },
+        required: ['path', 'new_content', 'explanation'],
       },
     },
   },

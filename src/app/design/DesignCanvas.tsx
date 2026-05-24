@@ -373,7 +373,8 @@ export default function DesignCanvas() {
       }
       if (inInput) return;
       if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); return; }
-      const map: Record<string, Tool> = { v:'select',V:'select',Escape:'select',r:'rect',R:'rect',c:'circle',C:'circle',d:'diamond',D:'diamond',t:'text',T:'text',a:'arrow',A:'arrow',l:'line',L:'line' };
+      if (e.key === 'Escape') { setActiveTool('select'); setSelected([]); return; }
+      const map: Record<string, Tool> = { v:'select',V:'select',r:'rect',R:'rect',c:'circle',C:'circle',d:'diamond',D:'diamond',t:'text',T:'text',a:'arrow',A:'arrow',l:'line',L:'line' };
       if (map[e.key]) setActiveTool(map[e.key] as Tool);
     };
     window.addEventListener('keydown', onKey);
@@ -661,7 +662,7 @@ export default function DesignCanvas() {
             </g>
           </svg>
           {selEl && (
-            <PropertiesPanel el={selEl} update={updateSelected} onDelete={deleteSelected}
+            <PropertiesPanel el={selEl} update={updateSelected} onDelete={deleteSelected} onClose={() => setSelected([])}
               isDark={d} panelBg={panelBg} borderClr={borderClr} inputBg={inputBg}
               textClr={textClr} mutedClr={mutedClr} btnPrimary={btnPrimary}/>
           )}
@@ -717,15 +718,18 @@ export default function DesignCanvas() {
 
 // ─── properties panel ─────────────────────────────────────────────────────────
 
-interface PPProps { el:CanvasElement; update:(p:Partial<CanvasElement>)=>void; onDelete:()=>void; isDark:boolean; panelBg:string; borderClr:string; inputBg:string; textClr:string; mutedClr:string; btnPrimary:string; }
+interface PPProps { el:CanvasElement; update:(p:Partial<CanvasElement>)=>void; onDelete:()=>void; onClose:()=>void; isDark:boolean; panelBg:string; borderClr:string; inputBg:string; textClr:string; mutedClr:string; btnPrimary:string; }
 
-function PropertiesPanel({ el, update, onDelete, isDark, panelBg, borderClr, inputBg, textClr, mutedClr, btnPrimary }: PPProps) {
+function PropertiesPanel({ el, update, onDelete, onClose, isDark, panelBg, borderClr, inputBg, textClr, mutedClr, btnPrimary }: PPProps) {
   const p = { inputBg, borderClr, textClr, mutedClr };
   return (
     <div style={{ position:'absolute', top:8, right:8, width:196, background:panelBg, border:`1px solid ${borderClr}`, borderRadius:10, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8, boxShadow:isDark?'0 4px 24px rgba(0,0,0,0.5)':'0 4px 24px rgba(0,0,0,0.1)', fontSize:11, color:textClr }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <span style={{ fontWeight:700, fontSize:12, color:btnPrimary, textTransform:'capitalize' }}>{el.type}</span>
-        <button onClick={onDelete} title="Delete (Del)" style={{ background:'none', border:'none', cursor:'pointer', color:mutedClr, fontSize:16, lineHeight:1 }}>×</button>
+        <div style={{ display:'flex', gap:4 }}>
+          <button onClick={onDelete} title="Delete (Del)" style={{ background:'none', border:'none', cursor:'pointer', color:'#f38ba8', fontSize:12, lineHeight:1, padding:'1px 4px', borderRadius:3 }}>🗑</button>
+          <button onClick={onClose} title="Close (Esc)" style={{ background:'none', border:'none', cursor:'pointer', color:mutedClr, fontSize:16, lineHeight:1 }}>×</button>
+        </div>
       </div>
       <PGroup label="Position & Size"><PosGrid el={el} update={update} {...p}/></PGroup>
       <PGroup label="Style">

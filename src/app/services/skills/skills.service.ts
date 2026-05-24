@@ -328,6 +328,8 @@ export class SkillsService {
     message: string,
     skills: Skill[]
   ): Promise<Skill | null> {
+    if (process.env.SKILL_ROUTER_ENABLED !== 'true') return null;
+
     const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
     console.log(`[SkillRouter] detectIntent called with OLLAMA_BASE_URL=${OLLAMA_BASE_URL}`);
 

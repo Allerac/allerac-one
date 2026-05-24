@@ -12,13 +12,14 @@ const nextConfig: NextConfig = {
     },
   },
   // oidc-provider is ESM-only and uses Node.js internals — do not bundle it.
-  serverExternalPackages: ['oidc-provider'],
-  // Next.js standalone file tracing misses .mjs files from ESM-only packages
-  // that are transitive deps of oidc-provider. Include them explicitly so
-  // they are copied into .next/standalone/node_modules.
+  serverExternalPackages: ['oidc-provider', 'imapflow', 'nodemailer', 'mailparser'],
+  // Next.js standalone file tracing misses .mjs files from ESM-only packages.
   outputFileTracingIncludes: {
     '/**': [
       './node_modules/oidc-provider/**',
+      './node_modules/imapflow/**',
+      './node_modules/nodemailer/**',
+      './node_modules/mailparser/**',
       './node_modules/generator-function/**',
       './node_modules/jose/**',
       './node_modules/nanoid/**',

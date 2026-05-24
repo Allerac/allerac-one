@@ -32,11 +32,9 @@ export default function ConversationMemoriesView({
   const loadMemories = async () => {
     setIsLoading(true);
     try {
-      if (!githubToken) return;
-
       const [summaries, statistics] = await Promise.all([
-        memoryActions.getRecentSummaries(userId, githubToken, 10, 1, domainSlug),
-        memoryActions.getSummaryStats(userId, githubToken, domainSlug),
+        memoryActions.getRecentSummaries(userId, undefined, 10, 1, domainSlug),
+        memoryActions.getSummaryStats(userId, undefined, domainSlug),
       ]);
 
       setMemories(summaries);
@@ -58,7 +56,7 @@ export default function ConversationMemoriesView({
 
     setIsDeleting(true);
     try {
-      await memoryActions.deleteSummary(memoryToDelete.id, githubToken);
+      await memoryActions.deleteSummary(memoryToDelete.id, undefined);
       await loadMemories();
       setDeleteConfirmOpen(false);
       setMemoryToDelete(null);

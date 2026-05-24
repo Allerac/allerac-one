@@ -104,13 +104,6 @@ export default function ChatHeader({
                 {domainName ?? 'Allerac'}
               </span>
             )}
-            {activeSkill && (
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-                isDarkMode ? 'bg-indigo-900/60 text-indigo-300 border border-indigo-700' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
-              }`}>
-                {activeSkill.display_name ?? activeSkill.name}
-              </span>
-            )}
           </div>
 
           {/* Spacer */}

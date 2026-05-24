@@ -220,6 +220,15 @@ export default function AdminClient({
     }
   };
 
+  const handleDomainMove = async (index: number, direction: 'up' | 'down') => {
+    const next = [...allDomains];
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= next.length) return;
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+    setAllDomains(next);
+    await adminActions.reorderDomains(next.map(d => d.id));
+  };
+
   const handleDelete = async (userId: string) => {
     setDeleteError('');
     setDeletingId(userId);
@@ -479,6 +488,7 @@ export default function AdminClient({
             <table className="w-full text-sm">
               <thead>
                 <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
+                  <th className="px-4 py-3 text-left font-medium">Order</th>
                   <th className="px-4 py-3 text-left font-medium">Slug</th>
                   <th className="px-4 py-3 text-left font-medium">Name</th>
                   <th className="px-4 py-3 text-left font-medium">Status</th>
@@ -488,6 +498,26 @@ export default function AdminClient({
               <tbody>
                 {allDomains.map((domain, i) => (
                   <tr key={domain.id} className={`border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleDomainMove(i, 'up')}
+                          disabled={i === 0}
+                          className={`p-0.5 rounded transition-colors disabled:opacity-20 ${d ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                          title="Move up"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                        </button>
+                        <button
+                          onClick={() => handleDomainMove(i, 'down')}
+                          disabled={i === allDomains.length - 1}
+                          className={`p-0.5 rounded transition-colors disabled:opacity-20 ${d ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                          title="Move down"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs">{domain.slug}</td>
                     <td className="px-4 py-3">{domain.display_name}</td>
                     <td className="px-4 py-3">

@@ -2,35 +2,63 @@
 
 import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
 import { ConversationSummary } from '@/app/services/memory/conversation-memory.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import pool from '@/app/clients/db';
 
-export async function generateConversationSummary(conversationId: string, userId: string, githubToken: string) {
-    const memoryService = new ConversationMemoryService(githubToken);
+const systemSettingsService = new SystemSettingsService();
+
+async function resolveLLMConfig() {
+    const settings = await systemSettingsService.loadAll();
+    if (settings.google_api_key) {
+        return {
+            endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+            apiKey: settings.google_api_key,
+            model: 'gemini-2.5-flash',
+        };
+    }
+    if (settings.github_token) {
+        return {
+            endpoint: 'https://models.inference.ai.azure.com/chat/completions',
+            apiKey: settings.github_token,
+            model: 'gpt-4o',
+        };
+    }
+    throw new Error('No LLM API key configured. Please add a Google or GitHub key in Settings.');
+}
+
+export async function generateConversationSummary(conversationId: string, userId: string, _legacyToken?: string, domainSlug?: string | null) {
+    const llmConfig = await resolveLLMConfig();
+    const memoryService = new ConversationMemoryService(llmConfig, domainSlug);
     return await memoryService.generateConversationSummary(conversationId, userId);
 }
 
-export async function getRecentSummaries(userId: string, githubToken: string, limit?: number, minImportance?: number, domainSlug?: string | null) {
-    const memoryService = new ConversationMemoryService(githubToken, domainSlug);
+export async function getRecentSummaries(userId: string, _legacyToken?: string, limit?: number, minImportance?: number, domainSlug?: string | null) {
+    const llmConfig = await resolveLLMConfig();
+    const memoryService = new ConversationMemoryService(llmConfig, domainSlug);
     return await memoryService.getRecentSummaries(userId, limit, minImportance);
 }
 
-export async function shouldSummarizeConversation(conversationId: string, githubToken: string) {
-    const memoryService = new ConversationMemoryService(githubToken);
+export async function shouldSummarizeConversation(conversationId: string, _legacyToken?: string) {
+    const llmConfig = await resolveLLMConfig();
+    const memoryService = new ConversationMemoryService(llmConfig);
     return await memoryService.shouldSummarizeConversation(conversationId);
 }
 
-export async function formatMemoryContext(summaries: ConversationSummary[], githubToken: string) {
-    const memoryService = new ConversationMemoryService(githubToken);
+export async function formatMemoryContext(summaries: ConversationSummary[], _legacyToken?: string) {
+    const llmConfig = await resolveLLMConfig();
+    const memoryService = new ConversationMemoryService(llmConfig);
     return memoryService.formatMemoryContext(summaries);
 }
 
-export async function getSummaryStats(userId: string, githubToken: string, domainSlug?: string | null) {
-    const memoryService = new ConversationMemoryService(githubToken, domainSlug);
+export async function getSummaryStats(userId: string, _legacyToken?: string, domainSlug?: string | null) {
+    const llmConfig = await resolveLLMConfig();
+    const memoryService = new ConversationMemoryService(llmConfig, domainSlug);
     return await memoryService.getSummaryStats(userId);
 }
 
-export async function deleteSummary(summaryId: string, githubToken: string) {
-    const memoryService = new ConversationMemoryService(githubToken);
+export async function deleteSummary(summaryId: string, _legacyToken?: string) {
+    const llmConfig = await resolveLLMConfig();
+    const memoryService = new ConversationMemoryService(llmConfig);
     return await memoryService.deleteSummary(summaryId);
 }
 

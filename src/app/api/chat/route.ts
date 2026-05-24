@@ -23,6 +23,7 @@ import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
 import { SearchWebTool } from '@/app/tools/search-web.tool';
+import { ReadUrlTool } from '@/app/tools/read-url.tool';
 import { ShellTool } from '@/app/tools/shell.tool';
 import { HealthTool } from '@/app/tools/health.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
@@ -501,6 +502,9 @@ export async function POST(request: Request): Promise<Response> {
                 } else if (toolName === 'search_web' && tavilyApiKey) {
                   const searchTool = new SearchWebTool(tavilyApiKey, githubToken);
                   toolResult = await searchTool.execute(toolArgs.query);
+                } else if (toolName === 'read_url' && tavilyApiKey) {
+                  const readUrlTool = new ReadUrlTool(tavilyApiKey);
+                  toolResult = await readUrlTool.execute(toolArgs.url);
                 } else if (toolName === 'execute_shell') {
                   const shellTool = new ShellTool();
                   toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
@@ -580,10 +584,32 @@ export async function POST(request: Request): Promise<Response> {
                 } else if (toolName === 'draw_canvas') {
                   // Client renders from the tool_call SSE event; just ack here
                   toolResult = { success: true, rendered: (toolArgs.elements || []).length };
+                } else if (toolName === 'edit_file') {
+                  const { path: rawPath, new_content: newContent, explanation } = toolArgs;
+                  const nodePath = await import('path');
+                  const userRoot = `/workspace/projects/${userId}`;
+                  const resolved = nodePath.resolve(rawPath || '');
+                  if (!resolved.startsWith(userRoot)) {
+                    toolResult = { error: 'Path is outside the user workspace. Only files in /workspace/projects/ can be edited.' };
+                  } else {
+                    const shellTool = new ShellTool();
+                    const readResult = await shellTool.execute(`cat "${resolved}" 2>/dev/null || echo ""`);
+                    const oldContent = readResult.stdout.endsWith('\n') ? readResult.stdout.slice(0, -1) : readResult.stdout;
+                    safeEnqueue(encode({
+                      type: 'file_edit_proposal',
+                      path: resolved,
+                      oldContent,
+                      newContent,
+                      explanation,
+                    }));
+                    toolResult = { success: true, message: 'Edit proposal shown to the user for review. Do not write the file yourself — wait for the user to accept or reject before continuing.' };
+                  }
                 } else {
                   toolResult = { error: `Tool ${toolName} not available` };
                 }
-                safeEnqueue(encode({ type: 'tool_result', name: toolName, success: true }));
+                const resultPayload: any = { type: 'tool_result', name: toolName, success: true };
+                if (toolName === 'search_web') resultPayload.data = toolResult;
+                safeEnqueue(encode(resultPayload));
                 conversationMessages.push({
                   role: 'tool',
                   tool_call_id: toolCallId,

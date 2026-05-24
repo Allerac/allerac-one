@@ -31,6 +31,7 @@ export interface AdminDomain {
   slug: string;
   display_name: string;
   is_active: boolean;
+  sort_order: number;
 }
 
 export async function listUsers(): Promise<AdminUser[]> {
@@ -50,7 +51,7 @@ export async function listUsers(): Promise<AdminUser[]> {
 export async function listActiveDomains(): Promise<AdminDomain[]> {
   await assertAdmin();
   const result = await pool.query(
-    `SELECT id, slug, display_name, is_active FROM domains WHERE is_active = true ORDER BY created_at ASC`
+    `SELECT id, slug, display_name, is_active, sort_order FROM domains WHERE is_active = true ORDER BY sort_order ASC`
   );
   return result.rows;
 }
@@ -58,9 +59,18 @@ export async function listActiveDomains(): Promise<AdminDomain[]> {
 export async function listAllDomains(): Promise<AdminDomain[]> {
   await assertAdmin();
   const result = await pool.query(
-    `SELECT id, slug, display_name, is_active FROM domains ORDER BY created_at ASC`
+    `SELECT id, slug, display_name, is_active, sort_order FROM domains ORDER BY sort_order ASC`
   );
   return result.rows;
+}
+
+export async function reorderDomains(orderedIds: string[]): Promise<void> {
+  await assertAdmin();
+  await Promise.all(
+    orderedIds.map((id, i) =>
+      pool.query(`UPDATE domains SET sort_order = $1 WHERE id = $2`, [i + 1, id])
+    )
+  );
 }
 
 export async function toggleDomainActive(

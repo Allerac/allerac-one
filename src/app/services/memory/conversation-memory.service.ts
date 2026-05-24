@@ -30,12 +30,27 @@ export interface Message {
   content: string;
 }
 
+interface LLMConfig {
+  endpoint: string;
+  apiKey: string;
+  model: string;
+}
+
 export class ConversationMemoryService {
-  private githubToken: string;
+  private llm: LLMConfig;
   private domainSlug: string | null;
 
-  constructor(githubToken: string, domainSlug?: string | null) {
-    this.githubToken = githubToken;
+  constructor(llmConfig: LLMConfig | string, domainSlug?: string | null) {
+    // Accept either a full LLMConfig or a legacy githubToken string
+    if (typeof llmConfig === 'string') {
+      this.llm = {
+        endpoint: 'https://models.inference.ai.azure.com/chat/completions',
+        apiKey: llmConfig,
+        model: 'gpt-4o',
+      };
+    } else {
+      this.llm = llmConfig;
+    }
     this.domainSlug = domainSlug ?? null;
   }
 
@@ -92,16 +107,16 @@ Provide your response in this JSON format:
 CONVERSATION TO SUMMARIZE:
 ${conversationText}`;
 
-      const response = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+      const response = await fetch(this.llm.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.githubToken}`,
+          'Authorization': `Bearer ${this.llm.apiKey}`,
         },
         body: JSON.stringify({
           messages: [{ role: 'user', content: summaryPrompt }],
-          model: 'gpt-4o',
-          temperature: 0.3, // Lower temperature for more consistent summaries
+          model: this.llm.model,
+          temperature: 0.3,
           max_tokens: 500,
         }),
       });
@@ -137,11 +152,17 @@ ${conversationText}`;
         };
       }
 
-      // Step 5: Save summary to database
+      // Step 5: Save summary to database (upsert so re-saving a conversation updates it)
       const saveRes = await pool.query(
         `INSERT INTO conversation_summaries
          (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion, domain_slug)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (conversation_id) DO UPDATE SET
+           summary = EXCLUDED.summary,
+           key_topics = EXCLUDED.key_topics,
+           importance_score = EXCLUDED.importance_score,
+           message_count = EXCLUDED.message_count,
+           emotion = EXCLUDED.emotion
          RETURNING *`,
         [
           conversationId,

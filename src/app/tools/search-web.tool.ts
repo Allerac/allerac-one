@@ -128,7 +128,7 @@ export class SearchWebTool {
             query,
             search_depth: 'basic',
             include_answer: true,
-            max_results: 5,
+            max_results: 10,
           }),
         });
         if (!response.ok) throw new Error(`Tavily API error: ${response.statusText}`);

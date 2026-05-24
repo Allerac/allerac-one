@@ -1,9 +1,17 @@
 import { requireDomainAccess } from '@/app/lib/domain-access';
 import { getDomainSkillDefault } from '@/app/actions/skills';
-import ChatClient from '../chat/ChatClient';
+import HealthClient from './HealthClient';
 
 export default async function HealthPage() {
-  const user = await requireDomainAccess('health');
+  const user  = await requireDomainAccess('health');
   const skill = await getDomainSkillDefault('health');
-  return <ChatClient defaultSkillName={skill?.skill_name} domainName="Health" showHealth defaultSidebarCollapsed isAdmin={user.is_admin} />;
+  return (
+    <HealthClient
+      userId={user.id}
+      userName={user.name}
+      userEmail={user.email}
+      isAdmin={user.is_admin}
+      defaultSkillName={skill?.skill_name}
+    />
+  );
 }

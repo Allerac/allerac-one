@@ -19,6 +19,8 @@ const DOMAINS_ALL = [
   { id: 'social',  label: 'Social',  icon: '📸', path: '/social',   desc: 'Instagram manager' },
   { id: 'tickets', label: 'Tickets', icon: '🎫', path: '/tickets',  desc: 'Bug tracker & tasks' },
   { id: 'design',  label: 'Design',  icon: '🎨', path: '/design',   desc: 'Design system assistant' },
+  { id: 'search',  label: 'Search',  icon: '🔍', path: '/search',   desc: 'Web search' },
+  { id: 'email',   label: 'Email',   icon: '✉️', path: '/email',    desc: 'Email inbox & AI' },
 ];
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
@@ -69,7 +71,9 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     fetch('/api/domains')
       .then(r => r.json())
       .then(data => {
-        const filtered = DOMAINS_ALL.filter(d => data.visible.includes(d.id));
+        const filtered = data.visible
+          .map((slug: string) => DOMAINS_ALL.find(d => d.id === slug))
+          .filter(Boolean);
         setDomains(filtered);
       })
       .catch(() => setDomains(DOMAINS_ALL)); // Fallback to all
@@ -182,6 +186,11 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
         window.open(domain.path, 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
         setClickCount(c => ({ ...c, [domain.id]: 0 }));
       } else {
+        fetch('/api/log-submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ context: 'Navigation', message: `Entered domain: ${domain.label}`, level: 'info' }),
+        });
         router.push(domain.path);
       }
     } else {
@@ -313,7 +322,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-start',
-          gap: '4px',
+          gap: '0',
           padding: '12px',
           overflowY: 'auto',
         }}>
@@ -541,6 +550,7 @@ function DesktopIcon({
         cursor: 'pointer',
         padding: '6px',
         width: '72px',
+        height: '88px',
       }}
     >
       <div style={{

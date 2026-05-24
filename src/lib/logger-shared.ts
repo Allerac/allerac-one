@@ -32,4 +32,5 @@ export const CONTEXT_COLORS: Record<string, string> = {
   Notifications:'#ff5ea3',  // hot pink (reserved for future)
   System:       '#6272a4',
   system:       '#6272a4',
+  Navigation:   '#d0aaff',  // lilac
 };

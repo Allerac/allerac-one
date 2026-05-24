@@ -937,7 +937,7 @@ export default function AdminChat({
             handleGenerateSummary={handleGenerateSummary}
             isTerminalMode={effectiveChatMode === 'terminal'}
             onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
-            hideHomeButton={showInstagramPost || !isAdmin}
+            hideHomeButton={!isAdmin}
             userName={userName}
             userEmail={userEmail}
             onLogout={handleLogout}
