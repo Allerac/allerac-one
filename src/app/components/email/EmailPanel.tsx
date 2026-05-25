@@ -173,8 +173,12 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
       {/* Email list + detail split */}
       {accounts.length > 0 && (
         <div className="flex flex-1 overflow-hidden">
-          {/* Message list */}
-          <div className={`flex-shrink-0 overflow-y-auto ${selectedMsg || loadingMsg ? 'w-72 border-r' : 'flex-1'} ${borderCls}`}>
+          {/* Message list — hidden on mobile when a message is open */}
+          <div className={`overflow-y-auto ${
+            selectedMsg || loadingMsg
+              ? 'hidden lg:flex lg:flex-col lg:flex-shrink-0 lg:w-72 lg:border-r'
+              : 'flex flex-col flex-1'
+          } ${borderCls}`}>
             {loadingMsgs && (
               <div className={`flex items-center justify-center py-12 ${textMuted}`}>
                 <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -218,7 +222,15 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
               ) : selectedMsg ? (
                 <>
                   {/* Email header */}
-                  <div className={`flex-shrink-0 px-5 py-4 border-b ${borderCls}`}>
+                  <div className={`flex-shrink-0 px-4 py-3 border-b ${borderCls}`}>
+                    {/* Back button — mobile only */}
+                    <button onClick={() => { setSelectedMsg(null); onContextUpdate(''); }}
+                      className={`lg:hidden flex items-center gap-1.5 text-xs mb-2.5 ${textMuted} hover:text-current transition-colors`}>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Back to inbox
+                    </button>
                     <div className="flex items-start justify-between gap-3">
                       <h3 className={`text-sm font-semibold leading-snug ${textPrimary}`}>{selectedMsg.subject}</h3>
                       <button onClick={handleReply}
