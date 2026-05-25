@@ -133,6 +133,18 @@ export async function createEmailAccount(input: CreateEmailAccountInput): Promis
   return { id: result.rows[0].id };
 }
 
+export async function deleteEmailMessage(accountId: string, uid: number): Promise<{ error?: string }> {
+  const user = await assertUser();
+  const account = await loadAccountForUser(accountId, user.id);
+  const imap = new ImapService();
+  try {
+    await imap.deleteMessage(account, uid);
+    return {};
+  } catch (err: any) {
+    return { error: err?.message ?? 'Failed to delete message' };
+  }
+}
+
 export async function deleteEmailAccount(accountId: string): Promise<void> {
   const user = await assertUser();
   await pool.query(

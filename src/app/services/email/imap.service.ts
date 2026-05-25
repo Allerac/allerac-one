@@ -139,6 +139,33 @@ export class ImapService {
     }
   }
 
+  async deleteMessage(account: EmailAccount, uid: number): Promise<void> {
+    const client = this.buildClient(account);
+    await client.connect();
+    try {
+      const lock = await client.getMailboxLock('INBOX');
+      try {
+        const trashFolders = ['[Gmail]/Trash', 'Deleted Items', 'Deleted Messages', 'Trash'];
+        let moved = false;
+        for (const folder of trashFolders) {
+          try {
+            await client.messageMove(String(uid), folder, { uid: true });
+            moved = true;
+            break;
+          } catch { /* try next */ }
+        }
+        if (!moved) {
+          await client.messageFlagsAdd(String(uid), ['\\Deleted'], { uid: true });
+          await client.messageDelete(String(uid), { uid: true });
+        }
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await client.logout();
+    }
+  }
+
   async testConnection(account: EmailAccount): Promise<{ ok: boolean; error?: string }> {
     const client = this.buildClient(account);
     try {

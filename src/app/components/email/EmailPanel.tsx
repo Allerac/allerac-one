@@ -47,6 +47,11 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
   const [selectedMsg, setSelectedMsg]     = useState<EmailDetail | null>(null);
   const [loadingMsg, setLoadingMsg]       = useState(false);
   const [loadingUid, setLoadingUid]       = useState<number | null>(null);
+  const [deletingUid, setDeletingUid]     = useState<number | null>(null);
+  const [confirmDeleteUid, setConfirmDeleteUid] = useState<number | null>(null);
+  const [revealedUid, setRevealedUid]     = useState<number | null>(null);
+  const swipeRef = useRef<{ x: number; y: number; el: HTMLDivElement; uid: number; decided: boolean } | null>(null);
+  const REVEAL_W = 72;
   const [addOpen, setAddOpen]             = useState(false);
   const [composeOpen, setComposeOpen]     = useState(false);
   const [replyData, setReplyData]         = useState<{ to: string; subject: string; inReplyTo: string; references: string } | null>(null);
@@ -84,6 +89,8 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
 
   const openMessage = async (msg: EmailSummary) => {
     if (!selectedAccount || loadingUid === msg.uid) return;
+    setConfirmDeleteUid(null);
+    setRevealedUid(null);
     setLoadingUid(msg.uid);
     setLoadingMsg(true);
     try {
@@ -98,6 +105,54 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
     } catch { /* silent */ }
     finally { setLoadingMsg(false); setLoadingUid(null); }
   };
+
+  const handleDelete = useCallback(async (uid: number) => {
+    if (!selectedAccount || deletingUid === uid) return;
+    setDeletingUid(uid);
+    setRevealedUid(null);
+    try {
+      await emailActions.deleteEmailMessage(selectedAccount, uid);
+      setMessages(prev => prev.filter(m => m.uid !== uid));
+      if (selectedMsg?.uid === uid) { setSelectedMsg(null); onContextUpdate(''); }
+    } catch { /* silent */ }
+    finally { setDeletingUid(null); }
+  }, [selectedAccount, deletingUid, selectedMsg, onContextUpdate]);
+
+  const onSwipeTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>, uid: number) => {
+    if (revealedUid !== null && revealedUid !== uid) { setRevealedUid(null); return; }
+    swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, el: e.currentTarget, uid, decided: false };
+  }, [revealedUid]);
+
+  const onSwipeTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const s = swipeRef.current;
+    if (!s) return;
+    const dx = e.touches[0].clientX - s.x;
+    const dy = e.touches[0].clientY - s.y;
+    if (!s.decided) {
+      if (Math.abs(dy) > Math.abs(dx)) { swipeRef.current = null; return; }
+      s.decided = true;
+    }
+    const base = revealedUid === s.uid ? -REVEAL_W : 0;
+    const offset = Math.min(0, Math.max(-REVEAL_W, base + dx));
+    s.el.style.transition = 'none';
+    s.el.style.transform = `translateX(${offset}px)`;
+  }, [revealedUid, REVEAL_W]);
+
+  const onSwipeTouchEnd = useCallback(() => {
+    const s = swipeRef.current;
+    if (!s) return;
+    swipeRef.current = null;
+    const mat = new DOMMatrix(getComputedStyle(s.el).transform);
+    const offset = mat.m41;
+    s.el.style.transition = 'transform 0.2s ease';
+    if (offset < -(REVEAL_W / 2)) {
+      s.el.style.transform = `translateX(-${REVEAL_W}px)`;
+      setRevealedUid(s.uid);
+    } else {
+      s.el.style.transform = 'translateX(0)';
+      setRevealedUid(null);
+    }
+  }, [REVEAL_W]);
 
   const handleReply = () => {
     if (!selectedMsg) return;
@@ -191,21 +246,43 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
               <div className={`text-center py-12 text-sm ${textMuted}`}>No messages</div>
             )}
             {messages.map(msg => (
-              <button key={msg.uid} onClick={() => openMessage(msg)}
-                className={`w-full text-left px-4 py-3 border-b transition-colors ${borderCls} ${selectedMsg?.uid === msg.uid || loadingUid === msg.uid ? activeRow : hoverRow}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <span className={`text-sm truncate ${msg.seen ? textMuted : `font-semibold ${textPrimary}`}`}>
-                    {msg.fromName || msg.from}
-                  </span>
-                  <span className={`text-xs flex-shrink-0 ${textMuted}`}>
-                    {loadingUid === msg.uid
-                      ? <svg className="w-3.5 h-3.5 animate-spin inline" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
-                      : relativeDate(msg.date)}
-                  </span>
+              <div key={msg.uid} className={`relative overflow-hidden border-b ${borderCls}`}>
+                {/* Delete action revealed by swipe (mobile) */}
+                <div className="lg:hidden absolute right-0 top-0 bottom-0 w-[72px] flex items-center justify-center bg-red-600">
+                  {deletingUid === msg.uid
+                    ? <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                    : <button onClick={() => handleDelete(msg.uid)} className="flex flex-col items-center gap-1 text-white">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <span className="text-xs font-medium">Delete</span>
+                      </button>
+                  }
                 </div>
-                <p className={`text-xs truncate mt-0.5 ${msg.seen ? textMuted : textPrimary}`}>{msg.subject}</p>
-                {msg.snippet && <p className={`text-xs truncate mt-0.5 opacity-60 ${textMuted}`}>{msg.snippet}</p>}
-              </button>
+
+                {/* Row content — swipeable on mobile */}
+                <div
+                  onTouchStart={e => onSwipeTouchStart(e, msg.uid)}
+                  onTouchMove={onSwipeTouchMove}
+                  onTouchEnd={onSwipeTouchEnd}
+                  style={{ transform: revealedUid === msg.uid ? `translateX(-${REVEAL_W}px)` : 'translateX(0)', transition: 'transform 0.2s ease' }}
+                  onClick={() => {
+                    if (revealedUid === msg.uid) { setRevealedUid(null); return; }
+                    openMessage(msg);
+                  }}
+                  className={`w-full text-left px-4 py-3 cursor-pointer transition-colors ${selectedMsg?.uid === msg.uid || loadingUid === msg.uid ? activeRow : hoverRow} ${d ? 'bg-gray-900' : 'bg-white'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className={`text-sm truncate ${msg.seen ? textMuted : `font-semibold ${textPrimary}`}`}>
+                      {msg.fromName || msg.from}
+                    </span>
+                    <span className={`text-xs flex-shrink-0 ${textMuted}`}>
+                      {loadingUid === msg.uid
+                        ? <svg className="w-3.5 h-3.5 animate-spin inline" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                        : relativeDate(msg.date)}
+                    </span>
+                  </div>
+                  <p className={`text-xs truncate mt-0.5 ${msg.seen ? textMuted : textPrimary}`}>{msg.subject}</p>
+                  {msg.snippet && <p className={`text-xs truncate mt-0.5 opacity-60 ${textMuted}`}>{msg.snippet}</p>}
+                </div>
+              </div>
             ))}
           </div>
 
@@ -231,15 +308,39 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
                       </svg>
                       Back to inbox
                     </button>
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className={`text-sm font-semibold leading-snug ${textPrimary}`}>{selectedMsg.subject}</h3>
-                      <button onClick={handleReply}
-                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                        </svg>
-                        Reply
-                      </button>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className={`text-sm font-semibold leading-snug flex-1 min-w-0 ${textPrimary}`}>{selectedMsg.subject}</h3>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button onClick={handleReply}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                          </svg>
+                          Reply
+                        </button>
+                        {confirmDeleteUid === selectedMsg.uid ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-xs ${textMuted}`}>Delete?</span>
+                            <button onClick={() => { setConfirmDeleteUid(null); handleDelete(selectedMsg.uid); }}
+                              className="px-2 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors">
+                              Yes
+                            </button>
+                            <button onClick={() => setConfirmDeleteUid(null)}
+                              className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${d ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmDeleteUid(selectedMsg.uid)} disabled={deletingUid === selectedMsg.uid}
+                            title="Delete"
+                            className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${d ? 'hover:bg-red-900/40 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'}`}>
+                            {deletingUid === selectedMsg.uid
+                              ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                              : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            }
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className={`mt-2 space-y-0.5 text-xs ${textMuted}`}>
                       <p><span className="font-medium">From:</span> {selectedMsg.fromName ? `${selectedMsg.fromName} <${selectedMsg.from}>` : selectedMsg.from}</p>
@@ -249,9 +350,21 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
                     </div>
                   </div>
                   {/* Body */}
-                  <div className={`flex-1 overflow-y-auto px-5 py-4 text-sm leading-relaxed ${textPrimary}`}>
-                    <pre className="whitespace-pre-wrap font-sans">{selectedMsg.bodyText}</pre>
-                  </div>
+                  {selectedMsg.bodyHtml ? (
+                    <iframe
+                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#3b82f6;}table{max-width:100%;}*{box-sizing:border-box;}</style></head><body>${selectedMsg.bodyHtml}</body></html>`}
+                      sandbox="allow-same-origin"
+                      className="flex-1 w-full border-0 bg-white"
+                      style={{ minHeight: 0 }}
+                      title="Email body"
+                    />
+                  ) : (
+                    <div className={`flex-1 overflow-y-auto px-5 py-4 text-sm leading-relaxed ${textPrimary}`}>
+                      {selectedMsg.bodyText.split(/\n{2,}/).map((para, i) => (
+                        <p key={i} className="mb-3 whitespace-pre-wrap">{para.trim()}</p>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : null}
             </div>
