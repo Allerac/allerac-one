@@ -75,6 +75,23 @@ export async function listEmailAccounts(): Promise<EmailAccountRow[]> {
   return result.rows;
 }
 
+function formatConnectionError(protocol: string, raw?: string): string {
+  const msg = (raw ?? '').toLowerCase();
+  if (msg.includes('auth') || msg.includes('credential') || msg.includes('invalid') || msg.includes('535') || msg.includes('534')) {
+    return `${protocol} authentication failed. Make sure you're using an App Password — your regular password won't work. Check the setup guide in the modal.`;
+  }
+  if (msg.includes('econnrefused') || msg.includes('connect')) {
+    return `${protocol} connection refused. Check the server host and port.`;
+  }
+  if (msg.includes('timeout') || msg.includes('etimedout')) {
+    return `${protocol} connection timed out. Check the server host and your network.`;
+  }
+  if (msg.includes('certificate') || msg.includes('tls') || msg.includes('ssl')) {
+    return `${protocol} TLS/SSL error. Try toggling the SSL option.`;
+  }
+  return `${protocol} connection failed${raw ? `: ${raw}` : '.'}`;
+}
+
 export async function createEmailAccount(input: CreateEmailAccountInput): Promise<{ id: string } | { error: string }> {
   const user = await assertUser();
   const imap = new ImapService();
@@ -94,13 +111,13 @@ export async function createEmailAccount(input: CreateEmailAccountInput): Promis
     password: input.password,
   };
 
-  const [imapOk, smtpOk] = await Promise.all([
+  const [imapResult, smtpResult] = await Promise.all([
     imap.testConnection(account),
     smtp.testConnection(account),
   ]);
 
-  if (!imapOk) return { error: 'IMAP connection failed. Check host, port and credentials.' };
-  if (!smtpOk) return { error: 'SMTP connection failed. Check host, port and credentials.' };
+  if (!imapResult.ok) return { error: formatConnectionError('IMAP', imapResult.error) };
+  if (!smtpResult.ok) return { error: formatConnectionError('SMTP', smtpResult.error) };
 
   const encrypted = encrypt(input.password);
   const result = await pool.query(

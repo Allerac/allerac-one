@@ -139,14 +139,14 @@ export class ImapService {
     }
   }
 
-  async testConnection(account: EmailAccount): Promise<boolean> {
+  async testConnection(account: EmailAccount): Promise<{ ok: boolean; error?: string }> {
     const client = this.buildClient(account);
     try {
       await client.connect();
       await client.logout();
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? String(err) };
     }
   }
 }

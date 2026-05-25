@@ -34,7 +34,7 @@ export class SmtpService {
     });
   }
 
-  async testConnection(account: EmailAccount): Promise<boolean> {
+  async testConnection(account: EmailAccount): Promise<{ ok: boolean; error?: string }> {
     const transporter = nodemailer.createTransport({
       host: account.smtp_host,
       port: account.smtp_port,
@@ -44,9 +44,9 @@ export class SmtpService {
     });
     try {
       await transporter.verify();
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? String(err) };
     }
   }
 }
