@@ -50,7 +50,7 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
   const [deletingUid, setDeletingUid]     = useState<number | null>(null);
   const [confirmDeleteUid, setConfirmDeleteUid] = useState<number | null>(null);
   const [revealedUid, setRevealedUid]     = useState<number | null>(null);
-  const swipeRef = useRef<{ x: number; y: number; el: HTMLDivElement; uid: number; decided: boolean } | null>(null);
+  const swipeRef = useRef<{ x: number; y: number; el: HTMLElement; uid: number; decided: boolean } | null>(null);
   const REVEAL_W = 72;
   const [addOpen, setAddOpen]             = useState(false);
   const [composeOpen, setComposeOpen]     = useState(false);
@@ -118,12 +118,12 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
     finally { setDeletingUid(null); }
   }, [selectedAccount, deletingUid, selectedMsg, onContextUpdate]);
 
-  const onSwipeTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>, uid: number) => {
+  const onSwipeTouchStart = useCallback((e: React.TouchEvent<HTMLButtonElement>, uid: number) => {
     if (revealedUid !== null && revealedUid !== uid) { setRevealedUid(null); return; }
     swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, el: e.currentTarget, uid, decided: false };
   }, [revealedUid]);
 
-  const onSwipeTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+  const onSwipeTouchMove = useCallback((e: React.TouchEvent<HTMLButtonElement>) => {
     const s = swipeRef.current;
     if (!s) return;
     const dx = e.touches[0].clientX - s.x;
@@ -149,7 +149,7 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
       s.el.style.transform = `translateX(-${REVEAL_W}px)`;
       setRevealedUid(s.uid);
     } else {
-      s.el.style.transform = 'translateX(0)';
+      s.el.style.transform = 'none';
       setRevealedUid(null);
     }
   }, [REVEAL_W]);
@@ -246,29 +246,31 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
               <div className={`text-center py-12 text-sm ${textMuted}`}>No messages</div>
             )}
             {messages.map(msg => (
-              <div key={msg.uid} className={`relative overflow-hidden border-b ${borderCls}`}>
-                {/* Delete action revealed by swipe (mobile) */}
-                <div className="lg:hidden absolute right-0 top-0 bottom-0 w-[72px] flex items-center justify-center bg-red-600">
-                  {deletingUid === msg.uid
-                    ? <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
-                    : <button onClick={() => handleDelete(msg.uid)} className="flex flex-col items-center gap-1 text-white">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        <span className="text-xs font-medium">Delete</span>
-                      </button>
-                  }
-                </div>
+              <div key={msg.uid} className={`relative border-b ${borderCls}`}>
+                {/* Delete action — absolute overlay, revealed by swipe on mobile */}
+                {revealedUid === msg.uid && (
+                  <div className="lg:hidden absolute right-0 top-0 bottom-0 w-[72px] flex items-center justify-center bg-red-600 z-10">
+                    {deletingUid === msg.uid
+                      ? <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                      : <button onClick={() => handleDelete(msg.uid)} className="flex flex-col items-center gap-1 text-white">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          <span className="text-xs font-medium">Delete</span>
+                        </button>
+                    }
+                  </div>
+                )}
 
-                {/* Row content — swipeable on mobile */}
-                <div
+                {/* Row — swipeable on mobile */}
+                <button
                   onTouchStart={e => onSwipeTouchStart(e, msg.uid)}
                   onTouchMove={onSwipeTouchMove}
                   onTouchEnd={onSwipeTouchEnd}
-                  style={{ transform: revealedUid === msg.uid ? `translateX(-${REVEAL_W}px)` : 'translateX(0)', transition: 'transform 0.2s ease' }}
+                  style={{ transform: revealedUid === msg.uid ? `translateX(-${REVEAL_W}px)` : 'none' }}
                   onClick={() => {
                     if (revealedUid === msg.uid) { setRevealedUid(null); return; }
                     openMessage(msg);
                   }}
-                  className={`w-full text-left px-4 py-3 cursor-pointer transition-colors ${selectedMsg?.uid === msg.uid || loadingUid === msg.uid ? activeRow : hoverRow} ${d ? 'bg-gray-900' : 'bg-white'}`}>
+                  className={`w-full text-left px-4 py-3 transition-colors ${selectedMsg?.uid === msg.uid || loadingUid === msg.uid ? activeRow : hoverRow}`}>
                   <div className="flex items-start justify-between gap-2">
                     <span className={`text-sm truncate ${msg.seen ? textMuted : `font-semibold ${textPrimary}`}`}>
                       {msg.fromName || msg.from}
@@ -281,7 +283,7 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
                   </div>
                   <p className={`text-xs truncate mt-0.5 ${msg.seen ? textMuted : textPrimary}`}>{msg.subject}</p>
                   {msg.snippet && <p className={`text-xs truncate mt-0.5 opacity-60 ${textMuted}`}>{msg.snippet}</p>}
-                </div>
+                </button>
               </div>
             ))}
           </div>
