@@ -7,6 +7,7 @@ import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import pool from '@/app/clients/db';
+import sharp from 'sharp';
 
 const credService = new InstagramCredentialsService();
 const igTool = new InstagramTool();
@@ -152,19 +153,6 @@ export async function generateTags(
   }
 }
 
-function getJpegDimensions(buf: Buffer): { width: number; height: number } | null {
-  let i = 2;
-  while (i < buf.length) {
-    if (buf[i] !== 0xff) break;
-    const marker = buf[i + 1];
-    const segLen = buf.readUInt16BE(i + 2);
-    if (marker >= 0xc0 && marker <= 0xc3) {
-      return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
-    }
-    i += 2 + segLen;
-  }
-  return null;
-}
 
 /**
  * Publish Instagram post
@@ -176,23 +164,25 @@ export async function publishInstagramPost(
 ): Promise<{ success: true; postId: string; message: string } | { success: false; error: string }> {
   try {
     // Convert base64 to buffer
-    const buffer = Buffer.from(imageBase64, 'base64');
+    const rawBuffer = Buffer.from(imageBase64, 'base64');
 
-    // Validate image format — Instagram only accepts JPEG
-    const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
-    if (isPng) {
-      return { success: false, error: 'O Instagram só aceita imagens JPEG. Converte a imagem para JPG antes de publicar.' };
-    }
-    const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8;
-    if (!isJpeg) {
-      return { success: false, error: 'Formato de imagem não suportado. O Instagram só aceita imagens JPEG.' };
+    // Convert to JPEG (handles PNG, WebP, HEIC, GIF, etc. transparently)
+    const image = sharp(rawBuffer);
+    const meta = await image.metadata();
+
+    if (!meta.width || !meta.height) {
+      return { success: false, error: 'Não foi possível ler a imagem. Verifica se o ficheiro está correto.' };
     }
 
-    // Validate image dimensions (Instagram requires min 320px)
-    const dims = getJpegDimensions(buffer);
-    if (dims && (dims.width < 320 || dims.height < 320)) {
-      return { success: false, error: `A imagem é demasiado pequena (${dims.width}x${dims.height}px). O Instagram requer no mínimo 320x320px.` };
+    // Validate dimensions (Instagram requires min 320px)
+    if (meta.width < 320 || meta.height < 320) {
+      return { success: false, error: `A imagem é demasiado pequena (${meta.width}x${meta.height}px). O Instagram requer no mínimo 320x320px.` };
     }
+
+    // Convert to JPEG if not already (Instagram only accepts JPEG)
+    const buffer = meta.format === 'jpeg'
+      ? rawBuffer
+      : await image.jpeg({ quality: 92 }).toBuffer();
 
     // Upload to Imgur
     const uploadService = getImageUploadService();
