@@ -66,23 +66,46 @@ export async function disconnectInstagram(userId: string) {
   await credService.disconnect(userId);
 }
 
-/** Debug: show what scopes the stored token actually has */
+/** Debug: show current subscribed fields and token status */
 export async function debugTokenPermissions(userId: string): Promise<{ success: boolean; data: any }> {
   try {
-    const accessToken = await credService.getAccessToken(userId);
+    const [accessToken, status] = await Promise.all([
+      credService.getAccessToken(userId),
+      credService.getStatus(userId),
+    ]);
     if (!accessToken) return { success: false, data: 'No token found' };
-    const appId     = process.env.INSTAGRAM_APP_ID     ?? '';
-    const appSecret = process.env.INSTAGRAM_APP_SECRET ?? '';
-    const appToken  = `${appId}|${appSecret}`;
-    const res = await fetch(
-      `https://graph.facebook.com/debug_token?input_token=${accessToken}&access_token=${encodeURIComponent(appToken)}`
-    );
-    const data = await res.json();
-    console.log('[Instagram] Token debug:', JSON.stringify(data));
-    const scopes: string[] = data?.data?.scopes ?? [];
-    return { success: res.ok, data: scopes.length ? scopes : data };
+    const igId = status.ig_business_user_id ?? status.ig_user_id;
+    const [meRes, subsRes] = await Promise.all([
+      fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${accessToken}`),
+      fetch(`https://graph.instagram.com/v21.0/${igId}/subscribed_apps?access_token=${accessToken}`),
+    ]);
+    const me   = await meRes.json();
+    const subs = await subsRes.json();
+    console.log('[Instagram] Token debug — me:', JSON.stringify(me), '| subscribed_apps:', JSON.stringify(subs));
+    return { success: true, data: { me, subscribed_apps: subs } };
   } catch (err: any) {
     return { success: false, data: err.message };
+  }
+}
+
+/** Revoke app permissions from Instagram side, forcing fresh re-authorization on next connect */
+export async function revokeInstagramAccess(userId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const accessToken = await credService.getAccessToken(userId);
+    if (!accessToken) return { success: false, message: 'No token found' };
+    const res = await fetch(
+      `https://graph.instagram.com/v21.0/me/permissions?access_token=${accessToken}`,
+      { method: 'DELETE' }
+    );
+    const data = await res.json();
+    console.log('[Instagram] revokeAccess:', JSON.stringify(data));
+    if (data.success) {
+      await credService.disconnect(userId);
+      return { success: true, message: 'Revoked. Now reconnect Instagram.' };
+    }
+    return { success: false, message: JSON.stringify(data) };
+  } catch (err: any) {
+    return { success: false, message: err.message };
   }
 }
 

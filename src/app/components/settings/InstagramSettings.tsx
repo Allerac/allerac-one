@@ -60,6 +60,13 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
     setMessage({ type: result.success ? 'success' : 'error', text: JSON.stringify(result.data) });
   }
 
+  async function handleForceRevoke() {
+    if (!confirm('This will revoke app access from Instagram and disconnect. You will need to reconnect.')) return;
+    const result = await instagramActions.revokeInstagramAccess(userId!);
+    if (result.success) { setState('disconnected'); setUsername(''); }
+    setMessage({ type: result.success ? 'success' : 'error', text: result.message });
+  }
+
   function handleConnect() {
     window.location.href = '/api/instagram/auth';
   }
@@ -114,6 +121,9 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
             </button>
             <button onClick={handleDebugToken} className={btn('ghost')}>
               Debug token
+            </button>
+            <button onClick={handleForceRevoke} className={btn('ghost')}>
+              Force revoke
             </button>
             <button onClick={handleDisconnect} className={btn('danger')}>
               Disconnect
