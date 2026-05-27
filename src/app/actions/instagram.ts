@@ -75,7 +75,7 @@ export async function resubscribeWebhooks(userId: string): Promise<{ success: bo
     const accessToken = await credService.getAccessToken(userId);
     if (!accessToken) return { success: false, message: 'No access token found' };
 
-    const igUserId = status.ig_user_id ?? status.ig_business_user_id;
+    const igUserId = status.ig_business_user_id ?? status.ig_user_id;
     if (!igUserId) return { success: false, message: 'No Instagram user ID found' };
 
     const res = await fetch(

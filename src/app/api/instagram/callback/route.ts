@@ -66,10 +66,11 @@ export async function GET(request: Request) {
       scopes:    'instagram_basic,instagram_manage_messages,instagram_content_publish',
     });
 
-    // Subscribe this IG account to webhook message events
+    // Subscribe this IG account to webhook message + comment events
+    // Must use the Business Login scoped ID (businessUserId), not the legacy webhookUserId
     try {
       const subRes = await fetch(
-        `https://graph.instagram.com/v21.0/${webhookUserId}/subscribed_apps`,
+        `https://graph.instagram.com/v21.0/${businessUserId}/subscribed_apps`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
