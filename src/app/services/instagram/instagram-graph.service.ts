@@ -69,6 +69,7 @@ export class InstagramGraphService {
       redirect_uri:  REDIRECT_URI,
       scope:         'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish',
       response_type: 'code',
+      auth_type:     'rerequest',
       state,
     });
     return `${IG_AUTH_URL}?${params.toString()}`;
