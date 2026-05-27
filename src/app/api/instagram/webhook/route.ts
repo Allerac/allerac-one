@@ -22,9 +22,14 @@ const VERIFY_TOKEN = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN ?? 'allerac-ig-w
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN ?? '';
 const OLLAMA_URL   = process.env.OLLAMA_URL ?? 'http://ollama:11434';
 
-// Dedup: avoid processing the same message twice (Meta may retry)
+// Dedup: avoid processing the same event twice (Meta may retry)
 const processedMids = new Set<string>();
+const processedComments = new Set<string>();
 const MAX_DEDUP = 500;
+
+// Comment trigger — keyword → auto-reply
+const COMMENT_TRIGGER = (process.env.INSTAGRAM_COMMENT_TRIGGER ?? 'quiero').toLowerCase();
+const COMMENT_REPLY   = process.env.INSTAGRAM_COMMENT_REPLY   ?? 'Enviamos os detalhes por DM! 📩';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful, friendly Instagram DM assistant.
 Reply concisely and naturally — this is a DM conversation, not an email.
@@ -77,31 +82,64 @@ async function processEvents(body: any) {
   if (body.object !== 'instagram') return;
 
   for (const entry of body.entry ?? []) {
-    const igAccountId = entry.id as string; // the receiving IG account
+    const igAccountId = entry.id as string;
 
+    // ── DMs ────────────────────────────────────────────────────────────────
     for (const event of entry.messaging ?? []) {
       const senderId = event.sender?.id as string;
       const mid      = event.message?.mid as string;
       const text     = event.message?.text as string;
 
       if (!senderId || !text || !mid) continue;
-
-      // Skip echo (we sent this)
       if (senderId === igAccountId) continue;
-
-      // Skip if already processed
       if (processedMids.has(mid)) continue;
       processedMids.add(mid);
       if (processedMids.size > MAX_DEDUP) {
-        // Evict oldest entries
         const first = processedMids.values().next().value;
         if (first) processedMids.delete(first);
       }
 
       console.log(`[Instagram Webhook] DM from ${senderId}: "${text.slice(0, 80)}"`);
-
       await handleDM({ igAccountId, senderId, text });
     }
+
+    // ── Comments ───────────────────────────────────────────────────────────
+    for (const change of entry.changes ?? []) {
+      if (change.field !== 'comments') continue;
+      const v = change.value;
+      const commentId   = v?.id as string;
+      const commentText = (v?.text ?? '') as string;
+      const commenterId = v?.from?.id as string;
+
+      if (!commentId || !commentText) continue;
+      if (commenterId === igAccountId) continue; // skip own comments
+      if (processedComments.has(commentId)) continue;
+      processedComments.add(commentId);
+      if (processedComments.size > MAX_DEDUP) {
+        const first = processedComments.values().next().value;
+        if (first) processedComments.delete(first);
+      }
+
+      console.log(`[Instagram Webhook] Comment ${commentId} from ${commenterId}: "${commentText.slice(0, 80)}"`);
+
+      if (commentText.trim().toLowerCase().includes(COMMENT_TRIGGER)) {
+        await handleCommentTrigger({ igAccountId, commentId });
+      }
+    }
+  }
+}
+
+async function handleCommentTrigger({ igAccountId, commentId }: { igAccountId: string; commentId: string }) {
+  const creds = await credService.getByIgUserId(igAccountId);
+  if (!creds) {
+    console.warn(`[Instagram Webhook] No account for IG ${igAccountId}`);
+    return;
+  }
+  try {
+    await instagramService.replyToComment(creds.accessToken, commentId, COMMENT_REPLY);
+    console.log(`[Instagram Webhook] Replied to comment ${commentId}`);
+  } catch (err) {
+    console.error('[Instagram Webhook] replyToComment error:', err);
   }
 }
 

@@ -177,6 +177,16 @@ export class InstagramGraphService {
     return res.json();
   }
 
+  /** Reply to a comment on a post */
+  async replyToComment(accessToken: string, commentId: string, message: string): Promise<void> {
+    const res = await fetch(`${GRAPH_URL}/${commentId}/replies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ message }),
+    });
+    if (!res.ok) throw new Error(`Instagram replyToComment error: ${await res.text()}`);
+  }
+
   /** Publish a prepared media post */
   async publishPost(accessToken: string, igUserId: string, imageUrl: string, caption: string): Promise<{ id: string }> {
     // Note: igUserId here is the Business User ID (for Graph API), not the legacy webhook ID
