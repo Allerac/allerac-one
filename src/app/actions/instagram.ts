@@ -66,15 +66,21 @@ export async function disconnectInstagram(userId: string) {
   await credService.disconnect(userId);
 }
 
-/** Debug: show what permissions the stored token actually has */
+/** Debug: show what scopes the stored token actually has */
 export async function debugTokenPermissions(userId: string): Promise<{ success: boolean; data: any }> {
   try {
     const accessToken = await credService.getAccessToken(userId);
     if (!accessToken) return { success: false, data: 'No token found' };
-    const res = await fetch(`https://graph.instagram.com/v21.0/me/permissions?access_token=${accessToken}`);
+    const appId     = process.env.INSTAGRAM_APP_ID     ?? '';
+    const appSecret = process.env.INSTAGRAM_APP_SECRET ?? '';
+    const appToken  = `${appId}|${appSecret}`;
+    const res = await fetch(
+      `https://graph.facebook.com/debug_token?input_token=${accessToken}&access_token=${encodeURIComponent(appToken)}`
+    );
     const data = await res.json();
-    console.log('[Instagram] Token permissions:', JSON.stringify(data));
-    return { success: res.ok, data };
+    console.log('[Instagram] Token debug:', JSON.stringify(data));
+    const scopes: string[] = data?.data?.scopes ?? [];
+    return { success: res.ok, data: scopes.length ? scopes : data };
   } catch (err: any) {
     return { success: false, data: err.message };
   }
