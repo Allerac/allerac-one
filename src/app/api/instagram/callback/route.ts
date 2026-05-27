@@ -63,7 +63,7 @@ export async function GET(request: Request) {
       igBusinessUserId: businessUserId,
       username:  profile.username ?? '',
       expiresAt,
-      scopes:    'instagram_basic,instagram_manage_messages,instagram_content_publish',
+      scopes:    'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish',
     });
 
     // Subscribe this IG account to webhook message + comment events
