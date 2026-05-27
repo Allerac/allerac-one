@@ -102,7 +102,7 @@ export class InstagramCredentialsService {
   async getByIgUserId(igUserId: string): Promise<{ userId: string; accessToken: string } | null> {
     const result = await pool.query(
       `SELECT user_id, access_token_encrypted FROM instagram_credentials
-       WHERE ig_user_id = $1 AND is_connected = true`,
+       WHERE (ig_user_id = $1 OR ig_business_user_id = $1) AND is_connected = true`,
       [igUserId]
     );
     if (!result.rows[0]?.access_token_encrypted) return null;

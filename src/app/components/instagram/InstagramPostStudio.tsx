@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { generateCaption, generateTags, publishInstagramPost } from '@/app/actions/instagram';
+import { MODELS } from '@/app/services/llm/models';
 
 interface PostState {
   caption: string;
@@ -62,14 +63,26 @@ export default function InstagramPostStudio({
   const [price, setPrice] = useState('');
   const [productRef, setProductRef] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
-  const [isGeneratingTags, setIsGeneratingTags] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [selectedProvider, setSelectedProvider] = useState<'github' | 'gemini' | 'anthropic' | 'ollama'>('github');
   const t = useTranslations('instagramStudio');
   const locale = useLocale();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('selected_model');
+    if (saved) {
+      const model = MODELS.find(m => m.id === saved);
+      if (model) {
+        setSelectedModel(saved);
+        setSelectedProvider(model.provider as 'github' | 'gemini' | 'anthropic' | 'ollama');
+      }
+    }
+  }, []);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -87,28 +100,20 @@ export default function InstagramPostStudio({
     reader.readAsDataURL(file);
   };
 
-  const handleGenerateCaption = async () => {
+  const handleGenerateAll = async () => {
     const imageInput = imageBase64 || imageUrl;
     if (!imageInput) { setError(t('errNoImage')); return; }
-    setIsGeneratingCaption(true);
+    setIsGenerating(true);
     setError('');
     try {
-      const result = await generateCaption(imageInput, userId, undefined, locale);
-      if (result.success) setCaption(result.caption);
-      else setError(result.error);
+      const captionResult = await generateCaption(imageInput, userId, undefined, locale, selectedModel, selectedProvider);
+      if (!captionResult.success) { setError(captionResult.error); return; }
+      setCaption(captionResult.caption);
+      const tagsResult = await generateTags(userId, captionResult.caption, locale, selectedModel, selectedProvider);
+      if (tagsResult.success) setTags(tagsResult.tags);
+      else setError(tagsResult.error);
     } catch (err: any) { setError(err.message); }
-    finally { setIsGeneratingCaption(false); }
-  };
-
-  const handleGenerateTags = async () => {
-    setIsGeneratingTags(true);
-    setError('');
-    try {
-      const result = await generateTags(userId, caption, locale);
-      if (result.success) setTags(result.tags);
-      else setError(result.error);
-    } catch (err: any) { setError(err.message); }
-    finally { setIsGeneratingTags(false); }
+    finally { setIsGenerating(false); }
   };
 
   // Save current state to cache and restore state for new conversation when conversationId changes
@@ -213,6 +218,11 @@ export default function InstagramPostStudio({
 
       if (result.success) {
         setSuccess(result.message);
+        setCaption(''); setTags(''); setPrice(''); setProductRef(''); setIsProduct(false);
+        setImageBase64(null); setImagePreview(null); setImageUrl(null); setImageName(null);
+        setAspectRatio('1/1');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        studioStateCache.delete(conversationId ?? 'new');
         setTimeout(() => { onSuccess?.(result.postId); onClose?.(); }, 2000);
       } else {
         setError(result.error);
@@ -288,6 +298,16 @@ export default function InstagramPostStudio({
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
 
             {(imagePreview || imageUrl) && (
+              <button
+                onClick={handleGenerateAll}
+                disabled={isGenerating}
+                className={`mt-3 w-full px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition`}
+              >
+                {isGenerating ? t('generating') : t('generateWithAI')}
+              </button>
+            )}
+
+            {(imagePreview || imageUrl) && (
               <div className="mt-3">
                 <label className={`block text-xs ${txtMuted} mb-1.5`}>{t('aspectRatio')}</label>
                 <select
@@ -305,16 +325,7 @@ export default function InstagramPostStudio({
 
           {/* Caption */}
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className={`text-sm font-medium ${txtSub}`}>{t('caption')}</label>
-              <button
-                onClick={handleGenerateCaption}
-                disabled={isGeneratingCaption || (!imageBase64 && !imageUrl)}
-                className={`text-xs px-2 py-1 rounded bg-brand-600 hover:bg-brand-700 ${btnSecDis} ${btnDisTxt} disabled:cursor-not-allowed text-white transition`}
-              >
-                {isGeneratingCaption ? t('generating') : t('generateWithAI')}
-              </button>
-            </div>
+            <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('caption')}</label>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
@@ -327,16 +338,7 @@ export default function InstagramPostStudio({
 
           {/* Hashtags */}
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className={`text-sm font-medium ${txtSub}`}>{t('hashtags')}</label>
-              <button
-                onClick={handleGenerateTags}
-                disabled={isGeneratingTags || (!imageBase64 && !imageUrl)}
-                className={`text-xs px-2 py-1 rounded bg-brand-600 hover:bg-brand-700 ${btnSecDis} ${btnDisTxt} disabled:cursor-not-allowed text-white transition`}
-              >
-                {isGeneratingTags ? t('generating') : t('generateWithAI')}
-              </button>
-            </div>
+            <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('hashtags')}</label>
             <input
               type="text"
               value={tags}

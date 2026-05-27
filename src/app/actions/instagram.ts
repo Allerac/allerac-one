@@ -16,12 +16,32 @@ const systemSettingsService = new SystemSettingsService();
 
 const LOCALE_NAMES: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English', fr: 'French', de: 'German', it: 'Italian' };
 
-async function resolveGithubToken(userId: string): Promise<string> {
+type LLMProviderType = 'github' | 'gemini' | 'anthropic' | 'ollama';
+
+async function resolveLLMConfig(userId: string, provider: LLMProviderType): Promise<{ token: string; baseUrl: string }> {
   const [settings, sysSettings] = await Promise.all([
     userSettingsService.loadUserSettings(userId),
     systemSettingsService.loadAll(),
   ]);
-  return settings?.github_token || sysSettings.github_token || process.env.GITHUB_TOKEN || '';
+  switch (provider) {
+    case 'gemini':
+      return {
+        token: settings?.google_api_key || sysSettings.google_api_key || '',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      };
+    case 'anthropic':
+      return {
+        token: settings?.anthropic_api_key || sysSettings.anthropic_api_key || '',
+        baseUrl: 'https://api.anthropic.com',
+      };
+    case 'ollama':
+      return { token: '', baseUrl: '/api/ollama' };
+    default:
+      return {
+        token: settings?.github_token || sysSettings.github_token || process.env.GITHUB_TOKEN || '',
+        baseUrl: 'https://models.inference.ai.azure.com',
+      };
+  }
 }
 
 async function buildSocialSystemPrompt(userId: string, locale: string): Promise<string> {
@@ -46,25 +66,62 @@ export async function disconnectInstagram(userId: string) {
   await credService.disconnect(userId);
 }
 
+/** Re-subscribe the connected account to both messages and comments webhooks */
+export async function resubscribeWebhooks(userId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const status = await credService.getStatus(userId);
+    if (!status.is_connected) return { success: false, message: 'No connected Instagram account' };
+
+    const accessToken = await credService.getAccessToken(userId);
+    if (!accessToken) return { success: false, message: 'No access token found' };
+
+    const igUserId = status.ig_user_id ?? status.ig_business_user_id;
+    if (!igUserId) return { success: false, message: 'No Instagram user ID found' };
+
+    const res = await fetch(
+      `https://graph.instagram.com/v21.0/${igUserId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ subscribed_fields: 'messages,comments' }),
+      }
+    );
+    const data = await res.json();
+    console.log('[Instagram] resubscribeWebhooks:', JSON.stringify(data));
+    if (data.success) return { success: true, message: `Subscribed to messages + comments` };
+    return { success: false, message: JSON.stringify(data) };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
 /**
  * Generate Instagram caption using LLM
  * @param imageInput - Either a public image URL (http/https) or base64-encoded image data
+ * @param modelId - Model ID from user's selection (e.g. 'gemini-2.5-flash', 'gpt-4o-mini')
+ * @param provider - Provider from user's selection ('github' | 'gemini' | 'anthropic' | 'ollama')
  */
 export async function generateCaption(
   imageInput: string,
   userId: string,
   topic?: string,
-  locale = 'en'
+  locale = 'en',
+  modelId = 'gpt-4o-mini',
+  provider: LLMProviderType = 'github'
 ): Promise<{ success: true; caption: string } | { success: false; error: string }> {
   try {
-    const [githubToken, systemPrompt] = await Promise.all([
-      resolveGithubToken(userId),
+    const [llmConfig, systemPrompt] = await Promise.all([
+      resolveLLMConfig(userId, provider),
       buildSocialSystemPrompt(userId, locale),
     ]);
-    if (!githubToken) {
-      return { success: false, error: 'GitHub token is required. Please configure it in Settings → API Keys.' };
+    if (provider !== 'ollama' && !llmConfig.token) {
+      return { success: false, error: `API key for ${provider} not configured. Please add it in Settings → API Keys.` };
     }
-    const llmService = new LLMService('github', 'https://models.inference.ai.azure.com', { githubToken });
+    const llmService = new LLMService(provider, llmConfig.baseUrl, {
+      githubToken: provider === 'github' ? llmConfig.token : undefined,
+      geminiToken: provider === 'gemini' ? llmConfig.token : undefined,
+      anthropicToken: provider === 'anthropic' ? llmConfig.token : undefined,
+    });
 
     const imageMessage = topic
       ? `Generate a creative and engaging Instagram caption for a post about "${topic}". Include relevant context but keep it concise (max 150 chars for the caption itself).`
@@ -94,7 +151,7 @@ export async function generateCaption(
           ],
         },
       ],
-      model: 'gpt-4o-mini',
+      model: modelId,
       temperature: 0.7,
       max_tokens: 200,
     });
@@ -116,17 +173,23 @@ export async function generateCaption(
 export async function generateTags(
   userId: string,
   caption?: string,
-  locale = 'en'
+  locale = 'en',
+  modelId = 'gpt-4o-mini',
+  provider: LLMProviderType = 'github'
 ): Promise<{ success: true; tags: string } | { success: false; error: string }> {
   try {
-    const [githubToken, systemPrompt] = await Promise.all([
-      resolveGithubToken(userId),
+    const [llmConfig, systemPrompt] = await Promise.all([
+      resolveLLMConfig(userId, provider),
       buildSocialSystemPrompt(userId, locale),
     ]);
-    if (!githubToken) {
-      return { success: false, error: 'GitHub token is required. Please configure it in Settings → API Keys.' };
+    if (provider !== 'ollama' && !llmConfig.token) {
+      return { success: false, error: `API key for ${provider} not configured. Please add it in Settings → API Keys.` };
     }
-    const llmService = new LLMService('github', 'https://models.inference.ai.azure.com', { githubToken });
+    const llmService = new LLMService(provider, llmConfig.baseUrl, {
+      githubToken: provider === 'github' ? llmConfig.token : undefined,
+      geminiToken: provider === 'gemini' ? llmConfig.token : undefined,
+      anthropicToken: provider === 'anthropic' ? llmConfig.token : undefined,
+    });
 
     const prompt = caption
       ? `Generate 10-15 relevant Instagram hashtags for a post with this caption: "${caption}". Return only hashtags separated by spaces, no numbering.`
@@ -137,7 +200,7 @@ export async function generateTags(
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
       ],
-      model: 'gpt-4o-mini',
+      model: modelId,
       temperature: 0.6,
       max_tokens: 150,
     });

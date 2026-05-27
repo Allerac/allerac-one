@@ -50,6 +50,11 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
     setMessage({ type: 'success', text: 'Instagram disconnected.' });
   }
 
+  async function handleResubscribe() {
+    const result = await instagramActions.resubscribeWebhooks(userId!);
+    setMessage({ type: result.success ? 'success' : 'error', text: result.message });
+  }
+
   function handleConnect() {
     window.location.href = '/api/instagram/auth';
   }
@@ -99,6 +104,9 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
             </div>
           </div>
           <div className="mt-4 flex gap-2">
+            <button onClick={handleResubscribe} className={btn('ghost')}>
+              Re-subscribe webhooks
+            </button>
             <button onClick={handleDisconnect} className={btn('danger')}>
               Disconnect
             </button>
@@ -131,6 +139,7 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
         <div className={`text-xs ${muted} space-y-1`}>
           <p>✓ Caption & hashtag generation — available via Post button in sidebar</p>
           <p>✓ DM inbox & AI-drafted replies — available in Social → DM Manager</p>
+          <p>✓ Comment trigger — replies automatically to comments with keyword</p>
           <p>◌ Post scheduling — coming soon</p>
         </div>
       )}

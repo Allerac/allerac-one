@@ -73,7 +73,7 @@ export async function GET(request: Request) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ subscribed_fields: 'messages' }),
+          body: JSON.stringify({ subscribed_fields: 'messages,comments' }),
         }
       );
       const subData = await subRes.json();
