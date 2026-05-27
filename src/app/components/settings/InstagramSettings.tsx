@@ -55,6 +55,11 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
     setMessage({ type: result.success ? 'success' : 'error', text: result.message });
   }
 
+  async function handleDebugToken() {
+    const result = await instagramActions.debugTokenPermissions(userId!);
+    setMessage({ type: result.success ? 'success' : 'error', text: JSON.stringify(result.data) });
+  }
+
   function handleConnect() {
     window.location.href = '/api/instagram/auth';
   }
@@ -103,9 +108,12 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
               </span>
             </div>
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex gap-2 flex-wrap">
             <button onClick={handleResubscribe} className={btn('ghost')}>
               Re-subscribe webhooks
+            </button>
+            <button onClick={handleDebugToken} className={btn('ghost')}>
+              Debug token
             </button>
             <button onClick={handleDisconnect} className={btn('danger')}>
               Disconnect

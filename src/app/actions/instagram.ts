@@ -66,6 +66,20 @@ export async function disconnectInstagram(userId: string) {
   await credService.disconnect(userId);
 }
 
+/** Debug: show what permissions the stored token actually has */
+export async function debugTokenPermissions(userId: string): Promise<{ success: boolean; data: any }> {
+  try {
+    const accessToken = await credService.getAccessToken(userId);
+    if (!accessToken) return { success: false, data: 'No token found' };
+    const res = await fetch(`https://graph.instagram.com/v21.0/me/permissions?access_token=${accessToken}`);
+    const data = await res.json();
+    console.log('[Instagram] Token permissions:', JSON.stringify(data));
+    return { success: res.ok, data };
+  } catch (err: any) {
+    return { success: false, data: err.message };
+  }
+}
+
 /** Re-subscribe the connected account to both messages and comments webhooks */
 export async function resubscribeWebhooks(userId: string): Promise<{ success: boolean; message: string }> {
   try {
