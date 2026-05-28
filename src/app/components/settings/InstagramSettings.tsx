@@ -197,31 +197,19 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
             </div>
             {refManaged && (
               <div className="space-y-3 pt-2 border-t border-gray-700/40">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={`block text-xs ${muted} mb-1`}>Prefixo</label>
-                    <input
-                      type="text"
-                      value={refPrefix}
-                      onChange={(e) => setRefPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9-_]/g, ''))}
-                      maxLength={20}
-                      className={`w-full px-2 py-1.5 rounded text-xs border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:border-brand-500`}
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-xs ${muted} mb-1`}>Contador atual</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={refCounter}
-                      onChange={(e) => setRefCounter(Math.max(0, parseInt(e.target.value) || 0))}
-                      className={`w-full px-2 py-1.5 rounded text-xs border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:border-brand-500`}
-                    />
-                  </div>
+                <div>
+                  <label className={`block text-xs ${muted} mb-1`}>Contador atual</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={refCounter}
+                    onChange={(e) => setRefCounter(Math.max(0, parseInt(e.target.value) || 0))}
+                    className={`w-full px-2 py-1.5 rounded text-xs border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:border-brand-500`}
+                  />
                 </div>
                 <p className={`text-xs ${muted}`}>
                   Próxima referência: <span className={`font-mono font-semibold ${isDarkMode ? 'text-brand-400' : 'text-brand-600'}`}>
-                    {refPrefix || 'REF'}-{String(refCounter + 1).padStart(3, '0')}
+                    Ref: {String(refCounter + 1).padStart(3, '0')}
                   </span>
                 </p>
               </div>

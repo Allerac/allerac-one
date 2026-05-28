@@ -164,7 +164,7 @@ export default function InstagramPostStudio({
 
   useEffect(() => {
     if (isProduct && refManaged && !productRef) {
-      setProductRef(`${refPrefix}-${String(refCounter + 1).padStart(3, '0')}`);
+      setProductRef(String(refCounter + 1).padStart(3, '0'));
     }
     if (!isProduct) setProductRef('');
   }, [isProduct]);
