@@ -14,7 +14,7 @@ const igTool = new InstagramTool();
 const userSettingsService = new UserSettingsService();
 const systemSettingsService = new SystemSettingsService();
 
-const LOCALE_NAMES: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English', fr: 'French', de: 'German', it: 'Italian' };
+const LOCALE_NAMES: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English', fr: 'French', de: 'German', it: 'Italian', ca: 'Catalan' };
 
 type LLMProviderType = 'github' | 'gemini' | 'anthropic' | 'ollama';
 
@@ -207,6 +207,7 @@ export async function generateCaption(
   provider: LLMProviderType = 'github'
 ): Promise<{ success: true; caption: string } | { success: false; error: string }> {
   try {
+    const language = LOCALE_NAMES[locale] ?? 'English';
     const [llmConfig, systemPrompt] = await Promise.all([
       resolveLLMConfig(userId, provider),
       buildSocialSystemPrompt(userId, locale),
@@ -221,8 +222,8 @@ export async function generateCaption(
     });
 
     const imageMessage = topic
-      ? `Generate a creative and engaging Instagram caption for a post about "${topic}". Include relevant context but keep it concise (max 150 chars). Do not include any hashtags.`
-      : `Generate a creative and engaging Instagram caption for this image. Keep it concise and engaging (max 150 chars). Do not include any hashtags.`;
+      ? `Generate a creative and engaging Instagram caption for a post about "${topic}". Include relevant context but keep it concise (max 150 chars). Do not include any hashtags. Write in ${language}.`
+      : `Generate a creative and engaging Instagram caption for this image. Keep it concise and engaging (max 150 chars). Do not include any hashtags. Write in ${language}.`;
 
     // Detect if input is a URL, data URI, or base64
     let imageUrl: string;
@@ -275,6 +276,7 @@ export async function generateTags(
   provider: LLMProviderType = 'github'
 ): Promise<{ success: true; tags: string } | { success: false; error: string }> {
   try {
+    const language = LOCALE_NAMES[locale] ?? 'English';
     const [llmConfig, systemPrompt] = await Promise.all([
       resolveLLMConfig(userId, provider),
       buildSocialSystemPrompt(userId, locale),
@@ -289,8 +291,8 @@ export async function generateTags(
     });
 
     const prompt = caption
-      ? `Generate 10-15 relevant Instagram hashtags for a post with this caption: "${caption}". Return only hashtags separated by spaces, no numbering.`
-      : `Generate 10-15 relevant Instagram hashtags for general engagement. Return only hashtags separated by spaces, no numbering.`;
+      ? `Generate 10-15 relevant Instagram hashtags for a post with this caption: "${caption}". The caption is in ${language} — use hashtags in ${language} where applicable (mix with global English hashtags is fine). Return only hashtags separated by spaces, no numbering.`
+      : `Generate 10-15 relevant Instagram hashtags for general engagement in ${language}. Return only hashtags separated by spaces, no numbering.`;
 
     const response = await llmService.chatCompletion({
       messages: [

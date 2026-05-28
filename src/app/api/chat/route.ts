@@ -173,7 +173,7 @@ export async function POST(request: Request): Promise<Response> {
 
         // Inject structured user context
         const locale = cookieStore.get('locale')?.value || 'en';
-        const languageNames: Record<string, string> = { en: 'English', pt: 'Portuguese', es: 'Spanish' };
+        const languageNames: Record<string, string> = { en: 'English', pt: 'Portuguese', es: 'Spanish', ca: 'Catalan' };
         const language = languageNames[locale] || 'English';
         const contextLines: string[] = [];
         if (user.name) contextLines.push(`- Name: ${user.name}`);
@@ -522,7 +522,7 @@ export async function POST(request: Request): Promise<Response> {
                       try {
                         console.log('[Instagram] Generating caption from image...');
                         // Pass user's message as context for caption generation
-                        const captionRes = await instagramActions.generateCaption(image_url, userId, message);
+                        const captionRes = await instagramActions.generateCaption(image_url, userId, message, locale);
                         if (captionRes.success) {
                           caption = captionRes.caption;
                           console.log('[Instagram] Caption generated:', caption);
@@ -538,7 +538,7 @@ export async function POST(request: Request): Promise<Response> {
                     if (caption && !tags) {
                       try {
                         console.log('[Instagram] Generating tags from caption...');
-                        const tagsRes = await instagramActions.generateTags(userId, caption);
+                        const tagsRes = await instagramActions.generateTags(userId, caption, locale);
                         if (tagsRes.success) {
                           tags = tagsRes.tags;
                           console.log('[Instagram] Tags generated:', tags);
