@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { generateCaption, generateTags, publishInstagramPost } from '@/app/actions/instagram';
+import { generateCaption, generateTags, publishInstagramPost, getInstagramRefSettings, incrementRefCounter } from '@/app/actions/instagram';
 import { MODELS } from '@/app/services/llm/models';
 
 interface PostState {
@@ -62,6 +62,10 @@ export default function InstagramPostStudio({
   const [isProduct, setIsProduct] = useState(false);
   const [price, setPrice] = useState('');
   const [productRef, setProductRef] = useState('');
+  const [purchaseInstructions, setPurchaseInstructions] = useState('');
+  const [refManaged, setRefManaged] = useState(false);
+  const [refPrefix,  setRefPrefix]  = useState('REF');
+  const [refCounter, setRefCounter] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
@@ -82,6 +86,13 @@ export default function InstagramPostStudio({
         setSelectedProvider(model.provider as 'github' | 'gemini' | 'anthropic' | 'ollama');
       }
     }
+    const savedInstructions = localStorage.getItem('ig_purchase_instructions');
+    if (savedInstructions !== null) setPurchaseInstructions(savedInstructions);
+    getInstagramRefSettings(userId).then((r) => {
+      setRefManaged(r.managed);
+      setRefPrefix(r.prefix);
+      setRefCounter(r.counter);
+    });
   }, []);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,6 +163,13 @@ export default function InstagramPostStudio({
   }, [conversationId]);
 
   useEffect(() => {
+    if (isProduct && refManaged && !productRef) {
+      setProductRef(`${refPrefix}-${String(refCounter + 1).padStart(3, '0')}`);
+    }
+    if (!isProduct) setProductRef('');
+  }, [isProduct]);
+
+  useEffect(() => {
     onPostStateChange?.({ caption, tags, price, productRef, isProduct });
   }, [caption, tags, price, productRef, isProduct]);
 
@@ -169,14 +187,16 @@ export default function InstagramPostStudio({
   }, [externalUpdate?.timestamp]);
 
   const buildFullCaption = () => {
-    let productText = '';
+    const parts: string[] = [caption];
+    if (purchaseInstructions.trim()) parts.push(purchaseInstructions.trim());
     if (isProduct) {
       const lines: string[] = [];
       if (productRef.trim()) lines.push(`Ref: ${productRef.trim()}`);
-      if (price.trim()) lines.push(`€${price.trim()}`);
-      if (lines.length) productText = `\n\n${lines.join('\n')}`;
+      if (price.trim()) lines.push(`${t('priceLabel')} ${price.trim()}€`);
+      if (lines.length) parts.push(lines.join('\n'));
     }
-    return tags ? `${caption}${productText}\n\n${tags}` : `${caption}${productText}`;
+    if (tags.trim()) parts.push(tags.trim());
+    return parts.join('\n\n');
   };
 
   const handleCopyToClipboard = async () => {
@@ -217,6 +237,10 @@ export default function InstagramPostStudio({
           }).then(r => r.json());
 
       if (result.success) {
+        if (isProduct && refManaged) {
+          const next = await incrementRefCounter(userId);
+          if (next) setRefCounter(refCounter + 1);
+        }
         setSuccess(result.message);
         setCaption(''); setTags(''); setPrice(''); setProductRef(''); setIsProduct(false);
         setImageBase64(null); setImagePreview(null); setImageUrl(null); setImageName(null);
@@ -348,6 +372,18 @@ export default function InstagramPostStudio({
             />
           </div>
 
+          {/* Purchase instructions */}
+          <div>
+            <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('purchaseInstructions')}</label>
+            <textarea
+              value={purchaseInstructions}
+              onChange={(e) => { setPurchaseInstructions(e.target.value); localStorage.setItem('ig_purchase_instructions', e.target.value); }}
+              placeholder={t('purchaseInstructionsPlaceholder')}
+              rows={2}
+              className={`w-full px-3 py-2 rounded-lg ${bgInput} border ${borderIn} ${txt} placeholder-gray-400 focus:outline-none focus:border-brand-500 resize-none text-sm`}
+            />
+          </div>
+
           {/* Product toggle + price */}
           <div>
             <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -448,10 +484,13 @@ export default function InstagramPostStudio({
                 <span className="font-semibold">{t('previewYou')} </span>
                 {previewCaption}
               </p>
+              {purchaseInstructions.trim() && (
+                <p className={`${txtSub} text-sm leading-relaxed whitespace-pre-wrap`}>{purchaseInstructions.trim()}</p>
+              )}
               {isProduct && (productRef.trim() || price.trim()) && (
                 <div className="space-y-0.5">
                   {productRef.trim() && <p className={`${txt} text-sm`}>Ref: {productRef.trim()}</p>}
-                  {price.trim() && <p className={`${txt} text-sm font-semibold`}>€{price.trim()}</p>}
+                  {price.trim() && <p className={`${txt} text-sm font-semibold`}>{t('priceLabel')} {price.trim()}€</p>}
                 </div>
               )}
               {previewTags.length > 0 && (

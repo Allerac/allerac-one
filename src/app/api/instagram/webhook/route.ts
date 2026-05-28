@@ -56,7 +56,6 @@ export async function GET(request: Request) {
 // ── POST — incoming events ───────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  console.log('[Instagram Webhook] POST received');
   let body: any;
   try {
     body = await request.json();
@@ -64,7 +63,7 @@ export async function POST(request: Request) {
     return new Response('Bad Request', { status: 400 });
   }
 
-  console.log('[Instagram Webhook] body:', JSON.stringify(body).slice(0, 200));
+  console.log('[Instagram Webhook] POST body:', JSON.stringify(body));
 
   // Acknowledge immediately — Meta requires a fast 200
   // Processing happens in the background (fire-and-forget)
@@ -78,8 +77,10 @@ export async function POST(request: Request) {
 // ── Event processing ─────────────────────────────────────────────────────────
 
 async function processEvents(body: any) {
-  console.log('[Instagram Webhook] POST received:', JSON.stringify(body).slice(0, 300));
-  if (body.object !== 'instagram') return;
+  if (body.object !== 'instagram') {
+    console.log('[Instagram Webhook] Ignoring non-instagram object:', body.object);
+    return;
+  }
 
   for (const entry of body.entry ?? []) {
     const igAccountId = entry.id as string;
@@ -104,25 +105,31 @@ async function processEvents(body: any) {
     }
 
     // ── Comments ───────────────────────────────────────────────────────────
+    console.log(`[Instagram Webhook] entry changes: ${entry.changes?.length ?? 0}`, JSON.stringify(entry.changes ?? []));
     for (const change of entry.changes ?? []) {
-      if (change.field !== 'comments') continue;
+      if (change.field !== 'comments') {
+        console.log(`[Instagram Webhook] Non-comment change field: ${change.field}`);
+        continue;
+      }
       const v = change.value;
       const commentId   = v?.id as string;
       const commentText = (v?.text ?? '') as string;
       const commenterId = v?.from?.id as string;
 
-      if (!commentId || !commentText) continue;
-      if (commenterId === igAccountId) continue; // skip own comments
-      if (processedComments.has(commentId)) continue;
+      console.log(`[Instagram Webhook] Comment — id: ${commentId}, from: ${commenterId}, account: ${igAccountId}, text: "${commentText}"`);
+
+      if (!commentId || !commentText) { console.log('[Instagram Webhook] Skip: missing id/text'); continue; }
+      if (commenterId === igAccountId) { console.log('[Instagram Webhook] Skip: own comment'); continue; }
+      if (processedComments.has(commentId)) { console.log('[Instagram Webhook] Skip: duplicate'); continue; }
       processedComments.add(commentId);
       if (processedComments.size > MAX_DEDUP) {
         const first = processedComments.values().next().value;
         if (first) processedComments.delete(first);
       }
 
-      console.log(`[Instagram Webhook] Comment ${commentId} from ${commenterId}: "${commentText.slice(0, 80)}"`);
-
-      if (commentText.trim().toLowerCase().includes(COMMENT_TRIGGER)) {
+      const triggerMatch = commentText.trim().toLowerCase().includes(COMMENT_TRIGGER);
+      console.log(`[Instagram Webhook] Trigger "${COMMENT_TRIGGER}" match: ${triggerMatch}`);
+      if (triggerMatch) {
         await handleCommentTrigger({ igAccountId, commentId });
       }
     }

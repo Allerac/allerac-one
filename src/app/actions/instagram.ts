@@ -62,6 +62,51 @@ export async function getInstagramStatus(userId: string) {
   return credService.getStatus(userId);
 }
 
+export async function getInstagramRefSettings(userId: string): Promise<{ managed: boolean; prefix: string; counter: number }> {
+  const result = await pool.query(
+    `SELECT ref_managed, ref_prefix, ref_counter FROM instagram_credentials WHERE user_id = $1`,
+    [userId]
+  );
+  return {
+    managed: result.rows[0]?.ref_managed ?? false,
+    prefix:  result.rows[0]?.ref_prefix  ?? 'REF',
+    counter: result.rows[0]?.ref_counter ?? 0,
+  };
+}
+
+export async function saveInstagramRefSettings(
+  userId: string, managed: boolean, prefix: string, counter: number
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const cleanPrefix = prefix.trim().toUpperCase().replace(/[^A-Z0-9-_]/g, '') || 'REF';
+    await pool.query(
+      `UPDATE instagram_credentials
+       SET ref_managed = $2, ref_prefix = $3, ref_counter = $4, updated_at = NOW()
+       WHERE user_id = $1`,
+      [userId, managed, cleanPrefix, Math.max(0, counter)]
+    );
+    return { success: true, message: 'Saved' };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function incrementRefCounter(userId: string): Promise<string | null> {
+  try {
+    const result = await pool.query(
+      `UPDATE instagram_credentials
+       SET ref_counter = ref_counter + 1, updated_at = NOW()
+       WHERE user_id = $1
+       RETURNING ref_prefix, ref_counter`,
+      [userId]
+    );
+    const { ref_prefix, ref_counter } = result.rows[0];
+    return `${ref_prefix}-${String(ref_counter).padStart(3, '0')}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function disconnectInstagram(userId: string) {
   await credService.disconnect(userId);
 }
@@ -75,14 +120,23 @@ export async function debugTokenPermissions(userId: string): Promise<{ success: 
     ]);
     if (!accessToken) return { success: false, data: 'No token found' };
     const igId = status.ig_business_user_id ?? status.ig_user_id;
-    const [meRes, subsRes] = await Promise.all([
+    // Fetch me + latest media + first comment (requires manage_comments if present)
+    const [meRes, mediaRes] = await Promise.all([
       fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${accessToken}`),
-      fetch(`https://graph.instagram.com/v21.0/${igId}/subscribed_apps?access_token=${accessToken}`),
+      fetch(`https://graph.instagram.com/v21.0/${igId}/media?fields=id&limit=1&access_token=${accessToken}`),
     ]);
-    const me   = await meRes.json();
-    const subs = await subsRes.json();
-    console.log('[Instagram] Token debug — me:', JSON.stringify(me), '| subscribed_apps:', JSON.stringify(subs));
-    return { success: true, data: { me, subscribed_apps: subs } };
+    const me    = await meRes.json();
+    const media = await mediaRes.json();
+    const firstMediaId = media?.data?.[0]?.id;
+    let commentsTest: any = null;
+    if (firstMediaId) {
+      const commentsRes = await fetch(
+        `https://graph.instagram.com/v21.0/${firstMediaId}/comments?limit=1&access_token=${accessToken}`
+      );
+      commentsTest = await commentsRes.json();
+    }
+    console.log('[Instagram] Token debug — me:', JSON.stringify(me), '| comments_test:', JSON.stringify(commentsTest));
+    return { success: true, data: { me, comments_test: commentsTest } };
   } catch (err: any) {
     return { success: false, data: err.message };
   }
@@ -167,8 +221,8 @@ export async function generateCaption(
     });
 
     const imageMessage = topic
-      ? `Generate a creative and engaging Instagram caption for a post about "${topic}". Include relevant context but keep it concise (max 150 chars for the caption itself).`
-      : `Generate a creative and engaging Instagram caption for this image. Keep it concise and engaging (max 150 chars).`;
+      ? `Generate a creative and engaging Instagram caption for a post about "${topic}". Include relevant context but keep it concise (max 150 chars). Do not include any hashtags.`
+      : `Generate a creative and engaging Instagram caption for this image. Keep it concise and engaging (max 150 chars). Do not include any hashtags.`;
 
     // Detect if input is a URL, data URI, or base64
     let imageUrl: string;

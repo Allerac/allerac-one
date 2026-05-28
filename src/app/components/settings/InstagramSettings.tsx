@@ -17,6 +17,12 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
   const [errMsg,   setErrMsg]   = useState('');
   const [message,  setMessage]  = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Ref settings
+  const [refManaged, setRefManaged] = useState(false);
+  const [refPrefix,  setRefPrefix]  = useState('REF');
+  const [refCounter, setRefCounter] = useState(0);
+  const [refSaving,  setRefSaving]  = useState(false);
+
   const muted   = isDarkMode ? 'text-gray-400' : 'text-gray-500';
   const card    = `rounded-xl border p-5 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`;
   const btn     = (v: 'primary' | 'danger' | 'ghost') => {
@@ -31,7 +37,13 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
 
   async function load() {
     setState('loading');
-    const data = await instagramActions.getInstagramStatus(userId!);
+    const [data, refs] = await Promise.all([
+      instagramActions.getInstagramStatus(userId!),
+      instagramActions.getInstagramRefSettings(userId!),
+    ]);
+    setRefManaged(refs.managed);
+    setRefPrefix(refs.prefix);
+    setRefCounter(refs.counter);
     if (data.is_connected) {
       setUsername(data.username ?? '');
       setExpires(data.expires_at ? new Date(data.expires_at).toLocaleDateString() : 'No expiry');
@@ -40,6 +52,13 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
       setErrMsg(data.last_error ?? '');
       setState(data.last_error ? 'error' : 'disconnected');
     }
+  }
+
+  async function handleSaveRefSettings() {
+    setRefSaving(true);
+    const result = await instagramActions.saveInstagramRefSettings(userId!, refManaged, refPrefix, refCounter);
+    setMessage({ type: result.success ? 'success' : 'error', text: result.success ? 'Saved.' : result.message });
+    setRefSaving(false);
   }
 
   async function handleDisconnect() {
@@ -154,12 +173,75 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
       )}
 
       {state === 'connected' && (
-        <div className={`text-xs ${muted} space-y-1`}>
-          <p>✓ Caption & hashtag generation — available via Post button in sidebar</p>
-          <p>✓ DM inbox & AI-drafted replies — available in Social → DM Manager</p>
-          <p>✓ Comment trigger — replies automatically to comments with keyword</p>
-          <p>◌ Post scheduling — coming soon</p>
-        </div>
+        <>
+          {/* Product reference settings */}
+          <div className={card}>
+            <p className={`text-xs font-semibold mb-3 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+              Referências de produto
+            </p>
+            <div className="space-y-2 mb-3">
+              {(['free', 'managed'] as const).map((mode) => (
+                <label key={mode} className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="refMode"
+                    checked={mode === 'managed' ? refManaged : !refManaged}
+                    onChange={() => setRefManaged(mode === 'managed')}
+                    className="accent-brand-600"
+                  />
+                  <span className={`text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {mode === 'free' ? 'Livre — escrevo a referência eu mesmo' : 'Allerac gera automaticamente'}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {refManaged && (
+              <div className="space-y-3 pt-2 border-t border-gray-700/40">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={`block text-xs ${muted} mb-1`}>Prefixo</label>
+                    <input
+                      type="text"
+                      value={refPrefix}
+                      onChange={(e) => setRefPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9-_]/g, ''))}
+                      maxLength={20}
+                      className={`w-full px-2 py-1.5 rounded text-xs border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:border-brand-500`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-xs ${muted} mb-1`}>Contador atual</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={refCounter}
+                      onChange={(e) => setRefCounter(Math.max(0, parseInt(e.target.value) || 0))}
+                      className={`w-full px-2 py-1.5 rounded text-xs border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:border-brand-500`}
+                    />
+                  </div>
+                </div>
+                <p className={`text-xs ${muted}`}>
+                  Próxima referência: <span className={`font-mono font-semibold ${isDarkMode ? 'text-brand-400' : 'text-brand-600'}`}>
+                    {refPrefix || 'REF'}-{String(refCounter + 1).padStart(3, '0')}
+                  </span>
+                </p>
+              </div>
+            )}
+            <button
+              onClick={handleSaveRefSettings}
+              disabled={refSaving}
+              className={`mt-3 px-3 py-1.5 rounded text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50`}
+            >
+              {refSaving ? 'A guardar…' : 'Guardar'}
+            </button>
+          </div>
+
+          <div className={`text-xs ${muted} space-y-1`}>
+            <p>✓ Caption & hashtag generation — available via Post button in sidebar</p>
+            <p>✓ DM inbox & AI-drafted replies — available in Social → DM Manager</p>
+            <p>✓ Comment trigger — replies automatically to comments with keyword</p>
+            <p>◌ Post scheduling — coming soon</p>
+          </div>
+        </>
       )}
     </div>
   );
