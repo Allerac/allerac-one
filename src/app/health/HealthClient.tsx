@@ -160,7 +160,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
     if (!convId) return;
     setMemoryOpen(true); setMemoryLoading(true); setMemoryResult(null);
     try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken);
+      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'health');
       setMemoryResult(summary
         ? { success: true, message: 'Summary generated successfully!', summary: summary.summary, topics: summary.key_topics }
         : { success: false, message: 'Could not generate summary (possibly not enough messages)' }
@@ -287,7 +287,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
                         messages={messages as unknown as Message[]} isSending={sending}
                         selectedModel={selectedModel} MODELS={MODELS} isDarkMode={d}
                         currentConversationId={convId} userId={userId} githubToken={githubToken}
-                        messagesEndRef={messagesEndRef}
+                        messagesEndRef={messagesEndRef} domainSlug="health"
                       />
                     </div>
                     <div className={`flex-shrink-0 px-3 sm:px-4 pt-3 ${d ? 'bg-gray-900' : 'bg-white'}`}

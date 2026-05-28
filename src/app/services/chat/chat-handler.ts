@@ -27,6 +27,7 @@ export interface ChatHandlerConfig {
   modelBaseUrl: string;
   systemMessage: string;
   botId?: string;  // For Telegram bot skill assignment
+  domainSlug?: string;
 }
 
 export interface ChatImageAttachment {
@@ -58,7 +59,7 @@ export async function handleChatMessage(
   config: ChatHandlerConfig,
   imageAttachments?: ChatImageAttachment[]
 ): Promise<ChatHandlerResult> {
-  const { userId, githubToken, geminiToken, anthropicToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId } = config;
+  const { userId, githubToken, geminiToken, anthropicToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId, domainSlug } = config;
 
   // 1. Create conversation if needed
   let convId = conversationId;
@@ -116,7 +117,7 @@ export async function handleChatMessage(
   // 2. Load memory context
   let conversationMemories = '';
   try {
-    const memoryService = new ConversationMemoryService(githubToken);
+    const memoryService = new ConversationMemoryService(githubToken, domainSlug ?? 'chat');
     const summaries = await memoryService.getRecentSummaries(userId, 3, 4);
     if (summaries && summaries.length > 0) {
       conversationMemories = memoryService.formatMemoryContext(summaries);
@@ -363,10 +364,11 @@ export async function handleChatMessage(
 export async function maybeSummarizeConversation(
   conversationId: string,
   userId: string,
-  githubToken: string
+  githubToken: string,
+  domainSlug: string = 'chat'
 ): Promise<void> {
   try {
-    const memoryService = new ConversationMemoryService(githubToken);
+    const memoryService = new ConversationMemoryService(githubToken, domainSlug);
     const shouldSummarize = await memoryService.shouldSummarizeConversation(conversationId);
     if (shouldSummarize) {
       await memoryService.generateConversationSummary(conversationId, userId);

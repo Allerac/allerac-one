@@ -528,7 +528,7 @@ export default function AdminChat({
         if (shouldSummarize) {
           console.log(`[Memory] Generating summary for conversation ${currentConversationId}...`);
           // Generate summary in background (don't wait for it)
-          memoryActions.generateConversationSummary(currentConversationId, userId, githubToken)
+          memoryActions.generateConversationSummary(currentConversationId, userId, githubToken, domainName?.toLowerCase() ?? 'chat')
             .then(summary => console.log('[Memory] Summary generated:', summary))
             .catch(err => console.error('[Memory] Failed to generate summary:', err));
         }
@@ -589,7 +589,7 @@ export default function AdminChat({
 
     try {
       // Direct action call instead of service
-      const summary = await memoryActions.generateConversationSummary(currentConversationId, userId, githubToken);
+      const summary = await memoryActions.generateConversationSummary(currentConversationId, userId, githubToken, domainName?.toLowerCase() ?? 'chat');
 
       if (summary) {
         setMemorySaveResult({
@@ -1102,6 +1102,7 @@ export default function AdminChat({
                   userId={userId}
                   githubToken={githubToken}
                   messagesEndRef={messagesEndRef}
+                  domainSlug={domainName?.toLowerCase() ?? 'chat'}
                 />
               </div>
               <div data-name="input-area-wrapper" className={`flex-shrink-0 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
@@ -1225,6 +1226,7 @@ export default function AdminChat({
           userId={userId}
           githubToken={githubToken}
           isDarkMode={isDarkMode}
+          domainSlug={domainName?.toLowerCase() ?? 'chat'}
         />
       )}
 

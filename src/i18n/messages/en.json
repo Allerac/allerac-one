@@ -468,7 +468,8 @@
     "creating": "Creating account...",
     "languageEnglish": "English",
     "languageSpanish": "Español",
-    "languagePortuguese": "Português"
+    "languagePortuguese": "Português",
+    "languageCatalan": "Català"
   },
   "onboarding": {
     "stepOf": "{current} of {total}",

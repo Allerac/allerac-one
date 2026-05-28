@@ -159,7 +159,7 @@ export default function CodeClient({ userId, userName, userEmail, isAdmin, defau
     if (!convId) return;
     setMemoryOpen(true); setMemoryLoading(true); setMemoryResult(null);
     try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken);
+      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'code');
       setMemoryResult(summary
         ? { success: true, message: 'Summary generated successfully!', summary: summary.summary, topics: summary.key_topics }
         : { success: false, message: 'Could not generate summary (possibly not enough messages)' }
@@ -316,7 +316,7 @@ export default function CodeClient({ userId, userName, userEmail, isAdmin, defau
                         messages={messages as unknown as Message[]} isSending={sending}
                         selectedModel={selectedModel} MODELS={MODELS} isDarkMode={d}
                         currentConversationId={convId} userId={userId} githubToken={githubToken}
-                        messagesEndRef={messagesEndRef}
+                        messagesEndRef={messagesEndRef} domainSlug="code"
                       />
                     </div>
                     {pendingEdits.length > 0 && (

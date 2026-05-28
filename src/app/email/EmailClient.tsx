@@ -123,7 +123,7 @@ export default function EmailClient({ userId, userName, userEmail, isAdmin, defa
     if (!convId) return;
     setMemoryOpen(true); setMemoryLoading(true); setMemoryResult(null);
     try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken);
+      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'email');
       setMemoryResult(summary
         ? { success: true, message: 'Summary generated!', summary: summary.summary, topics: summary.key_topics }
         : { success: false, message: 'Not enough messages to summarize' }
@@ -218,7 +218,8 @@ export default function EmailClient({ userId, userName, userEmail, isAdmin, defa
                     <div className={`flex-1 overflow-y-auto ${d ? 'bg-gray-900' : 'bg-white'}`}>
                       <ChatMessages messages={messages as unknown as Message[]} isSending={sending}
                         selectedModel={selectedModel} MODELS={MODELS} isDarkMode={d}
-                        currentConversationId={convId} userId={userId} githubToken={githubToken} messagesEndRef={messagesEndRef} />
+                        currentConversationId={convId} userId={userId} githubToken={githubToken} messagesEndRef={messagesEndRef}
+                        domainSlug="email" />
                     </div>
                     <div className={`flex-shrink-0 px-3 sm:px-4 pt-3 ${d ? 'bg-gray-900' : 'bg-white'}`}
                       style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>

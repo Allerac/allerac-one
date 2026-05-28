@@ -16,6 +16,144 @@ describe('ConversationMemoryService', () => {
     memoryService = new ConversationMemoryService('github_token_123');
   });
 
+  // ─── Domain isolation ────────────────────────────────────────────────────────
+
+  describe('domain isolation', () => {
+    it('getRecentSummaries — without domain returns all summaries (no filter)', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      await memoryService.getRecentSummaries('user_123');
+
+      const [sql, params] = mockQuery.mock.calls[0];
+      expect(sql).not.toContain('domain_slug');
+      expect(params).toEqual(['user_123', 3, 5]);
+    });
+
+    it('getRecentSummaries — with domain filters by domain_slug', async () => {
+      const financeService = new ConversationMemoryService('token', 'finance');
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      await financeService.getRecentSummaries('user_123');
+
+      const [sql, params] = mockQuery.mock.calls[0];
+      expect(sql).toContain('domain_slug');
+      expect(params).toContain('finance');
+      expect(params).toContain('user_123');
+    });
+
+    it('getRecentSummaries — finance domain does not return health memories', async () => {
+      const financeService = new ConversationMemoryService('token', 'finance');
+      // DB only returns finance records (where clause in real DB would filter)
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 's1', domain_slug: 'finance', summary: 'Finance summary' }],
+      });
+
+      const result = await financeService.getRecentSummaries('user_123');
+
+      const [sql, params] = mockQuery.mock.calls[0];
+      expect(params).toContain('finance');
+      expect(result.every(s => s.domain_slug === 'finance')).toBe(true);
+    });
+
+    it('generateConversationSummary — saves domain_slug to database', async () => {
+      const healthService = new ConversationMemoryService('token', 'health');
+
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          { role: 'user', content: 'my heart rate' },
+          { role: 'assistant', content: 'normal range' },
+        ],
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({ summary: 'Health talk', key_topics: [], importance_score: 5 }) } }],
+        }),
+      });
+
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 's1', summary: 'Health talk', domain_slug: 'health', key_topics: [], importance_score: 5, emotion: null, message_count: 2, created_at: new Date().toISOString() }],
+      });
+
+      await healthService.generateConversationSummary('conv_1', 'user_1');
+
+      const insertCall = mockQuery.mock.calls[1]; // second call is INSERT
+      const [sql, params] = insertCall;
+      expect(sql).toContain('domain_slug');
+      expect(params).toContain('health');
+    });
+
+    it('generateConversationSummary — ON CONFLICT includes domain_slug in UPDATE', async () => {
+      const financeService = new ConversationMemoryService('token', 'finance');
+
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          { role: 'user', content: 'budget' },
+          { role: 'assistant', content: 'use 50/30/20 rule' },
+        ],
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({ summary: 'Budget talk', key_topics: [], importance_score: 6 }) } }],
+        }),
+      });
+
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 's1', summary: 'Budget talk', domain_slug: 'finance', key_topics: [], importance_score: 6, emotion: null, message_count: 2, created_at: new Date().toISOString() }],
+      });
+
+      await financeService.generateConversationSummary('conv_1', 'user_1');
+
+      const [sql] = mockQuery.mock.calls[1];
+      expect(sql).toContain('domain_slug = EXCLUDED.domain_slug');
+    });
+
+    it('getSummaryStats — with domain filters stats by domain_slug', async () => {
+      const codeService = new ConversationMemoryService('token', 'code');
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ importance_score: 8, message_count: 10 }],
+      });
+
+      await codeService.getSummaryStats('user_123');
+
+      const [sql, params] = mockQuery.mock.calls[0];
+      expect(sql).toContain('domain_slug');
+      expect(params).toContain('code');
+    });
+
+    it('getSummaryStats — without domain includes all domains', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ importance_score: 8, message_count: 10 }],
+      });
+
+      await memoryService.getSummaryStats('user_123');
+
+      const [sql] = mockQuery.mock.calls[0];
+      expect(sql).not.toContain('domain_slug');
+    });
+
+    it('different domain services are isolated — each sends its own domain param', async () => {
+      const healthService = new ConversationMemoryService('token', 'health');
+      const financeService = new ConversationMemoryService('token', 'finance');
+
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      await healthService.getRecentSummaries('user_1');
+      await financeService.getRecentSummaries('user_1');
+
+      const healthParams = mockQuery.mock.calls[0][1];
+      const financeParams = mockQuery.mock.calls[1][1];
+
+      expect(healthParams).toContain('health');
+      expect(healthParams).not.toContain('finance');
+      expect(financeParams).toContain('finance');
+      expect(financeParams).not.toContain('health');
+    });
+  });
+
   describe('shouldSummarizeConversation()', () => {
     it('should return false if summary already exists', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [{ id: 'summary_123' }] }); // Summary exists

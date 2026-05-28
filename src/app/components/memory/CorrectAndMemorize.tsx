@@ -12,6 +12,7 @@ interface CorrectAndMemorizeProps {
   userId: string | null;
   githubToken: string;
   isDarkMode: boolean;
+  domainSlug?: string | null;
 }
 
 export default function CorrectAndMemorize({
@@ -22,6 +23,7 @@ export default function CorrectAndMemorize({
   userId,
   githubToken,
   isDarkMode,
+  domainSlug,
 }: CorrectAndMemorizeProps) {
   const t = useTranslations('teach');
   const [correction, setCorrection] = useState('');
@@ -61,7 +63,8 @@ export default function CorrectAndMemorize({
         userId,
         memoryContent,
         importanceValue,
-        emotion
+        emotion,
+        domainSlug
       );
 
       if (res.success) {

@@ -20,6 +20,7 @@ interface ChatMessagesProps {
   userId: string | null;
   githubToken: string;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  domainSlug?: string | null;
 }
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -153,6 +154,7 @@ export default function ChatMessages({
   userId,
   githubToken,
   messagesEndRef,
+  domainSlug,
 }: ChatMessagesProps) {
   // Controla qual mensagem tem o menu aberto (índice)
   const [openMenuIdx, setOpenMenuIdx] = useState<number | null>(null);
@@ -618,6 +620,7 @@ export default function ChatMessages({
           userId={userId}
           githubToken={githubToken}
           isDarkMode={isDarkMode}
+          domainSlug={domainSlug}
         />
       )}
     </div>

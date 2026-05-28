@@ -317,6 +317,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
                   { code: 'en', label: t('languageEnglish'), flag: '🇺🇸' },
                   { code: 'es', label: t('languageSpanish'), flag: '🇪🇸' },
                   { code: 'pt', label: t('languagePortuguese'), flag: '🇧🇷' },
+                  { code: 'ca', label: t('languageCatalan'), flag: '🟡' },
                 ].map((lang) => (
                   <button
                     key={lang.code}

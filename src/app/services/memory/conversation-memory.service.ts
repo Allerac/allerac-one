@@ -162,7 +162,8 @@ ${conversationText}`;
            key_topics = EXCLUDED.key_topics,
            importance_score = EXCLUDED.importance_score,
            message_count = EXCLUDED.message_count,
-           emotion = EXCLUDED.emotion
+           emotion = EXCLUDED.emotion,
+           domain_slug = EXCLUDED.domain_slug
          RETURNING *`,
         [
           conversationId,

@@ -279,6 +279,7 @@ export default function DomainChatPanel({
               userId={userId}
               githubToken=""
               messagesEndRef={messagesEndRef}
+              domainSlug={domainSlug}
             />
           </div>
           <div className={`flex-shrink-0 ${d ? 'bg-gray-900' : 'bg-white'}`}>

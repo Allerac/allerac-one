@@ -468,7 +468,8 @@
     "creating": "Criando conta...",
     "languageEnglish": "English",
     "languageSpanish": "Español",
-    "languagePortuguese": "Português"
+    "languagePortuguese": "Português",
+    "languageCatalan": "Català"
   },
   "onboarding": {
     "stepOf": "{current} de {total}",

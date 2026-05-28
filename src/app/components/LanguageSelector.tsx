@@ -12,7 +12,8 @@ interface LanguageSelectorProps {
 const languages = [
   { code: 'en', label: 'English' },
   { code: 'es', label: 'Español' },
-  { code: 'pt', label: 'Português' }
+  { code: 'pt', label: 'Português' },
+  { code: 'ca', label: 'Català' },
 ];
 
 export default function LanguageSelector({ currentLocale, isDarkMode }: LanguageSelectorProps) {

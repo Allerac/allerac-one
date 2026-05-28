@@ -162,7 +162,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
     setMemoryLoading(true);
     setMemoryResult(null);
     try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken);
+      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'design');
       if (summary) {
         setMemoryResult({ success: true, message: 'Summary generated successfully!', summary: summary.summary, topics: summary.key_topics });
       } else {
@@ -328,6 +328,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
                         userId={userId}
                         githubToken={githubToken}
                         messagesEndRef={messagesEndRef}
+                        domainSlug="design"
                       />
                     </div>
                     <div className={`flex-shrink-0 px-3 sm:px-4 pt-3 ${d ? 'bg-gray-900' : 'bg-white'}`} style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
