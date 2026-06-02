@@ -7,6 +7,7 @@ import * as userActions from '@/app/actions/user';
 import HubTour from '@/app/components/hub/HubTour';
 import SystemDashboard from '@/app/components/system/SystemDashboard';
 import DomainSkillsModal from '@/app/components/hub/DomainSkillsModal';
+import TelegramBotSettings from '@/app/components/settings/TelegramBotSettings';
 import { MODELS } from '@/app/services/llm/models';
 
 const DOMAINS_ALL = [
@@ -40,6 +41,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
   const [shutdownPhase, setShutdownPhase] = useState<ShutdownPhase>('running');
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isDomainSkillsOpen, setIsDomainSkillsOpen] = useState(false);
+  const [isTelegramBotSettingsOpen, setIsTelegramBotSettingsOpen] = useState(false);
   const [githubToken, setGithubToken] = useState('');
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
@@ -496,7 +498,18 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
         setSelectedModel={setSelectedModel}
         userName={userName}
         userEmail={userEmail}
+        onOpenTelegramSettings={() => {
+          setIsConfigOpen(false);
+          setIsTelegramBotSettingsOpen(true);
+        }}
       />
+
+      {isTelegramBotSettingsOpen && (
+        <TelegramBotSettings
+          userId={userId}
+          onClose={() => setIsTelegramBotSettingsOpen(false)}
+        />
+      )}
     </>
   );
 }
