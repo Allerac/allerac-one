@@ -2,9 +2,12 @@
 Garmin Connect integration.
 
 Auth flow:
-  1. authenticate(email, password) — starts login in a background thread.
+  1. authenticate(email, password) — starts login.
+     If AUTH_WORKER_URL is set, delegates to the Cloudflare garmin-auth-worker
+     (avoids cloud IP blocks on sso.garmin.com). Otherwise uses garminconnect
+     directly (local dev).
      Returns { status: "success", session_dump } or { status: "mfa_required", session_id }.
-  2. complete_mfa(session_id, mfa_code) — unblocks the waiting thread.
+  2. complete_mfa(session_id, mfa_code) — completes the MFA step.
      Returns { status: "success", session_dump }.
 
 Data fetch:
@@ -14,15 +17,106 @@ Data fetch:
 
 import json
 import logging
+import os
 import threading
 import queue
+import urllib.error
+import urllib.request
 import uuid
 from datetime import datetime, date, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
+_AUTH_WORKER_URL = os.getenv("AUTH_WORKER_URL", "").rstrip("/")
+_AUTH_WORKER_SECRET = os.getenv("AUTH_WORKER_SECRET", "")
+
+# ---------------------------------------------------------------------------
+# CF Worker helpers (used when AUTH_WORKER_URL is configured)
+# ---------------------------------------------------------------------------
+
+def _use_cf_worker() -> bool:
+    return bool(_AUTH_WORKER_URL and _AUTH_WORKER_SECRET)
+
+
+def _cf_request(path: str, body: dict) -> dict:
+    data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(
+        f"{_AUTH_WORKER_URL}{path}",
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "X-Worker-Secret": _AUTH_WORKER_SECRET,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8")
+        try:
+            error_data = json.loads(body_text)
+            raise RuntimeError(error_data.get("error", body_text))
+        except json.JSONDecodeError:
+            raise RuntimeError(f"CF Worker HTTP {e.code}: {body_text[:200]}")
+
+
+def _tokens_to_garth_dump(tokens: dict) -> str:
+    """Converts CF Worker token response to a garth session dump (base64 JSON)."""
+    from garth.auth_tokens import OAuth1Token, OAuth2Token
+    from garminconnect import Garmin
+
+    oauth1 = tokens["oauth1"]
+    oauth2 = tokens["oauth2"]
+
+    client = Garmin()
+    client.garth.configure(
+        oauth1_token=OAuth1Token(
+            oauth_token=oauth1["oauth_token"],
+            oauth_token_secret=oauth1["oauth_token_secret"],
+            mfa_token=oauth1.get("mfa_token"),
+            domain="garmin.com",
+        ),
+        oauth2_token=OAuth2Token(
+            scope=oauth2["scope"],
+            jti=oauth2["jti"],
+            token_type=oauth2["token_type"],
+            access_token=oauth2["access_token"],
+            refresh_token=oauth2["refresh_token"],
+            expires_in=int(oauth2["expires_in"]),
+            expires_at=int(oauth2["expires_at"]),
+            refresh_token_expires_in=int(oauth2["refresh_token_expires_in"]),
+            refresh_token_expires_at=int(oauth2["refresh_token_expires_at"]),
+        ),
+    )
+    return client.garth.dumps()
+
+
+def _authenticate_via_cf_worker(email: str, password: str) -> dict[str, Any]:
+    logger.info(f"Starting Garmin auth via CF Worker for {email}")
+    result = _cf_request("/login-start", {"email": email, "password": password})
+
+    if result.get("mfa_required"):
+        session_id = str(uuid.uuid4())
+        with _lock:
+            _pending[session_id] = {
+                "cf_state": result["state"],
+                "created_at": datetime.utcnow(),
+            }
+        logger.info(f"CF Worker MFA required, session_id={session_id}")
+        return {"status": "mfa_required", "session_id": session_id}
+
+    logger.info(f"CF Worker auth successful for {email}")
+    return {"status": "success", "session_dump": _tokens_to_garth_dump(result["tokens"])}
+
+
+# ---------------------------------------------------------------------------
+# In-memory MFA sessions
+# ---------------------------------------------------------------------------
+
 # In-memory MFA sessions: session_id → { mfa_queue, result_queue, created_at }
+#                      or session_id → { cf_state, created_at }
 _pending: dict[str, dict] = {}
 _lock = threading.Lock()
 
@@ -82,10 +176,13 @@ def _login_thread(
 
 def authenticate(email: str, password: str) -> dict[str, Any]:
     """
-    Starts Garmin authentication. Blocks up to 60s waiting for MFA signal or success.
+    Starts Garmin authentication.
     Returns { status, session_dump? } or { status: "mfa_required", session_id }.
     """
     _cleanup_expired()
+
+    if _use_cf_worker():
+        return _authenticate_via_cf_worker(email, password)
 
     session_id = str(uuid.uuid4())
     mfa_q: queue.Queue = queue.Queue()
@@ -125,7 +222,7 @@ def authenticate(email: str, password: str) -> dict[str, Any]:
 
 def complete_mfa(session_id: str, mfa_code: str) -> dict[str, Any]:
     """
-    Submits MFA code to the waiting login thread and returns the result.
+    Submits MFA code and returns { status: "success", session_dump }.
     """
     with _lock:
         session = _pending.get(session_id)
@@ -133,6 +230,19 @@ def complete_mfa(session_id: str, mfa_code: str) -> dict[str, Any]:
     if not session:
         raise RuntimeError("MFA session not found or expired. Please try connecting again.")
 
+    # CF Worker MFA flow
+    if "cf_state" in session:
+        logger.info(f"Completing CF Worker MFA for session {session_id}")
+        result = _cf_request("/login-complete", {
+            "state": session["cf_state"],
+            "mfa_code": mfa_code,
+        })
+        with _lock:
+            _pending.pop(session_id, None)
+        logger.info(f"CF Worker MFA completed successfully")
+        return {"status": "success", "session_dump": _tokens_to_garth_dump(result["tokens"])}
+
+    # garminconnect direct flow (local dev)
     session["mfa_queue"].put(mfa_code)
 
     deadline = datetime.utcnow() + timedelta(seconds=LOGIN_TIMEOUT_SECS)

@@ -2,6 +2,18 @@ export interface Env {
   WORKER_SECRET: string;
 }
 
+// Works in both CF Workers (headers.getAll) and Node.js 18.14+ (headers.getSetCookie)
+function getSetCookieHeaders(headers: Headers): string[] {
+  if (typeof (headers as any).getAll === "function") {
+    return (headers as any).getAll("set-cookie");
+  }
+  if (typeof (headers as any).getSetCookie === "function") {
+    return (headers as any).getSetCookie();
+  }
+  const val = headers.get("set-cookie");
+  return val ? [val] : [];
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -45,8 +57,7 @@ async function getOAuthConsumer() {
 type CookieJar = Record<string, string>;
 
 function updateCookies(resp: Response, jar: CookieJar): void {
-  // CF Workers supports getAll() for set-cookie
-  const setCookies = resp.headers.getAll("set-cookie");
+  const setCookies = getSetCookieHeaders(resp.headers);
   for (const cookie of setCookies) {
     const nameVal = cookie.split(";")[0];
     const eqIdx = nameVal.indexOf("=");
@@ -265,8 +276,7 @@ interface LoginState {
 // Main fetch handler
 // ---------------------------------------------------------------------------
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+export async function fetchHandler(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     // Public health check
@@ -382,5 +392,10 @@ export default {
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return fetchHandler(request, env);
   },
 };

@@ -5,10 +5,15 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "secret": "wrangler secret put WORKER_SECRET"
+    "secret": "wrangler secret put WORKER_SECRET",
+    "serve": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "tsx": "^4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4",
+    "@types/node": "^22",
     "typescript": "^5",
     "wrangler": "^3"
   }

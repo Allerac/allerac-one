@@ -444,6 +444,26 @@ services:
     ports:
       - "9000:9000"
 
+  # Local profile: Garmin auth worker (home IP bypasses Garmin's cloud IP block)
+  # Expose via Cloudflare Tunnel route: garmin-worker.allerac.ai → http://localhost:8787
+  garmin-auth-worker:
+    build:
+      context: ./services/garmin-auth-worker
+      dockerfile: Dockerfile
+    container_name: allerac-garmin-auth-worker
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      - WORKER_SECRET=${GARMIN_WORKER_SECRET:-}
+      - PORT=8787
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    profiles:
+      - local
+
   # Local profile: Caddy reverse proxy for local HTTPS (e.g. https://home.allerac)
   caddy:
     image: caddy:alpine
