@@ -12,7 +12,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, anthropic_api_key, location, onboarding_completed FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, anthropic_api_key, location, onboarding_completed, selected_model FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -32,6 +32,7 @@ export class UserSettingsService {
         anthropic_api_key: row.anthropic_api_key ? safeDecrypt(row.anthropic_api_key) : null,
         location: row.location || null,
         onboarding_completed: row.onboarding_completed ?? false,
+        selected_model: row.selected_model || null,
       };
     } catch (error) {
       console.error('Error loading user settings:', error);
@@ -106,6 +107,21 @@ export class UserSettingsService {
       return { success: true };
     } catch (error) {
       console.error('Error saving user settings:', error);
+      return { success: false, error };
+    }
+  }
+
+  async saveSelectedModel(userId: string, modelId: string) {
+    try {
+      await pool.query(
+        `INSERT INTO user_settings (user_id, selected_model)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id) DO UPDATE SET selected_model = $2`,
+        [userId, modelId]
+      );
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving selected model:', error);
       return { success: false, error };
     }
   }

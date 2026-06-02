@@ -202,11 +202,13 @@ export class AlleracTelegramBot {
       }
     }
 
-    const selectedModel = this.selectedModels.get(telegramUserId);
+    // Priority: /model command override → user's DB preference → gpt-4o default
+    const telegramOverride = this.selectedModels.get(telegramUserId);
+    const dbModel = settings?.selected_model ?? null;
+    const resolvedModelId = telegramOverride ?? dbModel;
 
-    // Find model config - default to gpt-4o for vision support
     const defaultModel = MODELS.find(m => m.id === 'gpt-4o') || MODELS[0];
-    const model = selectedModel ? MODELS.find(m => m.id === selectedModel) : null;
+    const model = resolvedModelId ? MODELS.find(m => m.id === resolvedModelId) : null;
     const activeModel = model || defaultModel;
 
     // For Ollama models in Docker, use the direct Ollama URL (not the Next.js proxy)
@@ -402,6 +404,8 @@ export class AlleracTelegramBot {
 
         if (model) {
           this.selectedModels.set(userId, model.id);
+          const alleracUserId = await this.getOrCreateVirtualUser(userId, msg.from?.username);
+          await this.userSettings.saveSelectedModel(alleracUserId, model.id);
           await this.bot.sendMessage(chatId, `Model switched to: *${model.name}* ${model.icon}`, { parse_mode: 'Markdown' });
         } else {
           await this.bot.sendMessage(chatId, `Model not found. Use /model to see available models.`);

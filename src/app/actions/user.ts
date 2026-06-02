@@ -14,6 +14,10 @@ export async function saveUserSettings(userId: string, githubToken?: string, tav
     return await userSettingsService.saveUserSettings(userId, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location);
 }
 
+export async function saveSelectedModel(userId: string, modelId: string) {
+    return await userSettingsService.saveSelectedModel(userId, modelId);
+}
+
 export async function completeOnboarding(userId: string) {
     return await userSettingsService.completeOnboarding(userId);
 }

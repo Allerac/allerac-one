@@ -10,6 +10,7 @@ import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
 import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import * as memoryActions from '@/app/actions/memory';
+import { saveSelectedModel } from '@/app/actions/user';
 
 interface Props {
   userId: string;
@@ -222,7 +223,7 @@ export default function DomainChatPanel({
         )}
         <select
           value={selectedModel}
-          onChange={e => { setModel(e.target.value); localStorage.setItem('selected_model', e.target.value); }}
+          onChange={e => { setModel(e.target.value); localStorage.setItem('selected_model', e.target.value); saveSelectedModel(userId, e.target.value); }}
           className={`text-xs rounded-md px-2 py-1 border outline-none cursor-pointer ${d ? 'bg-gray-800 text-gray-400 border-gray-700' : 'bg-gray-100 text-gray-600 border-gray-200'}`}
         >
           {MODELS.map(m => (
@@ -256,7 +257,7 @@ export default function DomainChatPanel({
               isDarkMode={d}
               setIsDocumentModalOpen={() => {}}
               selectedModel={selectedModel}
-              setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
+              setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(userId, m); }}
               MODELS={MODELS}
               githubConfigured={true}
               googleConfigured={true}
@@ -294,7 +295,7 @@ export default function DomainChatPanel({
                 isDarkMode={d}
                 setIsDocumentModalOpen={() => {}}
                 selectedModel={selectedModel}
-                setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
+                setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(userId, m); }}
                 MODELS={MODELS}
                 githubConfigured={true}
                 googleConfigured={true}
