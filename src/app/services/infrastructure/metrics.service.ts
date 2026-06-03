@@ -138,6 +138,118 @@ export class MetricsService {
     }
   }
 
+  async getTokenStatsByModel(hours: number = 24, useCurrentMonth: boolean = false): Promise<Array<{
+    model: string;
+    provider: string;
+    total_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_requests: number;
+    estimated_cost_usd: number;
+  }>> {
+    try {
+      let timeFilter = `timestamp >= NOW() - INTERVAL '${hours} hours'`;
+      if (useCurrentMonth) timeFilter = "timestamp >= date_trunc('month', NOW())";
+
+      const res = await pool.query(
+        `SELECT
+           model,
+           provider,
+           COALESCE(SUM(total_tokens), 0)       AS total_tokens,
+           COALESCE(SUM(prompt_tokens), 0)      AS prompt_tokens,
+           COALESCE(SUM(completion_tokens), 0)  AS completion_tokens,
+           COUNT(*)                             AS total_requests,
+           COALESCE(SUM(estimated_cost_usd), 0) AS estimated_cost_usd
+         FROM tokens_usage
+         WHERE ${timeFilter}
+         GROUP BY model, provider
+         ORDER BY estimated_cost_usd DESC`
+      );
+
+      return res.rows.map(r => ({
+        model: r.model,
+        provider: r.provider,
+        total_tokens: parseInt(r.total_tokens),
+        prompt_tokens: parseInt(r.prompt_tokens),
+        completion_tokens: parseInt(r.completion_tokens),
+        total_requests: parseInt(r.total_requests),
+        estimated_cost_usd: parseFloat(r.estimated_cost_usd),
+      }));
+    } catch (err) {
+      console.error('Exception while getting token stats by model:', err);
+      return [];
+    }
+  }
+
+  async getTokenStatsByUser(hours: number = 24, useCurrentMonth: boolean = false): Promise<Array<{
+    user_id: string;
+    total_tokens: number;
+    total_requests: number;
+    estimated_cost_usd: number;
+  }>> {
+    try {
+      let timeFilter = `tu.timestamp >= NOW() - INTERVAL '${hours} hours'`;
+      if (useCurrentMonth) timeFilter = "tu.timestamp >= date_trunc('month', NOW())";
+
+      const res = await pool.query(
+        `SELECT
+           COALESCE(u.name, u.email, tu.user_id::text, 'unknown') AS user_id,
+           COALESCE(SUM(tu.total_tokens), 0)       AS total_tokens,
+           COUNT(*)                                AS total_requests,
+           COALESCE(SUM(tu.estimated_cost_usd), 0) AS estimated_cost_usd
+         FROM tokens_usage tu
+         LEFT JOIN users u ON u.id = tu.user_id::uuid
+         WHERE ${timeFilter} AND tu.user_id IS NOT NULL
+         GROUP BY u.name, u.email, tu.user_id
+         ORDER BY estimated_cost_usd DESC`
+      );
+
+      return res.rows.map(r => ({
+        user_id: r.user_id,
+        total_tokens: parseInt(r.total_tokens),
+        total_requests: parseInt(r.total_requests),
+        estimated_cost_usd: parseFloat(r.estimated_cost_usd),
+      }));
+    } catch (err) {
+      console.error('Exception while getting token stats by user:', err);
+      return [];
+    }
+  }
+
+  async getModelPricing(): Promise<Array<{
+    model_id: string;
+    provider: string;
+    display_name: string;
+    input_price_per_1m: number;
+    output_price_per_1m: number;
+  }>> {
+    try {
+      const res = await pool.query(
+        `SELECT model_id, provider, display_name, input_price_per_1m, output_price_per_1m
+         FROM model_pricing
+         ORDER BY provider, display_name`
+      );
+      return res.rows.map(r => ({
+        model_id: r.model_id,
+        provider: r.provider,
+        display_name: r.display_name,
+        input_price_per_1m: parseFloat(r.input_price_per_1m),
+        output_price_per_1m: parseFloat(r.output_price_per_1m),
+      }));
+    } catch (err) {
+      console.error('Exception while getting model pricing:', err);
+      return [];
+    }
+  }
+
+  async saveModelPricing(modelId: string, inputPer1m: number, outputPer1m: number): Promise<void> {
+    await pool.query(
+      `UPDATE model_pricing SET input_price_per_1m = $1, output_price_per_1m = $2, updated_at = NOW()
+       WHERE model_id = $3`,
+      [inputPer1m, outputPer1m, modelId]
+    );
+  }
+
   /**
    * Get Tavily API call statistics for a time range
    */

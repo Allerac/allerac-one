@@ -23,6 +23,8 @@ export interface LLMRequest {
   max_tokens?: number;
   tools?: any[];
   tool_choice?: string | { type: string; function: { name: string } };
+  userId?: string;
+  conversationId?: string;
 }
 
 export interface LLMResponse {
@@ -51,6 +53,8 @@ export class LLMService {
   private geminiToken?: string;
   private anthropicToken?: string;
   private anthropicClient?: Anthropic;
+  private _userId?: string;
+  private _conversationId?: string;
 
   constructor(provider: LLMProvider, baseUrl: string, config?: { githubToken?: string; geminiToken?: string; anthropicToken?: string }) {
     this.provider = provider;
@@ -80,6 +84,8 @@ export class LLMService {
    * Call LLM API with automatic metrics tracking
    */
   async chatCompletion(request: LLMRequest): Promise<LLMResponse> {
+    this._userId = request.userId;
+    this._conversationId = request.conversationId;
     if (this.provider === 'github') {
       return this.githubChatCompletion(request);
     } else if (this.provider === 'gemini') {
@@ -96,6 +102,8 @@ export class LLMService {
    * Tool-detection calls stay non-streaming; use this for the final user-facing response.
    */
   async *streamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    this._userId = request.userId;
+    this._conversationId = request.conversationId;
     if (this.provider === 'github') {
       yield* this.githubStreamChatCompletion(request);
     } else if (this.provider === 'gemini') {
@@ -829,17 +837,19 @@ export class LLMService {
 
       // Log token usage if successful
       if (data.success && data.usage) {
-        const estimatedCost = (data.provider === 'github' || data.provider === 'gemini')
+        const estimatedCost = data.provider !== 'ollama'
           ? this.calculateCost(data.model, data.usage)
-          : 0; // Ollama is free
+          : 0;
 
         await metricActions.logTokenUsage({
           model: data.model,
-          provider: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : 'ollama',
+          provider: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : data.provider === 'anthropic' ? 'anthropic' : 'ollama',
           prompt_tokens: data.usage.prompt_tokens,
           completion_tokens: data.usage.completion_tokens,
           total_tokens: data.usage.total_tokens,
           estimated_cost_usd: estimatedCost,
+          user_id: this._userId,
+          conversation_id: this._conversationId,
           metadata: {
             has_tools: data.hasTools,
             message_count: data.messageCount,
@@ -860,16 +870,20 @@ export class LLMService {
     prompt_tokens: number;
     completion_tokens: number;
   }): number {
-    // Pricing based on similar OpenAI models (for estimation)
+    // Prices in USD per 1M tokens (kept in sync with model_pricing DB table)
     const pricing: Record<string, { input: number; output: number }> = {
-      'gpt-4o': { input: 0.0025, output: 0.01 },       // $2.50/$10 per 1M tokens
-      'gpt-4o-mini': { input: 0.00015, output: 0.0006 }, // $0.15/$0.60 per 1M tokens
-      'o1-preview': { input: 0.015, output: 0.06 },    // $15/$60 per 1M tokens
-      'o1-mini': { input: 0.003, output: 0.012 },      // $3/$12 per 1M tokens
-      'gemini-2.5-flash': { input: 0.00015, output: 0.00060 }, // $0.15/$0.60 per 1M tokens
+      'gpt-4o':                    { input: 2.500000, output: 10.000000 },
+      'gpt-4o-mini':               { input: 0.150000, output:  0.600000 },
+      'o1-preview':                { input: 15.00000, output: 60.000000 },
+      'o1-mini':                   { input: 3.000000, output: 12.000000 },
+      'ministral-3b':              { input: 0.040000, output:  0.040000 },
+      'gemini-2.5-flash':          { input: 0.150000, output:  0.600000 },
+      'claude-haiku-4-5-20251001': { input: 0.800000, output:  4.000000 },
+      'claude-sonnet-4-6':         { input: 3.000000, output: 15.000000 },
+      'claude-opus-4-7':           { input: 15.00000, output: 75.000000 },
     };
 
-    const modelPricing = pricing[model] || pricing['gpt-4o']; // Default to gpt-4o pricing
+    const modelPricing = pricing[model] ?? { input: 0, output: 0 };
 
     const inputCost = (usage.prompt_tokens / 1_000_000) * modelPricing.input;
     const outputCost = (usage.completion_tokens / 1_000_000) * modelPricing.output;

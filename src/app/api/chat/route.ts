@@ -463,6 +463,8 @@ export async function POST(request: Request): Promise<Response> {
             max_tokens: 2000,
             tools: activeTools,
             ...(initialToolChoice !== undefined && { tool_choice: initialToolChoice }),
+            userId,
+            conversationId: convId ?? undefined,
           });
           console.log('[ChatRoute] First LLM call completed');
           clearInterval(keepaliveInterval);
@@ -632,6 +634,8 @@ export async function POST(request: Request): Promise<Response> {
               max_tokens: 2000,
               tools: activeTools,
               tool_choice: 'auto',
+              userId,
+              conversationId: convId ?? undefined,
             });
             assistantMessage = data.choices[0].message;
           }
@@ -644,6 +648,8 @@ export async function POST(request: Request): Promise<Response> {
           model: modelId,
           temperature: 0.7,
           max_tokens: 2000,
+          userId,
+          conversationId: convId ?? undefined,
         })) {
           fullContent += token;
           safeEnqueue(encode({ type: 'token', content: token }));
