@@ -94,7 +94,6 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     volumes:
       - ${HOST_WORKSPACE:-/home}:/workspace
-      - /var/run/docker.sock:/var/run/docker.sock
       - ${COMPOSE_DIR:-.}:/project
       - /home:/home:ro
       - ./infra/executor/workspace-ports:/usr/local/bin/workspace-ports:ro
