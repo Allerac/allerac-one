@@ -11,6 +11,7 @@ interface Note {
   content: string;
   tags: string[];
   source: string;
+  due_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +38,25 @@ function TagBadge({ tag, active, onClick, d }: { tag: string; active?: boolean; 
       {tag}
     </button>
   );
+}
+
+function DueDateBadge({ due_date, d }: { due_date: string | null; d: boolean }) {
+  if (!due_date) return null;
+  const due = new Date(due_date);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const dueDay = new Date(due); dueDay.setHours(0, 0, 0, 0);
+
+  if (dueDay < today) {
+    return <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/40 text-red-400 font-medium flex-shrink-0">ATRASADO</span>;
+  } else if (dueDay.getTime() === today.getTime()) {
+    return <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-400 font-medium flex-shrink-0">HOJE</span>;
+  } else if (dueDay.getTime() === tomorrow.getTime()) {
+    return <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-400 font-medium flex-shrink-0">AMANHÃ</span>;
+  } else {
+    const label = due.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+    return <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${d ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>{label}</span>;
+  }
 }
 
 function NoteRow({ note, selected, onSelect, onDelete, d }: {
@@ -75,7 +95,10 @@ function NoteRow({ note, selected, onSelect, onDelete, d }: {
           ✕
         </button>
       </div>
-      <div className={`text-xs mt-0.5 ${d ? 'text-gray-600' : 'text-gray-400'}`}>{date}</div>
+      <div className={`flex items-center gap-1.5 mt-0.5`}>
+        <span className={`text-xs ${d ? 'text-gray-600' : 'text-gray-400'}`}>{date}</span>
+        <DueDateBadge due_date={note.due_date} d={d} />
+      </div>
     </button>
   );
 }
@@ -135,15 +158,24 @@ function mdComponents(d: boolean) {
   };
 }
 
+function toDateInputValue(due_date: string | null): string {
+  if (!due_date) return '';
+  const d = new Date(due_date);
+  if (isNaN(d.getTime())) return '';
+  // format as YYYY-MM-DD for <input type="date">
+  return d.toISOString().slice(0, 10);
+}
+
 function NoteEditor({ note, isDarkMode: d, onSave, onClose }: {
   note: Note;
   isDarkMode: boolean;
-  onSave: (id: string, content: string, title: string, tags: string[]) => Promise<void>;
+  onSave: (id: string, content: string, title: string, tags: string[], due_date: string | null) => Promise<void>;
   onClose: () => void;
 }) {
   const [content, setContent]     = useState(note.content);
   const [title, setTitle]         = useState(note.title ?? '');
   const [tagInput, setTagInput]   = useState(note.tags.join(', '));
+  const [dueDate, setDueDate]     = useState(toDateInputValue(note.due_date));
   const [editMode, setEditMode]   = useState(false);
   const [saving, setSaving]       = useState(false);
   const [savedAt, setSavedAt]     = useState<Date | null>(null);
@@ -156,6 +188,7 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose }: {
     setContent(note.content);
     setTitle(note.title ?? '');
     setTagInput(note.tags.join(', '));
+    setDueDate(toDateInputValue(note.due_date));
     setDirty(false);
     setSavedAt(null);
   }, [note.id]);
@@ -168,35 +201,41 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose }: {
   const parseTags = (input: string) =>
     input.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
 
-  const save = useCallback(async (c: string, t: string, ti: string) => {
+  const save = useCallback(async (c: string, t: string, ti: string, dd: string) => {
     setSaving(true);
-    await onSave(note.id, c, t, parseTags(ti));
+    await onSave(note.id, c, t, parseTags(ti), dd || null);
     setSaving(false);
     setSavedAt(new Date());
     setDirty(false);
   }, [note.id, onSave]);
 
-  const scheduleAutoSave = useCallback((c: string, t: string, ti: string) => {
+  const scheduleAutoSave = useCallback((c: string, t: string, ti: string, dd: string) => {
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
-    autoSaveRef.current = setTimeout(() => save(c, t, ti), 5000);
+    autoSaveRef.current = setTimeout(() => save(c, t, ti, dd), 5000);
   }, [save]);
 
   const handleContentChange = (val: string) => {
     setContent(val);
     setDirty(true);
-    scheduleAutoSave(val, title, tagInput);
+    scheduleAutoSave(val, title, tagInput, dueDate);
   };
 
   const handleTitleChange = (val: string) => {
     setTitle(val);
     setDirty(true);
-    scheduleAutoSave(content, val, tagInput);
+    scheduleAutoSave(content, val, tagInput, dueDate);
   };
 
   const handleTagChange = (val: string) => {
     setTagInput(val);
     setDirty(true);
-    scheduleAutoSave(content, title, val);
+    scheduleAutoSave(content, title, val, dueDate);
+  };
+
+  const handleDueDateChange = (val: string) => {
+    setDueDate(val);
+    setDirty(true);
+    scheduleAutoSave(content, title, tagInput, val);
   };
 
   // Flush auto-save on unmount
@@ -274,6 +313,15 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose }: {
             placeholder="tags, comma separated"
             className={`text-xs bg-transparent outline-none flex-1 ${
               d ? 'text-gray-500 placeholder-gray-700' : 'text-gray-400 placeholder-gray-300'
+            }`}
+          />
+          <input
+            type="date"
+            value={dueDate}
+            onChange={e => handleDueDateChange(e.target.value)}
+            title="Due date"
+            className={`text-xs bg-transparent outline-none flex-shrink-0 w-28 ${
+              d ? 'text-gray-500 [color-scheme:dark]' : 'text-gray-400'
             }`}
           />
           {saveStatus && (
@@ -385,13 +433,12 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
     onEditorToggle?.(false);
   };
 
-  const handleSave = async (id: string, content: string, title: string, tags: string[]) => {
-    await updateNote(userId, id, { content, title: title || null, tags });
-    // Update note in list without full reload
+  const handleSave = async (id: string, content: string, title: string, tags: string[], due_date: string | null) => {
+    await updateNote(userId, id, { content, title: title || null, tags, due_date });
     setNotes(prev => prev.map(n =>
-      n.id === id ? { ...n, content, title: title || null, tags, updated_at: new Date().toISOString() } : n
+      n.id === id ? { ...n, content, title: title || null, tags, due_date, updated_at: new Date().toISOString() } : n
     ));
-    setSelectedNote(prev => prev?.id === id ? { ...prev, content, title: title || null, tags } : prev);
+    setSelectedNote(prev => prev?.id === id ? { ...prev, content, title: title || null, tags, due_date } : prev);
     const tagRes = await getAllTags(userId);
     if (tagRes.success) setTags(tagRes.tags);
   };

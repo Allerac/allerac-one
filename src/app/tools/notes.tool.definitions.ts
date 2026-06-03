@@ -23,6 +23,10 @@ export const NOTES_TOOL_DEFINITIONS = [
             items: { type: 'string' },
             description: 'Relevant tags. Use lowercase, e.g. ["task", "health", "project-x"]. Add "task" for action items, "idea" for ideas, "reference" for documentation.',
           },
+          due_date: {
+            type: 'string',
+            description: 'Due date in ISO format YYYY-MM-DD or YYYY-MM-DDTHH:mm. Set when the note has a specific deadline or appointment, e.g. "médico amanhã às 10h" → "2026-06-04T10:00". Use get_today_info to resolve relative dates like "amanhã", "sexta".',
+          },
         },
         required: ['content'],
       },
@@ -64,6 +68,18 @@ export const NOTES_TOOL_DEFINITIONS = [
           tag: {
             type: 'string',
             description: 'Filter by a specific tag (e.g. "task", "idea").',
+          },
+          due_on: {
+            type: 'string',
+            description: 'Return only notes due on this specific date (YYYY-MM-DD). Use for "tenho algo pra amanhã?", "o que tenho pra hoje?".',
+          },
+          due_before: {
+            type: 'string',
+            description: 'Return notes due on or before this date (YYYY-MM-DD). Use for "o que tenho essa semana?".',
+          },
+          overdue: {
+            type: 'boolean',
+            description: 'If true, return only notes whose due_date is in the past.',
           },
         },
         required: [],
@@ -111,6 +127,10 @@ export const NOTES_TOOL_DEFINITIONS = [
             type: 'array',
             items: { type: 'string' },
             description: 'New tag list — replaces existing tags entirely (omit to keep current).',
+          },
+          due_date: {
+            type: 'string',
+            description: 'New due date (YYYY-MM-DD or YYYY-MM-DDTHH:mm). Pass null to clear.',
           },
         },
         required: ['note_id'],

@@ -10,14 +10,15 @@ export function buildNotesTools(user: NotesUser) {
   const notesService = new NotesService();
 
   return {
-    save_note: async (args: { content: string; title?: string; tags?: string[] }) => {
+    save_note: async (args: { content: string; title?: string; tags?: string[]; due_date?: string }) => {
       const note = await notesService.createNote(user.id, {
         content: args.content,
         title: args.title,
         tags: args.tags ?? [],
         source: 'chat',
+        due_date: args.due_date ?? null,
       }, user.githubToken);
-      return { success: true, note_id: note.id, title: note.title, tags: note.tags };
+      return { success: true, note_id: note.id, title: note.title, tags: note.tags, due_date: note.due_date };
     },
 
     query_vault: async (args: { query: string; limit?: number }) => {
@@ -30,9 +31,9 @@ export function buildNotesTools(user: NotesUser) {
       return { results: notes.map(n => ({ note_id: n.id, title: n.title, content: n.content, tags: n.tags, created_at: n.created_at, similarity: 0 })) };
     },
 
-    list_notes: async (args: { limit?: number; tag?: string }) => {
-      const notes = await notesService.listNotes(user.id, { limit: args.limit ?? 10, tag: args.tag });
-      return { notes: notes.map(n => ({ note_id: n.id, title: n.title, content: n.content.slice(0, 200), tags: n.tags, created_at: n.created_at })) };
+    list_notes: async (args: { limit?: number; tag?: string; due_on?: string; due_before?: string; overdue?: boolean }) => {
+      const notes = await notesService.listNotes(user.id, { limit: args.limit ?? 10, tag: args.tag, due_on: args.due_on, due_before: args.due_before, overdue: args.overdue });
+      return { notes: notes.map(n => ({ note_id: n.id, title: n.title, content: n.content.slice(0, 200), tags: n.tags, due_date: n.due_date, created_at: n.created_at })) };
     },
 
     delete_note: async (args: { note_id: string }) => {

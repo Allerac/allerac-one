@@ -10,6 +10,7 @@ export interface Note {
   content: string;
   tags: string[];
   source: string;
+  due_date: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -28,17 +29,19 @@ export interface CreateNoteInput {
   title?: string;
   tags?: string[];
   source?: string;
+  due_date?: string | null;
 }
 
 export interface UpdateNoteInput {
   content?: string;
   title?: string | null;
   tags?: string[];
+  due_date?: string | null;
 }
 
 export class NotesService {
   async createNote(userId: string, input: CreateNoteInput, githubToken?: string | null): Promise<Note> {
-    const { content, title = null, tags = [], source = 'chat' } = input;
+    const { content, title = null, tags = [], source = 'chat', due_date = null } = input;
 
     let documentId: string | null = null;
 
@@ -64,35 +67,48 @@ export class NotesService {
     }
 
     const res = await pool.query(
-      `INSERT INTO user_notes (user_id, document_id, title, content, tags, source)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO user_notes (user_id, document_id, title, content, tags, source, due_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [userId, documentId, title, content, tags, source]
+      [userId, documentId, title, content, tags, source, due_date ?? null]
     );
 
     return res.rows[0] as Note;
   }
 
-  async listNotes(userId: string, options: { limit?: number; tag?: string } = {}): Promise<Note[]> {
+  async listNotes(userId: string, options: {
+    limit?: number;
+    tag?: string;
+    due_on?: string;
+    due_before?: string;
+    overdue?: boolean;
+  } = {}): Promise<Note[]> {
     const limit = options.limit ?? 20;
+    const conditions: string[] = ['user_id = $1'];
+    const values: any[] = [userId];
+    let i = 2;
 
     if (options.tag) {
-      const res = await pool.query(
-        `SELECT * FROM user_notes
-         WHERE user_id = $1 AND $2 = ANY(tags)
-         ORDER BY created_at DESC
-         LIMIT $3`,
-        [userId, options.tag, limit]
-      );
-      return res.rows as Note[];
+      conditions.push(`$${i++} = ANY(tags)`);
+      values.push(options.tag);
+    }
+    if (options.due_on) {
+      conditions.push(`due_date::date = $${i++}::date`);
+      values.push(options.due_on);
+    } else if (options.due_before) {
+      conditions.push(`due_date::date <= $${i++}::date`);
+      values.push(options.due_before);
+    } else if (options.overdue) {
+      conditions.push(`due_date < NOW()`);
     }
 
+    values.push(limit);
     const res = await pool.query(
       `SELECT * FROM user_notes
-       WHERE user_id = $1
-       ORDER BY created_at DESC
-       LIMIT $2`,
-      [userId, limit]
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY CASE WHEN due_date IS NOT NULL THEN 0 ELSE 1 END, due_date ASC, created_at DESC
+       LIMIT $${i}`,
+      values
     );
     return res.rows as Note[];
   }
@@ -160,9 +176,10 @@ export class NotesService {
     const values: any[] = [];
     let i = 1;
 
-    if (input.content !== undefined) { fields.push(`content = $${i++}`); values.push(input.content); }
-    if (input.title !== undefined)   { fields.push(`title = $${i++}`);   values.push(input.title); }
-    if (input.tags !== undefined)    { fields.push(`tags = $${i++}`);    values.push(input.tags); }
+    if (input.content !== undefined)   { fields.push(`content = $${i++}`);   values.push(input.content); }
+    if (input.title !== undefined)     { fields.push(`title = $${i++}`);     values.push(input.title); }
+    if (input.tags !== undefined)      { fields.push(`tags = $${i++}`);      values.push(input.tags); }
+    if (input.due_date !== undefined)  { fields.push(`due_date = $${i++}`);  values.push(input.due_date ?? null); }
 
     if (fields.length === 0) return null;
 

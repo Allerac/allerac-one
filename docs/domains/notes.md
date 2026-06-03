@@ -3,8 +3,8 @@
 **Slug:** `notes`  
 **Route:** `/notes`  
 **Icon:** 📝  
-**Status:** Planned — not yet implemented  
-**Default Skill:** `notes` (to be created at `skills/notes.md`)
+**Status:** Active  
+**Default Skill:** `notes` (`skills/notes.md`)
 
 ---
 
@@ -16,155 +16,132 @@ A personal knowledge base — the Allerac equivalent of Obsidian. The user accum
 
 1. **Capture** — from any context, save something to the vault:
    > Telegram: "anota que preciso ligar pro dentista amanhã"  
-   > Allerac saves a note tagged `task`, `tomorrow`
+   > Allerac saves a note tagged `task`, with due_date set
 
 2. **Recall** — query the vault in natural language:
-   > Telegram: "o que tenho pra hoje?"  
-   > Allerac searches the vault and responds with relevant notes
-
-**The power:** your project documentation, meeting notes, ideas, and tasks live in one place. You paste in a project's README, architecture doc, or API reference — and from then on the AI answers questions about it instantly, from chat or Telegram.
+   > Chat: "o que tenho pra hoje?"  
+   > Allerac calls `list_notes` with `due_on` = today and responds with relevant notes
 
 ---
 
-## How it differs from existing Documents (RAG)
-
-The `documents` table already supports file uploads with vector search. Notes extends this with:
-
-| Feature | Documents (today) | Notes (planned) |
-|---------|-------------------|-----------------|
-| UI visibility | Hidden (upload only) | Full vault view — list, search, edit, delete |
-| Creation method | File upload only | Chat, Telegram, file upload, direct edit |
-| Structure | Files with chunks | Notes with tags + optional project grouping |
-| Telegram integration | None | `save_note` and `query_vault` tools available in Telegram |
-| Quick capture | No | Yes — one-line notes without a file |
-
----
-
-## Architecture Plan
+## Architecture
 
 ### DB
-
-New table `user_notes` — keeps notes separate from the general `documents` table so they have richer metadata (tags, source, title) while reusing the same `document_chunks` / vector search infrastructure.
 
 ```sql
 CREATE TABLE user_notes (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document_id  UUID REFERENCES documents(id) ON DELETE SET NULL,
   title        TEXT,
   content      TEXT NOT NULL,
   tags         TEXT[] DEFAULT '{}',
-  source       TEXT DEFAULT 'chat',  -- 'chat' | 'telegram' | 'upload' | 'manual'
+  source       TEXT DEFAULT 'chat',  -- 'chat' | 'telegram' | 'manual'
+  due_date     TIMESTAMPTZ,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- Chunks reuse the existing document_chunks table via a nullable note_id FK
-ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS note_id UUID REFERENCES user_notes(id) ON DELETE CASCADE;
 ```
 
-The `search_document_chunks` function already supports filtering by `user_id` and `domain_slug` — notes would pass `domain_slug = 'notes'` to scope searches.
+The `document_id` FK links to the RAG `documents` table — when a GitHub token is present, notes are embedded via `text-embedding-3-small` for semantic search. Without a token, keyword search (`ILIKE`) is used as fallback.
 
-### Tools (new)
+Relevant migrations:
+- `054_notes.sql` — creates `user_notes` table
+- `055_telegram_link_bot_owner.sql` — migrates notes from virtual Telegram user to real web owner (runs once on servers where the bot owner's Telegram ID is in `allowed_telegram_ids`)
+- `056_notes_due_date.sql` — adds `due_date TIMESTAMPTZ` column + index
 
-| Tool | Description |
-|------|-------------|
-| `save_note` | Save a note to the vault. Params: `content`, `title?`, `tags[]?` |
-| `query_vault` | Search the vault with a natural language query. Returns top-N relevant notes. |
-| `list_notes` | List recent notes, optionally filtered by tag. |
-| `delete_note` | Delete a note by ID. |
-
-These tools reuse `EmbeddingService` (already exists at `src/app/services/rag/embedding.service.ts`) and `VectorSearchService` (`src/app/services/rag/vector-search.service.ts`).
-
-### Services
+### Services & Actions
 
 | File | Purpose |
 |------|---------|
-| `src/app/services/notes/notes.service.ts` | CRUD + embedding on save |
-| `src/app/tools/notes.tool.ts` | Tool definitions wrapping notes service |
-| `src/app/actions/notes.ts` | Server actions for UI |
+| `src/app/services/notes/notes.service.ts` | CRUD + embedding on save. `listNotes` supports `due_on`, `due_before`, `overdue` filters. |
+| `src/app/actions/notes.ts` | Server actions consumed by VaultPanel |
 
-### UI (Pattern B)
+### Tools
+
+All notes tools are injected globally in every domain/skill (not just Notes). This allows capturing and recalling notes from any conversation.
+
+| Tool | Description |
+|------|-------------|
+| `save_note` | Save a note. Params: `content`, `title?`, `tags[]?`, `due_date?` (ISO YYYY-MM-DD or YYYY-MM-DDTHH:mm) |
+| `query_vault` | Semantic search (falls back to keyword). Returns top-N notes by relevance. |
+| `list_notes` | List notes, optionally filtered by `tag`, `due_on`, `due_before`, or `overdue: true`. |
+| `update_note` | Update content, title, tags, or due_date of an existing note. |
+| `delete_note` | Delete a note by ID. |
+
+Tool definitions live in `src/app/tools/notes.tool.definitions.ts` (no Node.js imports — browser-safe). Handlers in `src/app/tools/notes.tool.ts`.
+
+Global injection is done in `src/app/api/chat/route.ts` — notes tools are always appended to `activeTools`, replacing any domain-level copies.
+
+### UI
 
 ```
 src/app/notes/
   page.tsx          ← server: requireDomainAccess('notes')
-  NotesClient.tsx   ← client layout: chat panel + vault panel
-  VaultPanel.tsx    ← list of notes with search, tags, create, delete
+  NotesClient.tsx   ← client layout: vault panel + chat panel
+  VaultPanel.tsx    ← split-view editor + note list
 ```
 
-The vault panel sits alongside the chat, similar to how `WorkspacePanel` works in the Code domain. The user can read/manage notes visually while also chatting with the AI about them.
+**Layout pattern:** two-column on desktop (vault left, chat right). Mobile uses tabs (`Vault` / `Chat`).
 
-### Skill (`skills/notes.md`)
+**VaultPanel split-view:** when a note is selected, the list narrows to 192px (desktop only) and the editor fills the remaining space. On mobile, opening a note goes full-screen with a `← Vault` back button.
 
-```yaml
----
-name: notes
-display_name: 📝 Notes
-description: Personal knowledge base — save and recall notes, docs, and project references.
-category: productivity
-domain: notes
-version: 1.0.0
-tools:
-  - save_note
-  - query_vault
-  - list_notes
-  - delete_note
-  - search_web
-  - get_today_info
----
-```
+**NoteEditor features:**
+- Preview / Edit toggle (rendered with `react-markdown` + `remark-gfm`, manually styled without `@tailwindcss/typography`)
+- Inline title and tag editing
+- Due date picker (`<input type="date">`) — saves the due_date field
+- Auto-save with 5s debounce; shows Unsaved / Saving… / Saved HH:MM status
+- ✕ close button (desktop) / ← Vault back button (mobile)
 
-System prompt focus: understands capture intent ("anota...", "lembra...", "salva..."), query intent ("o que tenho...", "me mostra...", "tem algo sobre..."), and handles both Portuguese and English naturally.
+**NoteRow due date badges:**
+- 🔴 `ATRASADO` — overdue
+- 🟡 `HOJE` — due today
+- 🔵 `AMANHÃ` — due tomorrow
+- Gray `dd MMM` — future date
 
 ---
 
 ## Telegram Integration
 
-The `notes` skill should be available in Telegram (not just the web). When the Telegram bot receives a message that matches capture or recall intent, it activates the notes skill and calls `save_note` or `query_vault`.
+Bot owner's Telegram account maps to their real web `user_id` (via `telegram_bot_configs.allowed_telegram_ids`). Notes saved via Telegram appear in the web vault and vice versa.
 
-This works because:
-- Telegram bot already resolves the user's `selected_model` from DB
-- Skills are already activated per conversation
-- The tools just need to be registered and the skill needs to be selectable in Telegram
+Other Telegram users get isolated virtual accounts — their notes do not appear in the web vault.
 
-No new Telegram infrastructure needed — just add the notes skill to the Telegram skill selector.
+See `src/app/services/telegram/telegram-bot.service.ts` → `getOrCreateVirtualUser` for the resolution logic.
 
 ---
 
-## Implementation Plan
+## Implementation History
 
 ### Phase 1 — Data layer ✅
-- [x] Migration `054_notes.sql`: create `user_notes` table (domain registered as inactive)
-- [x] `src/app/services/notes/notes.service.ts`: `createNote`, `searchNotes`, `keywordSearchNotes`, `listNotes`, `deleteNote`, `getAllTags`
-- [x] `src/app/actions/notes.ts`: server actions for UI
+- Migration `054_notes.sql`: `user_notes` table
+- `notes.service.ts`: CRUD + embedding + keyword fallback
+- `notes.ts` actions: server actions for UI
 
 ### Phase 2 — AI tools ✅
-- [x] `src/app/tools/notes.tool.ts`: `buildNotesTools` handler function
-- [x] `src/app/tools/notes.tool.definitions.ts`: pure tool definitions (no Node.js imports — safe for browser bundle)
-- [x] `skills/notes.md`: system prompt + frontmatter (auto-loaded by SystemSkillsLoader)
-- [x] Tools registered in `TOOLS` array via `tools.ts` + injected in `src/app/api/chat/route.ts`
+- `notes.tool.ts` + `notes.tool.definitions.ts`
+- `skills/notes.md`: system prompt
+- Tools registered globally in `tools.ts` + `chat/route.ts`
 
 ### Phase 3 — Domain UI ✅
-- [x] `src/app/notes/page.tsx`: requireDomainAccess + Pattern B
-- [x] `src/app/notes/NotesClient.tsx`: layout wrapper (vault panel + chat)
-- [x] `src/app/notes/VaultPanel.tsx`: list, search, quick capture, tag filters, delete
-- [x] Register in `HubClient.tsx` → `DOMAINS_ALL`
-- [x] Register in `DomainSkillsModal.tsx` → `DOMAINS`
+- `page.tsx`, `NotesClient.tsx`, `VaultPanel.tsx`
+- Registered in `HubClient.tsx` → `DOMAINS_ALL` and `DomainSkillsModal.tsx`
 
 ### Phase 4 — Telegram ✅
-- [x] Notes tools added to `chat-handler.ts` tool execution block
-- [x] `NOTES_TOOL_DEFINITIONS` included in global `TOOLS` — available in all Telegram conversations
-- [ ] Activate domain for user + test end-to-end: "anota X" → `save_note` → "o que tenho pra hoje?" → `list_notes`
+- Notes tools in `chat-handler.ts`
+- Bot owner → web user mapping fix (`getOrCreateVirtualUser`)
+- Migration `055_telegram_link_bot_owner.sql` for existing servers
 
-### Phase 5 — Polish
-- [ ] File upload support in VaultPanel (PDF, MD, TXT → chunked + embedded as notes)
-- [ ] Note editing inline in VaultPanel
-- [ ] "Project" grouping (optional — tag-based is probably enough)
+### Phase 5 — Polish ✅
+- Split-view markdown editor in VaultPanel
+- Mobile tabs (Vault / Chat)
+- `due_date` field: date picker in editor, color-coded badges in list, AI tools (`due_on`, `due_before`, `overdue`)
+- `update_note` tool added
+- Notes tools available globally in all domains/skills
 
 ---
 
 ## Open Questions
 
-- **Scope:** Should notes be scoped to the `notes` domain only, or should `query_vault` be available in all domains (e.g., ask about your project docs while in the Code domain)? → Likely start domain-scoped, open up later.
-- **Deduplication:** If the user uploads the same doc twice, should we deduplicate? → Not critical for MVP.
-- **Note vs Document:** Should uploads in other domains (chat, code) eventually be migrated to the notes vault? → Future consideration.
+- **File upload:** Paste a PDF or `.md` file directly into the vault (chunked + embedded as a note). Not yet implemented.
+- **Folders:** Tags cover grouping by context (`projeto-x`, `pessoal`). Full folder hierarchy deferred until there's a clear need beyond tags.

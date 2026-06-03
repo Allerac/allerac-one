@@ -22,7 +22,7 @@ export async function createNote(userId: string, input: CreateNoteInput) {
   }
 }
 
-export async function listNotes(userId: string, options: { limit?: number; tag?: string } = {}) {
+export async function listNotes(userId: string, options: { limit?: number; tag?: string; due_on?: string; due_before?: string; overdue?: boolean } = {}) {
   try {
     const notes = await notesService.listNotes(userId, options);
     return { success: true, notes };
