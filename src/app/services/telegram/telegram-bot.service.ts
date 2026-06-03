@@ -82,12 +82,12 @@ export class AlleracTelegramBot {
 
   /**
    * Returns the Allerac user_id for a given Telegram user.
-   * Each unique Telegram user gets their own isolated Allerac account so that
-   * conversations, memories, and corrections are never shared across different
-   * Telegram users who happen to share the same bot.
+   * If the Telegram user is listed in a bot's allowed_telegram_ids, they are
+   * treated as the bot owner and share the same web account (notes, memory, etc.).
+   * Otherwise a dedicated virtual account is created so multi-user bots stay isolated.
    */
   private async getOrCreateVirtualUser(telegramUserId: number, username?: string): Promise<string> {
-    // Re-use the same Allerac user if this Telegram user already has any mapping
+    // Re-use existing mapping if already established
     const existing = await pool.query(
       'SELECT user_id FROM telegram_chat_mapping WHERE telegram_user_id = $1 LIMIT 1',
       [telegramUserId]
@@ -96,7 +96,17 @@ export class AlleracTelegramBot {
       return existing.rows[0].user_id;
     }
 
-    // First time this Telegram user talks to the bot – create a dedicated virtual account
+    // If this Telegram user is in a bot's allowed list, link to that bot owner's web account
+    const ownerMatch = await pool.query(
+      'SELECT user_id FROM telegram_bot_configs WHERE $1 = ANY(allowed_telegram_ids) LIMIT 1',
+      [telegramUserId]
+    );
+    if (ownerMatch.rows.length > 0) {
+      console.log(`[Telegram] Linking Telegram user ${telegramUserId} to bot owner web account ${ownerMatch.rows[0].user_id}`);
+      return ownerMatch.rows[0].user_id;
+    }
+
+    // Unknown Telegram user — create a dedicated virtual account
     const email = `telegram_${telegramUserId}@telegram.bot.local`;
     const displayName = username ? `Telegram: @${username}` : `Telegram User ${telegramUserId}`;
 
