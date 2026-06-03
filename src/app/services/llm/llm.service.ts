@@ -46,6 +46,66 @@ export interface LLMResponse {
 
 type LLMProvider = 'github' | 'ollama' | 'gemini' | 'anthropic';
 
+// Converts OpenAI-format messages to Anthropic MessageParam format.
+// Key differences:
+//   - role:'tool' → role:'user' with content:[{type:'tool_result',...}]
+//   - role:'assistant' + tool_calls → content:[{type:'tool_use',...}]
+//   - Consecutive tool_result blocks are grouped into one user message
+function convertToAnthropicMessages(
+  messages: LLMRequest['messages']
+): Anthropic.MessageParam[] {
+  const result: Anthropic.MessageParam[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') continue;
+
+    if (msg.role === 'tool') {
+      const block: Anthropic.ToolResultBlockParam = {
+        type: 'tool_result',
+        tool_use_id: msg.tool_call_id!,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      };
+      const last = result[result.length - 1];
+      if (last?.role === 'user' && Array.isArray(last.content)) {
+        (last.content as any[]).push(block);
+      } else {
+        result.push({ role: 'user', content: [block] });
+      }
+      continue;
+    }
+
+    if (msg.role === 'assistant' && msg.tool_calls?.length) {
+      const content: any[] = [];
+      if (msg.content && typeof msg.content === 'string' && msg.content.trim()) {
+        content.push({ type: 'text', text: msg.content });
+      }
+      for (const tc of msg.tool_calls) {
+        let input: any = {};
+        try {
+          input = typeof tc.function.arguments === 'string'
+            ? JSON.parse(tc.function.arguments)
+            : (tc.function.arguments ?? {});
+        } catch { /* keep {} */ }
+        content.push({
+          type: 'tool_use',
+          id: tc.id || `toolu_${tc.function.name}_${Date.now()}`,
+          name: tc.function.name,
+          input,
+        });
+      }
+      result.push({ role: 'assistant', content });
+      continue;
+    }
+
+    result.push({
+      role: msg.role as 'user' | 'assistant',
+      content: typeof msg.content === 'string' ? msg.content : (msg.content as any),
+    });
+  }
+
+  return result;
+}
+
 export class LLMService {
   private provider: LLMProvider;
   private baseUrl: string;
@@ -651,20 +711,9 @@ export class LLMService {
    * Stream Anthropic API response
    */
   private async *anthropicStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
-    // Convert OpenAI format to Anthropic format
-    let systemPrompt = '';
-    const messages: Anthropic.MessageParam[] = [];
-
-    for (const msg of request.messages) {
-      if (msg.role === 'system') {
-        systemPrompt = typeof msg.content === 'string' ? msg.content : '';
-      } else {
-        messages.push({
-          role: msg.role as 'user' | 'assistant',
-          content: typeof msg.content === 'string' ? msg.content : (msg.content as any),
-        });
-      }
-    }
+    const systemMsg = request.messages.find(m => m.role === 'system');
+    const systemPrompt = systemMsg ? (typeof systemMsg.content === 'string' ? systemMsg.content : '') : '';
+    const messages = convertToAnthropicMessages(request.messages);
 
     // Convert tools from OpenAI to Anthropic format
     const tools = request.tools?.map((tool: any) => ({
@@ -703,20 +752,9 @@ export class LLMService {
     let errorMessage: string | undefined;
 
     try {
-      // Convert OpenAI format to Anthropic format
-      let systemPrompt = '';
-      const messages: Anthropic.MessageParam[] = [];
-
-      for (const msg of request.messages) {
-        if (msg.role === 'system') {
-          systemPrompt = typeof msg.content === 'string' ? msg.content : '';
-        } else {
-          messages.push({
-            role: msg.role as 'user' | 'assistant',
-            content: typeof msg.content === 'string' ? msg.content : (msg.content as any),
-          });
-        }
-      }
+      const systemMsg = request.messages.find(m => m.role === 'system');
+      const systemPrompt = systemMsg ? (typeof systemMsg.content === 'string' ? systemMsg.content : '') : '';
+      const messages = convertToAnthropicMessages(request.messages);
 
       // Convert tools from OpenAI to Anthropic format
       const tools = request.tools?.map((tool: any) => ({
