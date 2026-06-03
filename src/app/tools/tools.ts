@@ -1,4 +1,5 @@
 // AI Tool definitions for function calling
+import { NOTES_TOOL_DEFINITIONS } from './notes.tool.definitions';
 
 // Static registry of all available tools for admin UI
 export const TOOL_REGISTRY: Array<{ name: string; label: string; description: string; group: string }> = [
@@ -17,6 +18,11 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'instagram_get_recent_posts', label: 'Recent Posts',        description: 'Get recent posts from Instagram account',        group: 'Instagram' },
   { name: 'draw_canvas',               label: 'Draw Canvas',         description: 'Draw or update elements on the design canvas',   group: 'Design'    },
   { name: 'edit_file',                 label: 'Edit File',           description: 'Propose a file edit — user reviews and accepts', group: 'Dev'       },
+  { name: 'save_note',                 label: 'Save Note',           description: 'Save a note to the personal vault',             group: 'Notes'     },
+  { name: 'query_vault',              label: 'Query Vault',         description: 'Search notes with natural language',            group: 'Notes'     },
+  { name: 'list_notes',               label: 'List Notes',          description: 'List recent notes from the vault',              group: 'Notes'     },
+  { name: 'delete_note',              label: 'Delete Note',         description: 'Delete a note from the vault',                  group: 'Notes'     },
+  { name: 'update_note',              label: 'Update Note',         description: 'Edit the content, title, or tags of a note',    group: 'Notes'     },
 ];
 
 // Health tools are conditionally included based on HEALTH_WORKER_SECRET being set.
@@ -189,6 +195,7 @@ export const TOOLS = [
     },
   },
   ...HEALTH_TOOLS,
+  ...NOTES_TOOL_DEFINITIONS,
   {
     type: 'function',
     function: {

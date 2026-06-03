@@ -35,6 +35,7 @@ const DOMAINS = [
   { slug: 'social',  label: 'Social',  icon: '📸' },
   { slug: 'tickets', label: 'Tickets', icon: '🎫' },
   { slug: 'design',  label: 'Design',  icon: '🎨' },
+  { slug: 'notes',   label: 'Notes',   icon: '📝' },
 ];
 
 interface Props {

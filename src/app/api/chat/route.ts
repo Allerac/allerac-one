@@ -26,6 +26,7 @@ import { SearchWebTool } from '@/app/tools/search-web.tool';
 import { ReadUrlTool } from '@/app/tools/read-url.tool';
 import { ShellTool } from '@/app/tools/shell.tool';
 import { HealthTool } from '@/app/tools/health.tool';
+import { buildNotesTools, NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { TOOLS } from '@/app/tools/tools';
@@ -362,13 +363,20 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // Load tools from DB skill assignment, fall back to universal tools
-        let activeTools = TOOLS;
+        let activeTools: any[] = TOOLS;
         if (activeSkill?.id) {
           const allowedToolNames = await getSkillTools(activeSkill.id);
           if (allowedToolNames.length > 0) {
             activeTools = TOOLS.filter(t => allowedToolNames.includes(t.function.name));
           }
         }
+
+        // Notes tools are always available across all domains
+        const noteToolNames = ['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note'];
+        activeTools = [
+          ...activeTools.filter((t: any) => !noteToolNames.includes(t.function.name)),
+          ...NOTES_TOOL_DEFINITIONS,
+        ];
 
         if (conversationMemories) {
           enrichedSystemMessage = conversationMemories + '\n\n' + enrichedSystemMessage;
@@ -606,6 +614,10 @@ export async function POST(request: Request): Promise<Response> {
                     }));
                     toolResult = { success: true, message: 'Edit proposal shown to the user for review. Do not write the file yourself — wait for the user to accept or reject before continuing.' };
                   }
+                } else if (noteToolNames.includes(toolName)) {
+                  const noteHandlers = buildNotesTools({ id: userId, githubToken: githubToken || null });
+                  const handler = noteHandlers[toolName as keyof typeof noteHandlers];
+                  toolResult = await handler(toolArgs);
                 } else {
                   toolResult = { error: `Tool ${toolName} not available` };
                 }

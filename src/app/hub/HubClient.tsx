@@ -22,6 +22,7 @@ const DOMAINS_ALL = [
   { id: 'design',  label: 'Design',  icon: '🎨', path: '/design',   desc: 'Design system assistant' },
   { id: 'search',  label: 'Search',  icon: '🔍', path: '/search',   desc: 'Web search' },
   { id: 'email',   label: 'Email',   icon: '✉️', path: '/email',    desc: 'Email inbox & AI' },
+  { id: 'notes',   label: 'Notes',   icon: '📝', path: '/notes',    desc: 'Personal knowledge base' },
 ];
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';

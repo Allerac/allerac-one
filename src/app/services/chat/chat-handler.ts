@@ -14,6 +14,7 @@ import { ShellTool } from '../../tools/shell.tool';
 import { ChatService } from '../database/chat.service';
 import { skillsService } from '../skills/skills.service';
 import { TOOLS } from '../../tools/tools';
+import { buildNotesTools } from '../../tools/notes.tool';
 import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
 
 export interface ChatHandlerConfig {
@@ -292,6 +293,10 @@ export async function handleChatMessage(
         } else if (toolName === 'search_web' && tavilyApiKey) {
           const searchTool = new SearchWebTool(tavilyApiKey);
           toolResult = await searchTool.execute(toolArgs.query);
+        } else if (['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note'].includes(toolName)) {
+          const noteHandlers = buildNotesTools({ id: userId, githubToken });
+          const handler = noteHandlers[toolName as keyof typeof noteHandlers];
+          toolResult = await handler(toolArgs);
         } else if (toolName === 'execute_shell') {
           const shellTool = new ShellTool();
           // Enforce user-scoped workspace paths regardless of what the LLM wrote
