@@ -319,14 +319,14 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           position: 'relative',
         }}
       >
-        {/* Desktop icon area — vertical on both desktop and mobile */}
+        {/* Desktop icon area — 1 col on small screens, 2 cols when tall enough */}
         <div style={{
           flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, 72px)',
+          alignContent: 'start',
           gap: '0',
-          padding: '12px',
+          padding: '12px 8px',
           overflowY: 'auto',
         }}>
           {domains.map(domain => (
