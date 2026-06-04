@@ -35,6 +35,8 @@ const DOMAINS = [
   { slug: 'social',  label: 'Social',  icon: '📸' },
   { slug: 'tickets', label: 'Tickets', icon: '🎫' },
   { slug: 'design',  label: 'Design',  icon: '🎨' },
+  { slug: 'search',  label: 'Search',  icon: '🔍' },
+  { slug: 'email',   label: 'Email',   icon: '✉️' },
   { slug: 'notes',   label: 'Notes',   icon: '📝' },
 ];
 

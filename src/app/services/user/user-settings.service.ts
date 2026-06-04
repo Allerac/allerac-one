@@ -12,7 +12,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, anthropic_api_key, location, onboarding_completed, selected_model FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, anthropic_api_key, location, onboarding_completed, selected_model, language FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -33,6 +33,7 @@ export class UserSettingsService {
         location: row.location || null,
         onboarding_completed: row.onboarding_completed ?? false,
         selected_model: row.selected_model || null,
+        language: row.language || 'en',
       };
     } catch (error) {
       console.error('Error loading user settings:', error);

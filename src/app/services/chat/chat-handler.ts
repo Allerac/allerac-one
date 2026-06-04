@@ -15,7 +15,11 @@ import { ChatService } from '../database/chat.service';
 import { skillsService } from '../skills/skills.service';
 import { TOOLS } from '../../tools/tools';
 import { buildNotesTools } from '../../tools/notes.tool';
-import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
+import { buildEmailTools } from '../../tools/email.tool';
+import { HealthTool } from '../../tools/health.tool';
+import { getSkillTools } from '../../actions/skills';
+import { buildSoul } from '@/app/config/allerac-soul';
+import pool from '@/app/clients/db';
 
 export interface ChatHandlerConfig {
   userId: string;
@@ -28,7 +32,8 @@ export interface ChatHandlerConfig {
   modelBaseUrl: string;
   systemMessage: string;
   botId?: string;  // For Telegram bot skill assignment
-  domainSlug?: string;
+  domainSlug?: string | null;
+  language?: string; // e.g. 'en', 'pt', 'es' — injected into system context
 }
 
 export interface ChatImageAttachment {
@@ -60,7 +65,7 @@ export async function handleChatMessage(
   config: ChatHandlerConfig,
   imageAttachments?: ChatImageAttachment[]
 ): Promise<ChatHandlerResult> {
-  const { userId, githubToken, geminiToken, anthropicToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId, domainSlug } = config;
+  const { userId, githubToken, geminiToken, anthropicToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId, domainSlug, language } = config;
 
   // 1. Create conversation if needed
   let convId = conversationId;
@@ -77,10 +82,16 @@ export async function handleChatMessage(
   
   if (!activeSkill && !conversationId) {
     // New conversation - try to load default skill
-    const defaultSkill = botId 
+    // Priority: bot default → chat domain default → user default
+    let defaultSkill = botId
       ? await skillsService.getDefaultBotSkill(botId)
       : await skillsService.getDefaultUserSkill(userId);
-    
+
+    // Fallback: if bot has no default skill configured, use the chat domain default
+    if (!defaultSkill && botId) {
+      defaultSkill = await skillsService.getDefaultDomainSkill('chat');
+    }
+
     if (defaultSkill) {
       await skillsService.activateSkill(
         defaultSkill.id,
@@ -109,6 +120,15 @@ export async function handleChatMessage(
     }
   }
 
+  // Filter available tools by skill assignment
+  let activeTools: typeof TOOLS = TOOLS;
+  if (activeSkill?.id) {
+    const allowedToolNames = await getSkillTools(activeSkill.id);
+    if (allowedToolNames.length > 0) {
+      activeTools = TOOLS.filter(t => allowedToolNames.includes(t.function.name));
+    }
+  }
+
   // Save user message (with image indicator if present)
   const messageToSave = imageAttachments && imageAttachments.length > 0
     ? `${message} [Image attached: ${imageAttachments.length} file(s)]`
@@ -132,14 +152,14 @@ export async function handleChatMessage(
   try {
     const embeddingService = new EmbeddingService(githubToken);
     const vectorService = new VectorSearchService(embeddingService);
-    relevantContext = await vectorService.getRelevantContext(message, userId);
+    relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: domainSlug ?? null });
   } catch (error) {
     console.log('[ChatHandler] No documents or RAG search failed:', error);
   }
 
   // 4. Build system message with context
   const isCustomSoul = systemMessage && systemMessage !== 'You are a helpful AI assistant.';
-  let enrichedSystemMessage = ALLERAC_SOUL;
+  let enrichedSystemMessage = buildSoul(domainSlug);
 
   // Inject current date and time
   const now = new Date();
@@ -148,7 +168,10 @@ export async function handleChatMessage(
   const todayTime = now.toTimeString().split(' ')[0];
   const todayWeekday = weekdays[now.getDay()];
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const LANGUAGE_NAMES: Record<string, string> = { en: 'English', pt: 'Portuguese', es: 'Spanish', ca: 'Catalan', fr: 'French', de: 'German', it: 'Italian' };
+  const languageName = language ? (LANGUAGE_NAMES[language] ?? language) : null;
   enrichedSystemMessage += `\n\n## Context\n- Current date & time: ${todayDate} ${todayWeekday}, ${todayTime} (${timezone})`;
+  if (languageName) enrichedSystemMessage += `\n- Language: ${languageName} — always reply in this language`;
 
   if (isCustomSoul) {
     enrichedSystemMessage += `\n\n## About the user\n${systemMessage}`;
@@ -259,14 +282,16 @@ export async function handleChatMessage(
     model: selectedModel,
     temperature: 0.7,
     max_tokens: 2000,
-    tools: TOOLS,
+    tools: activeTools,
     tool_choice: initialToolChoice,
   });
 
   let assistantMessage = data.choices[0].message;
 
-  // 6. Handle tool calls
-  while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+  // 6. Handle tool calls (max 10 iterations to prevent infinite loops)
+  let toolIterations = 0;
+  while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && toolIterations < 10) {
+    toolIterations++;
     // Push the original assistant message unchanged so Ollama receives its own native format
     // (arguments as object, no id). OpenAI always provides id and string arguments — both work as-is.
     conversationMessages.push(assistantMessage);
@@ -297,6 +322,30 @@ export async function handleChatMessage(
           const noteHandlers = buildNotesTools({ id: userId, githubToken });
           const handler = noteHandlers[toolName as keyof typeof noteHandlers];
           toolResult = await handler(toolArgs);
+        } else if (['list_emails', 'read_email', 'send_email'].includes(toolName)) {
+          const emailHandlers = buildEmailTools(userId);
+          const handler = emailHandlers[toolName as keyof typeof emailHandlers];
+          toolResult = await handler(toolArgs as any);
+        } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'].includes(toolName)) {
+          const userRes = await pool.query('SELECT id, email, name FROM users WHERE id = $1', [userId]);
+          const u = userRes.rows[0];
+          if (!u) {
+            toolResult = { error: 'User not found' };
+          } else {
+            const healthTool = new HealthTool();
+            const healthUser = { id: u.id, email: u.email, name: u.name || u.email };
+            if (toolName === 'get_health_summary') {
+              toolResult = await healthTool.getSummary(healthUser, toolArgs.period || 'week');
+            } else if (toolName === 'get_health_metrics') {
+              toolResult = await healthTool.getMetrics(healthUser, toolArgs.start_date, toolArgs.end_date);
+            } else if (toolName === 'get_daily_snapshot') {
+              toolResult = await healthTool.getDailySnapshot(healthUser, toolArgs.date);
+            } else if (toolName === 'get_recent_activities') {
+              toolResult = await healthTool.getRecentActivities(healthUser, toolArgs.limit || 10, toolArgs.start_date, toolArgs.end_date);
+            } else {
+              toolResult = await healthTool.getGarminStatus(healthUser);
+            }
+          }
         } else if (toolName === 'execute_shell') {
           const shellTool = new ShellTool();
           // Enforce user-scoped workspace paths regardless of what the LLM wrote
@@ -334,7 +383,7 @@ export async function handleChatMessage(
       model: selectedModel,
       temperature: 0.7,
       max_tokens: 2000,
-      tools: TOOLS,
+      tools: activeTools,
       tool_choice: 'auto',
     });
     assistantMessage = data.choices[0].message;

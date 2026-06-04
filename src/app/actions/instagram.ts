@@ -44,18 +44,29 @@ async function resolveLLMConfig(userId: string, provider: LLMProviderType): Prom
   }
 }
 
+const DEFAULT_SOCIAL_INSTRUCTIONS = `You create Instagram captions for Allerac — a privacy-first AI assistant platform that runs on the user's own infrastructure, with local LLM support via Ollama.
+
+Brand voice: authentic, technical but accessible, founder-building-in-public energy. Never sound like a press release or a corporate comms team.
+
+Caption structure:
+1. Strong hook line that stops the scroll (bold opinion, surprising fact, or personal story)
+2. 2–4 lines of substance
+3. Question or CTA
+4. Blank line
+5. Hashtags: 5 niche + 5 medium + 5 broad
+
+Good content angles: privacy narrative ("your AI that never phones home"), local AI, retro terminal UI ("1992 UI, 2025 intelligence"), domain personality (Code = green terminal, Health = teal, Finance = amber), building in public, shipping features.
+
+Never write: "In today's digital landscape", "It's more important than ever", "In conclusion", or any hollow corporate filler.`;
+
 async function buildSocialSystemPrompt(userId: string, locale: string): Promise<string> {
   const language = LOCALE_NAMES[locale] ?? 'English';
   const res = await pool.query(
     `SELECT content FROM user_domain_instructions WHERE user_id = $1 AND domain_slug = 'social'`,
     [userId]
   );
-  const userInstructions = res.rows[0]?.content?.trim() || '';
-  const parts = [
-    `You are a social media expert. Always respond in ${language}.`,
-    userInstructions,
-  ].filter(Boolean);
-  return parts.join('\n\n');
+  const userInstructions = res.rows[0]?.content?.trim() || DEFAULT_SOCIAL_INSTRUCTIONS;
+  return `You are a social media expert. Always respond in ${language}.\n\n${userInstructions}`;
 }
 
 export async function getInstagramStatus(userId: string) {

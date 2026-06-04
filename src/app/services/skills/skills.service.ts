@@ -157,6 +157,17 @@ export class SkillsService {
     return result.rows[0] || null;
   }
 
+  async getDefaultDomainSkill(domainSlug: string): Promise<Skill | null> {
+    const result = await pool.query<Skill>(
+      `SELECT s.* FROM skills s
+       JOIN domain_skill_defaults dsd ON s.id = dsd.skill_id
+       WHERE dsd.domain_slug = $1
+       LIMIT 1`,
+      [domainSlug]
+    );
+    return result.rows[0] || null;
+  }
+
   /**
    * Get default skill for a web user
    */
@@ -345,10 +356,20 @@ export class SkillsService {
       .map(s => `- ${s.name}: ${s.description}`)
       .join('\n');
 
-    const prompt = `You are a skill router. Given a user message, choose the best matching skill.
+    const prompt = `You are a skill router. Given a user message, choose the best matching skill from the list below.
 
 Available skills:
 ${skillList}
+
+Examples:
+- "cria um script python para renomear arquivos" → programmer
+- "quero postar uma foto no instagram" → social
+- "quantas calorias tem um abacate?" → health
+- "melhor ETF para investir agora?" → finance
+- "escreve um post para o linkedin sobre privacidade" → writer
+- "qual a previsão do tempo?" → search
+- "bom dia!" → none
+- "obrigado" → none
 
 User message: "${message}"
 

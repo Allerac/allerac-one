@@ -417,6 +417,8 @@ services:
       - TELEGRAM_DEFAULT_USER=${TELEGRAM_DEFAULT_USER:-}
       - EXECUTOR_URL=http://executor:3001
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+      - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
+      - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

@@ -237,6 +237,8 @@ export class AlleracTelegramBot {
       modelBaseUrl: baseUrl,
       systemMessage: settings?.system_message || 'You are a helpful AI assistant communicating via Telegram. Keep responses concise and well-formatted. Use markdown when helpful.',
       botId: botId,
+      domainSlug: null, // universal bot — sees memories from all domains
+      language: settings?.language || 'en',
     };
   }
 

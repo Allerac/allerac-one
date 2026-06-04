@@ -21,12 +21,13 @@ import { ChatService } from '@/app/services/database/chat.service';
 import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
 import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
-import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
+import { buildSoul } from '@/app/config/allerac-soul';
 import { SearchWebTool } from '@/app/tools/search-web.tool';
 import { ReadUrlTool } from '@/app/tools/read-url.tool';
 import { ShellTool } from '@/app/tools/shell.tool';
 import { HealthTool } from '@/app/tools/health.tool';
 import { buildNotesTools, NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
+import { buildEmailTools, EMAIL_TOOL_DEFINITIONS } from '@/app/tools/email.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { TOOLS } from '@/app/tools/tools';
@@ -169,8 +170,8 @@ export async function POST(request: Request): Promise<Response> {
           return;
         }
 
-        // Always start from ALLERAC_SOUL, never replace it
-        let systemMessage = ALLERAC_SOUL;
+        // Always start from Soul, never replace it
+        let systemMessage = buildSoul(domain);
 
         // Inject structured user context
         const locale = cookieStore.get('locale')?.value || 'en';
@@ -373,9 +374,11 @@ export async function POST(request: Request): Promise<Response> {
 
         // Notes tools are always available across all domains
         const noteToolNames = ['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note'];
+        const emailToolNames = ['list_emails', 'read_email', 'send_email'];
         activeTools = [
-          ...activeTools.filter((t: any) => !noteToolNames.includes(t.function.name)),
+          ...activeTools.filter((t: any) => !noteToolNames.includes(t.function.name) && !emailToolNames.includes(t.function.name)),
           ...NOTES_TOOL_DEFINITIONS,
+          ...(domain === 'email' ? EMAIL_TOOL_DEFINITIONS : []),
         ];
 
         if (conversationMemories) {
@@ -618,6 +621,10 @@ export async function POST(request: Request): Promise<Response> {
                   const noteHandlers = buildNotesTools({ id: userId, githubToken: githubToken || null });
                   const handler = noteHandlers[toolName as keyof typeof noteHandlers];
                   toolResult = await handler(toolArgs);
+                } else if (emailToolNames.includes(toolName)) {
+                  const emailHandlers = buildEmailTools(userId);
+                  const handler = emailHandlers[toolName as keyof typeof emailHandlers];
+                  toolResult = await handler(toolArgs as any);
                 } else {
                   toolResult = { error: `Tool ${toolName} not available` };
                 }
