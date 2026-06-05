@@ -553,7 +553,7 @@ export default function AdminClient({
         <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>System Settings</h2>
           <div className={`border rounded-lg p-6 ${cardBg} space-y-4`}>
-            {(['github_token', 'anthropic_api_key', 'tavily_api_key', 'google_api_key'] as const).map(key => (
+            {(['github_token', 'anthropic_api_key', 'tavily_api_key', 'google_api_key', 'fal_ai_api_key'] as const).map(key => (
               <div key={key}>
                 <label className={labelCls}>{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</label>
                 <input

@@ -1,7 +1,7 @@
 import pool from '@/app/clients/db';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 
-const KEYS = ['github_token', 'tavily_api_key', 'anthropic_api_key', 'google_api_key'] as const;
+const KEYS = ['github_token', 'tavily_api_key', 'anthropic_api_key', 'google_api_key', 'fal_ai_api_key'] as const;
 export type SystemSettingKey = typeof KEYS[number];
 
 export interface SystemSettings {
@@ -9,6 +9,7 @@ export interface SystemSettings {
   tavily_api_key: string | null;
   anthropic_api_key: string | null;
   google_api_key: string | null;
+  fal_ai_api_key: string | null;
 }
 
 export class SystemSettingsService {
@@ -23,6 +24,7 @@ export class SystemSettingsService {
       tavily_api_key: map['tavily_api_key'] ?? null,
       anthropic_api_key: map['anthropic_api_key'] ?? null,
       google_api_key: map['google_api_key'] ?? null,
+      fal_ai_api_key: map['fal_ai_api_key'] ?? null,
     };
   }
 

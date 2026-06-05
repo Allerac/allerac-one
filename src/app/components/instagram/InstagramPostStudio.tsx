@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { generateCaption, generateTags, publishInstagramPost, publishInstagramCarousel, getInstagramRefSettings, incrementRefCounter } from '@/app/actions/instagram';
+import ImageEditModal from '@/app/components/instagram/ImageEditModal';
 import { MODELS } from '@/app/services/llm/models';
 
 interface UploadedImage {
@@ -73,6 +74,7 @@ export default function InstagramPostStudio({
   const [refPrefix,  setRefPrefix]  = useState('REF');
   const [refCounter, setRefCounter] = useState(0);
   const [previewIndex, setPreviewIndex] = useState(0);
+  const [imageEditOpen, setImageEditOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
@@ -309,6 +311,7 @@ export default function InstagramPostStudio({
   const btnDisTxt = d ? 'disabled:text-gray-500' : 'disabled:text-gray-400';
 
   return (
+    <>
     <div className={`flex-1 flex h-full min-w-0 ${bg}`}>
 
       {/* ── Center: Editor ── */}
@@ -408,6 +411,17 @@ export default function InstagramPostStudio({
               </button>
             )}
             <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageSelect} className="hidden" />
+
+            {/* Edit with AI — only when at least 1 uploaded image */}
+            {images.length > 0 && (
+              <button
+                onClick={() => setImageEditOpen(true)}
+                className={`mt-2 w-full px-3 py-2 rounded-lg border ${borderIn} ${txtSub} hover:border-brand-500 hover:text-brand-400 text-sm transition flex items-center justify-center gap-2`}
+              >
+                <span>✨</span>
+                <span>Editar com IA</span>
+              </button>
+            )}
           </div>
 
           {/* Caption */}
@@ -599,5 +613,27 @@ export default function InstagramPostStudio({
       </div>
 
     </div>
+
+    {/* Image edit modal */}
+
+    {imageEditOpen && images[clampedPreviewIndex] && (
+      <ImageEditModal
+        isOpen={imageEditOpen}
+        onClose={() => setImageEditOpen(false)}
+        imageBase64={images[clampedPreviewIndex].base64}
+        imagePreview={images[clampedPreviewIndex].preview}
+        userId={userId}
+        isDarkMode={isDarkMode}
+        onApply={(resultBase64, resultPreview) => {
+          setImages(prev => prev.map((img, i) =>
+            i === clampedPreviewIndex
+              ? { base64: resultBase64, preview: resultPreview, name: img.name }
+              : img
+          ));
+          setImageEditOpen(false);
+        }}
+      />
+    )}
+    </>
   );
 }
