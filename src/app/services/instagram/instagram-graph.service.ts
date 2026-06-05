@@ -188,6 +188,73 @@ export class InstagramGraphService {
     if (!res.ok) throw new Error(`Instagram replyToComment error: ${await res.text()}`);
   }
 
+  private async pollContainerStatus(accessToken: string, containerId: string, label: string): Promise<void> {
+    const authHeader = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    for (let i = 0; i < 10; i++) {
+      await sleep(3000);
+      const res = await fetch(`${GRAPH_URL}/${containerId}?fields=status_code`, { headers: authHeader });
+      if (res.ok) {
+        const { status_code } = await res.json() as { status_code: string };
+        console.log(`[Instagram] ${label} status: ${status_code}`);
+        if (status_code === 'FINISHED') return;
+        if (status_code === 'ERROR') throw new Error(`Instagram media container ${containerId} (${label}) processing failed`);
+      }
+    }
+    throw new Error(`Instagram media container ${containerId} (${label}) timed out`);
+  }
+
+  /** Publish 2–10 images as a carousel album */
+  async publishCarousel(
+    accessToken: string,
+    igUserId: string,
+    imageUrls: string[],
+    caption: string
+  ): Promise<{ id: string }> {
+    const authHeader = { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+
+    // Step 1: Create a container for each image
+    const childIds: string[] = [];
+    for (let i = 0; i < imageUrls.length; i++) {
+      const res = await fetch(`${GRAPH_URL}/${igUserId}/media`, {
+        method: 'POST',
+        headers: authHeader,
+        body: JSON.stringify({ image_url: imageUrls[i], is_carousel_item: true }),
+      });
+      if (!res.ok) throw new Error(`Instagram createCarouselItem[${i}] error: ${await res.text()}`);
+      const { id } = await res.json();
+      console.log(`[Instagram] Carousel child[${i}] container: ${id}`);
+      childIds.push(id);
+    }
+
+    // Step 2: Poll each child until FINISHED
+    for (let i = 0; i < childIds.length; i++) {
+      await this.pollContainerStatus(accessToken, childIds[i], `child[${i}]`);
+    }
+
+    // Step 3: Create carousel container
+    const carouselRes = await fetch(`${GRAPH_URL}/${igUserId}/media`, {
+      method: 'POST',
+      headers: authHeader,
+      body: JSON.stringify({ media_type: 'CAROUSEL_ALBUM', children: childIds.join(','), caption }),
+    });
+    if (!carouselRes.ok) throw new Error(`Instagram createCarousel error: ${await carouselRes.text()}`);
+    const { id: carouselId } = await carouselRes.json();
+    console.log(`[Instagram] Carousel container: ${carouselId}`);
+
+    // Step 4: Poll carousel container until FINISHED
+    await this.pollContainerStatus(accessToken, carouselId, 'carousel');
+
+    // Step 5: Publish
+    const publishRes = await fetch(`${GRAPH_URL}/${igUserId}/media_publish`, {
+      method: 'POST',
+      headers: authHeader,
+      body: JSON.stringify({ creation_id: carouselId }),
+    });
+    if (!publishRes.ok) throw new Error(`Instagram publishCarousel error: ${await publishRes.text()}`);
+    return publishRes.json();
+  }
+
   /** Publish a prepared media post */
   async publishPost(accessToken: string, igUserId: string, imageUrl: string, caption: string): Promise<{ id: string }> {
     // Note: igUserId here is the Business User ID (for Graph API), not the legacy webhook ID

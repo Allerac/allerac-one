@@ -2,8 +2,14 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { generateCaption, generateTags, publishInstagramPost, getInstagramRefSettings, incrementRefCounter } from '@/app/actions/instagram';
+import { generateCaption, generateTags, publishInstagramPost, publishInstagramCarousel, getInstagramRefSettings, incrementRefCounter } from '@/app/actions/instagram';
 import { MODELS } from '@/app/services/llm/models';
+
+interface UploadedImage {
+  base64: string;
+  preview: string;
+  name: string;
+}
 
 interface PostState {
   caption: string;
@@ -11,10 +17,8 @@ interface PostState {
   price: string;
   productRef: string;
   isProduct: boolean;
-  imageBase64?: string | null;
-  imagePreview?: string | null;
+  images?: UploadedImage[];
   imageUrl?: string | null;
-  imageName?: string | null;
   aspectRatio?: '1/1' | '4/5' | '1.91/1';
 }
 
@@ -52,10 +56,12 @@ export default function InstagramPostStudio({
   initialImagePreview,
   initialImageUrl,
 }: Props) {
-  const [imageBase64, setImageBase64] = useState<string | null>(initialImageBase64 ?? null);
+  const [images, setImages] = useState<UploadedImage[]>(
+    initialImageBase64 && initialImagePreview
+      ? [{ base64: initialImageBase64, preview: initialImagePreview, name: 'imagem carregada' }]
+      : []
+  );
   const [imageUrl, setImageUrl] = useState<string | null>(initialImageUrl ?? null);
-  const [imagePreview, setImagePreview] = useState<string | null>(initialImagePreview ?? null);
-  const [imageName, setImageName] = useState<string | null>(initialImageBase64 || initialImagePreview ? 'imagem carregada' : null);
   const [aspectRatio, setAspectRatio] = useState<'1/1' | '4/5' | '1.91/1'>('1/1');
   const [caption, setCaption] = useState(initialCaption ?? '');
   const [tags, setTags] = useState(initialTags ?? '');
@@ -66,6 +72,7 @@ export default function InstagramPostStudio({
   const [refManaged, setRefManaged] = useState(false);
   const [refPrefix,  setRefPrefix]  = useState('REF');
   const [refCounter, setRefCounter] = useState(0);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
@@ -96,23 +103,40 @@ export default function InstagramPostStudio({
   }, []);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { setError(t('errInvalidFile')); return; }
-    if (file.size > 10 * 1024 * 1024) { setError(t('errFileTooLarge')); return; }
-    setError('');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setImageBase64(result.split(',')[1] || result);
-      setImagePreview(result);
-      setImageName(file.name);
-    };
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+
+    setImages(current => {
+      const remaining = 10 - current.length;
+      if (files.length > remaining) {
+        setError(`Máximo 10 imagens por carrossel. ${files.length - remaining} ficheiro(s) ignorado(s).`);
+      } else {
+        setError('');
+      }
+      const toProcess = files.slice(0, remaining);
+      toProcess.forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+        if (file.size > 10 * 1024 * 1024) { setError(t('errFileTooLarge')); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const result = ev.target?.result as string;
+          setImages(prev => [...prev, {
+            base64: result.split(',')[1] || result,
+            preview: result,
+            name: file.name,
+          }]);
+        };
+        reader.readAsDataURL(file);
+      });
+      return current;
+    });
+
+    if (imageUrl) setImageUrl(null);
   };
 
   const handleGenerateAll = async () => {
-    const imageInput = imageBase64 || imageUrl;
+    const imageInput = images[0]?.base64 || imageUrl;
     if (!imageInput) { setError(t('errNoImage')); return; }
     setIsGenerating(true);
     setError('');
@@ -134,7 +158,7 @@ export default function InstagramPostStudio({
     if (prevId === conversationId) return;
 
     // Save state under the previous conversation
-    studioStateCache.set(prevId ?? 'new', { caption, tags, price, productRef, isProduct, imageBase64, imagePreview, imageUrl, imageName, aspectRatio });
+    studioStateCache.set(prevId ?? 'new', { caption, tags, price, productRef, isProduct, images, imageUrl, aspectRatio });
 
     // Restore state for the new conversation
     const saved = studioStateCache.get(conversationId ?? 'new');
@@ -144,19 +168,16 @@ export default function InstagramPostStudio({
       setPrice(saved.price);
       setProductRef(saved.productRef ?? '');
       setIsProduct(saved.isProduct);
-      setImageBase64(saved.imageBase64 ?? null);
-      setImagePreview(saved.imagePreview ?? null);
+      setImages(saved.images ?? []);
       setImageUrl(saved.imageUrl ?? null);
-      setImageName(saved.imageName ?? null);
       setAspectRatio(saved.aspectRatio ?? '1/1');
     } else if (prevId == null) {
       // null → real ID: first message created a new conversation — keep current state
-      studioStateCache.set(conversationId ?? 'new', { caption, tags, price, productRef, isProduct, imageBase64, imagePreview, imageUrl, imageName, aspectRatio });
+      studioStateCache.set(conversationId ?? 'new', { caption, tags, price, productRef, isProduct, images, imageUrl, aspectRatio });
     } else {
       // real ID → different ID with no saved state — reset
       setCaption(''); setTags(''); setPrice(''); setProductRef(''); setIsProduct(false);
-      setImageBase64(null); setImagePreview(null); setImageUrl(null);
-      setImageName(null); setAspectRatio('1/1');
+      setImages([]); setImageUrl(null); setAspectRatio('1/1');
     }
 
     prevConvIdRef.current = conversationId;
@@ -170,6 +191,12 @@ export default function InstagramPostStudio({
   }, [isProduct]);
 
   useEffect(() => {
+    if (previewIndex >= images.length && images.length > 0) {
+      setPreviewIndex(images.length - 1);
+    }
+  }, [images.length]);
+
+  useEffect(() => {
     onPostStateChange?.({ caption, tags, price, productRef, isProduct });
   }, [caption, tags, price, productRef, isProduct]);
 
@@ -181,8 +208,7 @@ export default function InstagramPostStudio({
     if (externalUpdate.isProduct !== undefined) setIsProduct(externalUpdate.isProduct);
     if (externalUpdate.imageUrl !== undefined) {
       setImageUrl(externalUpdate.imageUrl);
-      setImagePreview(externalUpdate.imageUrl);
-      setImageName(externalUpdate.imageUrl.split('/').pop() ?? 'image');
+      setImages([]);
     }
   }, [externalUpdate?.timestamp]);
 
@@ -208,16 +234,24 @@ export default function InstagramPostStudio({
   };
 
   const handlePublish = async () => {
-    if (!imageBase64 && !imageUrl) { setError(t('errImageRequired')); return; }
+    if (images.length === 0 && !imageUrl) { setError(t('errImageRequired')); return; }
     if (!caption.trim()) { setError(t('errCaptionRequired')); return; }
     setIsLoading(true);
     setError('');
     setSuccess('');
     try {
-      let base64ToPublish = imageBase64;
-      if (!base64ToPublish && imageUrl) {
+      const fullCaption = buildFullCaption();
+      let result;
+
+      if (images.length >= 2) {
+        result = await publishInstagramCarousel(userId, images.map(i => i.base64), fullCaption);
+      } else if (images.length === 1) {
+        result = await publishInstagramPost(userId, images[0].base64, fullCaption);
+      } else {
+        // imageUrl path (image provided by AI tool)
+        let base64ToPublish: string | null = null;
         try {
-          const response = await fetch(imageUrl);
+          const response = await fetch(imageUrl!);
           const blob = await response.blob();
           const reader = new FileReader();
           base64ToPublish = await new Promise((resolve, reject) => {
@@ -226,15 +260,14 @@ export default function InstagramPostStudio({
             reader.readAsDataURL(blob);
           });
         } catch { /* fall through to imageUrl path */ }
+        result = base64ToPublish
+          ? await publishInstagramPost(userId, base64ToPublish, fullCaption)
+          : await fetch('/api/instagram/publish', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ caption: fullCaption, image_url: imageUrl }),
+            }).then(r => r.json());
       }
-      const fullCaption = buildFullCaption();
-      const result = base64ToPublish
-        ? await publishInstagramPost(userId, base64ToPublish as string, fullCaption)
-        : await fetch('/api/instagram/publish', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ caption: fullCaption, image_url: imageUrl }),
-          }).then(r => r.json());
 
       if (result.success) {
         if (isProduct && refManaged) {
@@ -242,8 +275,8 @@ export default function InstagramPostStudio({
           if (next) setRefCounter(refCounter + 1);
         }
         setSuccess(result.message);
+        setImages([]); setImageUrl(null);
         setCaption(''); setTags(''); setPrice(''); setProductRef(''); setIsProduct(false);
-        setImageBase64(null); setImagePreview(null); setImageUrl(null); setImageName(null);
         setAspectRatio('1/1');
         if (fileInputRef.current) fileInputRef.current.value = '';
         studioStateCache.delete(conversationId ?? 'new');
@@ -257,6 +290,8 @@ export default function InstagramPostStudio({
 
   const previewCaption = caption || t('previewCaptionPlaceholder');
   const previewTags = tags ? tags.split(' ').filter(Boolean) : [];
+  const clampedPreviewIndex = Math.min(previewIndex, Math.max(0, images.length - 1));
+  const previewImage = images.length > 0 ? images[clampedPreviewIndex].preview : (imageUrl ?? null);
 
   // Theme aliases
   const d = isDarkMode;
@@ -288,7 +323,7 @@ export default function InstagramPostStudio({
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-5">
 
           {/* Onboarding hint — visible only when no image is selected */}
-          {!imagePreview && !imageUrl && (
+          {images.length === 0 && !imageUrl && (
             <div className={`flex items-start gap-2.5 px-4 py-3 rounded-lg border ${d ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-blue-50 border-blue-100 text-blue-700'} text-sm`}>
               <span className="text-base leading-tight flex-shrink-0">📸</span>
               <span>{t('hint')}</span>
@@ -298,14 +333,67 @@ export default function InstagramPostStudio({
           {/* Image */}
           <div>
             <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('imageLabel')}</label>
-            {imagePreview || imageUrl ? (
-              <div className={`flex items-center gap-3 px-4 py-3 rounded-lg ${bgInput} border ${borderIn} min-w-0`}>
-                <span className="text-green-400 text-lg">✓</span>
-                <span className={`flex-1 text-sm ${d ? 'text-gray-200' : 'text-gray-800'} truncate`}>{imageName ?? (imageUrl ? imageUrl.split('/').pop() : 'imagem')}</span>
+
+            {(images.length > 0 || imageUrl) ? (
+              <div>
+                {/* Thumbnail strip */}
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {images.map((img, i) => (
+                    <div key={i} className={`relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border ${borderIn}`}>
+                      <img src={img.preview} alt={img.name} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                        className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/70 hover:bg-red-600 text-white text-[10px] rounded-full flex items-center justify-center leading-none"
+                      >×</button>
+                    </div>
+                  ))}
+                  {imageUrl && images.length === 0 && (
+                    <div className={`relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border ${borderIn}`}>
+                      <img src={imageUrl} alt="external" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setImageUrl(null)}
+                        className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/70 hover:bg-red-600 text-white text-[10px] rounded-full flex items-center justify-center leading-none"
+                      >×</button>
+                    </div>
+                  )}
+                  {images.length < 10 && images.length > 0 && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`w-16 h-16 flex-shrink-0 rounded-lg border-2 border-dashed ${borderIn} hover:border-brand-500 flex items-center justify-center ${txtMuted} hover:text-brand-400 transition text-2xl font-light`}
+                    >+</button>
+                  )}
+                </div>
+
+                {/* Count + carousel badge */}
+                {images.length > 0 && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className={`text-xs ${txtFaint}`}>{images.length}/10</span>
+                    {images.length >= 2 && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${d ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>carrossel</span>
+                    )}
+                  </div>
+                )}
+
                 <button
-                  onClick={() => { setImageBase64(null); setImageUrl(null); setImagePreview(null); setImageName(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                  className={`${txtMuted} hover:text-red-400 text-xs transition`}
-                >{t('remove')}</button>
+                  onClick={handleGenerateAll}
+                  disabled={isGenerating}
+                  className="mt-3 w-full px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition"
+                >
+                  {isGenerating ? t('generating') : t('generateWithAI')}
+                </button>
+
+                <div className="mt-3">
+                  <label className={`block text-xs ${txtMuted} mb-1.5`}>{t('aspectRatio')}</label>
+                  <select
+                    value={aspectRatio}
+                    onChange={(e) => setAspectRatio(e.target.value as typeof aspectRatio)}
+                    className={`w-full px-3 py-2 rounded-lg ${bgInput} border ${borderIn} ${txt} text-sm focus:outline-none focus:border-brand-500`}
+                  >
+                    <option value="1/1">{t('square')}</option>
+                    <option value="4/5">{t('portrait')}</option>
+                    <option value="1.91/1">{t('landscape')}</option>
+                  </select>
+                </div>
               </div>
             ) : (
               <button
@@ -315,36 +403,11 @@ export default function InstagramPostStudio({
                 <div className={txtMuted}>
                   <div className="text-3xl mb-1">📸</div>
                   <p className="text-sm">{t('clickToSelect')}</p>
-                  <p className={`text-xs ${txtFaint} mt-1`}>{t('imageSizeHint')}</p>
+                  <p className={`text-xs ${txtFaint} mt-1`}>Até 10 imagens · Max 10MB cada · JPG, PNG</p>
                 </div>
               </button>
             )}
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-
-            {(imagePreview || imageUrl) && (
-              <button
-                onClick={handleGenerateAll}
-                disabled={isGenerating}
-                className={`mt-3 w-full px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition`}
-              >
-                {isGenerating ? t('generating') : t('generateWithAI')}
-              </button>
-            )}
-
-            {(imagePreview || imageUrl) && (
-              <div className="mt-3">
-                <label className={`block text-xs ${txtMuted} mb-1.5`}>{t('aspectRatio')}</label>
-                <select
-                  value={aspectRatio}
-                  onChange={(e) => setAspectRatio(e.target.value as typeof aspectRatio)}
-                  className={`w-full px-3 py-2 rounded-lg ${bgInput} border ${borderIn} ${txt} text-sm focus:outline-none focus:border-brand-500`}
-                >
-                  <option value="1/1">{t('square')}</option>
-                  <option value="4/5">{t('portrait')}</option>
-                  <option value="1.91/1">{t('landscape')}</option>
-                </select>
-              </div>
-            )}
+            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageSelect} className="hidden" />
           </div>
 
           {/* Caption */}
@@ -438,7 +501,7 @@ export default function InstagramPostStudio({
             >{t('copy')}</button>
             <button
               onClick={handlePublish}
-              disabled={isLoading || (!imageBase64 && !imageUrl) || !caption.trim()}
+              disabled={isLoading || (images.length === 0 && !imageUrl) || !caption.trim()}
               className={`flex-1 px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 ${btnSecDis} ${btnDisTxt} disabled:cursor-not-allowed text-white font-medium transition text-sm`}
             >{isLoading ? t('publishing') : t('publish')}</button>
           </div>
@@ -462,13 +525,47 @@ export default function InstagramPostStudio({
               <span className={`ml-auto ${txtMuted} text-xl leading-none`}>···</span>
             </div>
 
-            <div className="w-full overflow-hidden" style={{ aspectRatio }}>
-              {imagePreview || imageUrl ? (
-                <img src={imagePreview || imageUrl || ''} alt="Post" className="w-full h-full object-cover" />
+            <div className="relative w-full overflow-hidden" style={{ aspectRatio }}>
+              {previewImage ? (
+                <img src={previewImage} alt="Post" className="w-full h-full object-cover" />
               ) : (
                 <div className={`w-full h-full ${d ? 'bg-gray-800' : 'bg-gray-100'} flex items-center justify-center`}>
                   <span className="text-6xl opacity-20">📸</span>
                 </div>
+              )}
+
+              {/* Carousel navigation — only when multiple uploaded images */}
+              {images.length > 1 && (
+                <>
+                  {/* Prev arrow */}
+                  {clampedPreviewIndex > 0 && (
+                    <button
+                      onClick={() => setPreviewIndex(i => i - 1)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center text-sm transition"
+                    >‹</button>
+                  )}
+                  {/* Next arrow */}
+                  {clampedPreviewIndex < images.length - 1 && (
+                    <button
+                      onClick={() => setPreviewIndex(i => i + 1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center text-sm transition"
+                    >›</button>
+                  )}
+                  {/* Image counter */}
+                  <span className="absolute top-2 right-2 text-[10px] bg-black/50 text-white px-1.5 py-0.5 rounded-full">
+                    {clampedPreviewIndex + 1}/{images.length}
+                  </span>
+                  {/* Dots */}
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+                    {images.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setPreviewIndex(i)}
+                        className={`w-1.5 h-1.5 rounded-full transition-colors ${i === clampedPreviewIndex ? 'bg-white' : 'bg-white/40'}`}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 

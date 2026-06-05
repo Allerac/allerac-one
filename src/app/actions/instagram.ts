@@ -1,6 +1,7 @@
 'use server';
 
 import { InstagramCredentialsService } from '@/app/services/instagram/instagram-credentials.service';
+import { InstagramGraphService } from '@/app/services/instagram/instagram-graph.service';
 import { getImageUploadService } from '@/app/services/image-upload';
 import { LLMService } from '@/app/services/llm/llm.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
@@ -327,8 +328,27 @@ export async function generateTags(
 }
 
 
+/** Convert base64 image → validate → JPEG → upload to Imgur → return public URL */
+async function prepareImageForInstagram(imageBase64: string): Promise<string> {
+  const rawBuffer = Buffer.from(imageBase64, 'base64');
+  const image = sharp(rawBuffer);
+  const meta = await image.metadata();
+
+  if (!meta.width || !meta.height) {
+    throw new Error('Não foi possível ler a imagem. Verifica se o ficheiro está correto.');
+  }
+  if (meta.width < 320 || meta.height < 320) {
+    throw new Error(`A imagem é demasiado pequena (${meta.width}x${meta.height}px). O Instagram requer no mínimo 320x320px.`);
+  }
+
+  const buffer = meta.format === 'jpeg' ? rawBuffer : await image.jpeg({ quality: 92 }).toBuffer();
+  const uploadService = getImageUploadService();
+  const uploaded = await uploadService.upload(buffer, 'instagram-post.jpg');
+  return uploaded.publicUrl;
+}
+
 /**
- * Publish Instagram post
+ * Publish Instagram post (single image)
  */
 export async function publishInstagramPost(
   userId: string,
@@ -336,33 +356,8 @@ export async function publishInstagramPost(
   caption: string
 ): Promise<{ success: true; postId: string; message: string } | { success: false; error: string }> {
   try {
-    // Convert base64 to buffer
-    const rawBuffer = Buffer.from(imageBase64, 'base64');
-
-    // Convert to JPEG (handles PNG, WebP, HEIC, GIF, etc. transparently)
-    const image = sharp(rawBuffer);
-    const meta = await image.metadata();
-
-    if (!meta.width || !meta.height) {
-      return { success: false, error: 'Não foi possível ler a imagem. Verifica se o ficheiro está correto.' };
-    }
-
-    // Validate dimensions (Instagram requires min 320px)
-    if (meta.width < 320 || meta.height < 320) {
-      return { success: false, error: `A imagem é demasiado pequena (${meta.width}x${meta.height}px). O Instagram requer no mínimo 320x320px.` };
-    }
-
-    // Convert to JPEG if not already (Instagram only accepts JPEG)
-    const buffer = meta.format === 'jpeg'
-      ? rawBuffer
-      : await image.jpeg({ quality: 92 }).toBuffer();
-
-    // Upload to Imgur
-    const uploadService = getImageUploadService();
-    const uploaded = await uploadService.upload(buffer, 'instagram-post.jpg');
-
-    // Publish via Instagram tool
-    const result = await igTool.publishPost(userId, caption, uploaded.publicUrl);
+    const publicUrl = await prepareImageForInstagram(imageBase64);
+    const result = await igTool.publishPost(userId, caption, publicUrl);
 
     if ('error' in result) {
       return { success: false, error: (result as any).error };
@@ -372,6 +367,44 @@ export async function publishInstagramPost(
       success: true,
       postId: (result as any).post_id,
       message: (result as any).message,
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Publish Instagram carousel (2–10 images)
+ */
+export async function publishInstagramCarousel(
+  userId: string,
+  imagesBase64: string[],
+  caption: string
+): Promise<{ success: true; postId: string; message: string } | { success: false; error: string }> {
+  try {
+    if (imagesBase64.length < 2 || imagesBase64.length > 10) {
+      return { success: false, error: `O carrossel requer entre 2 e 10 imagens (recebido: ${imagesBase64.length}).` };
+    }
+
+    const imageUrls = await Promise.all(imagesBase64.map(prepareImageForInstagram));
+
+    const effectiveUserId = await credService.resolveCredentialsUserId(userId);
+    const status = await credService.getStatus(effectiveUserId);
+    if (!status.is_connected) return { success: false, error: 'Instagram não conectado.' };
+
+    const accessToken = await credService.getAccessToken(effectiveUserId);
+    if (!accessToken) return { success: false, error: 'Não foi possível obter o token de acesso.' };
+
+    const businessUserId = status.ig_business_user_id || status.ig_user_id;
+    if (!businessUserId) return { success: false, error: 'Nenhum ID de utilizador Instagram disponível.' };
+
+    const igService = new InstagramGraphService();
+    const result = await igService.publishCarousel(accessToken, businessUserId, imageUrls, caption);
+
+    return {
+      success: true,
+      postId: result.id,
+      message: `Carrossel publicado com sucesso! Post ID: ${result.id}`,
     };
   } catch (error: any) {
     return { success: false, error: error.message };
