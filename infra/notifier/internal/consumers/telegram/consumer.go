@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/allerac/notifier/internal/crypto"
 	"github.com/allerac/notifier/internal/publisher"
 )
 
@@ -32,22 +33,22 @@ type DBPool interface {
 type Consumer struct {
 	redis           *redis.Client
 	db              DBPool
-	botToken        string
+	encryptionKey   string
 	telegramBaseURL string
 	httpClient      *http.Client
 }
 
 // New creates a Consumer using the production Telegram API.
-func New(redisURL string, db DBPool, botToken string) (*Consumer, error) {
-	return newConsumer(redisURL, db, botToken, "https://api.telegram.org")
+func New(redisURL string, db DBPool, encryptionKey string) (*Consumer, error) {
+	return newConsumer(redisURL, db, encryptionKey, "https://api.telegram.org")
 }
 
 // NewForTest creates a Consumer with a custom Telegram API base URL, useful in tests.
-func NewForTest(redisURL string, db DBPool, botToken, telegramBaseURL string) (*Consumer, error) {
-	return newConsumer(redisURL, db, botToken, telegramBaseURL)
+func NewForTest(redisURL string, db DBPool, encryptionKey, telegramBaseURL string) (*Consumer, error) {
+	return newConsumer(redisURL, db, encryptionKey, telegramBaseURL)
 }
 
-func newConsumer(redisURL string, db DBPool, botToken, telegramBaseURL string) (*Consumer, error) {
+func newConsumer(redisURL string, db DBPool, encryptionKey, telegramBaseURL string) (*Consumer, error) {
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse redis url: %w", err)
@@ -55,7 +56,7 @@ func newConsumer(redisURL string, db DBPool, botToken, telegramBaseURL string) (
 	return &Consumer{
 		redis:           redis.NewClient(opts),
 		db:              db,
-		botToken:        botToken,
+		encryptionKey:   encryptionKey,
 		telegramBaseURL: telegramBaseURL,
 		httpClient:      &http.Client{Timeout: 10 * time.Second},
 	}, nil
@@ -180,12 +181,17 @@ func (c *Consumer) ProcessMessage(ctx context.Context, msg redis.XMessage) error
 	userID, _ := msg.Values["user_id"].(string)
 	content, _ := msg.Values["content"].(string)
 
-	chatID, err := c.getChatID(ctx, userID)
+	chatID, encryptedToken, err := c.getChatIDAndToken(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("get chat_id for user %s: %w", userID, err)
+		return fmt.Errorf("get chat info for user %s: %w", userID, err)
 	}
 
-	return c.sendMessage(chatID, content)
+	botToken, err := crypto.SafeDecrypt(encryptedToken, c.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("decrypt bot token for user %s: %w", userID, err)
+	}
+
+	return c.sendMessage(chatID, content, botToken)
 }
 
 func (c *Consumer) moveToDLQ(ctx context.Context, msg redis.XMessage, reason string) {
@@ -208,17 +214,18 @@ func (c *Consumer) moveToDLQ(ctx context.Context, msg redis.XMessage, reason str
 	}
 }
 
-func (c *Consumer) getChatID(ctx context.Context, userID string) (int64, error) {
-	var chatID int64
-	err := c.db.QueryRow(ctx, `
-		SELECT telegram_chat_id FROM telegram_chat_mapping
-		WHERE user_id = $1
+func (c *Consumer) getChatIDAndToken(ctx context.Context, userID string) (chatID int64, encryptedToken string, err error) {
+	err = c.db.QueryRow(ctx, `
+		SELECT tcm.telegram_chat_id, tbc.bot_token
+		FROM telegram_chat_mapping tcm
+		JOIN telegram_bot_configs tbc ON tbc.user_id = tcm.user_id AND tbc.enabled = true
+		WHERE tcm.user_id = $1
 		LIMIT 1
-	`, userID).Scan(&chatID)
-	return chatID, err
+	`, userID).Scan(&chatID, &encryptedToken)
+	return chatID, encryptedToken, err
 }
 
-func (c *Consumer) sendMessage(chatID int64, text string) error {
+func (c *Consumer) sendMessage(chatID int64, text, botToken string) error {
 	payload := map[string]interface{}{
 		"chat_id": chatID,
 		"text":    text,
@@ -228,7 +235,7 @@ func (c *Consumer) sendMessage(chatID int64, text string) error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/bot%s/sendMessage", c.telegramBaseURL, c.botToken)
+	url := fmt.Sprintf("%s/bot%s/sendMessage", c.telegramBaseURL, botToken)
 	resp, err := c.httpClient.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("telegram request: %w", err)

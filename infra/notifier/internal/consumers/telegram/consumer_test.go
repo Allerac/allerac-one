@@ -20,18 +20,21 @@ import (
 
 // --- mock DB ---
 
+// mockDB returns a fixed chatID + plain-text botToken (no encryption needed in tests).
 type mockDB struct {
-	chatID int64
-	err    error
+	chatID   int64
+	botToken string
+	err      error
 }
 
 func (m *mockDB) QueryRow(_ context.Context, _ string, _ ...any) pgx.Row {
-	return &mockRow{chatID: m.chatID, err: m.err}
+	return &mockRow{chatID: m.chatID, botToken: m.botToken, err: m.err}
 }
 
 type mockRow struct {
-	chatID int64
-	err    error
+	chatID   int64
+	botToken string
+	err      error
 }
 
 func (r *mockRow) Scan(dest ...any) error {
@@ -43,14 +46,21 @@ func (r *mockRow) Scan(dest ...any) error {
 			*p = r.chatID
 		}
 	}
+	if len(dest) > 1 {
+		if p, ok := dest[1].(*string); ok {
+			*p = r.botToken
+		}
+	}
 	return nil
 }
 
 // --- helpers ---
 
+// newTestConsumer creates a consumer with an empty encryptionKey.
+// Tests use plain-text bot tokens in mockDB so no decryption is needed.
 func newTestConsumer(t *testing.T, mr *miniredis.Miniredis, db *mockDB, tgBaseURL string) *telegram.Consumer {
 	t.Helper()
-	c, err := telegram.NewForTest("redis://"+mr.Addr(), db, "test-token", tgBaseURL)
+	c, err := telegram.NewForTest("redis://"+mr.Addr(), db, "", tgBaseURL)
 	require.NoError(t, err)
 	return c
 }
@@ -88,7 +98,7 @@ func TestConsumer_ProcessMessage_Success(t *testing.T) {
 	defer tgSrv.Close()
 
 	mr := miniredis.RunT(t)
-	c := newTestConsumer(t, mr, &mockDB{chatID: 999888777}, tgSrv.URL)
+	c := newTestConsumer(t, mr, &mockDB{chatID: 999888777, botToken: "test-bot-token"}, tgSrv.URL)
 
 	err := c.ProcessMessage(context.Background(), xMessage("user-1", "Hello, World!"))
 
@@ -104,7 +114,7 @@ func TestConsumer_ProcessMessage_NoChatID(t *testing.T) {
 	err := c.ProcessMessage(context.Background(), xMessage("unknown-user", "hi"))
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get chat_id")
+	assert.Contains(t, err.Error(), "get chat info")
 }
 
 func TestConsumer_ProcessMessage_TelegramAPIError(t *testing.T) {
@@ -114,7 +124,7 @@ func TestConsumer_ProcessMessage_TelegramAPIError(t *testing.T) {
 	defer tgSrv.Close()
 
 	mr := miniredis.RunT(t)
-	c := newTestConsumer(t, mr, &mockDB{chatID: 12345}, tgSrv.URL)
+	c := newTestConsumer(t, mr, &mockDB{chatID: 12345, botToken: "test-bot-token"}, tgSrv.URL)
 
 	err := c.ProcessMessage(context.Background(), xMessage("user-1", "hello"))
 
@@ -132,7 +142,7 @@ func TestConsumer_ProcessWithDLQ_SuccessACKsMessage(t *testing.T) {
 	defer tgSrv.Close()
 
 	mr := miniredis.RunT(t)
-	c := newTestConsumer(t, mr, &mockDB{chatID: 111}, tgSrv.URL)
+	c := newTestConsumer(t, mr, &mockDB{chatID: 111, botToken: "test-bot-token"}, tgSrv.URL)
 	ctx := context.Background()
 	msg := xMessage("user-1", "Hello!")
 

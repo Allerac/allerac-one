@@ -51,7 +51,7 @@ func main() {
 	go sched.Watch(ctx, cfg.DatabaseURL)
 
 	// Telegram consumer: reads stream and delivers messages
-	tgConsumer, err := telegram.New(cfg.RedisURL, pool, cfg.TelegramBotToken)
+	tgConsumer, err := telegram.New(cfg.RedisURL, pool, cfg.EncryptionKey)
 	if err != nil {
 		log.Fatalf("[notifier] Failed to create Telegram consumer: %v", err)
 	}
