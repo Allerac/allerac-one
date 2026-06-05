@@ -98,6 +98,16 @@ export class AuthService {
 
       const user = result.rows[0] as User;
 
+      // Non-admin users get 'chat' domain access by default
+      if (!isFirstUser) {
+        await pool.query(
+          `INSERT INTO user_domain_access (user_id, domain_id)
+           SELECT $1, id FROM domains WHERE slug = 'chat' AND is_active = true
+           ON CONFLICT DO NOTHING`,
+          [user.id]
+        );
+      }
+
       // Create session
       const session = await this.createSession(user.id);
 
