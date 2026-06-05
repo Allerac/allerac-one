@@ -2,8 +2,13 @@
 
 import { cookies } from 'next/headers';
 import { AuthService, User } from '@/app/services/auth/auth.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 const authService = new AuthService();
+const sysSettings = new SystemSettingsService();
 
 const SESSION_COOKIE_NAME = 'session_token';
 
@@ -174,7 +179,141 @@ export async function checkFirstRun(): Promise<{ isFirstRun: boolean; userCount:
     return { isFirstRun: userCount === 0, userCount };
   } catch (error) {
     console.error('Error checking first run:', error);
-    // If we can't connect to DB, assume it's first run
     return { isFirstRun: true, userCount: 0 };
+  }
+}
+
+/**
+ * Request a password reset email.
+ * Always returns success to prevent email enumeration.
+ */
+export async function requestPasswordReset(
+  email: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const pool = (await import('@/app/clients/db')).default;
+    const settings = await sysSettings.loadAll();
+
+    if (!settings.resend_api_key) {
+      return { success: false, message: 'Password reset is not configured. Please contact the administrator.' };
+    }
+
+    const userRes = await pool.query(
+      'SELECT id, email, name FROM users WHERE email = $1 AND is_active = true',
+      [email.toLowerCase()]
+    );
+
+    // Always return the same message — don't reveal whether email exists
+    if (userRes.rows.length === 0) {
+      return { success: true, message: 'If that email is registered, you will receive a reset link shortly.' };
+    }
+
+    const user = userRes.rows[0];
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Delete any existing tokens for this user, then insert the new one
+    await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [user.id]);
+    await pool.query(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+      [user.id, token, expiresAt]
+    );
+
+    const appUrl = process.env.APP_URL ?? 'http://localhost:8080';
+    const resetUrl = `${appUrl}/reset-password?token=${token}`;
+    const fromEmail = settings.resend_from_email ?? 'noreply@allerac.ai';
+
+    // Inline logo as base64 so it renders in Outlook and offline clients
+    let logoSrc = '';
+    try {
+      const iconPath = path.join(process.cwd(), 'public', 'icon-192.png');
+      const iconB64 = fs.readFileSync(iconPath).toString('base64');
+      logoSrc = `data:image/png;base64,${iconB64}`;
+    } catch { /* skip logo if file not found */ }
+
+    const { Resend } = await import('resend');
+    const resend = new Resend(settings.resend_api_key);
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: user.email,
+      subject: 'Reset your Allerac password',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #6366f1 0%, #4c1d95 60%, #1e1b4b 100%); padding: 32px; text-align: center;">
+            ${logoSrc ? `<img src="${logoSrc}" alt="Allerac" width="64" height="64" style="border-radius: 12px;" />` : ''}
+          </div>
+          <div style="padding: 32px;">
+            <h2 style="color: #1e1b4b; margin: 0 0 16px;">Reset your password</h2>
+            <p style="color: #444; margin: 0 0 12px;">Hi ${user.name ?? user.email},</p>
+            <p style="color: #444; margin: 0 0 24px;">Someone requested a password reset for your Allerac account. Click the button below to set a new password.</p>
+            <p style="margin: 0 0 24px;">
+              <a href="${resetUrl}" style="background: #6366f1; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                Reset Password
+              </a>
+            </p>
+            <p style="color: #888; font-size: 12px; margin: 0 0 8px;">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+            <p style="color: #bbb; font-size: 11px; margin: 0; word-break: break-all;">Or copy this link: ${resetUrl}</p>
+          </div>
+          <div style="background: #f0f0f0; padding: 16px; text-align: center;">
+            <p style="color: #aaa; font-size: 11px; margin: 0;">Allerac · Private-first AI platform</p>
+          </div>
+        </div>
+      `,
+    });
+
+    return { success: true, message: 'If that email is registered, you will receive a reset link shortly.' };
+  } catch (error: any) {
+    console.error('requestPasswordReset error:', error);
+    return { success: false, message: 'Failed to send reset email. Please try again later.' };
+  }
+}
+
+/**
+ * Reset a user's password using a valid token.
+ * @param token - the reset token from the email link
+ * @param newPasswordHash - SHA-256 hash of the new password (same as login flow)
+ */
+export async function resetPassword(
+  token: string,
+  newPasswordHash: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const pool = (await import('@/app/clients/db')).default;
+
+    const tokenRes = await pool.query(
+      `SELECT prt.user_id, prt.expires_at
+       FROM password_reset_tokens prt
+       WHERE prt.token = $1`,
+      [token]
+    );
+
+    if (tokenRes.rows.length === 0) {
+      return { success: false, error: 'Invalid or expired reset link.' };
+    }
+
+    const { user_id, expires_at } = tokenRes.rows[0];
+
+    if (new Date(expires_at) < new Date()) {
+      await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [user_id]);
+      return { success: false, error: 'This reset link has expired. Please request a new one.' };
+    }
+
+    const bcrypt = await import('bcrypt');
+    const newHash = await bcrypt.hash(newPasswordHash, 12);
+
+    await pool.query(
+      'UPDATE users SET password_hash = $1, password_hash_version = 2 WHERE id = $2',
+      [newHash, user_id]
+    );
+
+    // Invalidate all tokens and sessions for this user
+    await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [user_id]);
+    await pool.query('DELETE FROM user_sessions WHERE user_id = $1', [user_id]);
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('resetPassword error:', error);
+    return { success: false, error: 'Failed to reset password. Please try again.' };
   }
 }

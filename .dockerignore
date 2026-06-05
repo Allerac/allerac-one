@@ -16,6 +16,7 @@ build/
 
 # Documentation
 *.md
+docs/
 
 # IDE and OS files
 .DS_Store
@@ -27,3 +28,15 @@ build/
 
 # Claude config
 .claude/
+
+# Workspace runtime data (not needed for build)
+workspace/
+
+# Test files
+tests/
+e2e/
+coverage/
+
+# Misc large files not needed at runtime
+tsconfig.tsbuildinfo
+allerac-icon-1024.png

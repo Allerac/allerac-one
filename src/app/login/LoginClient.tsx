@@ -12,7 +12,7 @@ async function hashPassword(password: string): Promise<string> {
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-type Mode = 'login' | 'register' | 'migration';
+type Mode = 'login' | 'register' | 'migration' | 'forgot';
 
 export default function LoginClient() {
   const router = useRouter();
@@ -27,6 +27,7 @@ export default function LoginClient() {
   const [migrationEmail, setMigrationEmail] = useState('');
 
   const [error, setError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
 
@@ -93,6 +94,26 @@ export default function LoginClient() {
     }
   };
 
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setLoading(true);
+    setError('');
+    setForgotSuccess('');
+    try {
+      const result = await authActions.requestPasswordReset(email);
+      if (result.success) {
+        setForgotSuccess(result.message);
+      } else {
+        setError(result.message);
+      }
+    } catch {
+      setError('An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleMigration = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
@@ -121,10 +142,11 @@ export default function LoginClient() {
   const isLogin = mode === 'login';
   const isRegister = mode === 'register';
   const isMigration = mode === 'migration';
+  const isForgot = mode === 'forgot';
 
-  const titleText = isMigration ? 'Set New Password' : isLogin ? 'Log On to Allerac' : 'Create Account';
-  const submitLabel = loading ? 'Please wait...' : isMigration ? 'Set Password' : isLogin ? 'OK' : 'Register';
-  const handleSubmit = isMigration ? handleMigration : isLogin ? handleLogin : handleRegister;
+  const titleText = isMigration ? 'Set New Password' : isForgot ? 'Reset Password' : isLogin ? 'Log On to Allerac' : 'Create Account';
+  const submitLabel = loading ? 'Please wait...' : isMigration ? 'Set Password' : isForgot ? 'Send Reset Link' : isLogin ? 'OK' : 'Register';
+  const handleSubmit = isMigration ? handleMigration : isForgot ? handleForgot : isLogin ? handleLogin : handleRegister;
 
   return (
     <div style={{
@@ -174,7 +196,7 @@ export default function LoginClient() {
         {/* Body */}
         <form onSubmit={handleSubmit} style={{ padding: '16px' }}>
           {/* Header */}
-          {!isMigration && (
+          {!isMigration && !isForgot && (
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
               <img src="/icon-nobg-purple.svg" alt="Allerac" style={{ width: 36, height: 36, flexShrink: 0 }} />
               <span style={{ fontSize: '11px', lineHeight: 1.5, color: '#000' }}>
@@ -182,6 +204,11 @@ export default function LoginClient() {
                   ? 'Type your credentials to log on to Allerac.'
                   : 'Fill in the details below to create your account.'}
               </span>
+            </div>
+          )}
+          {isForgot && (
+            <div style={{ marginBottom: '16px', fontSize: '11px', color: '#000', lineHeight: 1.6 }}>
+              Enter your email address and we&apos;ll send you a link to reset your password.
             </div>
           )}
           {isMigration && (
@@ -202,9 +229,11 @@ export default function LoginClient() {
                 <Win95Input ref={emailRef} type="email" value={email} onChange={setEmail} disabled={loading} />
               </Field>
             )}
-            <Field label="Password:">
-              <Win95Input type="password" value={password} onChange={setPassword} disabled={loading} />
-            </Field>
+            {!isForgot && (
+              <Field label="Password:">
+                <Win95Input type="password" value={password} onChange={setPassword} disabled={loading} />
+              </Field>
+            )}
             {(isRegister || isMigration) && (
               <Field label="Confirm:">
                 <Win95Input type="password" value={confirmPassword} onChange={setConfirmPassword} disabled={loading} />
@@ -221,27 +250,53 @@ export default function LoginClient() {
           {error && (
             <div style={{ fontSize: '10px', color: '#cc0000', marginBottom: '8px' }}>{error}</div>
           )}
+          {forgotSuccess && (
+            <div style={{ fontSize: '10px', color: '#006600', background: '#f0fff0', border: '1px solid #006600', padding: '6px 8px', marginBottom: '8px', lineHeight: 1.5 }}>
+              {forgotSuccess}
+            </div>
+          )}
 
           <div style={{ height: '1px', background: '#808080', borderBottom: '1px solid #fff', marginBottom: '12px' }} />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {/* Toggle link */}
-            {!isMigration && (
+            {/* Toggle links */}
+            {!isMigration && !isForgot && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setMode(isLogin ? 'register' : 'login'); setError(''); }}
+                  style={{ background: 'none', border: 'none', fontSize: '10px', color: '#000080', cursor: 'pointer', textDecoration: 'underline', padding: 0, textAlign: 'left' }}
+                >
+                  {isLogin ? 'Create account' : 'Back to login'}
+                </button>
+                {isLogin && (
+                  <button
+                    type="button"
+                    onClick={() => { setMode('forgot'); setError(''); setForgotSuccess(''); }}
+                    style={{ background: 'none', border: 'none', fontSize: '10px', color: '#000080', cursor: 'pointer', textDecoration: 'underline', padding: 0, textAlign: 'left' }}
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+            )}
+            {(isMigration || isForgot) && (
               <button
                 type="button"
-                onClick={() => { setMode(isLogin ? 'register' : 'login'); setError(''); }}
+                onClick={() => { setMode('login'); setError(''); setForgotSuccess(''); }}
                 style={{ background: 'none', border: 'none', fontSize: '10px', color: '#000080', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
               >
-                {isLogin ? 'Create account' : 'Back to login'}
+                Back to login
               </button>
             )}
-            {isMigration && <span />}
 
             <div style={{ display: 'flex', gap: '8px' }}>
-              <Win95Button type="submit" disabled={loading}>
-                {submitLabel}
-              </Win95Button>
-              {!isMigration && (
+              {!forgotSuccess && (
+                <Win95Button type="submit" disabled={loading}>
+                  {submitLabel}
+                </Win95Button>
+              )}
+              {!isMigration && !isForgot && (
                 <Win95Button type="button" onClick={() => { setEmail(''); setPassword(''); setError(''); }}>
                   Cancel
                 </Win95Button>
