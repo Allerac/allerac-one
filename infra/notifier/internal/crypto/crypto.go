@@ -3,88 +3,81 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"strings"
 )
 
-// deriveKey converts the ENCRYPTION_KEY env var to a 32-byte AES key,
-// matching the logic in src/app/services/crypto/encryption.service.ts.
-func deriveKey(encryptionKey string) ([]byte, error) {
-	if len(encryptionKey) == 64 {
-		key, err := hex.DecodeString(encryptionKey)
-		if err == nil {
-			return key, nil
-		}
+// deriveKey matches the TypeScript logic in telegram-bot-config.service.ts:
+//   Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32))
+func deriveKey(encryptionKey string) []byte {
+	padded := encryptionKey
+	for len(padded) < 32 {
+		padded += "0"
 	}
-	if len(encryptionKey) == 44 {
-		key, err := base64.StdEncoding.DecodeString(encryptionKey)
-		if err == nil {
-			return key, nil
-		}
-	}
-	h := sha256.Sum256([]byte(encryptionKey))
-	return h[:], nil
+	return []byte(padded[:32])
 }
 
-// Decrypt decrypts a value encrypted by the TypeScript encryption service.
-// Expected format: iv:authTag:ciphertext (all hex-encoded).
-// IV is 16 bytes (non-standard GCM — matches IV_LENGTH = 16 in the TS service).
+// Decrypt decrypts a bot token encrypted by telegram-bot-config.service.ts.
+// Algorithm: AES-256-CBC
+// Format: iv_hex:ciphertext_hex  (2 parts, no auth tag)
 func Decrypt(ciphertext, encryptionKey string) (string, error) {
-	parts := strings.SplitN(ciphertext, ":", 3)
-	if len(parts) != 3 {
-		return "", fmt.Errorf("invalid encrypted format: expected iv:authTag:ciphertext")
+	parts := strings.SplitN(ciphertext, ":", 2)
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid encrypted format: expected iv:ciphertext")
 	}
 
 	iv, err := hex.DecodeString(parts[0])
 	if err != nil {
 		return "", fmt.Errorf("decode iv: %w", err)
 	}
-	authTag, err := hex.DecodeString(parts[1])
-	if err != nil {
-		return "", fmt.Errorf("decode auth tag: %w", err)
-	}
-	encrypted, err := hex.DecodeString(parts[2])
+	encrypted, err := hex.DecodeString(parts[1])
 	if err != nil {
 		return "", fmt.Errorf("decode ciphertext: %w", err)
 	}
 
-	key, err := deriveKey(encryptionKey)
-	if err != nil {
-		return "", fmt.Errorf("derive key: %w", err)
-	}
-
+	key := deriveKey(encryptionKey)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("create cipher: %w", err)
 	}
 
-	// Use nonce size matching the TS IV_LENGTH (16 bytes)
-	gcm, err := cipher.NewGCMWithNonceSize(block, len(iv))
-	if err != nil {
-		return "", fmt.Errorf("create gcm: %w", err)
+	if len(encrypted)%aes.BlockSize != 0 {
+		return "", fmt.Errorf("ciphertext length is not a multiple of block size")
 	}
 
-	// Go's gcm.Open expects ciphertext with auth tag appended at the end
-	ciphertextWithTag := append(encrypted, authTag...) //nolint:gocritic
-	plaintext, err := gcm.Open(nil, iv, ciphertextWithTag, nil)
+	mode := cipher.NewCBCDecrypter(block, iv)
+	plaintext := make([]byte, len(encrypted))
+	mode.CryptBlocks(plaintext, encrypted)
+
+	// Remove PKCS7 padding
+	plaintext, err = pkcs7Unpad(plaintext)
 	if err != nil {
-		return "", fmt.Errorf("decrypt: %w", err)
+		return "", fmt.Errorf("unpad: %w", err)
 	}
 
 	return string(plaintext), nil
 }
 
-// SafeDecrypt decrypts if the value looks encrypted; returns it as-is otherwise.
+// SafeDecrypt decrypts if the value looks like iv:ciphertext; returns it as-is otherwise.
 func SafeDecrypt(value, encryptionKey string) (string, error) {
 	if value == "" {
 		return value, nil
 	}
-	parts := strings.SplitN(value, ":", 3)
-	if len(parts) != 3 {
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 {
 		return value, nil // not encrypted
 	}
 	return Decrypt(value, encryptionKey)
+}
+
+func pkcs7Unpad(data []byte) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty data")
+	}
+	padLen := int(data[len(data)-1])
+	if padLen == 0 || padLen > aes.BlockSize {
+		return nil, fmt.Errorf("invalid padding length: %d", padLen)
+	}
+	return data[:len(data)-padLen], nil
 }

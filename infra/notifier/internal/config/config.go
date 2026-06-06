@@ -18,7 +18,7 @@ func Load() *Config {
 		RedisURL:      getEnv("REDIS_URL", "redis://localhost:6379"),
 		OllamaBaseURL: getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
 		LLMModel:      getEnv("NOTIFIER_LLM_MODEL", "qwen2.5:3b"),
-		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
+		EncryptionKey: getEnv("TELEGRAM_TOKEN_ENCRYPTION_KEY", getEnv("ENCRYPTION_KEY", "")),
 	}
 }
 

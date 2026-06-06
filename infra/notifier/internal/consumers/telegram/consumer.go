@@ -191,6 +191,7 @@ func (c *Consumer) ProcessMessage(ctx context.Context, msg redis.XMessage) error
 		return fmt.Errorf("decrypt bot token for user %s: %w", userID, err)
 	}
 
+	log.Printf("[telegram-consumer] Delivering to chat_id=%d", chatID)
 	return c.sendMessage(chatID, content, botToken)
 }
 

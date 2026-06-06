@@ -380,6 +380,7 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
