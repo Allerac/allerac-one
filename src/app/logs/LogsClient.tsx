@@ -39,6 +39,7 @@ const LOG_FILTERS = [
   { id: 'LLM',       label: 'LLM',      match: (e: LogEntry) => e.context === 'LLM' },
   { id: 'WORKSPACE', label: 'WORK',     match: (e: LogEntry) => e.context === 'Workspace' },
   { id: 'HEALTH',    label: 'HEALTH',   match: (e: LogEntry) => e.context === 'Health' },
+  { id: 'SCHEDULER', label: 'SCHED',    match: (e: LogEntry) => e.context === 'Scheduler' },
   { id: 'ERRORS',    label: 'ERRORS',   match: (e: LogEntry) => e.level === 'error' || e.level === 'warn' },
 ];
 

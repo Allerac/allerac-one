@@ -29,7 +29,8 @@ export const CONTEXT_COLORS: Record<string, string> = {
   DB:           '#bd93f9',  // lavender
   Benchmark:    '#f8f8f2',  // white
   Telegram:     '#6272a4',  // muted blue
-  Notifications:'#ff5ea3',  // hot pink (reserved for future)
+  Notifications:'#ff5ea3',  // hot pink
+  Scheduler:    '#ff5ea3',  // hot pink — scheduled job executions
   System:       '#6272a4',
   system:       '#6272a4',
   Navigation:   '#d0aaff',  // lilac

@@ -2,14 +2,37 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { ScheduledJob } from '../../types';
+import type { ScheduledJob, JobExecution } from '../../types';
 import {
   getScheduledJobs,
   createScheduledJob,
   updateScheduledJob,
   deleteScheduledJob,
   toggleJobEnabled,
+  getJobExecutions,
 } from '../../actions/scheduled-jobs';
+
+// ─── Timezone helpers ────────────────────────────────────────────────────────
+
+/** Convert local hour+minute to UTC. offsetOverride in minutes (same sign as getTimezoneOffset). */
+function localToUtc(hour: string, minute: string, offsetOverride?: number | null): [string, string] {
+  const h = parseInt(hour, 10) || 0;
+  const m = parseInt(minute, 10) || 0;
+  const offsetMin = offsetOverride ?? new Date().getTimezoneOffset();
+  const utcTotal = ((h * 60 + m + offsetMin) % (24 * 60) + 24 * 60) % (24 * 60);
+  return [String(Math.floor(utcTotal / 60)), String(utcTotal % 60).padStart(2, '0')];
+}
+
+function userTimezone(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return 'UTC'; }
+}
+
+/** UTC offset options from UTC-12 to UTC+14 */
+const UTC_OFFSETS = Array.from({ length: 27 }, (_, i) => {
+  const h = i - 12;
+  const label = h === 0 ? 'UTC+0' : h > 0 ? `UTC+${h}` : `UTC${h}`;
+  return { label, offsetMin: -h * 60 }; // same sign as getTimezoneOffset
+});
 
 // ─── Cron helpers ────────────────────────────────────────────────────────────
 
@@ -21,20 +44,37 @@ function buildCronExpr(
   minute: string,
   weekday: string,
   monthDay: string,
-  cronExpr: string
+  cronExpr: string,
+  customMinute = '0',
+  customHour = '8',
+  customDom = '*',
+  customMonth = '*',
+  customDow = '*',
+  offsetOverride: number | null = null,
 ): string {
-  const h = hour.padStart(2, '0');
-  const m = minute.padStart(2, '0');
   switch (preset) {
     case 'hourly':
       return '0 * * * *';
-    case 'daily':
-      return `${m} ${h} * * *`;
-    case 'weekly':
-      return `${m} ${h} * * ${weekday}`;
-    case 'monthly':
-      return `${m} ${h} ${monthDay} * *`;
-    case 'custom':
+    case 'daily': {
+      const [uh, um] = localToUtc(hour, minute, offsetOverride);
+      return `${um} ${uh} * * *`;
+    }
+    case 'weekly': {
+      const [uh, um] = localToUtc(hour, minute, offsetOverride);
+      return `${um} ${uh} * * ${weekday}`;
+    }
+    case 'monthly': {
+      const [uh, um] = localToUtc(hour, minute, offsetOverride);
+      return `${um} ${uh} ${monthDay} * *`;
+    }
+    case 'custom': {
+      let cm = customMinute;
+      let ch = customHour;
+      if (ch !== '*' && cm !== '*') {
+        [ch, cm] = localToUtc(ch, cm, offsetOverride);
+      }
+      return `${cm} ${ch} ${customDom} ${customMonth} ${customDow}`;
+    }
     default:
       return cronExpr;
   }
@@ -149,6 +189,12 @@ interface FormData {
   weekday: string;
   monthDay: string;
   cronExpr: string;
+  // Visual custom builder fields
+  customMinute: string;
+  customHour: string;
+  customDom: string;
+  customMonth: string;
+  customDow: string;
 }
 
 // Days will be provided by translations
@@ -164,6 +210,11 @@ const defaultForm: FormData = {
   weekday: '1',
   monthDay: '1',
   cronExpr: '',
+  customMinute: '0',
+  customHour: '8',
+  customDom: '*',
+  customMonth: '*',
+  customDow: '*',
 };
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -184,20 +235,32 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
   const DAYS = t.raw('days') as string[];
   const [activeTab, setActiveTab] = useState<Tab>('list');
   const [jobs, setJobs] = useState<ScheduledJob[]>([]);
+  const [executions, setExecutions] = useState<Record<string, JobExecution[]>>({});
   const [selectedJob, setSelectedJob] = useState<ScheduledJob | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>(defaultForm);
 
-  // Derived cron expression
+  const [tzOffsetMin, setTzOffsetMin] = useState<number | null>(null); // null = auto-detect
+  const tz = userTimezone();
+  const activeOffset = tzOffsetMin ?? new Date().getTimezoneOffset();
+  const autoOffsetH = -Math.round(new Date().getTimezoneOffset() / 60);
+
+  // Derived cron expression (always in UTC)
   const derivedCron = buildCronExpr(
     formData.preset,
     formData.hour,
     formData.minute,
     formData.weekday,
     formData.monthDay,
-    formData.cronExpr
+    formData.cronExpr,
+    formData.customMinute,
+    formData.customHour,
+    formData.customDom,
+    formData.customMonth,
+    formData.customDow,
+    tzOffsetMin,
   );
 
   const nextRuns = getNextRuns(formData.preset, formData.hour, formData.minute, formData.weekday, formData.monthDay);
@@ -220,8 +283,16 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
     setError(null);
     const res = await getScheduledJobs(userId);
     setLoading(false);
-    if (res.success) setJobs(res.data ?? []);
-    else setError(res.error ?? t('errors.loadFailed'));
+    if (!res.success) { setError(res.error ?? t('errors.loadFailed')); return; }
+    const jobList = res.data ?? [];
+    setJobs(jobList);
+    // Load last 3 executions for each job in parallel
+    const exMap: Record<string, JobExecution[]> = {};
+    await Promise.all(jobList.map(async j => {
+      const ex = await getJobExecutions(j.id);
+      if (ex.success) exMap[j.id] = (ex.data ?? []).slice(0, 3);
+    }));
+    setExecutions(exMap);
   };
 
   const openCreate = () => {
@@ -236,15 +307,12 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
     setSelectedJob(job);
     // Try to reverse-map preset
     setFormData({
+      ...defaultForm,
       name: job.name,
       prompt: job.prompt,
       channels: job.channels,
       enabled: job.enabled,
       preset: 'custom',
-      hour: '8',
-      minute: '0',
-      weekday: '1',
-      monthDay: '1',
       cronExpr: job.cronExpr,
     });
     setError(null);
@@ -444,6 +512,31 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                         <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                           {t('lastRun')}: {job.lastRunAt ? new Date(job.lastRunAt).toLocaleString() : t('never')}
                         </p>
+                        {/* Execution history */}
+                        {(executions[job.id]?.length ?? 0) > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {executions[job.id].map(ex => (
+                              <div key={ex.id} className="flex items-start gap-1.5">
+                                <span className={`text-[10px] mt-0.5 flex-shrink-0 ${
+                                  ex.status === 'completed' ? 'text-green-400' :
+                                  ex.status === 'failed'    ? 'text-red-400' : 'text-yellow-400'
+                                }`}>
+                                  {ex.status === 'completed' ? '✓' : ex.status === 'failed' ? '✗' : '…'}
+                                </span>
+                                <div className="min-w-0">
+                                  <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                                    {new Date(ex.startedAt).toLocaleString()}
+                                  </span>
+                                  {ex.result && (
+                                    <p className={`text-[10px] truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                      {ex.result.replace(/\n/g, ' ').slice(0, 100)}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       {/* Actions */}
@@ -621,23 +714,86 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                 )}
 
                 {/* Cron expression preview (editable only for custom) */}
+                {/* Custom visual builder */}
+                {formData.preset === 'custom' && (
+                  <div className="mb-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Minuto</label>
+                        <select value={formData.customMinute} onChange={e => setFormData(p => ({ ...p, customMinute: e.target.value }))}
+                          className={`w-full px-2 py-1.5 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}>
+                          <option value="*">Qualquer (*)</option>
+                          {[0,5,10,15,20,25,30,35,40,45,50,55].map(v => <option key={v} value={v}>{String(v).padStart(2,'0')}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Hora</label>
+                        <select value={formData.customHour} onChange={e => setFormData(p => ({ ...p, customHour: e.target.value }))}
+                          className={`w-full px-2 py-1.5 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}>
+                          <option value="*">Qualquer (*)</option>
+                          {Array.from({length:24},(_,i)=>i).map(v => <option key={v} value={v}>{String(v).padStart(2,'0')}:00</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Dia do mês</label>
+                        <select value={formData.customDom} onChange={e => setFormData(p => ({ ...p, customDom: e.target.value }))}
+                          className={`w-full px-2 py-1.5 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}>
+                          <option value="*">Qualquer (*)</option>
+                          {Array.from({length:31},(_,i)=>i+1).map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Mês</label>
+                        <select value={formData.customMonth} onChange={e => setFormData(p => ({ ...p, customMonth: e.target.value }))}
+                          className={`w-full px-2 py-1.5 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}>
+                          <option value="*">Qualquer (*)</option>
+                          {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Dia da semana</label>
+                        <select value={formData.customDow} onChange={e => setFormData(p => ({ ...p, customDow: e.target.value }))}
+                          className={`w-full px-2 py-1.5 rounded border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}>
+                          <option value="*">Qualquer (*)</option>
+                          {['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'].map((d,i) => <option key={i} value={i}>{d}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    {formData.customHour !== '*' && formData.customMinute !== '*' && (
+                      <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {formData.customHour}:{String(formData.customMinute).padStart(2,'0')} {tz} → {localToUtc(formData.customHour, formData.customMinute, tzOffsetMin)[0]}:{localToUtc(formData.customHour, formData.customMinute, tzOffsetMin)[1]} UTC
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Cron preview */}
                 <div>
                   <label className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     {t('cronPreview')}
                   </label>
-                  {formData.preset === 'custom' ? (
-                    <input
-                      type="text"
-                      value={formData.cronExpr}
-                      onChange={e => setFormData(p => ({ ...p, cronExpr: e.target.value }))}
-                      className={`${inputCls} font-mono`}
-                      placeholder="*/5 * * * *"
-                    />
-                  ) : (
-                    <p className={`px-3 py-2 rounded font-mono text-sm ${isDarkMode ? 'bg-gray-800 text-green-400' : 'bg-gray-100 text-green-700'}`}>
-                      {derivedCron}
+                  <p className={`px-3 py-2 rounded font-mono text-sm ${isDarkMode ? 'bg-gray-800 text-green-400' : 'bg-gray-100 text-green-700'}`}>
+                    {derivedCron}
+                  </p>
+                  {formData.preset !== 'hourly' && formData.preset !== 'custom' && (
+                    <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {formData.hour}:{String(formData.minute).padStart(2,'0')} {tz} → {localToUtc(formData.hour, formData.minute, tzOffsetMin)[0]}:{localToUtc(formData.hour, formData.minute, tzOffsetMin)[1]} UTC
                     </p>
                   )}
+                  {/* Timezone override selector */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Fuso:</span>
+                    <select
+                      value={tzOffsetMin === null ? 'auto' : String(tzOffsetMin)}
+                      onChange={e => setTzOffsetMin(e.target.value === 'auto' ? null : parseInt(e.target.value, 10))}
+                      className={`text-xs px-2 py-0.5 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-300 text-gray-700'}`}
+                    >
+                      <option value="auto">Auto ({tz}, UTC{autoOffsetH >= 0 ? '+' : ''}{autoOffsetH})</option>
+                      {UTC_OFFSETS.map(o => (
+                        <option key={o.label} value={o.offsetMin}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Next runs */}
