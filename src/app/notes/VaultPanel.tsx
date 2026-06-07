@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { listNotes, searchNotes, createNote, updateNote, deleteNote, getAllTags } from '@/app/actions/notes';
+import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 
 interface Note {
   id: string;
@@ -443,159 +444,138 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
     if (tagRes.success) setTags(tagRes.tags);
   };
 
-  // ── Split view when note is open ───────────────────────────────────────────
-
-  if (selectedNote) {
-    return (
-      <div className="flex flex-1 overflow-hidden">
-        {/* Narrow note list — desktop only */}
-        <div className={`hidden lg:flex w-48 flex-shrink-0 flex-col border-r overflow-hidden ${d ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-          <div className={`flex-shrink-0 px-3 py-2.5 border-b ${d ? 'border-gray-800' : 'border-gray-200'}`}>
-            <div className={`text-xs font-semibold uppercase tracking-wider ${d ? 'text-gray-500' : 'text-gray-400'}`}>
-              {notes.length} notes
-            </div>
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search…"
-              className={`mt-2 w-full text-xs rounded px-2 py-1 border outline-none ${
-                d
-                  ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-600 focus:border-indigo-500'
-                  : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400 focus:border-indigo-400'
-              }`}
-            />
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className={`text-xs text-center py-8 ${d ? 'text-gray-600' : 'text-gray-400'}`}>loading…</div>
-            ) : notes.map(note => (
-              <NoteRow
-                key={note.id}
-                note={note}
-                selected={selectedNote.id === note.id}
-                onSelect={handleSelectNote}
-                onDelete={handleDelete}
-                d={d}
-              />
-            ))}
-          </div>
-
-          {/* Quick capture */}
-          <div className={`flex-shrink-0 px-2 py-2 border-t ${d ? 'border-gray-800' : 'border-gray-200'}`}>
-            <div className="flex gap-1">
-              <input
-                value={quickNote}
-                onChange={e => setQuickNote(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleQuickSave(); }}}
-                placeholder="Quick note…"
-                className={`flex-1 text-xs rounded px-2 py-1 border outline-none min-w-0 ${
-                  d
-                    ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-600 focus:border-indigo-500'
-                    : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400 focus:border-indigo-400'
-                }`}
-              />
-              <button
-                onClick={handleQuickSave}
-                disabled={saving || !quickNote.trim()}
-                className="px-2 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition-colors flex-shrink-0"
-              >
-                {saving ? '…' : '+'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Note editor */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <NoteEditor
-            note={selectedNote}
-            isDarkMode={d}
-            onSave={handleSave}
-            onClose={handleCloseEditor}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // ── Default list view ──────────────────────────────────────────────────────
+  // ── Always: fixed list on left + content on right ─────────────────────────
 
   return (
-    <div className={`flex flex-col flex-1 lg:border-r ${d ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+    <div className="flex flex-1 overflow-hidden">
 
-      {/* Header */}
-      <div className={`flex-shrink-0 px-4 py-3 border-b ${d ? 'border-gray-800' : 'border-gray-200'}`}>
-        <div className={`text-xs font-semibold uppercase tracking-wider mb-3 ${d ? 'text-gray-500' : 'text-gray-400'}`}>
-          Vault — {notes.length} notes
+      {/* Fixed-width notes list */}
+      <div className={`w-56 flex-shrink-0 flex flex-col border-r overflow-hidden ${d ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+
+        {/* Header */}
+        <div className={`flex-shrink-0 px-3 py-2.5 border-b flex items-center justify-between ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+          <span className={`text-xs font-semibold uppercase tracking-wider ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+            Notes · {notes.length}
+          </span>
+          <button
+            onClick={async () => {
+              setSaving(true);
+              const res = await createNote(userId, { content: '', source: 'manual' });
+              if (res.success && res.note) {
+                await loadNotes(activeTag ?? undefined);
+                handleSelectNote(res.note as unknown as Note);
+              }
+              setSaving(false);
+            }}
+            disabled={saving}
+            className={`text-xs px-2 py-0.5 rounded transition-colors ${d ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500'}`}
+          >
+            + New
+          </button>
         </div>
 
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search notes…"
-          className={`w-full text-sm rounded-lg px-3 py-1.5 border outline-none mb-3 ${
-            d
-              ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500 focus:border-indigo-500'
-              : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-indigo-400'
-          }`}
-        />
+        {/* Search */}
+        <div className={`flex-shrink-0 px-2 py-2 border-b ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search…"
+            className={`w-full text-xs rounded px-2 py-1 border outline-none ${
+              d
+                ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-600 focus:border-indigo-500'
+                : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400 focus:border-indigo-400'
+            }`}
+          />
+        </div>
 
+        {/* Tags */}
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className={`flex-shrink-0 px-2 py-2 border-b flex flex-wrap gap-1 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
             <TagBadge tag="all" active={!activeTag} onClick={() => setActiveTag(null)} d={d} />
             {tags.map(tag => (
               <TagBadge key={tag} tag={tag} active={activeTag === tag} onClick={() => setActiveTag(t => t === tag ? null : tag)} d={d} />
             ))}
           </div>
         )}
-      </div>
 
-      {/* Quick capture */}
-      <div className={`flex-shrink-0 px-4 py-3 border-b ${d ? 'border-gray-800' : 'border-gray-200'}`}>
-        <div className="flex gap-2">
-          <input
-            value={quickNote}
-            onChange={e => setQuickNote(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleQuickSave(); }}}
-            placeholder="Quick note…"
-            className={`flex-1 text-sm rounded-lg px-3 py-1.5 border outline-none ${
-              d
-                ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500 focus:border-indigo-500'
-                : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-indigo-400'
-            }`}
-          />
-          <button
-            onClick={handleQuickSave}
-            disabled={saving || !quickNote.trim()}
-            className="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition-colors"
-          >
-            {saving ? '…' : '+'}
-          </button>
-        </div>
-      </div>
-
-      {/* Notes list — click to open editor */}
-      <div className="flex-1 overflow-y-auto">
-        {(loading || searching) ? (
-          <div className={`text-xs text-center py-8 ${d ? 'text-gray-600' : 'text-gray-400'}`}>
-            {searching ? 'searching…' : 'loading…'}
-          </div>
-        ) : notes.length === 0 ? (
-          <div className={`text-xs text-center py-8 px-4 ${d ? 'text-gray-600' : 'text-gray-400'}`}>
-            {query ? 'No notes found.' : 'No notes yet. Ask the AI or use quick capture above.'}
-          </div>
-        ) : (
-          notes.map(note => (
+        {/* Notes list */}
+        <div className="flex-1 overflow-y-auto">
+          {(loading || searching) ? (
+            <div className={`text-xs text-center py-8 ${d ? 'text-gray-600' : 'text-gray-400'}`}>
+              {searching ? 'searching…' : 'loading…'}
+            </div>
+          ) : notes.length === 0 ? (
+            <div className={`text-xs text-center py-8 px-3 ${d ? 'text-gray-600' : 'text-gray-400'}`}>
+              {query ? 'No notes found.' : 'No notes yet.'}
+            </div>
+          ) : notes.map(note => (
             <NoteRow
               key={note.id}
               note={note}
-              selected={false}
+              selected={selectedNote?.id === note.id}
               onSelect={handleSelectNote}
               onDelete={handleDelete}
               d={d}
             />
-          ))
+          ))}
+        </div>
+
+        {/* Quick capture */}
+        <div className={`flex-shrink-0 px-2 py-2 border-t ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+          <div className="flex gap-1">
+            <input
+              value={quickNote}
+              onChange={e => setQuickNote(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleQuickSave(); }}}
+              placeholder="Quick note…"
+              className={`flex-1 text-xs rounded px-2 py-1 border outline-none min-w-0 ${
+                d
+                  ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-600 focus:border-indigo-500'
+                  : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400 focus:border-indigo-400'
+              }`}
+            />
+            <button
+              onClick={handleQuickSave}
+              disabled={saving || !quickNote.trim()}
+              className="px-2 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition-colors flex-shrink-0"
+            >
+              {saving ? '…' : '+'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel: empty state or editor */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {selectedNote ? (
+          <NoteEditor
+            note={selectedNote}
+            isDarkMode={d}
+            onSave={handleSave}
+            onClose={handleCloseEditor}
+          />
+        ) : (
+          <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${d ? 'bg-gray-900' : 'bg-white'}`}>
+            <AlleracIcon size={48} />
+            <p className={`text-sm ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+              Select or create a new note
+            </p>
+            <button
+              onClick={async () => {
+                setSaving(true);
+                const res = await createNote(userId, { content: '', source: 'manual' });
+                if (res.success && res.note) {
+                  await loadNotes(activeTag ?? undefined);
+                  handleSelectNote(res.note as unknown as Note);
+                }
+                setSaving(false);
+              }}
+              disabled={saving}
+              className={`text-sm font-medium transition-colors ${d ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500'}`}
+            >
+              + New note
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -931,36 +931,50 @@ const savedModel = localStorage.getItem('selected_model');
         {/* Content wrapper — owns header + all columns */}
         <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
-          {/* Chat Header — title only */}
-          <ChatHeader
-            isSidebarOpen={isSidebarOpen}
-            setIsSidebarOpen={setIsSidebarOpen}
-            isDarkMode={isDarkMode}
-            toggleTheme={toggleTheme}
-            clearChat={clearChat}
-            domainName={domainName}
-            activeSkill={activeSkill}
-            currentConversationId={currentConversationId}
-            currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
-            currentConversationHasMemory={currentConversationHasMemory}
-            handleGenerateSummary={handleGenerateSummary}
-            isTerminalMode={effectiveChatMode === 'terminal'}
-            onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
-            hideHomeButton={!isAdmin}
-            userName={userName}
-            userEmail={userEmail}
-            onLogout={handleLogout}
-            titleOnly
-          />
+          {/* Chat Header — title only (hidden on social domain, moved inside chat column) */}
+          {!isInstagramPostOpen && (
+            <ChatHeader
+              isSidebarOpen={isSidebarOpen}
+              setIsSidebarOpen={setIsSidebarOpen}
+              isDarkMode={isDarkMode}
+              toggleTheme={toggleTheme}
+              clearChat={clearChat}
+              domainName={domainName}
+              activeSkill={activeSkill}
+              currentConversationId={currentConversationId}
+              currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
+              currentConversationHasMemory={currentConversationHasMemory}
+              handleGenerateSummary={handleGenerateSummary}
+              isTerminalMode={effectiveChatMode === 'terminal'}
+              onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
+              hideHomeButton={!isAdmin}
+              userName={userName}
+              userEmail={userEmail}
+              onLogout={handleLogout}
+              titleOnly
+            />
+          )}
 
           {/* Mobile tab bar — social page */}
           {isInstagramPostOpen && (
-            <div className="lg:hidden flex-shrink-0 flex border-b border-gray-700">
-              {(['chat', 'editor', 'preview'] as const).map((tab) => (
+            <div className={`lg:hidden flex-shrink-0 flex items-center border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className={`px-3 py-2.5 ${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              {(['editor', 'preview', 'chat'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setMobileTab(tab)}
-                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === tab ? 'text-white border-b-2 border-brand-500' : 'text-gray-400 hover:text-gray-200'}`}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                    mobileTab === tab
+                      ? `border-b-2 border-brand-500 ${isDarkMode ? 'text-white' : 'text-gray-900'}`
+                      : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}
                 >
                   {tab === 'chat' ? tStudio('tabChat') : tab === 'editor' ? tStudio('tabPost') : tStudio('tabPreview')}
                 </button>
@@ -1022,15 +1036,71 @@ const savedModel = localStorage.getItem('selected_model');
             </div>
           )}
 
-          {/* Chat column */}
+          {/* Instagram Post Studio — left column (desktop), fullscreen tab (mobile) */}
+          {isInstagramPostOpen && userId && (
+            <div className={`${mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'} flex-1 min-w-0 overflow-hidden border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <InstagramPostStudio
+                userId={userId}
+                conversationId={currentConversationId}
+                mobileView={mobileTab === 'preview' ? 'preview' : 'editor'}
+                isDarkMode={isDarkMode}
+                externalUpdate={studioExternalUpdate}
+                onClose={showInstagramPost ? undefined : () => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
+                onSuccess={() => {
+                  if (!showInstagramPost) { setIsInstagramPostOpen(false); setInstagramPreFill(null); }
+                  setInstagramDraft(null);
+                }}
+                onPostStateChange={(state) => {
+                  const parts: string[] = [];
+                  if (state.caption) parts.push(`Caption: "${state.caption}"`);
+                  if (state.tags) parts.push(`Hashtags: ${state.tags}`);
+                  if (state.isProduct && state.price) parts.push(`Preço: €${state.price}`);
+                  const stateStr = parts.length ? `\n${parts.join('\n')}` : ' (empty)';
+                  const langMap: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English' };
+                  const lang = langMap[locale] ?? 'English';
+                  postContextRef.current = `## Instagram Post Studio is open${stateStr}\n\nLANGUAGE: Generate all captions and hashtags in ${lang}.\n\nRULES:\n- Whenever the user asks you to generate, write, or improve the post content, call \`update_instagram_form\` immediately.\n- When the user sends an image and asks to generate a post, call \`update_instagram_form\` ONCE with image_url + caption + tags all filled in a single call. Never call it first with only the image and then again with the text.\n- Never write caption or hashtags only in the chat — always use the tool.`;
+                }}
+                initialCaption={instagramPreFill?.caption}
+                initialTags={instagramPreFill?.tags}
+                initialImageBase64={instagramPreFill?.imageBase64}
+                initialImagePreview={instagramPreFill?.imagePreview}
+                initialImageUrl={instagramPreFill?.imageUrl}
+              />
+            </div>
+          )}
+
+          {/* Chat column — right, fixed width when Instagram studio is open */}
           <div className={`flex flex-col overflow-hidden ${
             isHealthDashboardOpen
               ? mobileHealthTab === 'chat'
                 ? 'flex-1 lg:w-[560px] lg:flex-shrink-0'
                 : 'hidden lg:flex lg:w-[560px] flex-shrink-0'
-              : isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1' : 'hidden lg:flex'} lg:flex-1` : 'flex-1'
+              : isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1' : 'hidden lg:flex'} lg:w-[400px] lg:flex-shrink-0` : 'flex-1'
           }`}>
 
+          {/* Social header — only inside chat column, only after conversation starts */}
+          {isInstagramPostOpen && currentConversationId && (
+            <ChatHeader
+              isSidebarOpen={isSidebarOpen}
+              setIsSidebarOpen={setIsSidebarOpen}
+              isDarkMode={isDarkMode}
+              toggleTheme={toggleTheme}
+              clearChat={clearChat}
+              domainName={domainName}
+              activeSkill={activeSkill}
+              currentConversationId={currentConversationId}
+              currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
+              currentConversationHasMemory={currentConversationHasMemory}
+              handleGenerateSummary={handleGenerateSummary}
+              isTerminalMode={false}
+              hideHomeButton={!isAdmin}
+              userName={userName}
+              userEmail={userEmail}
+              onLogout={handleLogout}
+              titleOnly
+              hideSidebarButton
+            />
+          )}
 
           {/* ── Terminal mode — full area replacement ── */}
           {effectiveChatMode === 'terminal' ? (
@@ -1055,13 +1125,13 @@ const savedModel = localStorage.getItem('selected_model');
           ) : messages.length === 0 ? (
             /* Empty State — greeting + input centered in the remaining space */
             <div className={`flex-1 flex flex-col items-center justify-center px-4 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-              <div className="w-full max-w-2xl">
+              <div className={`w-full ${isInstagramPostOpen ? 'max-w-lg' : 'max-w-2xl'}`}>
                 <div className="text-center mb-8">
                   <div className="w-fit mx-auto mb-6">
-                    <AlleracIcon size={80} />
+                    <AlleracIcon size={isInstagramPostOpen ? 64 : 80} />
                   </div>
-                  <h2 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
-                  <h3 className={`text-xl font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
+                  <h2 className={`font-bold mb-2 ${isInstagramPostOpen ? 'text-xl' : 'text-3xl'} ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
+                  <h3 className={`font-medium ${isInstagramPostOpen ? 'text-sm' : 'text-xl'} ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
                 </div>
                 <ChatInput
                   inputMessage={inputMessage}
@@ -1121,7 +1191,7 @@ const savedModel = localStorage.getItem('selected_model');
                 />
               </div>
               <div data-name="input-area-wrapper" className={`flex-shrink-0 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-                <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-3 pb-2">
+                <div className={`${isInstagramPostOpen ? 'px-3 sm:px-4' : 'max-w-3xl mx-auto px-3 sm:px-4'} pt-3 pb-2`}>
                   <ChatInput
                     inputMessage={inputMessage}
                     setInputMessage={setInputMessage}
@@ -1166,38 +1236,6 @@ const savedModel = localStorage.getItem('selected_model');
         </div>
 
 
-        {/* Instagram Post Studio — inline (desktop only) */}
-        {isInstagramPostOpen && userId && (
-          <div className={`${mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'} flex-1 lg:flex-[2] min-w-0 overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-            <InstagramPostStudio
-              userId={userId}
-              conversationId={currentConversationId}
-              mobileView={mobileTab === 'preview' ? 'preview' : 'editor'}
-              isDarkMode={isDarkMode}
-              externalUpdate={studioExternalUpdate}
-              onClose={showInstagramPost ? undefined : () => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
-              onSuccess={() => {
-                if (!showInstagramPost) { setIsInstagramPostOpen(false); setInstagramPreFill(null); }
-                setInstagramDraft(null);
-              }}
-              onPostStateChange={(state) => {
-                const parts: string[] = [];
-                if (state.caption) parts.push(`Caption: "${state.caption}"`);
-                if (state.tags) parts.push(`Hashtags: ${state.tags}`);
-                if (state.isProduct && state.price) parts.push(`Preço: €${state.price}`);
-                const stateStr = parts.length ? `\n${parts.join('\n')}` : ' (empty)';
-                const langMap: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English' };
-                const lang = langMap[locale] ?? 'English';
-                postContextRef.current = `## Instagram Post Studio is open${stateStr}\n\nLANGUAGE: Generate all captions and hashtags in ${lang}.\n\nRULES:\n- Whenever the user asks you to generate, write, or improve the post content, call \`update_instagram_form\` immediately.\n- When the user sends an image and asks to generate a post, call \`update_instagram_form\` ONCE with image_url + caption + tags all filled in a single call. Never call it first with only the image and then again with the text.\n- Never write caption or hashtags only in the chat — always use the tool.`;
-              }}
-              initialCaption={instagramPreFill?.caption}
-              initialTags={instagramPreFill?.tags}
-              initialImageBase64={instagramPreFill?.imageBase64}
-              initialImagePreview={instagramPreFill?.imagePreview}
-              initialImageUrl={instagramPreFill?.imageUrl}
-            />
-          </div>
-        )}
 
           </div>{/* end columns row */}
         </div>{/* end content wrapper */}

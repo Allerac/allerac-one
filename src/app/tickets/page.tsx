@@ -13,5 +13,12 @@ export default async function TicketsPage() {
   const user = await authService.validateSession(sessionToken);
   if (!user) redirect('/login');
 
-  return <TicketsClient />;
+  return (
+    <TicketsClient
+      userId={user.id}
+      userName={user.name}
+      userEmail={user.email}
+      isAdmin={user.is_admin}
+    />
+  );
 }

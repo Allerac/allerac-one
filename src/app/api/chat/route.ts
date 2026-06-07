@@ -29,6 +29,7 @@ import { HealthTool } from '@/app/tools/health.tool';
 import { buildNotesTools, NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
 import { buildEmailTools, EMAIL_TOOL_DEFINITIONS } from '@/app/tools/email.tool';
 import { buildJobsTools, JOBS_TOOL_DEFINITIONS } from '@/app/tools/jobs.tool';
+import { buildTicketsTools, TICKETS_TOOL_DEFINITIONS } from '@/app/tools/tickets.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { TOOLS } from '@/app/tools/tools';
@@ -374,14 +375,21 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // Notes tools are always available across all domains
-        const noteToolNames = ['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note'];
-        const emailToolNames = ['list_emails', 'read_email', 'send_email'];
-        const jobToolNames = ['list_jobs', 'create_job', 'update_job', 'delete_job', 'toggle_job'];
+        const noteToolNames    = ['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note'];
+        const emailToolNames   = ['list_emails', 'read_email', 'send_email'];
+        const jobToolNames     = ['list_jobs', 'create_job', 'update_job', 'delete_job', 'toggle_job'];
+        const ticketToolNames  = ['list_tickets', 'create_ticket', 'update_ticket_status', 'get_ticket'];
         activeTools = [
-          ...activeTools.filter((t: any) => !noteToolNames.includes(t.function.name) && !emailToolNames.includes(t.function.name) && !jobToolNames.includes(t.function.name)),
+          ...activeTools.filter((t: any) =>
+            !noteToolNames.includes(t.function.name) &&
+            !emailToolNames.includes(t.function.name) &&
+            !jobToolNames.includes(t.function.name) &&
+            !ticketToolNames.includes(t.function.name)
+          ),
           ...NOTES_TOOL_DEFINITIONS,
-          ...(domain === 'email' ? EMAIL_TOOL_DEFINITIONS : []),
-          ...(domain === 'jobs' ? JOBS_TOOL_DEFINITIONS : []),
+          ...(domain === 'email'   ? EMAIL_TOOL_DEFINITIONS   : []),
+          ...(domain === 'jobs'    ? JOBS_TOOL_DEFINITIONS    : []),
+          ...(domain === 'tickets' ? TICKETS_TOOL_DEFINITIONS : []),
         ];
 
         if (conversationMemories) {
@@ -631,6 +639,10 @@ export async function POST(request: Request): Promise<Response> {
                 } else if (jobToolNames.includes(toolName)) {
                   const jobHandlers = buildJobsTools(userId);
                   const handler = jobHandlers[toolName as keyof typeof jobHandlers];
+                  toolResult = await handler(toolArgs as any);
+                } else if (ticketToolNames.includes(toolName)) {
+                  const ticketHandlers = buildTicketsTools(userId);
+                  const handler = ticketHandlers[toolName as keyof typeof ticketHandlers];
                   toolResult = await handler(toolArgs as any);
                 } else {
                   toolResult = { error: `Tool ${toolName} not available` };

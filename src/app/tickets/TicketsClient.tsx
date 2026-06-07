@@ -2,6 +2,19 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import SidebarDesktop from '@/app/components/layout/SidebarDesktop';
+import SidebarMobile from '@/app/components/layout/SidebarMobile';
+import { useConversations } from '@/app/hooks/useConversations';
+import { MODELS } from '@/app/services/llm/models';
+import type { Message, Conversation } from '@/app/types';
+import ChatMessages from '@/app/components/chat/ChatMessages';
+import ChatInput from '@/app/components/chat/ChatInput';
+import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
+import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
+import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
+import { DomainProvider, type ToolCallEvent } from '@/app/context/DomainContext';
+import { saveSelectedModel } from '@/app/actions/user';
+import * as memoryActions from '@/app/actions/memory';
 import type { Ticket, TicketEvent, TicketStatus, TicketType, TicketPriority } from '@/app/types';
 
 // ─── agent run types ─────────────────────────────────────────────────────────
@@ -143,7 +156,15 @@ const EMPTY_FORM: NewTicketForm = { title: '', description: '', type: 'task', ex
 
 // ─── main component ──────────────────────────────────────────────────────────
 
-export default function TicketsClient() {
+interface Props {
+  userId: string;
+  userName: string | null;
+  userEmail: string;
+  isAdmin: boolean;
+  defaultSkillName?: string;
+}
+
+export default function TicketsClient({ userId, userName, userEmail, isAdmin, defaultSkillName }: Props) {
   const router = useRouter();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selected, setSelected] = useState<Ticket | null>(null);
@@ -157,13 +178,169 @@ export default function TicketsClient() {
   const [isDark, setIsDark] = useState(true);
   const [agentRuns, setAgentRuns] = useState<Map<string, AgentRunStatus>>(new Map());
   const pollTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [isSidebarOpen, setIsSidebarOpen]         = useState(false);
+  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [lastToolCall, setLastToolCall]           = useState<ToolCallEvent | null>(null);
+  const [mobileTab, setMobileTab]                 = useState<'tickets' | 'chat'>('tickets');
+
+  // ── chat state ─────────────────────────────────────────────────────────────
+  const {
+    conversations, currentConvId, setCurrentConvId,
+    messages, setMessages,
+    selectConversation, newConversation,
+    deleteConversation, pinConversation, renameConversation, reload,
+  } = useConversations(userId, 'tickets');
+
+  const [input, setInput]             = useState('');
+  const [sending, setSending]         = useState(false);
+  const [selectedModel, setModel]     = useState('gemini-2.5-flash');
+  const [convId, setConvId]           = useState<string | null>(currentConvId);
+  const [isAgentMode, setAgentMode]   = useState(false);
+  const [githubToken, setGithubToken] = useState('');
+  const messagesEndRef                = useRef<HTMLDivElement>(null);
+  const [memoryOpen, setMemoryOpen]       = useState(false);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memoryResult, setMemoryResult]   = useState<{ success: boolean; message: string; summary?: string; topics?: string[] } | null>(null);
+  const [isMyAlleracOpen, setIsMyAlleracOpen] = useState(false);
 
   const t = isDark ? DARK : LIGHT;
 
   useEffect(() => {
     const saved = localStorage.getItem('chatTheme');
     if (saved) setIsDark(saved === 'dark');
+    setGithubToken(localStorage.getItem('github_token') || '');
+    const savedModel = localStorage.getItem('selected_model');
+    if (savedModel) setModel(savedModel);
   }, []);
+
+  useEffect(() => { setConvId(currentConvId); }, [currentConvId]);
+
+  useEffect(() => {
+    const open = () => setIsMyAlleracOpen(true);
+    window.addEventListener('openMyAlleracModal', open);
+    return () => window.removeEventListener('openMyAlleracModal', open);
+  }, []);
+
+  const handleConvCreated = useCallback((id: string) => {
+    setCurrentConvId(id); reload();
+  }, [setCurrentConvId, reload]);
+
+  const send = useCallback(async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    setInput('');
+    setSending(true);
+    const requestStart = Date.now();
+
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: text, timestamp: new Date() },
+      { role: 'assistant', content: '', timestamp: new Date() },
+    ]);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          conversationId: convId,
+          model: selectedModel,
+          provider: MODELS.find(m => m.id === selectedModel)?.provider || 'ollama',
+          defaultSkillName,
+          domain: 'tickets',
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let event: any;
+          try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (event.type === 'token') {
+            setMessages(prev => {
+              const msgs = [...prev];
+              const last = msgs[msgs.length - 1];
+              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: last.content + event.content };
+              return msgs;
+            });
+          } else if (event.type === 'tool_call') {
+            setLastToolCall({ name: event.name, args: event.args, ts: Date.now() });
+          } else if (event.type === 'done') {
+            const elapsed = Date.now() - requestStart;
+            setMessages(prev => {
+              const msgs = [...prev];
+              const last = msgs[msgs.length - 1];
+              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, responseTime: elapsed };
+              return msgs;
+            });
+            if (event.conversationId && event.conversationId !== convId) {
+              setConvId(event.conversationId);
+              handleConvCreated(event.conversationId);
+            }
+          } else if (event.type === 'error') {
+            setMessages(prev => {
+              const msgs = [...prev];
+              msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: `Error: ${event.message}` };
+              return msgs;
+            });
+          }
+        }
+      }
+    } catch (err: any) {
+      setMessages(prev => {
+        const msgs = [...prev];
+        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: `Error: ${err.message}` };
+        return msgs;
+      });
+    } finally {
+      setSending(false);
+    }
+  }, [input, sending, convId, selectedModel, defaultSkillName, handleConvCreated, setMessages]);
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  const handleSaveToMemory = useCallback(async () => {
+    if (!convId) return;
+    setMemoryOpen(true);
+    setMemoryLoading(true);
+    setMemoryResult(null);
+    try {
+      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'tickets');
+      if (summary) {
+        setMemoryResult({ success: true, message: 'Summary generated!', summary: summary.summary, topics: summary.key_topics });
+      } else {
+        setMemoryResult({ success: false, message: 'Could not generate summary.' });
+      }
+    } catch {
+      setMemoryResult({ success: false, message: 'An unexpected error occurred.' });
+    } finally {
+      setMemoryLoading(false);
+    }
+  }, [convId, userId, githubToken]);
+
+  const clearChat      = useCallback(() => { newConversation(); setConvId(null); }, [newConversation]);
+  const loadConversation = useCallback(async (id: string) => { await selectConversation(id); setConvId(id); }, [selectConversation]);
+  const handleDelete   = useCallback(async (id: string) => { await deleteConversation(id); if (convId === id) setConvId(null); }, [deleteConversation, convId]);
+  const convList: Conversation[] = conversations.map(c => ({ ...c, pinned: c.pinned ?? false }));
+  const displayName = userName?.split(' ')[0] || 'there';
+
+  const handleLogout = async () => { const { logout } = await import('@/app/actions/auth'); await logout(); router.push('/login'); };
 
   function toggleTheme() {
     const next = !isDark;
@@ -351,23 +528,64 @@ export default function TicketsClient() {
   // ── layout ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: t.bg, color: t.text, fontFamily: 'monospace', fontSize: 13 }}>
+    <DomainProvider value={{ isDark, lastToolCall, setLastToolCall, postContext: '', setPostContext: () => {} }}>
+    <div style={{ display: 'flex', height: '100vh', background: t.bg, color: t.text }}>
 
-      {/* ── sidebar ─────────────────────────────────────────────────────── */}
-      <div style={{ width: 220, borderRight: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${t.border}` }}>
-          <button onClick={() => router.push('/hub')} style={{ background: 'none', border: 'none', color: t.textFaint, cursor: 'pointer', fontSize: 12, padding: 0, marginBottom: 10 }}>
-            ← Hub
+      {/* ── Standard sidebar ────────────────────────────────────────────── */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
+      )}
+      <div className="lg:hidden">
+        <SidebarMobile
+          isSidebarOpen={isSidebarOpen} isDarkMode={isDark} onClose={() => setIsSidebarOpen(false)}
+          conversations={convList} currentConversationId={convId}
+          loadConversation={loadConversation} deleteConversation={handleDelete}
+          pinConversation={pinConversation} renameConversation={renameConversation}
+          isAdmin={isAdmin} onNewConversation={clearChat} userName={userName ?? undefined} userEmail={userEmail}
+          onLogout={handleLogout} onToggleTheme={toggleTheme}
+        />
+      </div>
+      <div className="hidden lg:block">
+        <SidebarDesktop
+          isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setSidebarCollapsed}
+          isDarkMode={isDark} conversations={convList} currentConversationId={convId}
+          loadConversation={loadConversation} deleteConversation={handleDelete}
+          pinConversation={pinConversation} renameConversation={renameConversation}
+          isAdmin={isAdmin} onNewConversation={clearChat} userName={userName ?? undefined} userEmail={userEmail}
+          onLogout={handleLogout} onToggleTheme={toggleTheme}
+        />
+      </div>
+
+      {/* ── Main area (tickets + chat) ───────────────────────────────────── */}
+      <div style={{ marginLeft: isSidebarCollapsed ? 80 : 256, flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, transition: 'margin-left 0.2s' }} className="lg:ml-0">
+
+      {/* Mobile tab bar */}
+      <div className={`lg:hidden flex-shrink-0 flex items-center border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+        <button onClick={() => setIsSidebarOpen(true)} className={`px-3 py-2.5 ${isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
+        {(['tickets', 'chat'] as const).map(tab => (
+          <button key={tab} onClick={() => setMobileTab(tab)}
+            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+              mobileTab === tab
+                ? `border-b-2 border-indigo-500 ${isDark ? 'text-white' : 'text-gray-900'}`
+                : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            {tab === 'tickets' ? '🎫 Tickets' : '💬 Chat'}
           </button>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+
+      {/* ── Tickets panel (filters + list + detail) ───────────────────── */}
+      <div className={`${mobileTab === 'tickets' ? 'flex' : 'hidden'} lg:flex`} style={{ flex: 1, display: 'flex', minWidth: 0, overflow: 'hidden' }}>
+
+      {/* ── Ticket filters sidebar ───────────────────────────────────────── */}
+      <div style={{ width: 220, borderRight: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, fontFamily: 'monospace', fontSize: 13 }}>
+        <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${t.border}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: t.text }}>🎫 Tickets</div>
-            <button
-              onClick={toggleTheme}
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              style={{ background: 'none', border: `1px solid ${t.borderLight}`, borderRadius: 6, color: t.textMuted, cursor: 'pointer', fontSize: 14, padding: '2px 7px' }}
-            >
-              {isDark ? '☀️' : '🌙'}
-            </button>
           </div>
         </div>
 
@@ -406,7 +624,7 @@ export default function TicketsClient() {
       </div>
 
       {/* ── list ────────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, fontFamily: 'monospace', fontSize: 13 }}>
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ color: t.textMuted, fontSize: 12 }}>{visible.length} tickets</span>
         </div>
@@ -450,7 +668,7 @@ export default function TicketsClient() {
 
       {/* ── detail ──────────────────────────────────────────────────────── */}
       {selected && (
-        <div style={{ width: 360, borderLeft: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: t.bg }}>
+        <div style={{ width: 360, borderLeft: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: t.bg, fontFamily: 'monospace', fontSize: 13 }}>
           <div style={{ padding: '14px 16px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 600, fontSize: 13 }}>Detail</span>
             <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>
@@ -601,6 +819,69 @@ export default function TicketsClient() {
         </div>
       )}
 
+      </div>{/* end tickets wrapper D */}
+
+      {/* ── Chat panel ──────────────────────────────────────────────────── */}
+      <div className={`${mobileTab === 'chat' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-none lg:w-[360px] flex-col border-l overflow-hidden ${isDark ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
+        {messages.length === 0 && !sending ? (
+          <div className={`flex-1 flex flex-col items-center justify-center px-4 ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
+            <div className="w-full max-w-lg">
+              <div className="text-center mb-8">
+                <div className="w-fit mx-auto mb-6"><AlleracIcon size={64} /></div>
+                <h2 className={`text-xl font-bold mb-2 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
+                  Hello, {displayName}!
+                </h2>
+                <h3 className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Ask me to list, create, or update your tickets.
+                </h3>
+              </div>
+              <ChatInput
+                inputMessage={input} setInputMessage={setInput}
+                handleKeyPress={handleKeyPress} handleSendMessage={send}
+                isSending={sending} githubToken={githubToken} isDarkMode={isDark}
+                setIsDocumentModalOpen={() => {}}
+                selectedModel={selectedModel}
+                setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(userId, m); }}
+                MODELS={MODELS}
+                githubConfigured={true} googleConfigured={true} ollamaConnected={true}
+                isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className={`flex-1 overflow-y-auto ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
+              <ChatMessages
+                messages={messages as unknown as Message[]}
+                isSending={sending} selectedModel={selectedModel} MODELS={MODELS}
+                isDarkMode={isDark} currentConversationId={convId}
+                userId={userId} githubToken={githubToken}
+                messagesEndRef={messagesEndRef} domainSlug="tickets"
+              />
+            </div>
+            <div
+              className={`flex-shrink-0 px-3 sm:px-4 pt-3 ${isDark ? 'bg-gray-900' : 'bg-white'}`}
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+            >
+              <ChatInput
+                inputMessage={input} setInputMessage={setInput}
+                handleKeyPress={handleKeyPress} handleSendMessage={send}
+                isSending={sending} githubToken={githubToken} isDarkMode={isDark}
+                setIsDocumentModalOpen={() => {}}
+                selectedModel={selectedModel}
+                setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(userId, m); }}
+                MODELS={MODELS}
+                githubConfigured={true} googleConfigured={true} ollamaConnected={true}
+                isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      </div>{/* end inner row C (flex-row tickets+chat) */}
+      </div>{/* end main area A (flex-col) */}
+
       {/* ── new ticket modal ─────────────────────────────────────────────── */}
       {showForm && (
         <div style={{
@@ -668,6 +949,19 @@ export default function TicketsClient() {
           </div>
         </div>
       )}
+
+      <MemorySaveModal
+        isOpen={memoryOpen}
+        onClose={() => { setMemoryOpen(false); setMemoryResult(null); }}
+        loading={memoryLoading} result={memoryResult} isDarkMode={isDark}
+      />
+      <MyAlleracModal
+        isOpen={isMyAlleracOpen}
+        onClose={() => setIsMyAlleracOpen(false)}
+        isDarkMode={isDark} userId={userId} githubToken={githubToken}
+        userName={userName ?? undefined} domainSlug="tickets"
+      />
     </div>
+    </DomainProvider>
   );
 }

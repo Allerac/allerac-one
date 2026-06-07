@@ -28,6 +28,7 @@ interface ChatHeaderProps {
   onToggleChatMode?: () => void;
   hideHomeButton?: boolean;
   titleOnly?: boolean;
+  hideSidebarButton?: boolean;
   userName?: string;
   userEmail?: string;
   onLogout?: () => void;
@@ -49,6 +50,7 @@ export default function ChatHeader({
   onToggleChatMode,
   hideHomeButton,
   titleOnly,
+  hideSidebarButton,
   userName,
   userEmail,
   onLogout,
@@ -91,14 +93,16 @@ export default function ChatHeader({
   if (titleOnly) {
     return (
       <div className="flex-shrink-0 flex items-center gap-2 px-3 h-12" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-        <button
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className={`lg:hidden p-2 rounded-lg transition-colors ${isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
+        {!hideSidebarButton && (
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className={`lg:hidden p-2 rounded-lg transition-colors ${isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        )}
         <span className={`flex-1 text-sm font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
           {currentConversationTitle || domainName || 'Allerac'}
         </span>

@@ -2,8 +2,10 @@
 import { NOTES_TOOL_DEFINITIONS } from './notes.tool.definitions';
 import { EMAIL_TOOL_DEFINITIONS } from './email.tool.definitions';
 import { JOBS_TOOL_DEFINITIONS } from './jobs.tool.definitions';
+import { TICKETS_TOOL_DEFINITIONS } from './tickets.tool.definitions';
 
 export { JOBS_TOOL_DEFINITIONS };
+export { TICKETS_TOOL_DEFINITIONS };
 
 // Static registry of all available tools for admin UI
 export const TOOL_REGISTRY: Array<{ name: string; label: string; description: string; group: string }> = [
@@ -35,6 +37,10 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'update_job',               label: 'Update Job',          description: 'Update an existing scheduled job',               group: 'Jobs'      },
   { name: 'delete_job',               label: 'Delete Job',          description: 'Delete a scheduled job',                         group: 'Jobs'      },
   { name: 'toggle_job',               label: 'Toggle Job',          description: 'Enable or disable a scheduled job',              group: 'Jobs'      },
+  { name: 'list_tickets',             label: 'List Tickets',        description: 'List the user\'s tickets',                       group: 'Tickets'   },
+  { name: 'create_ticket',            label: 'Create Ticket',       description: 'Create a new ticket',                            group: 'Tickets'   },
+  { name: 'update_ticket_status',     label: 'Update Ticket Status',description: 'Change the status of a ticket',                  group: 'Tickets'   },
+  { name: 'get_ticket',               label: 'Get Ticket',          description: 'Get full details of a specific ticket',          group: 'Tickets'   },
 ];
 
 // Health tools are conditionally included based on HEALTH_WORKER_SECRET being set.

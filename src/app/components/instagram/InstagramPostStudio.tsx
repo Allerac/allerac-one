@@ -317,7 +317,7 @@ export default function InstagramPostStudio({
       {/* ── Center: Editor ── */}
       <div className={`${mobileView === 'preview' ? 'hidden lg:flex' : 'flex'} flex-1 flex-col min-w-0 overflow-hidden border-r ${border}`}>
         {/* Header */}
-        <div className={`flex-shrink-0 border-b ${border} px-5 py-[13px] flex justify-between items-center ${bg}`}>
+        <div className={`flex-shrink-0 border-b ${border} px-5 h-12 flex justify-between items-center ${bg}`}>
           <p className={`text-xs font-semibold ${txtMuted} uppercase tracking-wider`}>{t('title')}</p>
           <div className="flex items-center gap-2">
             <button
@@ -536,7 +536,7 @@ export default function InstagramPostStudio({
 
       {/* ── Right: Live Preview ── */}
       <div className={`${mobileView === 'preview' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col min-w-0 ${bg}`}>
-        <div className={`flex-shrink-0 border-b ${border} px-5 py-[13px]`}>
+        <div className={`flex-shrink-0 border-b ${border} px-5 h-12 flex items-center`}>
           <p className={`text-xs font-semibold ${txtMuted} uppercase tracking-wider`}>{t('preview')}</p>
         </div>
         <div className="flex-1 overflow-y-auto">

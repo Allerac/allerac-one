@@ -55,6 +55,8 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
   const [addOpen, setAddOpen]             = useState(false);
   const [composeOpen, setComposeOpen]     = useState(false);
   const [replyData, setReplyData]         = useState<{ to: string; subject: string; inReplyTo: string; references: string } | null>(null);
+  const [metaExpanded, setMetaExpanded]   = useState(false);
+  const msgCache = useRef<Map<number, EmailDetail>>(new Map());
 
   const initializedRef = useRef(false);
 
@@ -78,6 +80,7 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
   const fetchMessages = useCallback(async (accountId: string) => {
     setLoadingMsgs(true);
     setSelectedMsg(null);
+    msgCache.current.clear();
     onContextUpdate('');
     try {
       const res = await fetch(`/api/email/messages?accountId=${accountId}`);
@@ -91,12 +94,23 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
     if (!selectedAccount || loadingUid === msg.uid) return;
     setConfirmDeleteUid(null);
     setRevealedUid(null);
+    setMetaExpanded(false);
+
+    const cached = msgCache.current.get(msg.uid);
+    if (cached) {
+      setSelectedMsg(cached);
+      const ctx = `## Email context\n**From:** ${cached.fromName || cached.from}\n**Subject:** ${cached.subject}\n**Date:** ${new Date(cached.date).toLocaleString()}\n\n${cached.bodyText?.slice(0, 2000) ?? ''}\n\nThe user is viewing this email and may ask questions about it.`;
+      onContextUpdate(ctx);
+      return;
+    }
+
     setLoadingUid(msg.uid);
     setLoadingMsg(true);
     try {
       const res = await fetch(`/api/email/message?accountId=${selectedAccount}&uid=${msg.uid}`);
       const data = await res.json();
       if (data.message) {
+        msgCache.current.set(msg.uid, data.message);
         setSelectedMsg(data.message);
         setMessages(prev => prev.map(m => m.uid === msg.uid ? { ...m, seen: true } : m));
         const ctx = `## Email context\n**From:** ${data.message.fromName || data.message.from}\n**Subject:** ${data.message.subject}\n**Date:** ${new Date(data.message.date).toLocaleString()}\n\n${data.message.bodyText?.slice(0, 2000) ?? ''}\n\nThe user is viewing this email and may ask questions about it.`;
@@ -177,8 +191,8 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
 
   return (
     <div className={`flex flex-col h-full ${bgPanel}`}>
-      {/* Header */}
-      <div className={`flex-shrink-0 flex items-center justify-between px-4 py-3 border-b ${borderCls} ${d ? 'bg-gray-900' : 'bg-white'}`}>
+      {/* Header — hidden on mobile when an email is open */}
+      <div className={`flex-shrink-0 items-center justify-between px-4 py-3 border-b ${borderCls} ${d ? 'bg-gray-900' : 'bg-white'} ${(selectedMsg || loadingMsg) ? 'hidden lg:flex' : 'flex'}`}>
         <div className="flex items-center gap-2 min-w-0">
           {accounts.length > 1 ? (
             <select value={selectedAccount ?? ''} onChange={e => { setSelected(e.target.value); fetchMessages(e.target.value); }}
@@ -311,7 +325,12 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
                       Back to inbox
                     </button>
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className={`text-sm font-semibold leading-snug flex-1 min-w-0 ${textPrimary}`}>{selectedMsg.subject}</h3>
+                      <button onClick={() => setMetaExpanded(v => !v)} className={`flex items-start gap-1 flex-1 min-w-0 text-left group`}>
+                        <h3 className={`text-sm font-semibold leading-snug flex-1 min-w-0 ${textPrimary}`}>{selectedMsg.subject}</h3>
+                        <svg className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 transition-transform ${metaExpanded ? 'rotate-180' : ''} ${textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button onClick={handleReply}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors">
@@ -344,12 +363,14 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
                         )}
                       </div>
                     </div>
-                    <div className={`mt-2 space-y-0.5 text-xs ${textMuted}`}>
-                      <p><span className="font-medium">From:</span> {selectedMsg.fromName ? `${selectedMsg.fromName} <${selectedMsg.from}>` : selectedMsg.from}</p>
-                      {selectedMsg.to && <p><span className="font-medium">To:</span> {selectedMsg.to}</p>}
-                      {selectedMsg.cc && <p><span className="font-medium">CC:</span> {selectedMsg.cc}</p>}
-                      <p><span className="font-medium">Date:</span> {new Date(selectedMsg.date).toLocaleString()}</p>
-                    </div>
+                    {metaExpanded && (
+                      <div className={`mt-2 space-y-0.5 text-xs ${textMuted}`}>
+                        <p><span className="font-medium">From:</span> {selectedMsg.fromName ? `${selectedMsg.fromName} <${selectedMsg.from}>` : selectedMsg.from}</p>
+                        {selectedMsg.to && <p><span className="font-medium">To:</span> {selectedMsg.to}</p>}
+                        {selectedMsg.cc && <p><span className="font-medium">CC:</span> {selectedMsg.cc}</p>}
+                        <p><span className="font-medium">Date:</span> {new Date(selectedMsg.date).toLocaleString()}</p>
+                      </div>
+                    )}
                   </div>
                   {/* Body */}
                   {selectedMsg.bodyHtml ? (

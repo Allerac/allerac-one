@@ -234,6 +234,7 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
               deleteConversation={handleDelete}
               pinConversation={pinConversation}
               renameConversation={renameConversation}
+              isAdmin={isAdmin} onNewConversation={clearChat} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} onToggleTheme={toggleDark}
             />
           </div>
 
@@ -248,6 +249,7 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
               deleteConversation={handleDelete}
               pinConversation={pinConversation}
               renameConversation={renameConversation}
+              isAdmin={isAdmin} onNewConversation={clearChat} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} onToggleTheme={toggleDark}
             />
           </div>
 
@@ -272,7 +274,10 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
             /> */}
 
             {/* Mobile tab bar */}
-            <div className={`lg:hidden flex-shrink-0 flex border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`lg:hidden flex-shrink-0 flex items-center border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button onClick={() => setSidebarOpen(true)} className={`px-3 py-2.5 ${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
               {(['vault', 'chat'] as const).map(tab => (
                 <button key={tab} onClick={() => setMobileTab(tab)}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
@@ -288,8 +293,8 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
             {/* Vault + Chat */}
             <div className="flex flex-1 overflow-hidden">
 
-              {/* Vault panel — full screen on mobile when vault tab, expands on desktop when editor open */}
-              <div className={`${mobileTab === 'vault' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-shrink-0 overflow-hidden transition-all duration-200 ${editorOpen ? 'lg:flex-1' : 'lg:w-80'}`}>
+              {/* Vault panel — full screen on mobile when vault tab, flex-1 on desktop */}
+              <div className={`${mobileTab === 'vault' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-1 overflow-hidden`}>
                 <VaultPanel
                   userId={userId}
                   isDarkMode={d}
@@ -298,12 +303,8 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
                 />
               </div>
 
-              {/* Chat panel — full screen on mobile when chat tab, shrinks on desktop when editor open */}
-              <div className={`${mobileTab === 'chat' ? 'flex flex-1' : 'hidden'} lg:flex flex-col overflow-hidden border-l transition-all duration-200 ${
-                editorOpen
-                  ? `lg:flex-shrink-0 lg:w-96 ${d ? 'border-gray-800' : 'border-gray-200'}`
-                  : `lg:flex-1 ${d ? 'border-gray-800' : 'border-gray-200'}`
-              }`}>
+              {/* Chat panel — fixed width on the right */}
+              <div className={`${mobileTab === 'chat' ? 'flex flex-1' : 'hidden'} lg:flex lg:w-[360px] lg:flex-shrink-0 flex-col overflow-hidden border-l ${d ? 'border-gray-800' : 'border-gray-200'}`}>
                 {messages.length === 0 && !sending ? (
                   <div className={`flex-1 flex flex-col items-center justify-center px-4 ${d ? 'bg-gray-900' : 'bg-white'}`}>
                     <div className="w-full max-w-lg">

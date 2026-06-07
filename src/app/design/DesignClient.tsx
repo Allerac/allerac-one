@@ -233,6 +233,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
               deleteConversation={handleDelete}
               pinConversation={pinConversation}
               renameConversation={renameConversation}
+              isAdmin={isAdmin} onNewConversation={clearChat} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} onToggleTheme={toggleDark}
             />
           </div>
 
@@ -248,6 +249,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
               deleteConversation={handleDelete}
               pinConversation={pinConversation}
               renameConversation={renameConversation}
+              isAdmin={isAdmin} onNewConversation={clearChat} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} onToggleTheme={toggleDark}
             />
           </div>
 

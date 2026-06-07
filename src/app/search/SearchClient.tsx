@@ -257,12 +257,14 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
           <div className="lg:hidden">
             <SidebarMobile isSidebarOpen={isSidebarOpen} isDarkMode={d} onClose={() => setSidebarOpen(false)}
               conversations={convList} currentConversationId={convId} loadConversation={loadConversation}
-              deleteConversation={handleDelete} pinConversation={pinConversation} renameConversation={renameConversation} />
+              deleteConversation={handleDelete} pinConversation={pinConversation} renameConversation={renameConversation}
+              isAdmin={isAdmin} onNewConversation={clearChat} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} onToggleTheme={toggleDark} />
           </div>
           <div className="hidden lg:block">
             <SidebarDesktop isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setSidebarCollapsed}
               isDarkMode={d} conversations={convList} currentConversationId={convId} loadConversation={loadConversation}
-              deleteConversation={handleDelete} pinConversation={pinConversation} renameConversation={renameConversation} />
+              deleteConversation={handleDelete} pinConversation={pinConversation} renameConversation={renameConversation}
+              isAdmin={isAdmin} onNewConversation={clearChat} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} onToggleTheme={toggleDark} />
           </div>
 
           <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
@@ -274,7 +276,10 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
               hideHomeButton={!isAdmin} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} /> */}
 
             {/* Mobile tab bar */}
-            <div className={`lg:hidden flex-shrink-0 flex border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`lg:hidden flex-shrink-0 flex items-center border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button onClick={() => setSidebarOpen(true)} className={`px-3 py-2.5 ${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
               {(['component', 'chat'] as const).map(tab => (
                 <button key={tab} onClick={() => setMobileTab(tab)}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors ${

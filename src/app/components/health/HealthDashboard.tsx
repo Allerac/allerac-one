@@ -183,7 +183,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
     : { deep: avgPhase('sleep_deep_minutes'), light: avgPhase('sleep_light_minutes'), rem: avgPhase('sleep_rem_minutes'), awake: avgPhase('sleep_awake_minutes'), score: null };
 
   // Hide sync when viewing a past day — data is already there, user can switch to 7/30d to re-sync a range
-  const showSync = garminConnected && (!isSingleDay || isViewingToday);
+  const showSync = !!garminConnected;
 
   if (inline) {
     return (
@@ -212,44 +212,22 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
               <GarminSettings userId={userId} isDarkMode={isDarkMode} />
             </div>
           ) : (
-            <div className="p-5 space-y-4">
-              {/* Period selector: 1 row on desktop, 2 rows on mobile */}
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-                <div className="flex items-center gap-2">
+            <>
+              <div className={`sticky top-0 z-10 px-5 py-3 border-b ${isDarkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+              {/* Period + date nav: one compact row */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value as Period)}
+                  className={`px-2 py-1.5 rounded-lg text-sm font-medium border transition-colors flex-shrink-0 ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-gray-100 border-transparent text-gray-700'}`}
+                >
                   {(['today', '3days', '7days', '30days'] as Period[]).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPeriod(p)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-                        ${period === p
-                          ? 'bg-brand-500 text-white'
-                          : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                    >
-                      {t(`period.${p}`)}
-                    </button>
+                    <option key={p} value={p}>{t(`period.${p}`)}</option>
                   ))}
-                  {loading && (
-                    <div className="flex items-center ml-1">
-                      <div className={`animate-spin rounded-full h-4 w-4 border-2 border-t-transparent ${isDarkMode ? 'border-gray-500' : 'border-gray-400'}`} />
-                    </div>
-                  )}
-                  {!isSingleDay && showSync && (
-                    <button
-                      onClick={handleSync}
-                      disabled={syncing}
-                      className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50
-                        ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                    >
-                      <svg className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      {syncing ? t('syncing') : t('syncNow')}
-                    </button>
-                  )}
-                </div>
+                </select>
 
                 {isSingleDay && (
-                  <div className="flex items-center gap-2 lg:flex-1">
+                  <>
                     <button
                       onClick={goToPrevDay}
                       className={`h-8 w-8 flex items-center justify-center rounded-full border transition-colors flex-shrink-0
@@ -266,7 +244,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
                       max={getTodayStr()}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors
+                      className={`px-2 py-1.5 rounded-lg text-sm font-semibold border transition-colors
                         ${isDarkMode
                           ? 'bg-gray-800 border-gray-700 text-gray-200 focus:border-brand-500 focus:outline-none'
                           : 'bg-white border-gray-200 text-gray-900 focus:border-brand-500 focus:outline-none'}`}
@@ -285,22 +263,29 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
-                    {showSync && (
-                      <button
-                        onClick={handleSync}
-                        disabled={syncing}
-                        className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50
-                          ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                      >
-                        <svg className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        {syncing ? t('syncing') : t('syncNow')}
-                      </button>
-                    )}
-                  </div>
+                  </>
+                )}
+
+                {loading && (
+                  <div className={`animate-spin rounded-full h-4 w-4 border-2 border-t-transparent flex-shrink-0 ${isDarkMode ? 'border-gray-500' : 'border-gray-400'}`} />
+                )}
+
+                {showSync && (
+                  <button
+                    onClick={handleSync}
+                    disabled={syncing}
+                    title={syncing ? t('syncing') : t('syncNow')}
+                    className={`ml-auto h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors disabled:opacity-50
+                      ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  >
+                    <svg className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
                 )}
               </div>
+              </div>
+              <div className="p-5 space-y-4">
 
               {/* No data */}
               {!loading && metrics.length === 0 && (
@@ -400,6 +385,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                 return <ActivitiesList isDarkMode={isDarkMode} startDate={startDate} endDate={endDate} />;
               })()}
             </div>
+            </>
           )}
         </div>
       </div>
@@ -456,44 +442,22 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
               <GarminSettings userId={userId} isDarkMode={isDarkMode} />
             </div>
           ) : (
-            <div className="p-5 space-y-4">
-              {/* Period selector: 1 row on desktop, 2 rows on mobile */}
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-                <div className="flex items-center gap-2">
+            <>
+              <div className={`sticky top-0 z-10 px-5 py-3 border-b ${isDarkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+              {/* Period + date nav: one compact row */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value as Period)}
+                  className={`px-2 py-1.5 rounded-lg text-sm font-medium border transition-colors flex-shrink-0 ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-gray-100 border-transparent text-gray-700'}`}
+                >
                   {(['today', '3days', '7days', '30days'] as Period[]).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPeriod(p)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-                        ${period === p
-                          ? 'bg-brand-500 text-white'
-                          : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                    >
-                      {t(`period.${p}`)}
-                    </button>
+                    <option key={p} value={p}>{t(`period.${p}`)}</option>
                   ))}
-                  {loading && (
-                    <div className="flex items-center ml-1">
-                      <div className={`animate-spin rounded-full h-4 w-4 border-2 border-t-transparent ${isDarkMode ? 'border-gray-500' : 'border-gray-400'}`} />
-                    </div>
-                  )}
-                  {!isSingleDay && showSync && (
-                    <button
-                      onClick={handleSync}
-                      disabled={syncing}
-                      className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50
-                        ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                    >
-                      <svg className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      {syncing ? t('syncing') : t('syncNow')}
-                    </button>
-                  )}
-                </div>
+                </select>
 
                 {isSingleDay && (
-                  <div className="flex items-center gap-2 lg:flex-1">
+                  <>
                     <button
                       onClick={goToPrevDay}
                       className={`h-8 w-8 flex items-center justify-center rounded-full border transition-colors flex-shrink-0
@@ -510,7 +474,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
                       max={getTodayStr()}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors
+                      className={`px-2 py-1.5 rounded-lg text-sm font-semibold border transition-colors
                         ${isDarkMode
                           ? 'bg-gray-800 border-gray-700 text-gray-200 focus:border-brand-500 focus:outline-none'
                           : 'bg-white border-gray-200 text-gray-900 focus:border-brand-500 focus:outline-none'}`}
@@ -529,22 +493,29 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
-                    {showSync && (
-                      <button
-                        onClick={handleSync}
-                        disabled={syncing}
-                        className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50
-                          ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                      >
-                        <svg className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        {syncing ? t('syncing') : t('syncNow')}
-                      </button>
-                    )}
-                  </div>
+                  </>
+                )}
+
+                {loading && (
+                  <div className={`animate-spin rounded-full h-4 w-4 border-2 border-t-transparent flex-shrink-0 ${isDarkMode ? 'border-gray-500' : 'border-gray-400'}`} />
+                )}
+
+                {showSync && (
+                  <button
+                    onClick={handleSync}
+                    disabled={syncing}
+                    title={syncing ? t('syncing') : t('syncNow')}
+                    className={`ml-auto h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors disabled:opacity-50
+                      ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  >
+                    <svg className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
                 )}
               </div>
+              </div>
+              <div className="p-5 space-y-4">
 
               {/* No data */}
               {!loading && metrics.length === 0 && (
@@ -644,6 +615,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                 return <ActivitiesList isDarkMode={isDarkMode} startDate={startDate} endDate={endDate} />;
               })()}
             </div>
+            </>
           )}
         </div>
       </div>

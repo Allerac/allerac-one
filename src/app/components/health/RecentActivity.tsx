@@ -138,8 +138,8 @@ export default function RecentActivity({ isDarkMode, selectedDate }: Props) {
   return (
     <div className={cardCls}>
 
-      {/* Header: title left, stats right */}
-      <div className="flex items-start justify-between gap-4 mb-4">
+      {/* Header: title + stats — stacked on mobile, side-by-side on sm+ */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-3xl flex-shrink-0">{activityIcon(activity.activityType)}</span>
           <div className="min-w-0">
@@ -150,10 +150,10 @@ export default function RecentActivity({ isDarkMode, selectedDate }: Props) {
           </div>
         </div>
 
-        {/* Stats — compact, top right */}
-        <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 flex-shrink-0">
+        {/* Stats — grid on mobile, inline on sm+ */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:justify-end gap-x-4 gap-y-2">
           {stats.map(({ icon, label, value }) => (
-            <div key={label} className="text-right">
+            <div key={label} className="sm:text-right">
               <p className={`text-sm font-bold leading-tight ${textMain}`}>{value}</p>
               <p className={`text-xs ${textMuted}`}>{icon} {label}</p>
             </div>
