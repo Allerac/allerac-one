@@ -90,6 +90,7 @@
     "language": "Idioma"
   },
   "chat": {
+    "disclaimer": "O Allerac pode errar. Verifique informações importantes.",
     "typeMessage": "Digite sua mensagem...",
     "attachFile": "Anexar arquivo",
     "addAttachment": "Adicionar anexo",
@@ -333,7 +334,32 @@
       "deleteFailed": "Falha ao excluir",
       "createFailed": "Falha ao criar job",
       "updateFailed": "Falha ao atualizar job"
-    }
+    },
+    "customFields": {
+      "minute": "Minuto",
+      "hour": "Hora",
+      "dayOfMonth": "Dia do mês",
+      "month": "Mês",
+      "dayOfWeek": "Dia da semana",
+      "any": "Qualquer (*)"
+    },
+    "months": [
+      "Jan",
+      "Fev",
+      "Mar",
+      "Abr",
+      "Mai",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Set",
+      "Out",
+      "Nov",
+      "Dez"
+    ],
+    "execHistory": "Últimas execuções",
+    "timezone": "Fuso:",
+    "editorHint": "Seleciona um job ou cria um"
   },
   "consciousness": {
     "title": "Sobre mim",
@@ -580,5 +606,19 @@
     "errCopyFailed": "Erro ao copiar para a área de transferência",
     "errImageRequired": "Por favor selecione uma imagem",
     "errCaptionRequired": "Por favor adicione uma caption"
+  },
+  "grampeador": {
+    "title": "Allerac Assistant",
+    "greeting": "Olá{name}!",
+    "greetingNoName": "Olá!",
+    "helpPrompt": "Como posso te ajudar com seus jobs?",
+    "placeholder": "Escreva uma mensagem...",
+    "send": "Enviar (Enter)",
+    "attach": "Anexar arquivo",
+    "image": "Imagem",
+    "fallback0": "Precisa de ajuda com seus jobs?",
+    "fallback1": "Parece que você está trabalhando muito!",
+    "fallback2": "Posso criar um job pra você!",
+    "fallback3": "Tudo bem por aqui... monitorando seus agendamentos."
   }
 }

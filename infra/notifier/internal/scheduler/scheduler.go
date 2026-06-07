@@ -29,9 +29,9 @@ type DBPool interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-// Runner executes a prompt for a given user and returns the LLM response.
+// Runner executes a prompt for a given user/job and returns the LLM response.
 type Runner interface {
-	Run(ctx context.Context, userID, prompt string) (string, error)
+	Run(ctx context.Context, userID, jobID, prompt string) (string, error)
 }
 
 // NotificationPublisher sends a notification to a delivery channel.
@@ -287,7 +287,7 @@ func (s *Scheduler) ExecuteJob(ctx context.Context, job Job) {
 func (s *Scheduler) runWithRetry(ctx context.Context, job Job) (string, error) {
 	var lastErr error
 	for attempt := 1; attempt <= maxRunnerAttempts; attempt++ {
-		result, err := s.runner.Run(ctx, job.UserID, job.Prompt)
+		result, err := s.runner.Run(ctx, job.UserID, job.ID, job.Prompt)
 		if err == nil {
 			if attempt > 1 {
 				log.Printf("[scheduler] Job %q succeeded on attempt %d/%d", job.Name, attempt, maxRunnerAttempts)

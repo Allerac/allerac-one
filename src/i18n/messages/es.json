@@ -90,6 +90,7 @@
     "language": "Idioma"
   },
   "chat": {
+    "disclaimer": "Allerac puede cometer errores. Verifica la información importante.",
     "typeMessage": "Escribe tu mensaje...",
     "attachFile": "Adjuntar archivo",
     "addAttachment": "Agregar adjunto",
@@ -411,5 +412,122 @@
     "errCopyFailed": "Error al copiar al portapapeles",
     "errImageRequired": "Por favor selecciona una imagen",
     "errCaptionRequired": "Por favor añade una descripción"
+  },
+  "grampeador": {
+    "title": "Allerac Assistant",
+    "greeting": "¡Hola{name}!",
+    "greetingNoName": "¡Hola!",
+    "helpPrompt": "¿Cómo puedo ayudarte con tus tareas?",
+    "placeholder": "Escribe un mensaje...",
+    "send": "Enviar (Enter)",
+    "attach": "Adjuntar archivo",
+    "image": "Imagen",
+    "fallback0": "¿Necesitas ayuda con tus tareas?",
+    "fallback1": "¡Parece que estás trabajando duro!",
+    "fallback2": "¡Puedo crear una tarea por ti!",
+    "fallback3": "Todo bien por aquí... vigilando tus agendas."
+  },
+  "scheduledJobs": {
+    "title": "Tareas Programadas",
+    "description": "Automatiza prompts con horario. Los resultados se envían a tus canales configurados.",
+    "newJob": "+ Nueva tarea",
+    "noJobs": "Sin tareas programadas",
+    "noJobsHint": "Haz clic en \"+ Nueva tarea\" para empezar.",
+    "loading": "Cargando...",
+    "tabs": {
+      "list": "Tareas",
+      "create": "Crear",
+      "edit": "Editar"
+    },
+    "fields": {
+      "name": "Nombre *",
+      "prompt": "Prompt *",
+      "channels": "Canales *",
+      "enabled": "Activo",
+      "frequency": "Frecuencia"
+    },
+    "presets": {
+      "hourly": "Cada hora",
+      "daily": "Cada día a…",
+      "weekly": "Cada semana el…",
+      "monthly": "Cada mes el día…",
+      "custom": "Personalizado (cron)"
+    },
+    "timeAt": "a las",
+    "timeH": "h",
+    "timeMin": "min",
+    "timeOn": "el",
+    "timeOnDay": "el día",
+    "enabledLabel": "Activo",
+    "disabledLabel": "Inactivo",
+    "toggleDisable": "Desactivar",
+    "toggleEnable": "Activar",
+    "cronPreview": "Expresión cron",
+    "nextRuns": "Próximas 3 ejecuciones",
+    "lastRun": "Última ejecución",
+    "never": "Nunca",
+    "placeholderName": "Resumen diario",
+    "placeholderPrompt": "Resume las últimas noticias de IA y envíamelas.",
+    "saving": "Guardando…",
+    "createJob": "Crear tarea",
+    "saveChanges": "Guardar cambios",
+    "days": [
+      "Domingo",
+      "Lunes",
+      "Martes",
+      "Miércoles",
+      "Jueves",
+      "Viernes",
+      "Sábado"
+    ],
+    "actions": {
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "delete": "Eliminar",
+      "edit": "Editar"
+    },
+    "confirm": {
+      "delete": "¿Eliminar esta tarea?"
+    },
+    "success": {
+      "created": "Tarea creada",
+      "updated": "Tarea actualizada",
+      "deleted": "Tarea eliminada"
+    },
+    "errors": {
+      "invalidCron": "Expresión cron inválida",
+      "nameRequired": "El nombre es obligatorio",
+      "promptRequired": "El prompt es obligatorio",
+      "channelRequired": "Se requiere al menos un canal",
+      "loadFailed": "Error al cargar las tareas",
+      "deleteFailed": "Error al eliminar",
+      "createFailed": "Error al crear la tarea",
+      "updateFailed": "Error al actualizar la tarea"
+    },
+    "customFields": {
+      "minute": "Minuto",
+      "hour": "Hora",
+      "dayOfMonth": "Día del mes",
+      "month": "Mes",
+      "dayOfWeek": "Día de la semana",
+      "any": "Cualquier (*)"
+    },
+    "months": [
+      "Ene",
+      "Feb",
+      "Mar",
+      "Abr",
+      "May",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dic"
+    ],
+    "execHistory": "Últimas ejecuciones",
+    "timezone": "Zona horaria:",
+    "editorHint": "Selecciona un job o crea uno"
   }
 }

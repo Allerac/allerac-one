@@ -38,6 +38,7 @@ const DOMAINS = [
   { slug: 'search',  label: 'Search',  icon: '🔍' },
   { slug: 'email',   label: 'Email',   icon: '✉️' },
   { slug: 'notes',   label: 'Notes',   icon: '📝' },
+  { slug: 'jobs',    label: 'Jobs',    icon: '⏰' },
 ];
 
 interface Props {

@@ -10,8 +10,8 @@ export async function loadUserSettings(userId: string) {
     return await userSettingsService.loadUserSettings(userId);
 }
 
-export async function saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string) {
-    return await userSettingsService.saveUserSettings(userId, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location);
+export async function saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string) {
+    return await userSettingsService.saveUserSettings(userId, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location, timezone);
 }
 
 export async function saveSelectedModel(userId: string, modelId: string) {
@@ -38,6 +38,21 @@ export async function updateLanguage(locale: string): Promise<{ success: boolean
         maxAge: 60 * 60 * 24 * 365,
         sameSite: 'lax'
     });
+
+    // Sync to DB so Telegram bot and other server-side consumers stay in sync
+    try {
+        const { getCurrentUser } = await import('@/app/actions/auth');
+        const user = await getCurrentUser();
+        if (user?.id) {
+            await pool.query(
+                `UPDATE user_settings SET language = $1 WHERE user_id = $2`,
+                [locale, user.id]
+            );
+        }
+    } catch {
+        // Non-critical: cookie already set, DB sync is best-effort
+    }
+
     return { success: true };
 }
 

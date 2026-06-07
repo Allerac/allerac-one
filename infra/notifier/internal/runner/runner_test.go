@@ -26,7 +26,7 @@ func TestRunner_Run_Success(t *testing.T) {
 	defer srv.Close()
 
 	r := runner.New(srv.URL, "test-model")
-	result, err := r.Run(context.Background(), "user-1", "Say hello world")
+	result, err := r.Run(context.Background(), "user-1", "job-1", "Say hello world")
 
 	require.NoError(t, err)
 	assert.Equal(t, "Hello, World!", result)
@@ -42,7 +42,7 @@ func TestRunner_Run_LLMError(t *testing.T) {
 	defer srv.Close()
 
 	r := runner.New(srv.URL, "nonexistent-model")
-	_, err := r.Run(context.Background(), "user-1", "hello")
+	_, err := r.Run(context.Background(), "user-1", "job-1", "hello")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "model not found")
@@ -50,7 +50,7 @@ func TestRunner_Run_LLMError(t *testing.T) {
 
 func TestRunner_Run_ServerUnavailable(t *testing.T) {
 	r := runner.New("http://127.0.0.1:1", "test-model")
-	_, err := r.Run(context.Background(), "user-1", "hello")
+	_, err := r.Run(context.Background(), "user-1", "job-1", "hello")
 	require.Error(t, err)
 }
 
@@ -73,7 +73,7 @@ func TestRunner_Run_SendsPromptInRequest(t *testing.T) {
 	defer srv.Close()
 
 	r := runner.New(srv.URL, "test-model")
-	_, err := r.Run(context.Background(), "user-1", wantPrompt)
+	_, err := r.Run(context.Background(), "user-1", "job-1", wantPrompt)
 
 	require.NoError(t, err)
 	assert.Equal(t, wantPrompt, gotPrompt)

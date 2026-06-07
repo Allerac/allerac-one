@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import * as authActions from '@/app/actions/auth';
-import * as userActions from '@/app/actions/user';
 import HubTour from '@/app/components/hub/HubTour';
-import SystemDashboard from '@/app/components/system/SystemDashboard';
-import DomainSkillsModal from '@/app/components/hub/DomainSkillsModal';
-import TelegramBotSettings from '@/app/components/settings/TelegramBotSettings';
-import { MODELS } from '@/app/services/llm/models';
+import AlleracTaskbar from '@/app/components/layout/AlleracTaskbar';
+import * as authActions from '@/app/actions/auth';
+
+type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 
 const DOMAINS_ALL = [
   { id: 'chat',    label: 'Chat',    icon: '💬', path: '/chat',     desc: 'General assistant' },
@@ -23,11 +21,10 @@ const DOMAINS_ALL = [
   { id: 'search',  label: 'Search',  icon: '🔍', path: '/search',   desc: 'Web search' },
   { id: 'email',   label: 'Email',   icon: '✉️', path: '/email',    desc: 'Email inbox & AI' },
   { id: 'notes',   label: 'Notes',   icon: '📝', path: '/notes',    desc: 'Personal knowledge base' },
+  { id: 'jobs',    label: 'Jobs',    icon: '⏰', path: '/jobs',     desc: 'Scheduled tasks & automation' },
 ];
 
-type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
-
-export default function HubClient({ userName, userEmail, userId, completedHubTour }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean }) {
+export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[] }) {
   const router = useRouter();
   const [domains, setDomains] = useState<typeof DOMAINS_ALL>([]);
   const [booting, setBooting] = useState(() => {
@@ -35,29 +32,13 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     return !sessionStorage.getItem('allerac_booted');
   });
   const [bootStep, setBootStep] = useState(0);
-  const [time, setTime] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [clickCount, setClickCount] = useState<Record<string, number>>({});
-  const [startMenuOpen, setStartMenuOpen] = useState(false);
   const [shutdownPhase, setShutdownPhase] = useState<ShutdownPhase>('running');
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [isDomainSkillsOpen, setIsDomainSkillsOpen] = useState(false);
-  const [isTelegramBotSettingsOpen, setIsTelegramBotSettingsOpen] = useState(false);
-  const [githubToken, setGithubToken] = useState('');
-  const [tavilyApiKey, setTavilyApiKey] = useState('');
-  const [googleApiKey, setGoogleApiKey] = useState('');
-  const [anthropicApiKey, setAnthropicApiKey] = useState('');
-  const [tokenInput, setTokenInput] = useState('');
-  const [tavilyKeyInput, setTavilyKeyInput] = useState('');
-  const [googleKeyInput, setGoogleKeyInput] = useState('');
-  const [anthropicKeyInput, setAnthropicKeyInput] = useState('');
-  const [locationInput, setLocationInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [showTour, setShowTour] = useState(() => {
     if (typeof window === 'undefined') return false;
     return !completedHubTour;
   });
-  const startMenuRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
 
   const BOOT_LINES = [
@@ -99,86 +80,28 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
   }, []);
 
   useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      setTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }));
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Close start menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (startMenuRef.current && !startMenuRef.current.contains(e.target as Node)) {
-        setStartMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 480);
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const loadSettings = async () => {
-    try {
-      const savedToken = localStorage.getItem('github_token') || '';
-      const savedTavilyKey = localStorage.getItem('tavily_api_key') || '';
-      const settings = await userActions.loadUserSettings(userId);
-      if (settings) {
-        if (!savedToken && settings.github_token) setGithubToken(settings.github_token);
-        else setGithubToken(savedToken);
-        if (!savedTavilyKey && settings.tavily_api_key) setTavilyApiKey(settings.tavily_api_key);
-        else setTavilyApiKey(savedTavilyKey);
-        if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
-        if (settings.anthropic_api_key) setAnthropicApiKey(settings.anthropic_api_key);
-        if (settings.location) setLocationInput(settings.location);
-      } else {
-        setGithubToken(savedToken);
-        setTavilyApiKey(savedTavilyKey);
-      }
-    } catch (error) {
-      console.error('[HubClient] loadSettings error:', error);
-    }
-  };
-
-  const handleSaveToken = async () => {
-    const newGithubToken = tokenInput.trim();
-    const newTavilyKey = tavilyKeyInput.trim();
-    const newGoogleKey = googleKeyInput.trim();
-    const newAnthropicKey = anthropicKeyInput.trim();
-    const newLocation = locationInput.trim();
-
-    if (!newGithubToken && !newTavilyKey && !newGoogleKey && !newAnthropicKey && !newLocation) return;
-
-    try {
-      if (newGithubToken) { localStorage.setItem('github_token', newGithubToken); setGithubToken(newGithubToken); setTokenInput(''); }
-      if (newTavilyKey) { localStorage.setItem('tavily_api_key', newTavilyKey); setTavilyApiKey(newTavilyKey); setTavilyKeyInput(''); }
-      if (newGoogleKey) { setGoogleApiKey(newGoogleKey); setGoogleKeyInput(''); }
-      if (newAnthropicKey) { setAnthropicApiKey(newAnthropicKey); setAnthropicKeyInput(''); }
-
-      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined);
-      if (!result?.success) alert('Error saving settings to database.');
-    } catch (error) {
-      console.error('Error saving API keys:', error);
-      alert('Error saving settings. Please try again.');
-    }
+  const handleShutDown = async () => {
+    setShutdownPhase('shutting-down');
+    sessionStorage.removeItem('allerac_booted');
+    authActions.logout().catch(() => {});
+    setTimeout(() => {
+      setShutdownPhase('safe-to-turn-off');
+      setTimeout(() => router.push('/login'), 2500);
+    }, 2500);
   };
 
   const handleDesktopClick = () => {
     setSelected(null);
-    setStartMenuOpen(false);
   };
 
   const handleIconClick = (e: React.MouseEvent, domain: typeof DOMAINS_ALL[0]) => {
     e.stopPropagation();
-    setStartMenuOpen(false);
     const count = (clickCount[domain.id] || 0) + 1;
     setClickCount(c => ({ ...c, [domain.id]: count }));
     setSelected(domain.id);
@@ -203,24 +126,28 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     }
   };
 
-  const handleShutDown = async () => {
-    setStartMenuOpen(false);
-    setShutdownPhase('shutting-down');
+  // ── Shutdown screens ─────────────────────────────────────────────────────
+  if (shutdownPhase === 'shutting-down') {
+    return (
+      <div style={{ background: '#000c5a', height: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32, fontFamily: '"Press Start 2P", monospace' }}>
+        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+        <img src="/icon-nobg-purple.svg" alt="Allerac" style={{ width: 64, height: 64, opacity: 0.9 }} />
+        <div style={{ color: '#fff', fontSize: 13, textAlign: 'center', lineHeight: 2 }}>Allerac is shutting down...</div>
+        <div style={{ color: '#aaa', fontSize: 9, textAlign: 'center', lineHeight: 2 }}>Please wait while your session is ended.</div>
+      </div>
+    );
+  }
 
-    // Call logout in background
-    sessionStorage.removeItem('allerac_booted');
-    authActions.logout().catch(() => {});
-
-    // After 2.5s show "safe to turn off"
-    setTimeout(() => {
-      setShutdownPhase('safe-to-turn-off');
-
-      // After another 2.5s redirect to login
-      setTimeout(() => {
-        router.push('/login');
-      }, 2500);
-    }, 2500);
-  };
+  if (shutdownPhase === 'safe-to-turn-off') {
+    return (
+      <div style={{ background: '#000', height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Press Start 2P", monospace' }}>
+        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+        <div style={{ background: '#000c5a', border: '3px solid #fff', padding: '32px 48px', textAlign: 'center', maxWidth: 420 }}>
+          <div style={{ color: '#fff', fontSize: 11, lineHeight: 2.2 }}>It is now safe to<br />turn off your computer.</div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Boot screen ──────────────────────────────────────────────────────────
   if (booting) {
@@ -250,58 +177,6 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     );
   }
 
-  // ── Shutdown: "Windows is shutting down…" ────────────────────────────────
-  if (shutdownPhase === 'shutting-down') {
-    return (
-      <div style={{
-        background: '#000c5a',
-        height: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '32px',
-        fontFamily: '"Press Start 2P", monospace',
-      }}>
-        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
-        <img src="/icon-nobg-purple.svg" alt="Allerac" style={{ width: 64, height: 64, opacity: 0.9 }} />
-        <div style={{ color: '#fff', fontSize: '13px', textAlign: 'center', lineHeight: 2 }}>
-          Allerac is shutting down...
-        </div>
-        <div style={{ color: '#aaa', fontSize: '9px', textAlign: 'center', lineHeight: 2 }}>
-          Please wait while your session is ended.
-        </div>
-      </div>
-    );
-  }
-
-  // ── Shutdown: "It is now safe…" ──────────────────────────────────────────
-  if (shutdownPhase === 'safe-to-turn-off') {
-    return (
-      <div style={{
-        background: '#000',
-        height: '100dvh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: '"Press Start 2P", monospace',
-      }}>
-        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
-        <div style={{
-          background: '#000c5a',
-          border: '3px solid #fff',
-          padding: '32px 48px',
-          textAlign: 'center',
-          maxWidth: '420px',
-        }}>
-          <div style={{ color: '#fff', fontSize: '11px', lineHeight: 2.2 }}>
-            It is now safe to<br />turn off your computer.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ── Desktop ──────────────────────────────────────────────────────────────
   return (
     <>
@@ -319,7 +194,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           position: 'relative',
         }}
       >
-        {/* Desktop icon area — 1 col on small screens, 2 cols when tall enough */}
+        {/* Desktop icon area */}
         <div style={{
           flex: 1,
           display: 'grid',
@@ -334,209 +209,25 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           ))}
         </div>
 
-        {/* Start menu (above taskbar) */}
-        {startMenuOpen && (
-          <div
-            ref={startMenuRef}
-            onClick={e => e.stopPropagation()}
-            style={{
-              position: 'absolute',
-              bottom: '36px',
-              left: '0',
-              width: '220px',
-              background: '#c0c0c0',
-              border: '2px solid',
-              borderColor: '#ffffff #808080 #808080 #ffffff',
-              boxShadow: '2px 2px 0 #000',
-              display: 'flex',
-              zIndex: 100,
-            }}
-          >
-            {/* Left decorative strip */}
-            <div style={{
-              width: '28px',
-              background: '#000080',
-              display: 'flex',
-              alignItems: 'flex-end',
-              justifyContent: 'center',
-              paddingBottom: '8px',
-            }}>
-              <span style={{
-                fontFamily: '"Press Start 2P", monospace',
-                fontSize: '7px',
-                color: '#c0c0c0',
-                writingMode: 'vertical-rl',
-                transform: 'rotate(180deg)',
-                letterSpacing: '2px',
-              }}>
-                Allerac
-              </span>
-            </div>
-
-            {/* Menu items */}
-            <div style={{ flex: 1, padding: '4px 0' }}>
-              <StartMenuItem icon="💬" label="Chat" onClick={() => { setStartMenuOpen(false); router.push('/chat'); }} />
-              <StartMenuItem icon="📁" label="Workspace" onClick={() => { setStartMenuOpen(false); router.push('/workspace'); }} />
-              <StartMenuItem icon="📟" label="Monitor" onClick={() => { setStartMenuOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
-              <StartMenuItem icon="⚙️" label="Configuration" onClick={() => { setStartMenuOpen(false); loadSettings(); setIsConfigOpen(true); }} />
-              <StartMenuItem icon="🌐" label="Domains" onClick={() => { setStartMenuOpen(false); setIsDomainSkillsOpen(true); }} />
-              <StartMenuItem icon="👥" label="Admin" onClick={() => { setStartMenuOpen(false); router.push('/admin'); }} />
-              <div style={{ height: '1px', background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
-              <StartMenuItem icon="🔌" label="Shut Down..." onClick={handleShutDown} />
-            </div>
-          </div>
+        {(
+          <AlleracTaskbar
+            domainKey="hub"
+            domainName="Hub"
+            domainIcon="🖥️"
+            userId={userId}
+            userName={userName}
+            userEmail={userEmail}
+            isAdmin={true}
+            allowedDomains={allowedDomains}
+            onLogout={handleShutDown}
+          />
         )}
-
-        {/* Taskbar */}
-        <div style={{
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#c0c0c0',
-          borderTop: '2px solid #ffffff',
-          padding: '2px 8px 2px 2px',
-          height: '36px',
-          gap: '8px',
-          position: 'relative',
-          zIndex: 99,
-        }}>
-          {/* Start button */}
-          <button
-            id="hub-start-button"
-            onClick={e => { e.stopPropagation(); setStartMenuOpen(v => !v); }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: startMenuOpen ? '#808080' : '#c0c0c0',
-              border: '2px solid',
-              borderColor: startMenuOpen
-                ? '#808080 #ffffff #ffffff #808080'
-                : '#ffffff #808080 #808080 #ffffff',
-              padding: '2px 10px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              height: '28px',
-              fontFamily: '"Press Start 2P", monospace',
-              flexShrink: 0,
-            }}
-          >
-            <img src="/icon-nobg-purple.svg" alt="Allerac" style={{ width: 18, height: 18 }} />
-            <span style={{ fontSize: '8px', color: '#000' }}>Start</span>
-          </button>
-
-          {/* Divider */}
-          <div style={{ width: '1px', height: '24px', background: '#808080', borderRight: '1px solid #fff', flexShrink: 0 }} />
-
-          <div style={{ flex: 1 }} />
-
-          {/* Username */}
-          <span style={{
-            fontSize: '8px',
-            fontFamily: '"Press Start 2P", monospace',
-            color: '#000080',
-          }}>
-            {userName}
-          </span>
-
-          <div style={{ width: '1px', height: '24px', background: '#808080', borderRight: '1px solid #fff', flexShrink: 0 }} />
-
-          {/* Clock */}
-          <span style={{
-            fontSize: '8px',
-            fontFamily: '"Press Start 2P", monospace',
-            color: '#000',
-            flexShrink: 0,
-          }}>
-            {time}
-          </span>
-        </div>
       </div>
 
-      {/* Onboarding Tour */}
       {showTour && (
-        <HubTour
-          userId={userId}
-          onDone={() => {
-            setShowTour(false);
-          }}
-        />
-      )}
-
-      {/* Domain Skills Modal */}
-      <DomainSkillsModal
-        isOpen={isDomainSkillsOpen}
-        onClose={() => setIsDomainSkillsOpen(false)}
-        userId={userId}
-      />
-
-      {/* Configuration Modal */}
-      <SystemDashboard
-        isOpen={isConfigOpen}
-        onClose={() => setIsConfigOpen(false)}
-        isDarkMode={false}
-        userId={userId}
-        initialTab="preferences"
-        githubToken={githubToken}
-        tavilyApiKey={tavilyApiKey}
-        googleApiKey={googleApiKey}
-        anthropicApiKey={anthropicApiKey}
-        tokenInput={tokenInput}
-        setTokenInput={setTokenInput}
-        tavilyKeyInput={tavilyKeyInput}
-        setTavilyKeyInput={setTavilyKeyInput}
-        googleKeyInput={googleKeyInput}
-        setGoogleKeyInput={setGoogleKeyInput}
-        anthropicKeyInput={anthropicKeyInput}
-        setAnthropicKeyInput={setAnthropicKeyInput}
-        locationInput={locationInput}
-        setLocationInput={setLocationInput}
-        onSaveToken={handleSaveToken}
-        MODELS={MODELS}
-        selectedModel={selectedModel}
-        setSelectedModel={setSelectedModel}
-        userName={userName}
-        userEmail={userEmail}
-        onOpenTelegramSettings={() => {
-          setIsConfigOpen(false);
-          setIsTelegramBotSettingsOpen(true);
-        }}
-      />
-
-      {isTelegramBotSettingsOpen && (
-        <TelegramBotSettings
-          userId={userId}
-          onClose={() => setIsTelegramBotSettingsOpen(false)}
-        />
+        <HubTour userId={userId} onDone={() => setShowTour(false)} />
       )}
     </>
-  );
-}
-
-function StartMenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '6px 12px',
-        cursor: 'pointer',
-        background: hovered ? '#000080' : 'transparent',
-        color: hovered ? '#fff' : '#000',
-        fontSize: '12px',
-        fontFamily: 'Arial, sans-serif',
-      }}
-    >
-      <span style={{ fontSize: '16px' }}>{icon}</span>
-      <span>{label}</span>
-    </div>
   );
 }
 

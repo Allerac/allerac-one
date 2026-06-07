@@ -1,5 +1,6 @@
 'use client';
 
+import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -25,7 +26,7 @@ export default function WorkspaceProjectView({ path, userId }: Props) {
   const rootPath = `/workspace/projects/${userId}/${path.join('/')}`;
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const { isDark: isDarkMode, toggleDark } = useTheme();
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isResizing, setIsResizing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -56,15 +57,6 @@ export default function WorkspaceProjectView({ path, userId }: Props) {
 
   const router = useRouter();
 
-  useEffect(() => {
-    const saved = localStorage.getItem('chatTheme');
-    if (saved) { setIsDarkMode(saved === 'dark'); return; }
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    setIsDarkMode(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
 
   useEffect(() => {
     setSidebarOpen(window.innerWidth < 1024);

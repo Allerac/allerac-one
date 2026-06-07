@@ -33,6 +33,8 @@ interface SystemDashboardProps {
   setAnthropicKeyInput: (v: string) => void;
   locationInput: string;
   setLocationInput: (v: string) => void;
+  timezoneInput: string;
+  setTimezoneInput: (v: string) => void;
   onSaveToken: () => Promise<void>;
   onOpenTelegramSettings?: () => void;
   userName?: string;
@@ -68,6 +70,8 @@ export default function SystemDashboardModal({
   setAnthropicKeyInput,
   locationInput,
   setLocationInput,
+  timezoneInput,
+  setTimezoneInput,
   onSaveToken,
   onOpenTelegramSettings,
   MODELS = [],
@@ -359,6 +363,8 @@ export default function SystemDashboardModal({
                 setSelectedModel={setSelectedModel}
                 locationInput={locationInput}
                 setLocationInput={setLocationInput}
+                timezoneInput={timezoneInput}
+                setTimezoneInput={setTimezoneInput}
                 onOpenTelegramSettings={onOpenTelegramSettings}
                 onSave={handleSaveApiKeys}
                 isSavingKeys={isSavingKeys}

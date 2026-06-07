@@ -60,6 +60,33 @@ body {
   100%       { transform: translateX(260%) skewX(-20deg); opacity: 0; }
 }
 
+/* ── Clippy animations ─────────────────────────────────────────── */
+
+/* Periodic idle bounce */
+@keyframes clippy-idle {
+  0%, 80%, 100% { transform: translateY(0);   }
+  85%           { transform: translateY(-6px); }
+  90%           { transform: translateY(0);    }
+  93%           { transform: translateY(-3px); }
+  96%           { transform: translateY(0);    }
+}
+
+/* Eye blink */
+@keyframes clippy-blink {
+  0%, 87%, 100% { transform: scaleY(1);    }
+  91%           { transform: scaleY(0.05); }
+}
+
+/* Window slide up on open */
+@keyframes clippy-window-in {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.clippy-idle   { animation: clippy-idle  9s ease-in-out infinite; }
+.clippy-blink  { animation: clippy-blink 5s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.clippy-window { animation: clippy-window-in 0.15s ease-out forwards; }
+
 /* Safe-area padding utilities */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);

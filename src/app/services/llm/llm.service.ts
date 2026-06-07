@@ -176,13 +176,14 @@ export class LLMService {
   }
 
   private async *githubStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    const { userId: _u, conversationId: _c, ...apiRequest } = request;
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.githubToken}`,
       },
-      body: JSON.stringify({ ...request, stream: true }),
+      body: JSON.stringify({ ...apiRequest, stream: true }),
     });
 
     if (!response.ok) {
@@ -313,13 +314,14 @@ export class LLMService {
     let errorMessage: string | undefined;
 
     try {
+      const { userId: _u, conversationId: _c, ...apiRequest } = request;
       response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.githubToken}`,
         },
-        body: JSON.stringify(request),
+        body: JSON.stringify(apiRequest),
       });
 
       statusCode = response.status;
@@ -408,13 +410,14 @@ export class LLMService {
     let errorMessage: string | undefined;
 
     try {
+      const { userId: _u, conversationId: _c, ...apiRequest } = request;
       response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.geminiToken}`,
         },
-        body: JSON.stringify(request),
+        body: JSON.stringify(apiRequest),
       });
 
       statusCode = response.status;
@@ -473,13 +476,14 @@ export class LLMService {
   }
 
   private async *geminiStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    const { userId: _u, conversationId: _c, ...apiRequest } = request;
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.geminiToken}`,
       },
-      body: JSON.stringify({ ...request, stream: true }),
+      body: JSON.stringify({ ...apiRequest, stream: true }),
     });
 
     if (!response.ok) {

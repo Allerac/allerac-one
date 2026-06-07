@@ -537,15 +537,14 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                             ))}
                           </div>
                         )}
-                      </div>
 
-                      {/* Actions */}
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => openEdit(job)}
-                          className={`text-xs px-3 py-1 rounded transition-colors ${
-                            isDarkMode ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                          }`}
+                        {/* Actions — below content to avoid horizontal overflow */}
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => openEdit(job)}
+                            className={`text-xs px-3 py-1 rounded transition-colors ${
+                              isDarkMode ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            }`}
                         >
                           {t('actions.edit')}
                         </button>
@@ -561,6 +560,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                       </div>
                     </div>
                   </div>
+                </div>
                 ))
               )}
             </div>

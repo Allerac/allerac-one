@@ -1,5 +1,6 @@
 'use client';
 
+import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MODELS } from '@/app/services/llm/models';
 import type { Message, Conversation } from '@/app/types';
@@ -27,7 +28,7 @@ interface Props {
 }
 
 export default function NotesClient({ userId, userName, userEmail, isAdmin, defaultSkillName }: Props) {
-  const [isDarkMode, setIsDarkMode]           = useState(true);
+  const { isDark: isDarkMode, toggleDark } = useTheme();
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isSidebarOpen, setSidebarOpen]       = useState(false);
   const [lastToolCall, setLastToolCall]       = useState<ToolCallEvent | null>(null);
@@ -214,7 +215,7 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
 
   return (
     <DomainProvider value={{ isDark: d, lastToolCall, setLastToolCall, postContext, setPostContext }}>
-      <div className={`h-dvh flex flex-col ${d ? 'bg-gray-900' : 'bg-white'}`}>
+      <div className={`h-full flex flex-col ${d ? 'bg-gray-900' : 'bg-white'}`}>
 
         {isSidebarOpen && (
           <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -252,11 +253,11 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
 
           <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
-            <ChatHeader
+            {/* <ChatHeader
               isSidebarOpen={isSidebarOpen}
               setIsSidebarOpen={setSidebarOpen}
               isDarkMode={d}
-              toggleTheme={() => setIsDarkMode(v => !v)}
+              toggleTheme={() => toggleDark}
               clearChat={clearChat}
               domainName="Notes"
               activeSkill={activeSkill}
@@ -268,7 +269,7 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
               userName={userName ?? undefined}
               userEmail={userEmail}
               onLogout={handleLogout}
-            />
+            /> */}
 
             {/* Mobile tab bar */}
             <div className={`lg:hidden flex-shrink-0 flex border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>

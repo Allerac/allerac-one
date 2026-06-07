@@ -16,7 +16,23 @@ export async function register() {
   }
 }
 
-function startSchedulerLogger() {
+async function startSchedulerLogger() {
+  const g = globalThis as any;
+  if (g.__allerac_scheduler_logger_started) return;
+  g.__allerac_scheduler_logger_started = true;
+
+  try {
+    // Advisory lock (session-level): só 1 worker Next.js faz polling.
+    // Chave fixa = hash de 'allerac_scheduler_logger'. Não-bloqueante — retorna false se outro worker já tem.
+    const pool = (await import('./app/clients/db')).default;
+    const { rows: [{ acquired }] } = await pool.query(
+      'SELECT pg_try_advisory_lock(1952936801) AS acquired'
+    );
+    if (!acquired) return;
+  } catch {
+    return;
+  }
+
   let lastSeenAt = new Date();
 
   const poll = async () => {
@@ -47,7 +63,7 @@ function startSchedulerLogger() {
     } catch { /* silent — DB might not be ready yet */ }
   };
 
-  // Start after 10s to let DB connect, then poll every 15s
+  // Start após 10s para DB conectar, depois poll a cada 15s
   setTimeout(() => {
     poll();
     setInterval(poll, 15_000);

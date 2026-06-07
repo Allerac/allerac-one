@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from '@/app/context/ThemeContext';
 import { useTranslations, useLocale } from 'next-intl';
 import { Message, Conversation, MemorySaveResult, Model } from '../types';
 import { MODELS } from '../services/llm/models';
@@ -73,6 +74,7 @@ export default function AdminChat({
   systemDashboardInitialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social';
 }) {
   const t = useTranslations('home');
+  const tChat = useTranslations('chat');
   const tStudio = useTranslations('instagramStudio');
   const locale = useLocale();
   const router = useRouter();
@@ -168,7 +170,7 @@ export default function AdminChat({
 
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const { isDark: isDarkMode, toggleDark } = useTheme();
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState('Dev User'); // Default user name
   const [userEmail, setUserEmail] = useState('dev@local.host'); // Default user email
@@ -188,6 +190,7 @@ export default function AdminChat({
   const [googleKeyInput, setGoogleKeyInput] = useState('');
   const [anthropicKeyInput, setAnthropicKeyInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
+  const [timezoneInput, setTimezoneInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [systemMessage, setSystemMessage] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -300,9 +303,7 @@ export default function AdminChat({
 
   useEffect(() => {
     checkAuth();
-    const savedTheme = localStorage.getItem('chatTheme');
-    if (savedTheme) setIsDarkMode(savedTheme === 'dark');
-    const savedModel = localStorage.getItem('selected_model');
+const savedModel = localStorage.getItem('selected_model');
     if (savedModel) setSelectedModel(savedModel);
   }, []);
 
@@ -479,6 +480,7 @@ export default function AdminChat({
         if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
         if (settings.anthropic_api_key) setAnthropicApiKey(settings.anthropic_api_key);
         if (settings.location) setLocationInput(settings.location);
+        if (settings.timezone) setTimezoneInput(settings.timezone);
         if (!settings.onboarding_completed) setShowOnboarding(true);
       } else {
         setShowOnboarding(true);
@@ -496,11 +498,7 @@ export default function AdminChat({
     }
   };
 
-  const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem('chatTheme', newTheme ? 'dark' : 'light');
-  };
+  const toggleTheme = toggleDark;
 
   const loadSystemMessage = async () => {
     if (!userId) return;
@@ -648,8 +646,7 @@ export default function AdminChat({
     const newGoogleKey = googleKeyInput.trim();
     const newAnthropicKey = anthropicKeyInput.trim();
     const newLocation = locationInput.trim();
-
-    if (!newGithubToken && !newTavilyKey && !newGoogleKey && !newAnthropicKey && !newLocation) return;
+    const newTimezone = timezoneInput.trim();
 
     try {
       // Save to localStorage
@@ -673,7 +670,7 @@ export default function AdminChat({
       }
 
       // Save to DB
-      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined);
+      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined, newTimezone || undefined);
 
       if (!result?.success) {
         alert('Error saving keys to database. Please check server configuration.');
@@ -869,7 +866,7 @@ export default function AdminChat({
   }
 
   return (
-    <div className={`h-dvh flex flex-col ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+    <div className={`h-full flex flex-col ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
 
       {/* Mobile Overlay */}
       {isSidebarOpen && (
@@ -897,6 +894,12 @@ export default function AdminChat({
             showHealth={showHealth}
             showInstagramDM={showInstagramDM}
             instagramConnected={showInstagramPost}
+            isAdmin={isAdmin}
+            onNewConversation={clearChat}
+            userName={userName}
+            userEmail={userEmail}
+            onLogout={handleLogout}
+            onToggleTheme={toggleTheme}
           />
         </div>
 
@@ -916,13 +919,19 @@ export default function AdminChat({
             showHealth={showHealth}
             showInstagramDM={showInstagramDM}
             instagramConnected={showInstagramPost}
+            isAdmin={isAdmin}
+            onNewConversation={clearChat}
+            userName={userName}
+            userEmail={userEmail}
+            onLogout={handleLogout}
+            onToggleTheme={toggleTheme}
           />
         </div>
 
         {/* Content wrapper — owns header + all columns */}
         <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
-          {/* Chat Header — spans all columns */}
+          {/* Chat Header — title only */}
           <ChatHeader
             isSidebarOpen={isSidebarOpen}
             setIsSidebarOpen={setIsSidebarOpen}
@@ -941,6 +950,7 @@ export default function AdminChat({
             userName={userName}
             userEmail={userEmail}
             onLogout={handleLogout}
+            titleOnly
           />
 
           {/* Mobile tab bar — social page */}
@@ -1086,6 +1096,11 @@ export default function AdminChat({
                   isAgentMode={isAgentMode}
                   onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
                 />
+                {currentConversationId && (
+                  <p className={`text-center px-4 pb-2 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} style={{ fontSize: '10px' }}>
+                    {tChat('disclaimer')}
+                  </p>
+                )}
               </div>
             </div>
           ) : (
@@ -1106,7 +1121,7 @@ export default function AdminChat({
                 />
               </div>
               <div data-name="input-area-wrapper" className={`flex-shrink-0 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-                <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-3" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
+                <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-3 pb-2">
                   <ChatInput
                     inputMessage={inputMessage}
                     setInputMessage={setInputMessage}
@@ -1136,6 +1151,14 @@ export default function AdminChat({
                     isAgentMode={isAgentMode}
                     onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
                   />
+                  {currentConversationId && (
+                    <p
+                      className={`text-center px-4 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}
+                      style={{ fontSize: '10px', paddingTop: '4px', paddingBottom: 'max(env(safe-area-inset-bottom), 4px)' }}
+                    >
+                      {tChat('disclaimer')}
+                    </p>
+                  )}
                 </div>
               </div>
             </>
@@ -1315,6 +1338,8 @@ export default function AdminChat({
         setAnthropicKeyInput={setAnthropicKeyInput}
         locationInput={locationInput}
         setLocationInput={setLocationInput}
+        timezoneInput={timezoneInput}
+        setTimezoneInput={setTimezoneInput}
         onSaveToken={handleSaveToken}
         onOpenTelegramSettings={() => {
           setIsSystemDashboardOpen(false);

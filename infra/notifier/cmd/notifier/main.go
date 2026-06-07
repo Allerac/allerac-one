@@ -36,8 +36,15 @@ func main() {
 	}
 	defer pub.Close()
 
-	// LLM runner (Ollama-compatible)
-	run := runner.New(cfg.OllamaBaseURL, cfg.LLMModel)
+	// LLM runner — prefer Allerac pipeline (tools + skills) over bare Ollama
+	var run scheduler.Runner
+	if cfg.AlleracAppURL != "" && cfg.ExecutorSecret != "" {
+		run = runner.NewAllerac(cfg.AlleracAppURL, cfg.ExecutorSecret)
+		log.Printf("[notifier] Using Allerac runner: %s", cfg.AlleracAppURL)
+	} else {
+		run = runner.New(cfg.OllamaBaseURL, cfg.LLMModel)
+		log.Printf("[notifier] Using Ollama runner: %s model=%s", cfg.OllamaBaseURL, cfg.LLMModel)
+	}
 
 	// Scheduler: loads jobs from DB and fires them on cron
 	sched := scheduler.New(pool, run, pub)
@@ -70,7 +77,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("[notifier] Running. Ollama=%s Model=%s", cfg.OllamaBaseURL, cfg.LLMModel)
+	log.Printf("[notifier] Running.")
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

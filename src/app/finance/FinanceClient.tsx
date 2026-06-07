@@ -1,5 +1,6 @@
 'use client';
 
+import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MODELS } from '@/app/services/llm/models';
 import type { Message, Conversation } from '@/app/types';
@@ -26,7 +27,7 @@ interface Props {
 
 export default function FinanceClient({ userId, userName, userEmail, isAdmin, defaultSkillName }: Props) {
   // — theme & sidebar —
-  const [isDarkMode, setIsDarkMode]               = useState(true);
+  const { isDark: isDarkMode, toggleDark } = useTheme();
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isSidebarOpen, setSidebarOpen]           = useState(false);
 
@@ -164,7 +165,7 @@ export default function FinanceClient({ userId, userName, userEmail, isAdmin, de
 
   return (
     <DomainProvider value={{ isDark: d, lastToolCall, setLastToolCall, postContext, setPostContext }}>
-      <div className={`h-dvh flex flex-col ${d ? 'bg-gray-900' : 'bg-white'}`}>
+      <div className={`h-full flex flex-col ${d ? 'bg-gray-900' : 'bg-white'}`}>
         {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
         <div className="flex flex-1 overflow-hidden">
@@ -180,12 +181,12 @@ export default function FinanceClient({ userId, userName, userEmail, isAdmin, de
           </div>
 
           <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
-            <ChatHeader isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setSidebarOpen}
-              isDarkMode={d} toggleTheme={() => setIsDarkMode(v => !v)} clearChat={clearChat}
+            {/* <ChatHeader isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setSidebarOpen}
+              isDarkMode={d} toggleTheme={() => toggleDark} clearChat={clearChat}
               domainName="Finance" activeSkill={activeSkill}
               currentConversationId={convId} currentConversationTitle={currentTitle}
               currentConversationHasMemory={false} handleGenerateSummary={handleSaveToMemory}
-              hideHomeButton={!isAdmin} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} />
+              hideHomeButton={!isAdmin} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} /> */}
 
             {/* Mobile tab bar */}
             <div className={`lg:hidden flex-shrink-0 flex border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>

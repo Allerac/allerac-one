@@ -12,7 +12,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, anthropic_api_key, location, onboarding_completed, selected_model, language FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, anthropic_api_key, location, timezone, onboarding_completed, selected_model, language FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -31,6 +31,7 @@ export class UserSettingsService {
         google_api_key: row.google_api_key ? safeDecrypt(row.google_api_key) : null,
         anthropic_api_key: row.anthropic_api_key ? safeDecrypt(row.anthropic_api_key) : null,
         location: row.location || null,
+        timezone: row.timezone || null,
         onboarding_completed: row.onboarding_completed ?? false,
         selected_model: row.selected_model || null,
         language: row.language || 'en',
@@ -45,7 +46,7 @@ export class UserSettingsService {
    * Save or update user API keys
    * Encrypts sensitive fields before storing
    */
-  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string) {
+  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string) {
     try {
       // Encrypt tokens before storing
       const encryptedGithubToken = githubToken ? encrypt(githubToken) : undefined;
@@ -88,6 +89,10 @@ export class UserSettingsService {
         if (location !== undefined) {
           updateFields.push(`location = $${paramCount++}`);
           values.push(location || null);
+        }
+        if (timezone !== undefined) {
+          updateFields.push(`timezone = $${paramCount++}`);
+          values.push(timezone || null);
         }
 
         if (updateFields.length > 0) {

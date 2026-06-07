@@ -90,6 +90,7 @@
     "language": "Idioma"
   },
   "chat": {
+    "disclaimer": "Allerac pot cometre errors. Verifica la informació important.",
     "typeMessage": "Escriu el teu missatge...",
     "attachFile": "Adjuntar fitxer",
     "addAttachment": "Afegir adjunt",
@@ -488,7 +489,32 @@
       "deleteFailed": "Error en eliminar",
       "createFailed": "Error en crear la tasca",
       "updateFailed": "Error en actualitzar la tasca"
-    }
+    },
+    "customFields": {
+      "minute": "Minut",
+      "hour": "Hora",
+      "dayOfMonth": "Dia del mes",
+      "month": "Mes",
+      "dayOfWeek": "Dia de la setmana",
+      "any": "Qualsevol (*)"
+    },
+    "months": [
+      "Gen",
+      "Feb",
+      "Mar",
+      "Abr",
+      "Mai",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Set",
+      "Oct",
+      "Nov",
+      "Des"
+    ],
+    "execHistory": "Darreres execucions",
+    "timezone": "Zona horària:",
+    "editorHint": "Selecciona un job o crea'n un"
   },
   "memoriesModal": {
     "title": "Memòries de converses",
@@ -580,5 +606,19 @@
     "saving": "Desant...",
     "saveToMemory": "Desar en memòria",
     "cancel": "Cancel·lar"
+  },
+  "grampeador": {
+    "title": "Allerac Assistant",
+    "greeting": "Hola{name}!",
+    "greetingNoName": "Hola!",
+    "helpPrompt": "Com puc ajudar-te amb les teves tasques?",
+    "placeholder": "Escriu un missatge...",
+    "send": "Enviar (Intro)",
+    "attach": "Adjuntar fitxer",
+    "image": "Imatge",
+    "fallback0": "Necessites ajuda amb les teves tasques?",
+    "fallback1": "Sembla que estàs treballant molt!",
+    "fallback2": "Puc crear una tasca per tu!",
+    "fallback3": "Tot bé per aquí... vigilant els teus horaris."
   }
 }

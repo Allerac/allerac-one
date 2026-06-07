@@ -44,8 +44,8 @@ func New(baseURL, model string) *Runner {
 }
 
 // Run sends a prompt to the LLM and returns the response text.
-// userID is passed for context but not used in the HTTP request (future: per-user model selection).
-func (r *Runner) Run(ctx context.Context, _ string, prompt string) (string, error) {
+// userID and jobID are passed for context but not used in the Ollama request.
+func (r *Runner) Run(ctx context.Context, _, _ string, prompt string) (string, error) {
 	body, err := json.Marshal(chatRequest{
 		Model:    r.model,
 		Messages: []ChatMsg{{Role: "user", Content: prompt}},

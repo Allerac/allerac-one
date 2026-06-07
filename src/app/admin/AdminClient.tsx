@@ -1,5 +1,6 @@
 'use client';
 
+import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useEffect, useTransition } from 'react';
 import * as adminActions from '@/app/actions/admin';
 import type { AdminUser, AdminDomain, InstagramAccountEntry } from '@/app/actions/admin';
@@ -18,7 +19,7 @@ export default function AdminClient({
   initialUsers, initialDomains, initialAllDomains,
   initialSystemSettings, initialInstagramAccounts, initialConnectedAdmins,
 }: AdminClientProps) {
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const { isDark: isDarkMode, toggleDark } = useTheme();
   const [users, setUsers] = useState<AdminUser[]>(initialUsers);
   const [domains] = useState<AdminDomain[]>(initialDomains);
   const [allDomains, setAllDomains] = useState<AdminDomain[]>(initialAllDomains);
@@ -68,16 +69,7 @@ export default function AdminClient({
   const [resetPending, setResetPending] = useState(false);
   const [resetMsg, setResetMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('chatTheme');
-    setIsDarkMode(saved !== 'light');
-  }, []);
-
-  const toggleTheme = () => {
-    const next = !isDarkMode;
-    setIsDarkMode(next);
-    localStorage.setItem('chatTheme', next ? 'dark' : 'light');
-  };
+  const toggleTheme = toggleDark;
 
   const d = isDarkMode;
   const bg = d ? 'bg-gray-900' : 'bg-gray-50';

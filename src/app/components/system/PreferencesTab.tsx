@@ -13,6 +13,8 @@ interface PreferencesTabProps {
   setSelectedModel: (modelId: string) => void;
   locationInput: string;
   setLocationInput: (v: string) => void;
+  timezoneInput: string;
+  setTimezoneInput: (v: string) => void;
   onOpenTelegramSettings?: () => void;
   onSave: () => Promise<void>;
   isSavingKeys: boolean;
@@ -28,6 +30,8 @@ export default function PreferencesTab({
   setSelectedModel,
   locationInput,
   setLocationInput,
+  timezoneInput,
+  setTimezoneInput,
   onOpenTelegramSettings,
   onSave,
   isSavingKeys,
@@ -134,6 +138,33 @@ export default function PreferencesTab({
             Used to answer questions like &quot;what&apos;s the weather here?&quot;. Click the pin to detect automatically.
           </p>
         )}
+      </div>
+
+      <div>
+        <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          Timezone <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(used by scheduled jobs)</span>
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={timezoneInput}
+            onChange={(e) => setTimezoneInput(e.target.value)}
+            placeholder="e.g. Europe/Lisbon"
+            className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+          />
+          <button
+            onClick={() => setTimezoneInput(Intl.DateTimeFormat().resolvedOptions().timeZone)}
+            title="Detect my timezone"
+            className={`px-3 py-2 rounded-md border transition-colors ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600' : 'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+        </div>
+        <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          IANA timezone name. Click the clock to auto-detect from your browser.
+        </p>
       </div>
 
       <div>

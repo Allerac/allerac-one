@@ -381,6 +381,8 @@ services:
       - NOTIFIER_LLM_MODEL=${NOTIFIER_LLM_MODEL:-qwen2.5:3b}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:-}
+      - ALLERAC_APP_URL=${ALLERAC_APP_URL:-http://app:8080}
+      - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

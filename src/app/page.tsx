@@ -1,21 +1,22 @@
 import HubClient from './hub/HubClient';
 import { requireAdmin } from '@/app/lib/domain-access';
+import { getUserAccessibleDomains } from '@/app/actions/domains';
 import pool from '@/app/clients/db';
 
 export default async function RootPage() {
   const user = await requireAdmin();
 
-  // Fetch hub tour completion status
   let completedHubTour = false;
+  let allowedDomains: string[] = [];
   try {
-    const userRes = await pool.query(
-      'SELECT completed_onboarding_tour FROM users WHERE id = $1',
-      [user.id]
-    );
-    completedHubTour = userRes.rows[0]?.completed_onboarding_tour ?? false;
+    const [tourRes, domains] = await Promise.all([
+      pool.query('SELECT completed_onboarding_tour FROM users WHERE id = $1', [user.id]),
+      getUserAccessibleDomains(String(user.id), true),
+    ]);
+    completedHubTour = tourRes.rows[0]?.completed_onboarding_tour ?? false;
+    allowedDomains = domains;
   } catch (error) {
-    console.error('[RootPage] Error fetching hub tour status:', error);
-    completedHubTour = false;
+    console.error('[RootPage] Error fetching data:', error);
   }
 
   return (
@@ -24,6 +25,7 @@ export default async function RootPage() {
       userEmail={user.email}
       userId={String(user.id)}
       completedHubTour={completedHubTour}
+      allowedDomains={allowedDomains}
     />
   );
 }

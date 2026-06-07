@@ -57,7 +57,7 @@ type countingRunner struct {
 	err    error
 }
 
-func (m *countingRunner) Run(_ context.Context, _, _ string) (string, error) {
+func (m *countingRunner) Run(_ context.Context, _, _, _ string) (string, error) {
 	m.calls.Add(1)
 	return m.result, m.err
 }
@@ -69,7 +69,7 @@ type failThenSucceedRunner struct {
 	result    string
 }
 
-func (m *failThenSucceedRunner) Run(_ context.Context, _, _ string) (string, error) {
+func (m *failThenSucceedRunner) Run(_ context.Context, _, _, _ string) (string, error) {
 	n := int(m.calls.Add(1))
 	if n <= m.failUntil {
 		return "", fmt.Errorf("transient error (attempt %d)", n)

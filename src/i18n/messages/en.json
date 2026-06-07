@@ -90,6 +90,7 @@
     "language": "Language"
   },
   "chat": {
+    "disclaimer": "Allerac can make mistakes. Check important info.",
     "typeMessage": "Type your message...",
     "attachFile": "Attach file",
     "addAttachment": "Add attachment",
@@ -333,7 +334,32 @@
       "deleteFailed": "Failed to delete",
       "createFailed": "Failed to create job",
       "updateFailed": "Failed to update job"
-    }
+    },
+    "customFields": {
+      "minute": "Minute",
+      "hour": "Hour",
+      "dayOfMonth": "Day of month",
+      "month": "Month",
+      "dayOfWeek": "Day of week",
+      "any": "Any (*)"
+    },
+    "months": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ],
+    "execHistory": "Last executions",
+    "timezone": "Timezone:",
+    "editorHint": "Select a job or create one"
   },
   "consciousness": {
     "title": "About me",
@@ -580,5 +606,19 @@
     "errCopyFailed": "Failed to copy to clipboard",
     "errImageRequired": "Please select an image",
     "errCaptionRequired": "Please add a caption"
+  },
+  "grampeador": {
+    "title": "Allerac Assistant",
+    "greeting": "Hello{name}!",
+    "greetingNoName": "Hello!",
+    "helpPrompt": "How can I help with your jobs?",
+    "placeholder": "Write a message...",
+    "send": "Send (Enter)",
+    "attach": "Attach file",
+    "image": "Image",
+    "fallback0": "Need help with your jobs?",
+    "fallback1": "Looks like you're working hard!",
+    "fallback2": "I can create a job for you!",
+    "fallback3": "All good here... watching your schedules."
   }
 }

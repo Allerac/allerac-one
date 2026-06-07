@@ -1,8 +1,19 @@
 'use client';
 
+import { useState, useRef, useEffect, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useLocale } from 'next-intl';
 import { Conversation } from '../../types';
 import SidebarContent from './SidebarContent';
 import { AlleracLogo } from '../ui/AlleracLogo';
+import { updateLanguage } from '@/app/actions/user';
+
+const LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+  { code: 'pt', label: 'Português' },
+  { code: 'ca', label: 'Català' },
+];
 
 interface SidebarDesktopProps {
   isSidebarCollapsed: boolean;
@@ -19,6 +30,12 @@ interface SidebarDesktopProps {
   showInstagramDM?: boolean;
   onOpenInstagramPost?: () => void;
   instagramConnected?: boolean;
+  isAdmin?: boolean;
+  onNewConversation?: () => void;
+  userName?: string;
+  userEmail?: string;
+  onLogout?: () => void;
+  onToggleTheme?: () => void;
 }
 
 export default function SidebarDesktop({
@@ -36,51 +53,199 @@ export default function SidebarDesktop({
   showInstagramDM,
   onOpenInstagramPost,
   instagramConnected,
+  isAdmin,
+  onNewConversation,
+  userName,
+  userEmail,
+  onLogout,
+  onToggleTheme,
 }: SidebarDesktopProps) {
   const d = isDarkMode;
+  const router = useRouter();
+  const locale = useLocale();
+  const [langPending, startLangTransition] = useTransition();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleLangChange = (code: string) => {
+    startLangTransition(async () => {
+      await updateLanguage(code);
+      window.location.reload();
+    });
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const initials = (userName || userEmail || '?').slice(0, 2).toUpperCase();
+  const actionBtn = `w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${d ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-500 hover:bg-gray-100'}`;
+
   return (
     <div className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r transition-all duration-300 ${
       isSidebarCollapsed ? 'w-20' : 'w-64'
     } ${d ? 'bg-gray-900 text-white border-gray-800' : 'bg-white text-gray-900 border-gray-200'}`}>
-      {/* Header — matches ChatHeader style */}
-      <div>
-        <div className={`pb-2 flex items-center gap-3 min-h-[48px] ${isSidebarCollapsed ? 'justify-center' : 'px-3'}`} style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
-          <button
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className={`p-2 rounded-lg transition-colors flex-shrink-0 ${d ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}
-            title={isSidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-          >
-            {isSidebarCollapsed ? (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            ) : (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
-          </button>
-          {!isSidebarCollapsed && (
-            <AlleracLogo height={28} variant={d ? 'dark' : 'light'} />
+
+      {/* Logo / collapse toggle */}
+      <div className={`pb-2 flex items-center gap-3 min-h-[48px] flex-shrink-0 ${isSidebarCollapsed ? 'justify-center' : 'px-3'}`} style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
+        <button
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className={`p-2 rounded-lg transition-colors flex-shrink-0 ${d ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}
+          title={isSidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+        >
+          {isSidebarCollapsed ? (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          ) : (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           )}
-        </div>
+        </button>
+        {!isSidebarCollapsed && <AlleracLogo height={28} variant={d ? 'dark' : 'light'} />}
       </div>
 
-      <SidebarContent
-        conversations={conversations}
-        currentConversationId={currentConversationId}
-        loadConversation={loadConversation}
-        deleteConversation={deleteConversation}
-        pinConversation={pinConversation}
-        renameConversation={renameConversation}
-        isSidebarCollapsed={isSidebarCollapsed}
-        isDarkMode={isDarkMode}
-        showWorkspace={showWorkspace}
-        showHealth={showHealth}
-        showInstagramDM={showInstagramDM}
-        onOpenInstagramPost={onOpenInstagramPost}
-        instagramConnected={instagramConnected}
-      />
+      {/* Action buttons */}
+      <div className={`flex flex-col px-2 py-1.5 gap-0.5 border-b flex-shrink-0 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+        {onNewConversation && (
+          <button onClick={onNewConversation} className={`${actionBtn} ${isSidebarCollapsed ? 'justify-center' : ''}`} title="New conversation">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            {!isSidebarCollapsed && <span>New conversation</span>}
+          </button>
+        )}
+        <button onClick={() => window.dispatchEvent(new CustomEvent('openMyAlleracModal'))} className={`${actionBtn} ${isSidebarCollapsed ? 'justify-center' : ''}`} title="My Allerac">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+            <path d="M15.5 13a3.5 3.5 0 0 0 -3.5 3.5v1a3.5 3.5 0 0 0 7 0v-1.8" />
+            <path d="M8.5 13a3.5 3.5 0 0 1 3.5 3.5v1a3.5 3.5 0 0 1 -7 0v-1.8" />
+            <path d="M17.5 16a3.5 3.5 0 0 0 0 -7h-.5" />
+            <path d="M19 9.3v-2.8a3.5 3.5 0 0 0 -7 0" />
+            <path d="M6.5 16a3.5 3.5 0 0 1 0 -7h.5" />
+            <path d="M5 9.3v-2.8a3.5 3.5 0 0 1 7 0v10" />
+          </svg>
+          {!isSidebarCollapsed && <span>My Allerac</span>}
+        </button>
+        {isAdmin && (
+          <button onClick={() => router.push('/')} className={`${actionBtn} ${isSidebarCollapsed ? 'justify-center' : ''}`} title="Hub">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            {!isSidebarCollapsed && <span>Hub</span>}
+          </button>
+        )}
+      </div>
+
+      {/* Conversation list */}
+      <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+        <SidebarContent
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          loadConversation={loadConversation}
+          deleteConversation={deleteConversation}
+          pinConversation={pinConversation}
+          renameConversation={renameConversation}
+          isSidebarCollapsed={isSidebarCollapsed}
+          isDarkMode={isDarkMode}
+          showWorkspace={showWorkspace}
+          showHealth={showHealth}
+          showInstagramDM={showInstagramDM}
+          onOpenInstagramPost={onOpenInstagramPost}
+          instagramConnected={instagramConnected}
+        />
+      </div>
+
+      {/* Bottom: avatar / user menu */}
+      {(userName || userEmail) && (
+        <div className={`border-t px-2 py-2 flex-shrink-0 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+          <div className="relative" ref={userMenuRef}>
+            <button
+              onClick={() => setUserMenuOpen(o => !o)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${d ? 'hover:bg-gray-800' : 'hover:bg-gray-100'} ${isSidebarCollapsed ? 'justify-center' : ''}`}
+            >
+              <span className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                {initials}
+              </span>
+              {!isSidebarCollapsed && (
+                <span className={`flex-1 text-left text-sm truncate ${d ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {userName || userEmail}
+                </span>
+              )}
+            </button>
+
+            {userMenuOpen && (
+              <div className={`absolute bottom-full left-0 mb-1 w-56 rounded-xl shadow-2xl border z-50 overflow-hidden ${d ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                {/* User info */}
+                <div className={`px-4 py-3 border-b ${d ? 'border-gray-700' : 'border-gray-100'}`}>
+                  <p className={`text-sm font-semibold truncate ${d ? 'text-gray-100' : 'text-gray-900'}`}>{userName}</p>
+                  <p className={`text-xs truncate ${d ? 'text-gray-400' : 'text-gray-500'}`}>{userEmail}</p>
+                </div>
+
+                {/* Theme toggle */}
+                {onToggleTheme && (
+                  <button
+                    onClick={onToggleTheme}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-b ${d ? 'text-gray-300 hover:bg-gray-700 border-gray-700' : 'text-gray-700 hover:bg-gray-50 border-gray-100'}`}
+                  >
+                    {d ? (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                      </svg>
+                    )}
+                    {d ? 'Light mode' : 'Dark mode'}
+                  </button>
+                )}
+
+                {/* Language */}
+                <div className={`px-4 py-2.5 border-b ${d ? 'border-gray-700' : 'border-gray-100'}`}>
+                  <p className={`text-xs font-medium mb-1.5 ${d ? 'text-gray-400' : 'text-gray-500'}`}>Language</p>
+                  <div className="flex flex-wrap gap-1">
+                    {LANGUAGES.map(lang => (
+                      <button
+                        key={lang.code}
+                        onClick={() => handleLangChange(lang.code)}
+                        disabled={langPending}
+                        className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                          locale === lang.code
+                            ? 'bg-indigo-600 text-white'
+                            : d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {lang.code.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sign out */}
+                {onLogout && (
+                  <button
+                    onClick={() => { setUserMenuOpen(false); onLogout(); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-red-600/20 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Sign out
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

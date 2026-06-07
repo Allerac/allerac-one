@@ -1,6 +1,9 @@
 // AI Tool definitions for function calling
 import { NOTES_TOOL_DEFINITIONS } from './notes.tool.definitions';
 import { EMAIL_TOOL_DEFINITIONS } from './email.tool.definitions';
+import { JOBS_TOOL_DEFINITIONS } from './jobs.tool.definitions';
+
+export { JOBS_TOOL_DEFINITIONS };
 
 // Static registry of all available tools for admin UI
 export const TOOL_REGISTRY: Array<{ name: string; label: string; description: string; group: string }> = [
@@ -27,6 +30,11 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'list_emails',              label: 'List Emails',         description: 'List messages from the inbox',                   group: 'Email'     },
   { name: 'read_email',               label: 'Read Email',          description: 'Read the full content of an email',              group: 'Email'     },
   { name: 'send_email',               label: 'Send Email',          description: 'Send or reply to an email',                      group: 'Email'     },
+  { name: 'list_jobs',                label: 'List Jobs',           description: 'List the user\'s scheduled jobs',                group: 'Jobs'      },
+  { name: 'create_job',               label: 'Create Job',          description: 'Create a new scheduled job',                     group: 'Jobs'      },
+  { name: 'update_job',               label: 'Update Job',          description: 'Update an existing scheduled job',               group: 'Jobs'      },
+  { name: 'delete_job',               label: 'Delete Job',          description: 'Delete a scheduled job',                         group: 'Jobs'      },
+  { name: 'toggle_job',               label: 'Toggle Job',          description: 'Enable or disable a scheduled job',              group: 'Jobs'      },
 ];
 
 // Health tools are conditionally included based on HEALTH_WORKER_SECRET being set.

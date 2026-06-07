@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
+import GlobalShell from "./components/layout/GlobalShell";
+import { getCurrentUser } from "./actions/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,13 +40,18 @@ export default async function RootLayout({
   const locale = await getLocale();
   const messages = await getMessages();
 
+  let user = null;
+  try { user = await getCurrentUser(); } catch {}
+
   return (
     <html lang={locale}>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col h-dvh`}
       >
         <NextIntlClientProvider messages={messages}>
-          {children}
+          <GlobalShell user={user}>
+            {children}
+          </GlobalShell>
         </NextIntlClientProvider>
       </body>
     </html>
