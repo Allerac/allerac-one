@@ -29,6 +29,7 @@ interface ChatHeaderProps {
   hideHomeButton?: boolean;
   titleOnly?: boolean;
   hideSidebarButton?: boolean;
+  hideMemoryButton?: boolean;
   userName?: string;
   userEmail?: string;
   onLogout?: () => void;
@@ -51,6 +52,7 @@ export default function ChatHeader({
   hideHomeButton,
   titleOnly,
   hideSidebarButton,
+  hideMemoryButton,
   userName,
   userEmail,
   onLogout,
@@ -103,10 +105,12 @@ export default function ChatHeader({
             </svg>
           </button>
         )}
-        <span className={`flex-1 text-sm font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-          {currentConversationTitle || domainName || 'Allerac'}
-        </span>
-        {currentConversationId && (
+        {(currentConversationTitle || domainName) && (
+          <span className={`flex-1 text-sm font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+            {currentConversationTitle || domainName}
+          </span>
+        )}
+        {currentConversationId && !hideMemoryButton && (
           <button
             onClick={handleGenerateSummary}
             className={`p-2 rounded-lg transition-colors ${
@@ -157,11 +161,11 @@ export default function ChatHeader({
               <span className={`text-sm font-medium truncate max-w-[40vw] sm:max-w-[260px] ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
                 {currentConversationTitle}
               </span>
-            ) : (
+            ) : domainName ? (
               <span className={`text-xl font-bold flex-shrink-0 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                {domainName ?? 'Allerac'}
+                {domainName}
               </span>
-            )}
+            ) : null}
           </div>
 
           {/* Spacer */}
@@ -183,7 +187,7 @@ export default function ChatHeader({
           )}
 
           {/* Memory button — only when conversation exists */}
-          {currentConversationId && (
+          {currentConversationId && !hideMemoryButton && (
             <button
               onClick={handleGenerateSummary}
               className={`p-2 rounded-lg transition-colors ${

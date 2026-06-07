@@ -314,7 +314,8 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
-                        isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)} />
+                        isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} />
                     </div>
                   </div>
                 ) : (
@@ -332,7 +333,8 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
-                        isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)} />
+                        isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} />
                     </div>
                   </>
                 )}

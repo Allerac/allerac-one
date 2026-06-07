@@ -4,19 +4,17 @@ import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MODELS } from '@/app/services/llm/models';
 import type { Message, Conversation } from '@/app/types';
-import type { ChatMessage } from '@/app/hooks/useConversations';
-import { DomainProvider, type ToolCallEvent } from '@/app/context/DomainContext';
+import { DomainProvider } from '@/app/context/DomainContext';
 import { useConversations } from '@/app/hooks/useConversations';
+import { useDomainChat } from '@/app/hooks/useDomainChat';
 import SidebarDesktop from '@/app/components/layout/SidebarDesktop';
 import SidebarMobile from '@/app/components/layout/SidebarMobile';
-import ChatHeader from '@/app/components/chat/ChatHeader';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
 import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
 import DesignCanvas from './DesignCanvas';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
-import * as memoryActions from '@/app/actions/memory';
 
 interface Props {
   userId: string;
@@ -30,9 +28,10 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
   const { isDark: isDarkMode, toggleDark } = useTheme();
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isSidebarOpen, setSidebarOpen]       = useState(false);
-  const [lastToolCall, setLastToolCall]       = useState<ToolCallEvent | null>(null);
+  const [mobileTab, setMobileTab]             = useState<'canvas' | 'chat'>('canvas');
   const [postContext, setPostContext]         = useState('');
   const postContextRef                        = useRef('');
+  useEffect(() => { postContextRef.current = postContext; }, [postContext]);
 
   const {
     conversations, currentConvId, setCurrentConvId,
@@ -41,140 +40,22 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
     deleteConversation, pinConversation, renameConversation, reload,
   } = useConversations(userId, 'design');
 
-  const [input, setInput]           = useState('');
-  const [sending, setSending]       = useState(false);
-  const [selectedModel, setModel]   = useState('gemini-2.5-flash');
-  const [convId, setConvId]         = useState<string | null>(currentConvId);
-  const [isAgentMode, setAgentMode] = useState(false);
-  const [githubToken, setGithubToken] = useState('');
-  const messagesEndRef              = useRef<HTMLDivElement>(null);
-
-  const [memoryOpen, setMemoryOpen]     = useState(false);
-  const [memoryLoading, setMemoryLoading] = useState(false);
-  const [memoryResult, setMemoryResult] = useState<{ success: boolean; message: string; summary?: string; topics?: string[] } | null>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('selected_model');
-    if (saved) setModel(saved);
-    setGithubToken(localStorage.getItem('github_token') || '');
-  }, []);
-
-  useEffect(() => { setConvId(currentConvId); }, [currentConvId]);
-  useEffect(() => { postContextRef.current = postContext; }, [postContext]);
-
   const handleConvCreated = useCallback((id: string) => {
     setCurrentConvId(id); reload();
   }, [setCurrentConvId, reload]);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || sending) return;
-    setInput('');
-    setSending(true);
-    const requestStart = Date.now();
-
-    setMessages(prev => [
-      ...prev,
-      { role: 'user', content: text, timestamp: new Date() },
-      { role: 'assistant', content: '', timestamp: new Date() },
-    ]);
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          conversationId: convId,
-          model: selectedModel,
-          provider: MODELS.find(m => m.id === selectedModel)?.provider || 'ollama',
-          defaultSkillName,
-          domain: 'design',
-          ...(postContextRef.current ? { postContext: postContextRef.current } : {}),
-        }),
-      });
-
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          let event: any;
-          try { event = JSON.parse(line.slice(6)); } catch { continue; }
-
-          if (event.type === 'token') {
-            setMessages(prev => {
-              const msgs = [...prev];
-              const last = msgs[msgs.length - 1];
-              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: last.content + event.content };
-              return msgs;
-            });
-          } else if (event.type === 'tool_call') {
-            setLastToolCall({ name: event.name, args: event.args, ts: Date.now() });
-          } else if (event.type === 'done') {
-            const elapsed = Date.now() - requestStart;
-            setMessages(prev => {
-              const msgs = [...prev];
-              const last = msgs[msgs.length - 1];
-              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, responseTime: elapsed };
-              return msgs;
-            });
-            if (event.conversationId && event.conversationId !== convId) {
-              setConvId(event.conversationId);
-              handleConvCreated(event.conversationId);
-            }
-          } else if (event.type === 'error') {
-            setMessages(prev => {
-              const msgs = [...prev];
-              msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: `Error: ${event.message}` };
-              return msgs;
-            });
-          }
-        }
-      }
-    } catch (err: any) {
-      setMessages(prev => {
-        const msgs = [...prev];
-        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: `Error: ${err.message}` };
-        return msgs;
-      });
-    } finally {
-      setSending(false);
-    }
-  }, [input, sending, convId, selectedModel, defaultSkillName, handleConvCreated, setMessages]);
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-  };
-
-  const handleSaveToMemory = useCallback(async () => {
-    if (!convId) return;
-    setMemoryOpen(true);
-    setMemoryLoading(true);
-    setMemoryResult(null);
-    try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'design');
-      if (summary) {
-        setMemoryResult({ success: true, message: 'Summary generated successfully!', summary: summary.summary, topics: summary.key_topics });
-      } else {
-        setMemoryResult({ success: false, message: 'Could not generate summary (possibly not enough messages)' });
-      }
-    } catch {
-      setMemoryResult({ success: false, message: 'An unexpected error occurred' });
-    } finally {
-      setMemoryLoading(false);
-    }
-  }, [convId, userId, githubToken]);
+  const {
+    input, setInput, sending, selectedModel, setSelectedModel,
+    convId, isAgentMode, toggleAgentMode, githubToken,
+    messagesEndRef, lastToolCall, setLastToolCall,
+    send, handleKeyPress, handleSaveToMemory,
+    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+  } = useDomainChat({
+    userId, domain: 'design', defaultSkillName,
+    currentConvId, messages, setMessages,
+    onConversationCreated: handleConvCreated,
+    getPostContext: () => postContextRef.current,
+  });
 
   const [isMyAlleracOpen, setIsMyAlleracOpen] = useState(false);
   useEffect(() => {
@@ -190,24 +71,12 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
 
   const loadConversation = useCallback(async (id: string) => {
     await selectConversation(id);
-    setConvId(id);
   }, [selectConversation]);
 
-  const clearChat = useCallback(() => {
-    newConversation();
-    setConvId(null);
-  }, [newConversation]);
+  const clearChat = useCallback(() => { newConversation(); }, [newConversation]);
+  const handleDelete = useCallback(async (id: string) => { await deleteConversation(id); }, [deleteConversation]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    await deleteConversation(id);
-    if (convId === id) setConvId(null);
-  }, [deleteConversation, convId]);
-
-  // Map ConvItem[] → Conversation[] for sidebar components
   const convList: Conversation[] = conversations.map(c => ({ ...c, pinned: c.pinned ?? false }));
-
-  const activeSkill = defaultSkillName ? { name: defaultSkillName, display_name: defaultSkillName } : null;
-  const currentTitle = conversations.find(c => c.id === convId)?.title;
   const d = isDarkMode;
   const displayName = userName?.split(' ')[0] || userName || 'there';
 
@@ -221,7 +90,6 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
 
         <div className="flex flex-1 overflow-hidden">
 
-          {/* Mobile sidebar */}
           <div className="lg:hidden">
             <SidebarMobile
               isSidebarOpen={isSidebarOpen}
@@ -237,7 +105,6 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
             />
           </div>
 
-          {/* Desktop sidebar */}
           <div className="hidden lg:block">
             <SidebarDesktop
               isSidebarCollapsed={isSidebarCollapsed}
@@ -253,37 +120,34 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
             />
           </div>
 
-          {/* Main content */}
           <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
-            {/* <ChatHeader
-              isSidebarOpen={isSidebarOpen}
-              setIsSidebarOpen={setSidebarOpen}
-              isDarkMode={d}
-              toggleTheme={() => toggleDark}
-              clearChat={clearChat}
-              domainName="Design"
-              activeSkill={activeSkill}
-              currentConversationId={convId}
-              currentConversationTitle={currentTitle}
-              currentConversationHasMemory={false}
-              handleGenerateSummary={handleSaveToMemory}
-              hideHomeButton={!isAdmin}
-              userName={userName ?? undefined}
-              userEmail={userEmail}
-              onLogout={handleLogout}
-            /> */}
+            {/* Mobile tab bar */}
+            <div className={`lg:hidden flex-shrink-0 flex items-center border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button onClick={() => setSidebarOpen(true)} className={`px-3 py-2.5 ${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
+              {(['canvas', 'chat'] as const).map(tab => (
+                <button key={tab} onClick={() => setMobileTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
+                    mobileTab === tab
+                      ? `border-b-2 border-blue-500 ${d ? 'text-white' : 'text-gray-900'}`
+                      : d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {tab === 'canvas' ? 'Canvas' : 'Chat'}
+                </button>
+              ))}
+            </div>
 
-            {/* Canvas + Chat */}
             <div className="flex flex-1 overflow-hidden">
 
-              {/* DesignCanvas — takes remaining space */}
-              <div className="flex-1 overflow-hidden flex flex-col">
+              {/* DesignCanvas */}
+              <div className={`${mobileTab === 'canvas' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col overflow-hidden`}>
                 <DesignCanvas />
               </div>
 
               {/* Chat panel */}
-              <div className={`w-[360px] flex-shrink-0 flex flex-col border-l overflow-hidden ${d ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
+              <div className={`${mobileTab === 'chat' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-none lg:w-[360px] flex-col border-l overflow-hidden ${d ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
                 {messages.length === 0 && !sending ? (
                   <div className={`flex-1 flex flex-col items-center justify-center px-4 ${d ? 'bg-gray-900' : 'bg-white'}`}>
                     <div className="w-full max-w-sm">
@@ -308,13 +172,14 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
                         isDarkMode={d}
                         setIsDocumentModalOpen={() => {}}
                         selectedModel={selectedModel}
-                        setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
+                        setSelectedModel={setSelectedModel}
                         MODELS={MODELS}
                         githubConfigured={true}
                         googleConfigured={true}
                         ollamaConnected={true}
                         isAgentMode={isAgentMode}
-                        onToggleAgentMode={() => setAgentMode(v => !v)}
+                        onToggleAgentMode={toggleAgentMode}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
                       />
                     </div>
                   </div>
@@ -345,13 +210,14 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
                         isDarkMode={d}
                         setIsDocumentModalOpen={() => {}}
                         selectedModel={selectedModel}
-                        setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
+                        setSelectedModel={setSelectedModel}
                         MODELS={MODELS}
                         githubConfigured={true}
                         googleConfigured={true}
                         ollamaConnected={true}
                         isAgentMode={isAgentMode}
-                        onToggleAgentMode={() => setAgentMode(v => !v)}
+                        onToggleAgentMode={toggleAgentMode}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
                       />
                     </div>
                   </>

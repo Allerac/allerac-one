@@ -14,12 +14,14 @@ export async function GET(req: NextRequest) {
   const user = await authService.validateSession(token);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const accountId = new URL(req.url).searchParams.get('accountId');
+  const params = new URL(req.url).searchParams;
+  const accountId = params.get('accountId');
   if (!accountId) return NextResponse.json({ error: 'accountId required' }, { status: 400 });
+  const sinceUid = params.get('sinceUid');
 
   try {
     const account = await loadAccountForUser(accountId, user.id);
-    const messages = await imap.listMessages(account, 30);
+    const messages = await imap.listMessages(account, 30, sinceUid ? parseInt(sinceUid, 10) : undefined);
     return NextResponse.json({ messages });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

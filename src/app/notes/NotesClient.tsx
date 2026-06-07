@@ -4,20 +4,17 @@ import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MODELS } from '@/app/services/llm/models';
 import type { Message, Conversation } from '@/app/types';
-import type { ChatMessage } from '@/app/hooks/useConversations';
-import { DomainProvider, type ToolCallEvent } from '@/app/context/DomainContext';
+import { DomainProvider } from '@/app/context/DomainContext';
 import { useConversations } from '@/app/hooks/useConversations';
+import { useDomainChat } from '@/app/hooks/useDomainChat';
 import SidebarDesktop from '@/app/components/layout/SidebarDesktop';
 import SidebarMobile from '@/app/components/layout/SidebarMobile';
-import ChatHeader from '@/app/components/chat/ChatHeader';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
 import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
 import VaultPanel from './VaultPanel';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
-import * as memoryActions from '@/app/actions/memory';
-import { saveSelectedModel } from '@/app/actions/user';
 
 interface Props {
   userId: string;
@@ -31,12 +28,11 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
   const { isDark: isDarkMode, toggleDark } = useTheme();
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isSidebarOpen, setSidebarOpen]       = useState(false);
-  const [lastToolCall, setLastToolCall]       = useState<ToolCallEvent | null>(null);
   const [postContext, setPostContext]         = useState('');
   const postContextRef                        = useRef('');
   const [vaultRefresh, setVaultRefresh]       = useState(0);
   const [editorOpen, setEditorOpen]           = useState(false);
-  const [mobileTab, setMobileTab]             = useState<'vault' | 'chat'>('vault');
+  const [mobileTab, setMobileTab]             = useState<'notes' | 'chat'>('notes');
 
   const {
     conversations, currentConvId, setCurrentConvId,
@@ -45,26 +41,8 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
     deleteConversation, pinConversation, renameConversation, reload,
   } = useConversations(userId, 'notes');
 
-  const [input, setInput]           = useState('');
-  const [sending, setSending]       = useState(false);
-  const [selectedModel, setModel]   = useState('gemini-2.5-flash');
-  const [convId, setConvId]         = useState<string | null>(currentConvId);
-  const [isAgentMode, setAgentMode] = useState(false);
-  const [githubToken, setGithubToken] = useState('');
-  const messagesEndRef              = useRef<HTMLDivElement>(null);
-
-  const [memoryOpen, setMemoryOpen]       = useState(false);
-  const [memoryLoading, setMemoryLoading] = useState(false);
-  const [memoryResult, setMemoryResult]   = useState<{ success: boolean; message: string; summary?: string; topics?: string[] } | null>(null);
   const [isMyAlleracOpen, setIsMyAlleracOpen] = useState(false);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('selected_model');
-    if (saved) setModel(saved);
-    setGithubToken(localStorage.getItem('github_token') || '');
-  }, []);
-
-  useEffect(() => { setConvId(currentConvId); }, [currentConvId]);
   useEffect(() => { postContextRef.current = postContext; }, [postContext]);
 
   useEffect(() => {
@@ -77,118 +55,23 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
     setCurrentConvId(id); reload();
   }, [setCurrentConvId, reload]);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || sending) return;
-    setInput('');
-    setSending(true);
-    const requestStart = Date.now();
-
-    setMessages(prev => [
-      ...prev,
-      { role: 'user', content: text, timestamp: new Date() },
-      { role: 'assistant', content: '', timestamp: new Date() },
-    ]);
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          conversationId: convId,
-          model: selectedModel,
-          provider: MODELS.find(m => m.id === selectedModel)?.provider || 'ollama',
-          defaultSkillName,
-          domain: 'notes',
-          ...(postContextRef.current ? { postContext: postContextRef.current } : {}),
-        }),
-      });
-
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          let event: any;
-          try { event = JSON.parse(line.slice(6)); } catch { continue; }
-
-          if (event.type === 'token') {
-            setMessages(prev => {
-              const msgs = [...prev];
-              const last = msgs[msgs.length - 1];
-              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: last.content + event.content };
-              return msgs;
-            });
-          } else if (event.type === 'tool_call') {
-            setLastToolCall({ name: event.name, args: event.args, ts: Date.now() });
-            if (['save_note', 'delete_note', 'update_note'].includes(event.name)) {
-              setVaultRefresh(v => v + 1);
-            }
-          } else if (event.type === 'done') {
-            const elapsed = Date.now() - requestStart;
-            setMessages(prev => {
-              const msgs = [...prev];
-              const last = msgs[msgs.length - 1];
-              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, responseTime: elapsed };
-              return msgs;
-            });
-            if (event.conversationId && event.conversationId !== convId) {
-              setConvId(event.conversationId);
-              handleConvCreated(event.conversationId);
-            }
-          } else if (event.type === 'error') {
-            setMessages(prev => {
-              const msgs = [...prev];
-              msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: `Error: ${event.message}` };
-              return msgs;
-            });
-          }
-        }
+  const {
+    input, setInput, sending, selectedModel, setSelectedModel,
+    convId, isAgentMode, toggleAgentMode, githubToken,
+    messagesEndRef, lastToolCall, setLastToolCall,
+    send, handleKeyPress, handleSaveToMemory,
+    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+  } = useDomainChat({
+    userId, domain: 'notes', defaultSkillName,
+    currentConvId, messages, setMessages,
+    onConversationCreated: handleConvCreated,
+    getPostContext: () => postContextRef.current,
+    onToolCall: (name) => {
+      if (['save_note', 'delete_note', 'update_note'].includes(name)) {
+        setVaultRefresh(v => v + 1);
       }
-    } catch (err: any) {
-      setMessages(prev => {
-        const msgs = [...prev];
-        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: `Error: ${err.message}` };
-        return msgs;
-      });
-    } finally {
-      setSending(false);
-    }
-  }, [input, sending, convId, selectedModel, defaultSkillName, handleConvCreated, setMessages]);
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-  };
-
-  const handleSaveToMemory = useCallback(async () => {
-    if (!convId) return;
-    setMemoryOpen(true);
-    setMemoryLoading(true);
-    setMemoryResult(null);
-    try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'notes');
-      if (summary) {
-        setMemoryResult({ success: true, message: 'Summary generated!', summary: summary.summary, topics: summary.key_topics });
-      } else {
-        setMemoryResult({ success: false, message: 'Could not generate summary.' });
-      }
-    } catch {
-      setMemoryResult({ success: false, message: 'An unexpected error occurred.' });
-    } finally {
-      setMemoryLoading(false);
-    }
-  }, [convId, userId, githubToken]);
+    },
+  });
 
   const handleLogout = async () => {
     const { logout } = await import('@/app/actions/auth');
@@ -197,15 +80,13 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
 
   const loadConversation = useCallback(async (id: string) => {
     await selectConversation(id);
-    setConvId(id);
   }, [selectConversation]);
 
-  const clearChat = useCallback(() => { newConversation(); setConvId(null); }, [newConversation]);
+  const clearChat = useCallback(() => { newConversation(); }, [newConversation]);
 
   const handleDelete = useCallback(async (id: string) => {
     await deleteConversation(id);
-    if (convId === id) setConvId(null);
-  }, [deleteConversation, convId]);
+  }, [deleteConversation]);
 
   const convList: Conversation[] = conversations.map(c => ({ ...c, pinned: c.pinned ?? false }));
   const activeSkill = defaultSkillName ? { name: defaultSkillName, display_name: defaultSkillName } : null;
@@ -255,37 +136,19 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
 
           <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
-            {/* <ChatHeader
-              isSidebarOpen={isSidebarOpen}
-              setIsSidebarOpen={setSidebarOpen}
-              isDarkMode={d}
-              toggleTheme={() => toggleDark}
-              clearChat={clearChat}
-              domainName="Notes"
-              activeSkill={activeSkill}
-              currentConversationId={convId}
-              currentConversationTitle={currentTitle}
-              currentConversationHasMemory={false}
-              handleGenerateSummary={handleSaveToMemory}
-              hideHomeButton={!isAdmin}
-              userName={userName ?? undefined}
-              userEmail={userEmail}
-              onLogout={handleLogout}
-            /> */}
-
             {/* Mobile tab bar */}
             <div className={`lg:hidden flex-shrink-0 flex items-center border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
               <button onClick={() => setSidebarOpen(true)} className={`px-3 py-2.5 ${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
               </button>
-              {(['vault', 'chat'] as const).map(tab => (
+              {(['notes', 'chat'] as const).map(tab => (
                 <button key={tab} onClick={() => setMobileTab(tab)}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
                     mobileTab === tab
                       ? `border-b-2 border-indigo-500 ${d ? 'text-white' : 'text-gray-900'}`
                       : d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
                   }`}>
-                  {tab === 'vault' ? 'Vault' : 'Chat'}
+                  {tab === 'notes' ? 'Notes' : 'Chat'}
                 </button>
               ))}
             </div>
@@ -293,8 +156,8 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
             {/* Vault + Chat */}
             <div className="flex flex-1 overflow-hidden">
 
-              {/* Vault panel — full screen on mobile when vault tab, flex-1 on desktop */}
-              <div className={`${mobileTab === 'vault' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-1 overflow-hidden`}>
+              {/* Notes panel — full screen on mobile when notes tab, flex-1 on desktop */}
+              <div className={`${mobileTab === 'notes' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-1 overflow-hidden`}>
                 <VaultPanel
                   userId={userId}
                   isDarkMode={d}
@@ -323,10 +186,11 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
                         isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}}
                         selectedModel={selectedModel}
-                        setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(userId, m); }}
+                        setSelectedModel={setSelectedModel}
                         MODELS={MODELS}
                         githubConfigured={true} googleConfigured={true} ollamaConnected={true}
-                        isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
+                        isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
                       />
                     </div>
                   </div>
@@ -348,10 +212,11 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
                         isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}}
                         selectedModel={selectedModel}
-                        setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(userId, m); }}
+                        setSelectedModel={setSelectedModel}
                         MODELS={MODELS}
                         githubConfigured={true} googleConfigured={true} ollamaConnected={true}
-                        isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
+                        isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
                       />
                     </div>
                   </>

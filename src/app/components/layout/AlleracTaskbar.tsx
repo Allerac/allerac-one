@@ -184,6 +184,7 @@ export default function AlleracTaskbar({ domainKey, domainName, domainIcon, user
                     <StartMenuItem icon="📡" label="Monitor" onClick={() => { setStartOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
                     <StartMenuItem icon="⚙️" label="Configuration" onClick={() => { setStartOpen(false); setConfigModalOpen(true); }} />
                     <StartMenuItem icon="🌐" label="Domains" onClick={() => { setStartOpen(false); setDomainsModalOpen(true); }} />
+                    <StartMenuItem icon="🔧" label="Admin" onClick={() => navigate('/admin')} />
                     <div style={{ height: 1, background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
                     <StartMenuItem icon="🖥️" label="Desktop" onClick={() => navigate('/')} />
                   </>

@@ -167,11 +167,12 @@ function toDateInputValue(due_date: string | null): string {
   return d.toISOString().slice(0, 10);
 }
 
-function NoteEditor({ note, isDarkMode: d, onSave, onClose }: {
+function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete }: {
   note: Note;
   isDarkMode: boolean;
   onSave: (id: string, content: string, title: string, tags: string[], due_date: string | null) => Promise<void>;
   onClose: () => void;
+  onDelete?: (id: string) => void;
 }) {
   const [content, setContent]     = useState(note.content);
   const [title, setTitle]         = useState(note.title ?? '');
@@ -266,7 +267,7 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose }: {
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Vault
+            Notes
           </button>
           <input
             value={title}
@@ -276,6 +277,17 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose }: {
               d ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'
             }`}
           />
+          {onDelete && (
+            <button
+              onClick={() => { if (window.confirm('Delete this note?')) onDelete(note.id); }}
+              className={`flex-shrink-0 p-1 rounded transition-colors ${d ? 'text-gray-600 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}
+              title="Delete note"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
           {/* Edit / Preview toggle */}
           <div className={`flex rounded-lg border text-xs overflow-hidden ${d ? 'border-gray-700' : 'border-gray-200'}`}>
             <button
@@ -444,13 +456,11 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
     if (tagRes.success) setTags(tagRes.tags);
   };
 
-  // ── Always: fixed list on left + content on right ─────────────────────────
-
   return (
     <div className="flex flex-1 overflow-hidden">
 
-      {/* Fixed-width notes list */}
-      <div className={`w-56 flex-shrink-0 flex flex-col border-r overflow-hidden ${d ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+      {/* Notes list — full width on mobile when no note selected, fixed 56 on desktop */}
+      <div className={`${selectedNote ? 'hidden lg:flex' : 'flex flex-1'} lg:flex-none lg:w-56 flex-col border-r overflow-hidden ${d ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
 
         {/* Header */}
         <div className={`flex-shrink-0 px-3 py-2.5 border-b flex items-center justify-between ${d ? 'border-gray-800' : 'border-gray-200'}`}>
@@ -545,14 +555,15 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
         </div>
       </div>
 
-      {/* Right panel: empty state or editor */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Editor — full width on mobile when note selected, flex-1 on desktop */}
+      <div className={`${selectedNote ? 'flex flex-1' : 'hidden lg:flex lg:flex-1'} flex-col overflow-hidden`}>
         {selectedNote ? (
           <NoteEditor
             note={selectedNote}
             isDarkMode={d}
             onSave={handleSave}
             onClose={handleCloseEditor}
+            onDelete={handleDelete}
           />
         ) : (
           <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${d ? 'bg-gray-900' : 'bg-white'}`}>

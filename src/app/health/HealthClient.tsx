@@ -6,15 +6,14 @@ import { MODELS } from '@/app/services/llm/models';
 import type { Message, Conversation } from '@/app/types';
 import { DomainProvider } from '@/app/context/DomainContext';
 import { useConversations } from '@/app/hooks/useConversations';
+import { useDomainChat } from '@/app/hooks/useDomainChat';
 import SidebarDesktop from '@/app/components/layout/SidebarDesktop';
 import SidebarMobile from '@/app/components/layout/SidebarMobile';
-import ChatHeader from '@/app/components/chat/ChatHeader';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
 import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import HealthDashboard from '@/app/components/health/HealthDashboard';
-import * as memoryActions from '@/app/actions/memory';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
 
 type HealthPeriod = 'today' | '3days' | '7days' | '30days';
@@ -52,123 +51,24 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
     deleteConversation, pinConversation, renameConversation, reload,
   } = useConversations(userId, 'health');
 
-  const [input, setInput]           = useState('');
-  const [sending, setSending]       = useState(false);
-  const [selectedModel, setModel]   = useState('gemini-2.5-flash');
-  const [convId, setConvId]         = useState<string | null>(currentConvId);
-  const [isAgentMode, setAgentMode] = useState(false);
-  const [githubToken, setGithubToken] = useState('');
-  const messagesEndRef              = useRef<HTMLDivElement>(null);
-
   const [mobileHealthTab, setMobileHealthTab] = useState<'dashboard' | 'chat'>('dashboard');
 
-  const [memoryOpen, setMemoryOpen]       = useState(false);
-  const [memoryLoading, setMemoryLoading] = useState(false);
-  const [memoryResult, setMemoryResult]   = useState<{ success: boolean; message: string; summary?: string; topics?: string[] } | null>(null);
+  const handleConvCreated = useCallback((id: string) => {
+    setCurrentConvId(id); reload();
+  }, [setCurrentConvId, reload]);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('selected_model');
-    if (saved) setModel(saved);
-    setGithubToken(localStorage.getItem('github_token') || '');
-  }, []);
-
-  useEffect(() => { setConvId(currentConvId); }, [currentConvId]);
-
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || sending) return;
-    setInput(''); setSending(true);
-    const requestStart = Date.now();
-
-    setMessages(prev => [
-      ...prev,
-      { role: 'user', content: text, timestamp: new Date() },
-      { role: 'assistant', content: '', timestamp: new Date() },
-    ]);
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          conversationId: convId,
-          model: selectedModel,
-          provider: MODELS.find(m => m.id === selectedModel)?.provider || 'ollama',
-          defaultSkillName,
-          domain: 'health',
-          ...(healthViewContextRef.current ? { postContext: healthViewContextRef.current } : {}),
-        }),
-      });
-
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n'); buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          let event: any; try { event = JSON.parse(line.slice(6)); } catch { continue; }
-
-          if (event.type === 'token') {
-            setMessages(prev => {
-              const m = [...prev]; const l = m[m.length - 1];
-              if (l?.role === 'assistant') m[m.length - 1] = { ...l, content: l.content + event.content };
-              return m;
-            });
-          } else if (event.type === 'done') {
-            const elapsed = Date.now() - requestStart;
-            setMessages(prev => {
-              const m = [...prev]; const l = m[m.length - 1];
-              if (l?.role === 'assistant') m[m.length - 1] = { ...l, responseTime: elapsed };
-              return m;
-            });
-            if (event.conversationId && event.conversationId !== convId) {
-              setConvId(event.conversationId);
-              setCurrentConvId(event.conversationId);
-              reload();
-            }
-          } else if (event.type === 'error') {
-            setMessages(prev => {
-              const m = [...prev];
-              m[m.length - 1] = { ...m[m.length - 1], content: `Error: ${event.message}` };
-              return m;
-            });
-          }
-        }
-      }
-    } catch (err: any) {
-      setMessages(prev => {
-        const m = [...prev];
-        m[m.length - 1] = { ...m[m.length - 1], content: `Error: ${err.message}` };
-        return m;
-      });
-    } finally { setSending(false); }
-  }, [input, sending, convId, selectedModel, defaultSkillName, setMessages, setCurrentConvId, reload]);
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-  };
-
-  const handleSaveToMemory = useCallback(async () => {
-    if (!convId) return;
-    setMemoryOpen(true); setMemoryLoading(true); setMemoryResult(null);
-    try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'health');
-      setMemoryResult(summary
-        ? { success: true, message: 'Summary generated successfully!', summary: summary.summary, topics: summary.key_topics }
-        : { success: false, message: 'Could not generate summary (possibly not enough messages)' }
-      );
-    } catch { setMemoryResult({ success: false, message: 'An unexpected error occurred' }); }
-    finally { setMemoryLoading(false); }
-  }, [convId, userId, githubToken]);
+  const {
+    input, setInput, sending, selectedModel, setSelectedModel,
+    convId, isAgentMode, toggleAgentMode, githubToken,
+    messagesEndRef, lastToolCall, setLastToolCall,
+    send, handleKeyPress, handleSaveToMemory,
+    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+  } = useDomainChat({
+    userId, domain: 'health', defaultSkillName,
+    currentConvId, messages, setMessages,
+    onConversationCreated: handleConvCreated,
+    getPostContext: () => healthViewContextRef.current,
+  });
 
   const [isMyAlleracOpen, setIsMyAlleracOpen] = useState(false);
   useEffect(() => {
@@ -178,9 +78,9 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
   }, []);
 
   const handleLogout = async () => { const { logout } = await import('@/app/actions/auth'); await logout(); };
-  const loadConversation = useCallback(async (id: string) => { await selectConversation(id); setConvId(id); }, [selectConversation]);
-  const clearChat = useCallback(() => { newConversation(); setConvId(null); }, [newConversation]);
-  const handleDelete = useCallback(async (id: string) => { await deleteConversation(id); if (convId === id) setConvId(null); }, [deleteConversation, convId]);
+  const loadConversation = useCallback(async (id: string) => { await selectConversation(id); }, [selectConversation]);
+  const clearChat = useCallback(() => { newConversation(); }, [newConversation]);
+  const handleDelete = useCallback(async (id: string) => { await deleteConversation(id); }, [deleteConversation]);
 
   const convList: Conversation[] = conversations.map(c => ({ ...c, pinned: c.pinned ?? false }));
   const activeSkill = defaultSkillName ? { name: defaultSkillName, display_name: defaultSkillName } : null;
@@ -221,16 +121,6 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
           </div>
 
           <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
-
-            {/* <ChatHeader
-              isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setSidebarOpen}
-              isDarkMode={d} toggleTheme={() => toggleDark}
-              clearChat={clearChat} domainName="Health" activeSkill={activeSkill}
-              currentConversationId={convId} currentConversationTitle={currentTitle}
-              currentConversationHasMemory={false} handleGenerateSummary={handleSaveToMemory}
-              hideHomeButton={!isAdmin} userName={userName ?? undefined} userEmail={userEmail}
-              onLogout={handleLogout}
-            /> */}
 
             {/* Mobile tab bar */}
             <div className={`lg:hidden flex-shrink-0 flex items-center border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
@@ -280,9 +170,10 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
                         handleKeyPress={handleKeyPress} handleSendMessage={send}
                         isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
-                        setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
+                        setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
-                        isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
+                        isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
                       />
                     </div>
                   </div>
@@ -303,9 +194,10 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
                         handleKeyPress={handleKeyPress} handleSendMessage={send}
                         isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
-                        setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
+                        setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
-                        isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
+                        isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
                       />
                     </div>
                   </>

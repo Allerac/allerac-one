@@ -156,9 +156,10 @@ interface Props {
   displayName?: string;
   githubToken?: string;
   bottomOffset?: number;
+  domain?: string;
 }
 
-export default function ClippyAssistant({ userId, defaultSkillName, displayName, githubToken = '', bottomOffset = 24 }: Props) {
+export default function ClippyAssistant({ userId, defaultSkillName, displayName, githubToken = '', bottomOffset = 24, domain = 'jobs' }: Props) {
   const locale = useLocale();
   const t = useTranslations('grampeador');
 
@@ -182,7 +183,7 @@ export default function ClippyAssistant({ userId, defaultSkillName, displayName,
   const generatedRef = useRef<string>(BUBBLES[Math.floor(Math.random() * BUBBLES.length)]);
 
   const refreshBubble = useCallback(async () => {
-    const result = await generateClippyBubble('jobs', locale);
+    const result = await generateClippyBubble(domain, locale);
     if (result) generatedRef.current = result;
   }, [locale]);
 
@@ -258,7 +259,7 @@ export default function ClippyAssistant({ userId, defaultSkillName, displayName,
           model: selectedModel,
           provider: MODELS.find(m => m.id === selectedModel)?.provider || 'ollama',
           defaultSkillName,
-          domain: 'jobs',
+          domain,
         }),
       });
 
@@ -410,7 +411,7 @@ export default function ClippyAssistant({ userId, defaultSkillName, displayName,
                   userId={userId}
                   githubToken={githubToken}
                   messagesEndRef={messagesEndRef}
-                  domainSlug="jobs"
+                  domainSlug={domain}
                 />
               </div>
             )}

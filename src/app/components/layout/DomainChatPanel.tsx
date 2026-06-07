@@ -210,17 +210,6 @@ export default function DomainChatPanel({
           </button>
         )}
         <div className="flex-1" />
-        {convId && (
-          <button
-            onClick={handleSaveToMemory}
-            title="Save to memory"
-            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${d ? 'text-gray-500 hover:bg-gray-800 hover:text-gray-300' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-          </button>
-        )}
         <select
           value={selectedModel}
           onChange={e => { setModel(e.target.value); localStorage.setItem('selected_model', e.target.value); saveSelectedModel(userId, e.target.value); }}
@@ -264,6 +253,8 @@ export default function DomainChatPanel({
               ollamaConnected={true}
               isAgentMode={isAgentMode}
               onToggleAgentMode={() => setIsAgentMode(v => !v)}
+              onSaveMemory={handleSaveToMemory}
+              hasConversation={!!convId}
             />
           </div>
         </div>
@@ -302,6 +293,8 @@ export default function DomainChatPanel({
                 ollamaConnected={true}
                 isAgentMode={isAgentMode}
                 onToggleAgentMode={() => setIsAgentMode(v => !v)}
+                onSaveMemory={handleSaveToMemory}
+                hasConversation={!!convId}
               />
             </div>
           </div>

@@ -45,24 +45,57 @@ export class ImapService {
     });
   }
 
-  async listMessages(account: EmailAccount, limit = 30): Promise<EmailSummary[]> {
+  async listMessages(account: EmailAccount, limit = 30, sinceUid?: number): Promise<EmailSummary[]> {
     const client = this.buildClient(account);
     await client.connect();
     try {
       const lock = await client.getMailboxLock('INBOX');
       try {
+        const messages: EmailSummary[] = [];
+
+        if (sinceUid !== undefined) {
+          // Incremental: only UIDs newer than sinceUid
+          try {
+            for await (const msg of client.fetch(`${sinceUid + 1}:*`, {
+              uid: true, flags: true, envelope: true, bodyStructure: true,
+            }, { uid: true })) {
+              const env = msg.envelope;
+              const fromAddr = env?.from?.[0];
+              messages.push({
+                uid: msg.uid,
+                messageId: env?.messageId ?? String(msg.uid),
+                subject: env?.subject ?? '(no subject)',
+                from: fromAddr?.address ?? '',
+                fromName: fromAddr?.name || fromAddr?.address || '',
+                date: env?.date?.toISOString() ?? '',
+                snippet: '',
+                seen: msg.flags?.has('\\Seen') ?? false,
+              });
+            }
+          } catch { /* empty range = no new messages */ }
+
+          for (const summary of messages.slice(0, 5)) {
+            try {
+              const raw = await client.download(String(summary.uid), undefined, { uid: true });
+              if (raw?.content) {
+                const parsed = await simpleParser(raw.content);
+                summary.snippet = (parsed.text ?? '').slice(0, 120).replace(/\s+/g, ' ').trim();
+              }
+            } catch { /* skip */ }
+          }
+
+          return messages.reverse();
+        }
+
+        // Full fetch: last N messages by sequence
         const mailbox = client.mailbox as { exists: number } | false | undefined;
         const count = mailbox ? (mailbox as { exists: number }).exists : 0;
         if (count === 0) return [];
 
         const from = Math.max(1, count - limit + 1);
-        const messages: EmailSummary[] = [];
 
         for await (const msg of client.fetch(`${from}:*`, {
-          uid: true,
-          flags: true,
-          envelope: true,
-          bodyStructure: true,
+          uid: true, flags: true, envelope: true, bodyStructure: true,
         })) {
           const env = msg.envelope;
           const fromAddr = env?.from?.[0];
@@ -78,7 +111,6 @@ export class ImapService {
           });
         }
 
-        // Fetch snippets for last 10 messages (most recent)
         const recent = messages.slice(-10).reverse();
         for (const summary of recent) {
           try {
@@ -87,7 +119,7 @@ export class ImapService {
               const parsed = await simpleParser(raw.content);
               summary.snippet = (parsed.text ?? '').slice(0, 120).replace(/\s+/g, ' ').trim();
             }
-          } catch { /* skip snippet on error */ }
+          } catch { /* skip */ }
         }
 
         return messages.reverse();

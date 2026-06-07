@@ -943,8 +943,9 @@ const savedModel = localStorage.getItem('selected_model');
               activeSkill={activeSkill}
               currentConversationId={currentConversationId}
               currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
-              currentConversationHasMemory={currentConversationHasMemory}
-              handleGenerateSummary={handleGenerateSummary}
+              currentConversationHasMemory={false}
+              handleGenerateSummary={() => {}}
+              hideMemoryButton
               isTerminalMode={effectiveChatMode === 'terminal'}
               onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
               hideHomeButton={!isAdmin}
@@ -1078,30 +1079,6 @@ const savedModel = localStorage.getItem('selected_model');
               : isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1' : 'hidden lg:flex'} lg:w-[400px] lg:flex-shrink-0` : 'flex-1'
           }`}>
 
-          {/* Social header — only inside chat column, only after conversation starts */}
-          {isInstagramPostOpen && currentConversationId && (
-            <ChatHeader
-              isSidebarOpen={isSidebarOpen}
-              setIsSidebarOpen={setIsSidebarOpen}
-              isDarkMode={isDarkMode}
-              toggleTheme={toggleTheme}
-              clearChat={clearChat}
-              domainName={domainName}
-              activeSkill={activeSkill}
-              currentConversationId={currentConversationId}
-              currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
-              currentConversationHasMemory={currentConversationHasMemory}
-              handleGenerateSummary={handleGenerateSummary}
-              isTerminalMode={false}
-              hideHomeButton={!isAdmin}
-              userName={userName}
-              userEmail={userEmail}
-              onLogout={handleLogout}
-              titleOnly
-              hideSidebarButton
-            />
-          )}
-
           {/* ── Terminal mode — full area replacement ── */}
           {effectiveChatMode === 'terminal' ? (
             <TerminalMessageArea
@@ -1165,6 +1142,8 @@ const savedModel = localStorage.getItem('selected_model');
                   onDownloadModel={handleDownloadModel}
                   isAgentMode={isAgentMode}
                   onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
+                  onSaveMemory={handleGenerateSummary}
+                  hasConversation={!!currentConversationId}
                 />
                 {currentConversationId && (
                   <p className={`text-center px-4 pb-2 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} style={{ fontSize: '10px' }}>
@@ -1220,6 +1199,8 @@ const savedModel = localStorage.getItem('selected_model');
                     onDownloadModel={handleDownloadModel}
                     isAgentMode={isAgentMode}
                     onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
+                    onSaveMemory={handleGenerateSummary}
+                    hasConversation={!!currentConversationId}
                   />
                   {currentConversationId && (
                     <p

@@ -39,6 +39,9 @@ interface ChatInputProps {
   // Agent props
   isAgentMode?: boolean;
   onToggleAgentMode?: () => void;
+  // Memory props
+  onSaveMemory?: () => void;
+  hasConversation?: boolean;
 }
 
 export default function ChatInput({
@@ -68,6 +71,8 @@ export default function ChatInput({
   onDownloadModel,
   isAgentMode = false,
   onToggleAgentMode,
+  onSaveMemory,
+  hasConversation = false,
 }: ChatInputProps) {
   const t = useTranslations('chat');
   const attachDropdownRef = useRef<HTMLDivElement>(null);
@@ -309,6 +314,22 @@ export default function ChatInput({
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h10v2H7z" />
+              </svg>
+            </button>
+          )}
+
+          {onSaveMemory && hasConversation && (
+            <button
+              onClick={onSaveMemory}
+              className={`w-11 h-11 rounded-lg transition-all flex items-center justify-center ${
+                isDarkMode
+                  ? 'hover:bg-gray-600 text-gray-400'
+                  : 'hover:bg-gray-200 text-gray-600'
+              }`}
+              title="Save to memory"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
             </button>
           )}

@@ -57,6 +57,7 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
   const [replyData, setReplyData]         = useState<{ to: string; subject: string; inReplyTo: string; references: string } | null>(null);
   const [metaExpanded, setMetaExpanded]   = useState(false);
   const msgCache = useRef<Map<number, EmailDetail>>(new Map());
+  const listCache = useRef<Map<string, EmailSummary[]>>(new Map());
 
   const initializedRef = useRef(false);
 
@@ -77,15 +78,59 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
     setAccounts(list);
   }, []);
 
-  const fetchMessages = useCallback(async (accountId: string) => {
+  const fetchMessages = useCallback(async (accountId: string, explicit = false) => {
+    const cached = listCache.current.get(accountId);
+
+    if (cached && !explicit) {
+      // Show cached list instantly, then silently check for new
+      setMessages(cached);
+      setLoadingMsgs(false);
+      const maxUid = Math.max(...cached.map(m => m.uid));
+      try {
+        const res = await fetch(`/api/email/messages?accountId=${accountId}&sinceUid=${maxUid}`);
+        const data = await res.json();
+        const fresh: EmailSummary[] = data.messages ?? [];
+        if (fresh.length > 0) {
+          const merged = [...fresh, ...cached];
+          listCache.current.set(accountId, merged);
+          setMessages(merged);
+        }
+      } catch { /* silent */ }
+      return;
+    }
+
+    // Full fetch (first load or explicit refresh)
     setLoadingMsgs(true);
+    if (explicit) {
+      // On explicit refresh, keep showing current list while loading
+      const maxUid = cached ? Math.max(...cached.map(m => m.uid)) : undefined;
+      try {
+        const url = maxUid !== undefined
+          ? `/api/email/messages?accountId=${accountId}&sinceUid=${maxUid}`
+          : `/api/email/messages?accountId=${accountId}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const fresh: EmailSummary[] = data.messages ?? [];
+        if (fresh.length > 0) {
+          const merged = [...fresh, ...(cached ?? [])];
+          listCache.current.set(accountId, merged);
+          setMessages(merged);
+        }
+      } catch { /* silent */ }
+      finally { setLoadingMsgs(false); }
+      return;
+    }
+
+    // No cache — full fetch from scratch
     setSelectedMsg(null);
     msgCache.current.clear();
     onContextUpdate('');
     try {
       const res = await fetch(`/api/email/messages?accountId=${accountId}`);
       const data = await res.json();
-      setMessages(data.messages ?? []);
+      const msgs: EmailSummary[] = data.messages ?? [];
+      listCache.current.set(accountId, msgs);
+      setMessages(msgs);
     } catch { setMessages([]); }
     finally { setLoadingMsgs(false); }
   }, [onContextUpdate]);
@@ -127,6 +172,8 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
     try {
       await emailActions.deleteEmailMessage(selectedAccount, uid);
       setMessages(prev => prev.filter(m => m.uid !== uid));
+      const cached = listCache.current.get(selectedAccount);
+      if (cached) listCache.current.set(selectedAccount, cached.filter(m => m.uid !== uid));
       if (selectedMsg?.uid === uid) { setSelectedMsg(null); onContextUpdate(''); }
     } catch { /* silent */ }
     finally { setDeletingUid(null); }
@@ -195,7 +242,7 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
       <div className={`flex-shrink-0 items-center justify-between px-4 py-3 border-b ${borderCls} ${d ? 'bg-gray-900' : 'bg-white'} ${(selectedMsg || loadingMsg) ? 'hidden lg:flex' : 'flex'}`}>
         <div className="flex items-center gap-2 min-w-0">
           {accounts.length > 1 ? (
-            <select value={selectedAccount ?? ''} onChange={e => { setSelected(e.target.value); fetchMessages(e.target.value); }}
+            <select value={selectedAccount ?? ''} onChange={e => { setSelected(e.target.value); msgCache.current.clear(); setSelectedMsg(null); onContextUpdate(''); fetchMessages(e.target.value); }}
               className={`text-sm font-medium bg-transparent outline-none truncate ${textPrimary}`}>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
             </select>
@@ -211,7 +258,7 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </button>
-          <button onClick={() => selectedAccount && fetchMessages(selectedAccount)} title="Refresh"
+          <button onClick={() => selectedAccount && fetchMessages(selectedAccount, true)} title="Refresh"
             className={`p-1.5 rounded-lg transition-colors ${d ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'}`}>
             <svg className={`w-4 h-4 ${loadingMsgs ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

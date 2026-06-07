@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import HubTour from '@/app/components/hub/HubTour';
 import AlleracTaskbar from '@/app/components/layout/AlleracTaskbar';
+import ClippyAssistant from '@/app/jobs/ClippyAssistant';
 import * as authActions from '@/app/actions/auth';
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
@@ -40,6 +41,8 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     return !completedHubTour;
   });
   const [isMobile, setIsMobile] = useState(false);
+  const [githubToken, setGithubToken] = useState('');
+  useEffect(() => { setGithubToken(localStorage.getItem('github_token') || ''); }, []);
 
   const BOOT_LINES = [
     'Allerac OS v1.0',
@@ -223,6 +226,14 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           />
         )}
       </div>
+
+      <ClippyAssistant
+        userId={userId}
+        displayName={userName?.split(' ')[0] || userName || 'there'}
+        githubToken={githubToken}
+        domain="hub"
+        bottomOffset={60}
+      />
 
       {showTour && (
         <HubTour userId={userId} onDone={() => setShowTour(false)} />
