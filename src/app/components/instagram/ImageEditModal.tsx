@@ -8,7 +8,6 @@ interface ImageEditModalProps {
   onClose: () => void;
   imageBase64: string;
   imagePreview: string;
-  userId: string;
   isDarkMode: boolean;
   onApply: (resultBase64: string, resultPreview: string) => void;
 }
@@ -19,7 +18,7 @@ const OPERATIONS: Array<{ type: OperationType; label: string; description: strin
   { type: 'remove-background', label: 'Remover fundo',      description: 'Fundo transparente', icon: '✂️' },
   { type: 'white-background',  label: 'Fundo branco',       description: 'Estúdio infinito',   icon: '⬜' },
   { type: 'lifestyle-scene',   label: 'Cena de lifestyle',  description: 'Prompt personalizado', icon: '🎨' },
-  { type: 'enhance',           label: 'Melhorar qualidade', description: 'Upscaling ESRGAN',   icon: '✨' },
+  { type: 'enhance',           label: 'Melhorar qualidade', description: 'Nitidez e iluminação', icon: '✨' },
 ];
 
 export default function ImageEditModal({
@@ -27,7 +26,6 @@ export default function ImageEditModal({
   onClose,
   imageBase64,
   imagePreview,
-  userId,
   isDarkMode,
   onApply,
 }: ImageEditModalProps) {

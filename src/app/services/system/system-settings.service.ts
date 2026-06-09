@@ -1,7 +1,7 @@
 import pool from '@/app/clients/db';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 
-const KEYS = ['github_token', 'tavily_api_key', 'anthropic_api_key', 'google_api_key', 'fal_ai_api_key', 'resend_api_key', 'resend_from_email'] as const;
+const KEYS = ['github_token', 'tavily_api_key', 'anthropic_api_key', 'google_api_key', 'resend_api_key', 'resend_from_email'] as const;
 const KEY_SET = new Set<string>(KEYS);
 export type SystemSettingKey = typeof KEYS[number];
 
@@ -10,7 +10,6 @@ export interface SystemSettings {
   tavily_api_key: string | null;
   anthropic_api_key: string | null;
   google_api_key: string | null;
-  fal_ai_api_key: string | null;
   resend_api_key: string | null;
   resend_from_email: string | null;
 }
@@ -27,7 +26,6 @@ export class SystemSettingsService {
       tavily_api_key: map['tavily_api_key'] ?? null,
       anthropic_api_key: map['anthropic_api_key'] ?? null,
       google_api_key: map['google_api_key'] ?? null,
-      fal_ai_api_key: map['fal_ai_api_key'] ?? null,
       resend_api_key: map['resend_api_key'] ?? null,
       resend_from_email: map['resend_from_email'] ?? null,
     };

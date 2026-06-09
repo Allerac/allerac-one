@@ -77,6 +77,8 @@ export default function AdminClient({
   const [resetPending, setResetPending] = useState(false);
   const [resetMsg, setResetMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null);
 
+  const [activeTab, setActiveTab] = useState<'users' | 'domains' | 'apikeys' | 'integrations'>('users');
+
   const toggleTheme = toggleDark;
 
   const d = isDarkMode;
@@ -241,52 +243,70 @@ export default function AdminClient({
     }
   };
 
+  const tabs = [
+    { id: 'users' as const, label: 'Users', count: users.length },
+    { id: 'domains' as const, label: 'Domains', count: allDomains.length },
+    { id: 'apikeys' as const, label: 'API Keys' },
+    { id: 'integrations' as const, label: 'Integrations' },
+  ];
+
   return (
-    <div className={`min-h-dvh ${bg} ${text}`}>
+    <div className={`h-full overflow-y-auto ${bg} ${text}`}>
       {/* Header */}
-      <div className={`border-b ${d ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            <h1 className="text-lg font-semibold">Admin Panel</h1>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-lg transition-colors ${d ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
-              title={d ? 'Switch to light' : 'Switch to dark'}
-            >
-              {d ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              )}
-            </button>
-            <a
-              href="/"
-              className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md transition-colors ${
-                d ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      <div className={`sticky top-0 z-10 border-b ${d ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-2.5">
+              <svg className="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
-              Desktop
-            </a>
+              <h1 className="text-sm font-semibold">Admin</h1>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={toggleTheme} className={`p-1.5 rounded-md transition-colors ${d ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`} title={d ? 'Light mode' : 'Dark mode'}>
+                {d ? (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                ) : (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                )}
+              </button>
+              <a href="/" className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors ${d ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                Desktop
+              </a>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-0.5 -mb-px">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? d ? 'border-indigo-400 text-indigo-300' : 'border-indigo-600 text-indigo-600'
+                    : d ? 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.label}
+                {'count' in tab && tab.count !== undefined && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    activeTab === tab.id
+                      ? d ? 'bg-indigo-900/60 text-indigo-300' : 'bg-indigo-50 text-indigo-600'
+                      : d ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                  }`}>{tab.count}</span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
 
-        {/* Users table */}
-        <section>
+        {/* ── Users tab ── */}
+        {activeTab === 'users' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Users</h2>
           <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
             {deleteError && (
@@ -481,8 +501,10 @@ export default function AdminClient({
           </div>
         </section>
 
-        {/* Domains */}
-        <section>
+        }
+
+        {/* ── Domains tab ── */}
+        {activeTab === 'domains' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Domains</h2>
           <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
             <table className="w-full text-sm">
@@ -549,8 +571,10 @@ export default function AdminClient({
           </div>
         </section>
 
-        {/* System Settings */}
-        <section>
+        }
+
+        {/* ── API Keys tab ── */}
+        {activeTab === 'apikeys' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-1 ${textMuted}`}>System Settings</h2>
           <p className={`text-xs mb-4 ${textMuted}`}>These keys are used as fallback when users have no personal key configured.</p>
 
@@ -590,7 +614,7 @@ export default function AdminClient({
                   value={sysSettings.google_api_key ?? ''}
                   onChange={v => setSysSettings(prev => ({ ...prev, google_api_key: v }))}
                   isDarkMode={isDarkMode}
-                  helpText="Default key for Gemini models."
+                  helpText="Default key for Gemini chat and Gemini Image editing."
                 />
               </div>
             </div>
@@ -609,16 +633,6 @@ export default function AdminClient({
                   onChange={v => setSysSettings(prev => ({ ...prev, tavily_api_key: v }))}
                   isDarkMode={isDarkMode}
                   helpText="Default key for web search tool."
-                />
-                <ApiKeyField
-                  label="FAL.ai API Key"
-                  description="(image editing)"
-                  placeholder="fal-..."
-                  hasStoredValue={!!sysSettings.fal_ai_api_key}
-                  value={sysSettings.fal_ai_api_key ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, fal_ai_api_key: v }))}
-                  isDarkMode={isDarkMode}
-                  helpText="Used for background removal and image processing."
                 />
                 <ApiKeyField
                   label="Resend API Key"
@@ -655,8 +669,10 @@ export default function AdminClient({
           </div>
         </section>
 
-        {/* Instagram Accounts */}
-        <section>
+        }
+
+        {/* ── Integrations tab ── */}
+        {activeTab === 'integrations' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Instagram Accounts</h2>
           <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
             {/* Registered accounts */}
@@ -744,9 +760,10 @@ export default function AdminClient({
             </div>
           </div>
         </section>
+        }
 
-        {/* Create user form */}
-        <section>
+        {/* ── Create user (Users tab) ── */}
+        {activeTab === 'users' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Create Domain User</h2>
           <div className={`border rounded-lg p-6 ${cardBg}`}>
             <form onSubmit={handleCreate} className="space-y-5">
@@ -830,8 +847,10 @@ export default function AdminClient({
           </div>
         </section>
 
-        {/* API Key Audit Log */}
-        <section>
+        }
+
+        {/* ── Audit Log (API Keys tab) ── */}
+        {activeTab === 'apikeys' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>API Key Audit Log</h2>
           <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
             {auditLog.length === 0 ? (
@@ -884,6 +903,7 @@ export default function AdminClient({
             )}
           </div>
         </section>
+        }
 
       </div>
     </div>

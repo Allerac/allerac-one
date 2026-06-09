@@ -634,7 +634,6 @@ export default function InstagramPostStudio({
         onClose={() => setImageEditOpen(false)}
         imageBase64={images[clampedPreviewIndex].base64}
         imagePreview={images[clampedPreviewIndex].preview}
-        userId={userId}
         isDarkMode={isDarkMode}
         onApply={(resultBase64, resultPreview) => {
           setImages(prev => prev.map((img, i) =>
