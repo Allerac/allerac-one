@@ -81,10 +81,10 @@ describe('image editing action', () => {
     expect(request.headers['x-goog-api-key']).toBe('user-google-key');
 
     const body = JSON.parse(request.body);
-    expect(body.generationConfig.responseModalities).toEqual(['TEXT', 'IMAGE']);
+    expect(body.generationConfig).toBeUndefined();
     expect(body.contents[0].parts[0].text).toContain('on a marble table at golden hour');
-    expect(body.contents[0].parts[1].inlineData).toEqual({
-      mimeType: 'image/png',
+    expect(body.contents[0].parts[1].inline_data).toEqual({
+      mime_type: 'image/png',
       data: PNG_BASE64,
     });
   });

@@ -90,16 +90,13 @@ async function geminiImageEdit(
         parts: [
           { text: operationPrompt(operation) },
           {
-            inlineData: {
-              mimeType: detectImageMimeType(imageBase64),
+            inline_data: {
+              mime_type: detectImageMimeType(imageBase64),
               data: imageBase64,
             },
           },
         ],
       }],
-      generationConfig: {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
     }),
   });
   if (!res.ok) {
