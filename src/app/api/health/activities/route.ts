@@ -1,29 +1,17 @@
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
+import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { getRecentActivities } from '@/app/actions/health';
 
-const authService = new AuthService();
-
 export async function GET(request: Request): Promise<Response> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-
-  if (!sessionToken) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const user = await authService.validateSession(sessionToken);
-  if (!user) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const user = await requireCurrentUser();
     const url = new URL(request.url);
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '10'), 50);
     const date = url.searchParams.get('date') || undefined;
-    const activities = await getRecentActivities(user.id, limit, date || undefined);
+    const activities = await getRecentActivities(limit, date || undefined);
     return Response.json({ activities });
   } catch (err: unknown) {
+    const authError = authenticationErrorResponse(err);
+    if (authError) return authError;
     const message = err instanceof Error ? err.message : 'Unknown error';
     return Response.json({ error: message }, { status: 500 });
   }

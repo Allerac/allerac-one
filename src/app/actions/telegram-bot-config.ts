@@ -5,13 +5,15 @@
  */
 
 import { TelegramBotConfigService } from '@/app/services/telegram/telegram-bot-config.service';
+import { requireCurrentUser } from '@/app/lib/auth-session';
 
 /**
  * Get current user's bot configurations
  */
-export async function getUserBotConfigs(userId: string) {
+export async function getUserBotConfigs() {
   try {
-    const configs = await TelegramBotConfigService.getUserBotConfigs(userId);
+    const user = await requireCurrentUser();
+    const configs = await TelegramBotConfigService.getUserBotConfigs(user.id);
     return { success: true, configs };
   } catch (error) {
     console.error('[TelegramBotConfig] Error getting bot configs:', error);
@@ -23,20 +25,20 @@ export async function getUserBotConfigs(userId: string) {
  * Create a new bot configuration
  */
 export async function createBotConfig(
-  userId: string,
   botName: string,
   botToken: string,
   allowedTelegramIds: number[],
   botUsername?: string
 ) {
   try {
+    const user = await requireCurrentUser();
     // Validate bot token format (should be like: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)
     if (!botToken.match(/^\d+:[A-Za-z0-9_-]+$/)) {
       return { success: false, error: 'Invalid bot token format' };
     }
 
     const config = await TelegramBotConfigService.createBotConfig(
-      userId,
+      user.id,
       botName,
       botToken,
       allowedTelegramIds,
@@ -44,11 +46,11 @@ export async function createBotConfig(
     );
     
     return { success: true, config };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[TelegramBotConfig] Error creating bot config:', error);
     
     // Handle unique constraint violation
-    if (error.code === '23505') {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
       return { success: false, error: 'A bot with this name already exists' };
     }
     
@@ -60,7 +62,6 @@ export async function createBotConfig(
  * Update bot configuration
  */
 export async function updateBotConfig(
-  userId: string,
   botId: string,
   updates: {
     botName?: string;
@@ -71,6 +72,7 @@ export async function updateBotConfig(
   }
 ) {
   try {
+    const user = await requireCurrentUser();
     // Validate bot token format if provided
     if (updates.botToken && !updates.botToken.match(/^\d+:[A-Za-z0-9_-]+$/)) {
       return { success: false, error: 'Invalid bot token format' };
@@ -78,7 +80,7 @@ export async function updateBotConfig(
 
     const config = await TelegramBotConfigService.updateBotConfig(
       botId,
-      userId,
+      user.id,
       updates
     );
     
@@ -87,11 +89,11 @@ export async function updateBotConfig(
     }
     
     return { success: true, config };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[TelegramBotConfig] Error updating bot config:', error);
     
     // Handle unique constraint violation
-    if (error.code === '23505') {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
       return { success: false, error: 'A bot with this name already exists' };
     }
     
@@ -102,9 +104,10 @@ export async function updateBotConfig(
 /**
  * Toggle bot enabled/disabled
  */
-export async function toggleBotEnabled(userId: string, botId: string) {
+export async function toggleBotEnabled(botId: string) {
   try {
-    const config = await TelegramBotConfigService.toggleBotEnabled(botId, userId);
+    const user = await requireCurrentUser();
+    const config = await TelegramBotConfigService.toggleBotEnabled(botId, user.id);
     
     if (!config) {
       return { success: false, error: 'Bot configuration not found' };
@@ -120,9 +123,10 @@ export async function toggleBotEnabled(userId: string, botId: string) {
 /**
  * Delete bot configuration
  */
-export async function deleteBotConfig(userId: string, botId: string) {
+export async function deleteBotConfig(botId: string) {
   try {
-    const deleted = await TelegramBotConfigService.deleteBotConfig(botId, userId);
+    const user = await requireCurrentUser();
+    const deleted = await TelegramBotConfigService.deleteBotConfig(botId, user.id);
     
     if (!deleted) {
       return { success: false, error: 'Bot configuration not found' };
@@ -140,6 +144,7 @@ export async function deleteBotConfig(userId: string, botId: string) {
  */
 export async function testBotToken(botToken: string) {
   try {
+    await requireCurrentUser();
     const response = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
     const data = await response.json();
     

@@ -22,6 +22,7 @@ export interface ConversationSummary {
   importance_score: number;
   message_count: number;
   created_at: string;
+  domain_slug?: string | null;
   emotion?: string | null;
 }
 
@@ -69,8 +70,12 @@ export class ConversationMemoryService {
     try {
       // Step 1: Load all messages from the conversation
       const msgRes = await pool.query(
-        'SELECT role, content FROM chat_messages WHERE conversation_id = $1 ORDER BY created_at ASC',
-        [conversationId]
+        `SELECT cm.role, cm.content
+         FROM chat_messages cm
+         INNER JOIN chat_conversations cc ON cc.id = cm.conversation_id
+         WHERE cm.conversation_id = $1 AND cc.user_id = $2
+         ORDER BY cm.created_at ASC`,
+        [conversationId, userId]
       );
       const messages = msgRes.rows;
 
@@ -259,12 +264,12 @@ ${memoryItems.join('\n\n')}
    * @param conversationId - The conversation ID to check
    * @returns Promise with boolean indicating if summary should be created
    */
-  async shouldSummarizeConversation(conversationId: string): Promise<boolean> {
+  async shouldSummarizeConversation(conversationId: string, userId: string): Promise<boolean> {
     try {
       // Check if summary already exists
       const existingRes = await pool.query(
-        'SELECT id FROM conversation_summaries WHERE conversation_id = $1',
-        [conversationId]
+        'SELECT id FROM conversation_summaries WHERE conversation_id = $1 AND user_id = $2',
+        [conversationId, userId]
       );
 
       if (existingRes.rows.length > 0) {
@@ -273,8 +278,11 @@ ${memoryItems.join('\n\n')}
 
       // Check message count
       const countRes = await pool.query(
-        'SELECT COUNT(*) FROM chat_messages WHERE conversation_id = $1',
-        [conversationId]
+        `SELECT COUNT(*)
+         FROM chat_messages cm
+         INNER JOIN chat_conversations cc ON cc.id = cm.conversation_id
+         WHERE cm.conversation_id = $1 AND cc.user_id = $2`,
+        [conversationId, userId]
       );
 
       const count = parseInt(countRes.rows[0].count, 10);
@@ -292,11 +300,14 @@ ${memoryItems.join('\n\n')}
    * 
    * @param summaryId - The summary ID to delete
    */
-  async deleteSummary(summaryId: string): Promise<void> {
+  async deleteSummary(summaryId: string, userId: string): Promise<void> {
     try {
-      await pool.query('DELETE FROM conversation_summaries WHERE id = $1', [summaryId]);
-    } catch (error: any) {
-      throw new Error(`Failed to delete summary: ${error.message}`);
+      await pool.query(
+        'DELETE FROM conversation_summaries WHERE id = $1 AND user_id = $2',
+        [summaryId, userId]
+      );
+    } catch (error: unknown) {
+      throw new Error(`Failed to delete summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

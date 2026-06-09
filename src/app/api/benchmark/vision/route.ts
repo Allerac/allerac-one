@@ -11,19 +11,22 @@
  *   {"type":"done"}
  */
 
-import { cookies } from 'next/headers';
 import Anthropic from '@anthropic-ai/sdk';
-import { AuthService } from '@/app/services/auth/auth.service';
+import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import * as metricActions from '@/app/actions/metrics';
+import {
+  acquireOperationLimit,
+  operationLimitResponse,
+} from '@/app/lib/operation-limiter';
 
-const authService = new AuthService();
 const userSettingsService = new UserSettingsService();
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
+const MAX_IMAGE_INPUT_LENGTH = 8 * 1024 * 1024;
 
 interface VisionModel {
   model: string;
@@ -264,28 +267,40 @@ async function testAnthropicVision(
 }
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) {
-    return new Response(JSON.stringify({ error: 'Not authenticated' }), { status: 401 });
+  let user;
+  try {
+    user = await requireCurrentUser();
+  } catch (error) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: 'Authentication failed' }, { status: 500 });
   }
 
-  const user = await authService.validateSession(sessionToken);
-  if (!user) {
-    return new Response(JSON.stringify({ error: 'Invalid session' }), { status: 401 });
+  let body: { imageUrl?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+  const { imageUrl } = body;
 
-  const body = await request.json();
-  const { imageUrl } = body as { imageUrl: string };
-
-  if (!imageUrl) {
-    return new Response(JSON.stringify({ error: 'imageUrl is required' }), { status: 400 });
+  if (
+    !imageUrl
+    || imageUrl.length > MAX_IMAGE_INPUT_LENGTH
+    || (!imageUrl.startsWith('data:image/') && !imageUrl.startsWith('https://'))
+  ) {
+    return Response.json({ error: 'Invalid imageUrl' }, { status: 400 });
   }
 
   const settings = await userSettingsService.loadUserSettings(user.id);
   const githubToken = settings?.github_token || '';
   const geminiToken = settings?.google_api_key || '';
   const anthropicToken = settings?.anthropic_api_key || '';
+
+  const limitResult = acquireOperationLimit('benchmark', user.id);
+  if (!limitResult.allowed) {
+    return operationLimitResponse(limitResult);
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -379,6 +394,8 @@ export async function POST(request: Request) {
       } catch (err: any) {
         controller.enqueue(encode({ type: 'error', message: err.message || 'Vision benchmark failed' }));
         controller.close();
+      } finally {
+        limitResult.lease.release();
       }
     },
   });
@@ -388,6 +405,7 @@ export async function POST(request: Request) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
+      ...limitResult.headers,
     },
   });
 }

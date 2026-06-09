@@ -57,7 +57,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
 
   useEffect(() => {
     if (!userId) return;
-    getBenchmarkHistory(userId).then(h => {
+    getBenchmarkHistory().then(h => {
       setHistory(h);
       setHistoryLoading(false);
     });
@@ -129,7 +129,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
             setLastRunId(event.runId);
             // Refresh history
             if (userId) {
-              const h = await getBenchmarkHistory(userId);
+              const h = await getBenchmarkHistory();
               setHistory(h);
             }
           } else if (event.type === 'error') {
@@ -165,7 +165,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
 
   const handleClearHistory = async () => {
     if (!userId) return;
-    await clearBenchmarkHistory(userId);
+    await clearBenchmarkHistory();
     setHistory([]);
     setTests({});
     setLastRunId(null);

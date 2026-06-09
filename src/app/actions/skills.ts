@@ -3,16 +3,14 @@
 import { SkillsService } from '../services/skills/skills.service';
 import pool from '@/app/clients/db';
 import { TelegramBotConfigService } from '../services/telegram/telegram-bot-config.service';
+import { requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
 
 const skillsService = new SkillsService();
 
-export async function getAllSkills(userId: string | null) {
+export async function getAllSkills() {
   try {
-    if (!userId) {
-      // Return only public shared skills if no user
-      return await skillsService.getAvailableSkills('00000000-0000-0000-0000-000000000000');
-    }
-    return await skillsService.getAvailableSkills(userId);
+    const user = await requireCurrentUser();
+    return await skillsService.getAvailableSkills(user.id);
   } catch (error) {
     console.error('[Actions] Error getting skills:', error);
     throw error;
@@ -21,7 +19,8 @@ export async function getAllSkills(userId: string | null) {
 
 export async function getSkillById(skillId: string) {
   try {
-    return await skillsService.getSkillById(skillId);
+    const user = await requireCurrentUser();
+    return await skillsService.getSkillForUser(skillId, user.id);
   } catch (error) {
     console.error('[Actions] Error getting skill:', error);
     throw error;
@@ -29,7 +28,6 @@ export async function getSkillById(skillId: string) {
 }
 
 export async function createSkill(data: {
-  userId: string | null;
   name: string;
   displayName: string;
   description: string;
@@ -39,8 +37,9 @@ export async function createSkill(data: {
   shared?: boolean;
 }) {
   try {
+    const user = await requireCurrentUser();
     return await skillsService.createSkill({
-      user_id: data.userId,
+      user_id: user.id,
       name: data.name,
       display_name: data.displayName,
       description: data.description,
@@ -68,7 +67,8 @@ export async function updateSkill(skillId: string, data: {
   enabled?: boolean;
 }) {
   try {
-    return await skillsService.updateSkill(skillId, {
+    const user = await requireCurrentUser();
+    return await skillsService.updateSkill(skillId, user.id, user.is_admin, {
       name: data.name,
       display_name: data.displayName,
       description: data.description,
@@ -82,9 +82,10 @@ export async function updateSkill(skillId: string, data: {
   }
 }
 
-export async function deleteSkill(skillId: string, userId: string) {
+export async function deleteSkill(skillId: string) {
   try {
-    return await skillsService.deleteSkill(skillId, userId);
+    const user = await requireCurrentUser();
+    return await skillsService.deleteSkill(skillId, user.id);
   } catch (error) {
     console.error('[Actions] Error deleting skill:', error);
     throw error;
@@ -93,7 +94,10 @@ export async function deleteSkill(skillId: string, userId: string) {
 
 export async function getSkillUsageStats(skillId: string) {
   try {
-    return await skillsService.getSkillStats(skillId);
+    const user = await requireCurrentUser();
+    const skill = await skillsService.getSkillForUser(skillId, user.id);
+    if (!skill) throw new Error('Skill not found');
+    return await skillsService.getSkillStats(skillId, user.id);
   } catch (error) {
     console.error('[Actions] Error getting skill stats:', error);
     throw error;
@@ -102,6 +106,9 @@ export async function getSkillUsageStats(skillId: string) {
 
 export async function getBotSkills(botId: string) {
   try {
+    const user = await requireCurrentUser();
+    const bot = await TelegramBotConfigService.getBotConfig(botId, user.id);
+    if (!bot) throw new Error('Bot not found');
     return await skillsService.getBotSkills(botId);
   } catch (error) {
     console.error('[Actions] Error getting bot skills:', error);
@@ -111,6 +118,12 @@ export async function getBotSkills(botId: string) {
 
 export async function assignSkillToBot(botId: string, skillId: string, isDefault: boolean = false) {
   try {
+    const user = await requireCurrentUser();
+    const [bot, skill] = await Promise.all([
+      TelegramBotConfigService.getBotConfig(botId, user.id),
+      skillsService.getSkillForUser(skillId, user.id),
+    ]);
+    if (!bot || !skill) throw new Error('Bot or skill not found');
     return await skillsService.assignSkillToBot(skillId, botId, isDefault);
   } catch (error) {
     console.error('[Actions] Error assigning skill to bot:', error);
@@ -120,6 +133,9 @@ export async function assignSkillToBot(botId: string, skillId: string, isDefault
 
 export async function removeSkillFromBot(botId: string, skillId: string) {
   try {
+    const user = await requireCurrentUser();
+    const bot = await TelegramBotConfigService.getBotConfig(botId, user.id);
+    if (!bot) throw new Error('Bot not found');
     return await skillsService.unassignSkillFromBot(skillId, botId);
   } catch (error) {
     console.error('[Actions] Error removing skill from bot:', error);
@@ -128,18 +144,22 @@ export async function removeSkillFromBot(botId: string, skillId: string) {
 }
 
 // Web chat actions
-export async function getUserSkills(userId: string) {
+export async function getUserSkills() {
   try {
-    return await skillsService.getUserSkills(userId);
+    const user = await requireCurrentUser();
+    return await skillsService.getUserSkills(user.id);
   } catch (error) {
     console.error('[Actions] Error getting user skills:', error);
     throw error;
   }
 }
 
-export async function assignSkillToUser(userId: string, skillId: string, isDefault: boolean = false) {
+export async function assignSkillToUser(skillId: string, isDefault: boolean = false) {
   try {
-    return await skillsService.assignSkillToUser(skillId, userId, isDefault);
+    const user = await requireCurrentUser();
+    const skill = await skillsService.getSkillForUser(skillId, user.id);
+    if (!skill) throw new Error('Skill not found');
+    return await skillsService.assignSkillToUser(skillId, user.id, isDefault);
   } catch (error) {
     console.error('[Actions] Error assigning skill to user:', error);
     throw error;
@@ -148,14 +168,19 @@ export async function assignSkillToUser(userId: string, skillId: string, isDefau
 
 export async function activateSkill(
   skillId: string,
-  conversationId: string,
-  userId: string
+  conversationId: string
 ) {
   try {
+    const user = await requireCurrentUser();
+    const [conversation, skill] = await Promise.all([
+      pool.query('SELECT id FROM chat_conversations WHERE id = $1 AND user_id = $2', [conversationId, user.id]),
+      skillsService.getSkillForUser(skillId, user.id),
+    ]);
+    if (!conversation.rows[0] || !skill) throw new Error('Conversation or skill not found');
     return await skillsService.activateSkill(
       skillId,
       conversationId,
-      userId,
+      user.id,
       'manual'
     );
   } catch (error) {
@@ -166,6 +191,12 @@ export async function activateSkill(
 
 export async function deactivateSkill(conversationId: string) {
   try {
+    const user = await requireCurrentUser();
+    const conversation = await pool.query(
+      'SELECT id FROM chat_conversations WHERE id = $1 AND user_id = $2',
+      [conversationId, user.id]
+    );
+    if (!conversation.rows[0]) throw new Error('Conversation not found');
     return await skillsService.deactivateSkill(conversationId);
   } catch (error) {
     console.error('[Actions] Error deactivating skill:', error);
@@ -175,6 +206,12 @@ export async function deactivateSkill(conversationId: string) {
 
 export async function getActiveSkill(conversationId: string) {
   try {
+    const user = await requireCurrentUser();
+    const conversation = await pool.query(
+      'SELECT id FROM chat_conversations WHERE id = $1 AND user_id = $2',
+      [conversationId, user.id]
+    );
+    if (!conversation.rows[0]) return null;
     return await skillsService.getActiveSkill(conversationId);
   } catch (error) {
     console.error('[Actions] Error getting active skill:', error);
@@ -183,9 +220,10 @@ export async function getActiveSkill(conversationId: string) {
 }
 
 // Telegram bot related
-export async function getUserTelegramBot(userId: string) {
+export async function getUserTelegramBot() {
   try {
-    const bots = await TelegramBotConfigService.getUserBotConfigs(userId);
+    const user = await requireCurrentUser();
+    const bots = await TelegramBotConfigService.getUserBotConfigs(user.id);
     // Return the first enabled bot
     return bots.find(bot => bot.enabled) || null;
   } catch (error) {
@@ -197,11 +235,7 @@ export async function getUserTelegramBot(userId: string) {
 // Skill → Tool assignments
 export async function getSkillTools(skillId: string): Promise<string[]> {
   try {
-    const res = await pool.query(
-      'SELECT tool_name FROM skill_tools WHERE skill_id = $1 ORDER BY tool_name',
-      [skillId]
-    );
-    return res.rows.map((r: { tool_name: string }) => r.tool_name);
+    return await skillsService.getSkillTools(skillId);
   } catch (error) {
     console.error('[Actions] getSkillTools failed:', error);
     return [];
@@ -210,6 +244,12 @@ export async function getSkillTools(skillId: string): Promise<string[]> {
 
 export async function setSkillTools(skillId: string, toolNames: string[]): Promise<{ success: boolean; error?: string }> {
   try {
+    const user = await requireCurrentUser();
+    const skill = await pool.query(
+      'SELECT id FROM skills WHERE id = $1 AND (user_id = $2 OR $3 = true)',
+      [skillId, user.id, user.is_admin]
+    );
+    if (!skill.rows[0]) return { success: false, error: 'Skill not found' };
     await pool.query('DELETE FROM skill_tools WHERE skill_id = $1', [skillId]);
     if (toolNames.length > 0) {
       await pool.query(
@@ -245,6 +285,7 @@ export async function getDomainSkillDefault(domainSlug: string): Promise<{ skill
 
 export async function getAllDomainSkillDefaults(): Promise<Array<{ domain_slug: string; skill_id: string | null; skill_name: string | null; display_name: string | null }>> {
   try {
+    await requireCurrentAdmin();
     const res = await pool.query(
       `SELECT dsd.domain_slug, dsd.skill_id, s.name AS skill_name, s.display_name
        FROM domain_skill_defaults dsd
@@ -260,6 +301,7 @@ export async function getAllDomainSkillDefaults(): Promise<Array<{ domain_slug: 
 
 export async function setDomainSkillDefault(domainSlug: string, skillId: string | null): Promise<{ success: boolean; error?: string }> {
   try {
+    await requireCurrentAdmin();
     await pool.query(
       `INSERT INTO domain_skill_defaults (domain_slug, skill_id, updated_at)
        VALUES ($1, $2, NOW())

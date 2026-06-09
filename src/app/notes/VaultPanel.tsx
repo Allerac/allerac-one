@@ -393,9 +393,9 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
 
   const loadNotes = useCallback(async (tag?: string) => {
     setLoading(true);
-    const res = await listNotes(userId, { limit: 50, tag });
+    const res = await listNotes({ limit: 50, tag });
     if (res.success) setNotes(res.notes as unknown as Note[]);
-    const tagRes = await getAllTags(userId);
+    const tagRes = await getAllTags();
     if (tagRes.success) setTags(tagRes.tags);
     setLoading(false);
   }, [userId]);
@@ -405,7 +405,7 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   const handleSearch = useCallback(async () => {
     if (!query.trim()) { loadNotes(activeTag ?? undefined); return; }
     setSearching(true);
-    const res = await searchNotes(userId, query);
+    const res = await searchNotes(query);
     if (res.success) setNotes(res.results as unknown as Note[]);
     setSearching(false);
   }, [query, userId, activeTag, loadNotes]);
@@ -419,7 +419,7 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   const handleQuickSave = async () => {
     if (!quickNote.trim()) return;
     setSaving(true);
-    await createNote(userId, { content: quickNote.trim(), source: 'manual' });
+    await createNote({ content: quickNote.trim(), source: 'manual' });
     setQuickNote('');
     await loadNotes(activeTag ?? undefined);
     setSaving(false);
@@ -430,9 +430,9 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
       setSelectedNote(null);
       onEditorToggle?.(false);
     }
-    await deleteNote(userId, id);
+    await deleteNote(id);
     setNotes(prev => prev.filter(n => n.id !== id));
-    const tagRes = await getAllTags(userId);
+    const tagRes = await getAllTags();
     if (tagRes.success) setTags(tagRes.tags);
   };
 
@@ -447,12 +447,12 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   };
 
   const handleSave = async (id: string, content: string, title: string, tags: string[], due_date: string | null) => {
-    await updateNote(userId, id, { content, title: title || null, tags, due_date });
+    await updateNote(id, { content, title: title || null, tags, due_date });
     setNotes(prev => prev.map(n =>
       n.id === id ? { ...n, content, title: title || null, tags, due_date, updated_at: new Date().toISOString() } : n
     ));
     setSelectedNote(prev => prev?.id === id ? { ...prev, content, title: title || null, tags, due_date } : prev);
-    const tagRes = await getAllTags(userId);
+    const tagRes = await getAllTags();
     if (tagRes.success) setTags(tagRes.tags);
   };
 
@@ -470,7 +470,7 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
           <button
             onClick={async () => {
               setSaving(true);
-              const res = await createNote(userId, { content: '', source: 'manual' });
+              const res = await createNote({ content: '', source: 'manual' });
               if (res.success && res.note) {
                 await loadNotes(activeTag ?? undefined);
                 handleSelectNote(res.note as unknown as Note);
@@ -574,7 +574,7 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
             <button
               onClick={async () => {
                 setSaving(true);
-                const res = await createNote(userId, { content: '', source: 'manual' });
+                const res = await createNote({ content: '', source: 'manual' });
                 if (res.success && res.note) {
                   await loadNotes(activeTag ?? undefined);
                   handleSelectNote(res.note as unknown as Note);

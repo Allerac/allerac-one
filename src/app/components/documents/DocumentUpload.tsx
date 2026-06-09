@@ -43,7 +43,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
   const loadDocuments = useCallback(async (): Promise<Document[]> => {
     try {
       if (!githubToken || !userId) return [];
-      const data = await docActions.getAllDocuments(userId, githubToken, domainSlug);
+      const data = await docActions.getAllDocuments(domainSlug);
       setDocuments(data || []);
       return data || [];
     } catch (error) {
@@ -118,7 +118,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
       formData.append('file', file);
 
       // Use async upload - returns immediately while processing continues in background
-      await docActions.uploadDocument(formData, userId, githubToken, domainSlug);
+      await docActions.uploadDocument(formData, domainSlug);
 
       setUploadProgress('Document uploaded! Processing in background...');
 
@@ -195,7 +195,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     }
 
     try {
-      await docActions.deleteDocument(documentId, userId, githubToken);
+      await docActions.deleteDocument(documentId);
       await loadDocuments();
 
       if (onDocumentsChange) {

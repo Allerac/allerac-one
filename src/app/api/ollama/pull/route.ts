@@ -1,13 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  authenticationErrorResponse,
+  ForbiddenError,
+  requireCurrentAdmin,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
+import {
+  acquireOperationLimit,
+  operationLimitResponse,
+} from '@/app/lib/operation-limiter';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
+const MODEL_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*(?::[a-zA-Z0-9][a-zA-Z0-9._-]*)?$/;
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireCurrentAdmin();
     const { modelId } = await request.json();
 
-    if (!modelId) {
-      return NextResponse.json({ error: 'Model ID is required' }, { status: 400 });
+    if (
+      typeof modelId !== 'string'
+      || modelId.length > 200
+      || !MODEL_ID_PATTERN.test(modelId)
+    ) {
+      return NextResponse.json({ error: 'Invalid model ID' }, { status: 400 });
+    }
+
+    const limitResult = acquireOperationLimit('model-download', user.id);
+    if (!limitResult.allowed) {
+      return operationLimitResponse(limitResult);
     }
 
     // Create a streaming response
@@ -74,6 +95,8 @@ export async function POST(request: NextRequest) {
         } catch (error: any) {
           controller.enqueue(`data: ${JSON.stringify({ error: error.message || 'Unknown error' })}\n\n`);
           controller.close();
+        } finally {
+          limitResult.lease.release();
         }
       },
     });
@@ -83,9 +106,13 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        ...limitResult.headers,
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to process request' }, { status: 500 });
+  } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    const message = error instanceof Error ? error.message : 'Failed to process request';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -38,8 +38,8 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
   async function load() {
     setState('loading');
     const [data, refs] = await Promise.all([
-      instagramActions.getInstagramStatus(userId!),
-      instagramActions.getInstagramRefSettings(userId!),
+      instagramActions.getInstagramStatus(),
+      instagramActions.getInstagramRefSettings(),
     ]);
     setRefManaged(refs.managed);
     setRefPrefix(refs.prefix);
@@ -56,32 +56,32 @@ export default function InstagramSettings({ userId, isDarkMode }: InstagramSetti
 
   async function handleSaveRefSettings() {
     setRefSaving(true);
-    const result = await instagramActions.saveInstagramRefSettings(userId!, refManaged, refPrefix, refCounter);
+    const result = await instagramActions.saveInstagramRefSettings(refManaged, refPrefix, refCounter);
     setMessage({ type: result.success ? 'success' : 'error', text: result.success ? 'Saved.' : result.message });
     setRefSaving(false);
   }
 
   async function handleDisconnect() {
     if (!confirm('Disconnect your Instagram account?')) return;
-    await instagramActions.disconnectInstagram(userId!);
+    await instagramActions.disconnectInstagram();
     setUsername('');
     setState('disconnected');
     setMessage({ type: 'success', text: 'Instagram disconnected.' });
   }
 
   async function handleResubscribe() {
-    const result = await instagramActions.resubscribeWebhooks(userId!);
+    const result = await instagramActions.resubscribeWebhooks();
     setMessage({ type: result.success ? 'success' : 'error', text: result.message });
   }
 
   async function handleDebugToken() {
-    const result = await instagramActions.debugTokenPermissions(userId!);
+    const result = await instagramActions.debugTokenPermissions();
     setMessage({ type: result.success ? 'success' : 'error', text: JSON.stringify(result.data) });
   }
 
   async function handleForceRevoke() {
     if (!confirm('This will revoke app access from Instagram and disconnect. You will need to reconnect.')) return;
-    const result = await instagramActions.revokeInstagramAccess(userId!);
+    const result = await instagramActions.revokeInstagramAccess();
     if (result.success) { setState('disconnected'); setUsername(''); }
     setMessage({ type: result.success ? 'success' : 'error', text: result.message });
   }

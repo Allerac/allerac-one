@@ -1,11 +1,14 @@
 'use server';
 
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 import sharp from 'sharp';
+import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 
 const sysSettings = new SystemSettingsService();
 
 const FAL_BASE = 'https://fal.run';
+const MAX_IMAGE_BASE64_LENGTH = 20 * 1024 * 1024;
 
 export type ImageEditOperation =
   | { type: 'remove-background' }
@@ -15,7 +18,12 @@ export type ImageEditOperation =
 
 type EditResult =
   | { success: true; resultBase64: string; mimeType: 'image/png' | 'image/jpeg' }
-  | { success: false; error: string };
+  | {
+      success: false;
+      error: string;
+      code?: 'RATE_LIMITED';
+      retryAfterSeconds?: number;
+    };
 
 async function getFalKey(): Promise<string> {
   const settings = await sysSettings.loadAll();
@@ -46,64 +54,96 @@ async function fetchAsBuffer(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
+async function performImageEdit(
+  imageBase64: string,
+  operation: ImageEditOperation,
+  falKey: string,
+): Promise<EditResult> {
+  const dataUri = `data:image/jpeg;base64,${imageBase64}`;
+
+  switch (operation.type) {
+    case 'remove-background': {
+      const result = await falPost('fal-ai/birefnet', { image_url: dataUri }, falKey);
+      const url = result.image?.url;
+      if (!url) throw new Error('Sem imagem resultado do birefnet');
+      const buf = await fetchAsBuffer(url);
+      return { success: true, resultBase64: buf.toString('base64'), mimeType: 'image/png' };
+    }
+
+    case 'white-background': {
+      const result = await falPost('fal-ai/birefnet', { image_url: dataUri }, falKey);
+      const url = result.image?.url;
+      if (!url) throw new Error('Sem imagem resultado do birefnet');
+      const pngBuf = await fetchAsBuffer(url);
+      const finalBuf = await sharp(pngBuf)
+        .flatten({ background: { r: 255, g: 255, b: 255 } })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+      return { success: true, resultBase64: finalBuf.toString('base64'), mimeType: 'image/jpeg' };
+    }
+
+    case 'lifestyle-scene': {
+      const prompt = operation.prompt.trim() || 'professional product photography, clean studio, soft light, elegant background';
+      const result = await falPost('fal-ai/flux/dev/image-to-image', {
+        image_url: dataUri,
+        prompt,
+        strength: 0.85,
+        image_size: 'square_hd',
+        num_images: 1,
+      }, falKey);
+      const url = result.images?.[0]?.url;
+      if (!url) throw new Error('Sem imagem resultado do FLUX img2img');
+      const buf = await fetchAsBuffer(url);
+      const jpegBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
+      return { success: true, resultBase64: jpegBuf.toString('base64'), mimeType: 'image/jpeg' };
+    }
+
+    case 'enhance': {
+      const result = await falPost('fal-ai/esrgan', { image_url: dataUri }, falKey);
+      const url = result.image?.url;
+      if (!url) throw new Error('Sem imagem resultado do ESRGAN');
+      const buf = await fetchAsBuffer(url);
+      const jpegBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
+      return { success: true, resultBase64: jpegBuf.toString('base64'), mimeType: 'image/jpeg' };
+    }
+  }
+}
+
 export async function editProductImage(
-  _userId: string,
   imageBase64: string,
   operation: ImageEditOperation,
 ): Promise<EditResult> {
   try {
-    const falKey = await getFalKey();
-    const dataUri = `data:image/jpeg;base64,${imageBase64}`;
+    const user = await requireCurrentUser();
+    await assertDomainAccess(user, 'social');
+    if (
+      typeof imageBase64 !== 'string'
+      || imageBase64.length === 0
+      || imageBase64.length > MAX_IMAGE_BASE64_LENGTH
+      || !operation
+      || typeof operation.type !== 'string'
+      || (operation.type === 'lifestyle-scene' && operation.prompt.length > 2_000)
+    ) {
+      return { success: false, error: 'Entrada de imagem inválida' };
+    }
 
-    switch (operation.type) {
-      case 'remove-background': {
-        const result = await falPost('fal-ai/birefnet', { image_url: dataUri }, falKey);
-        const url = result.image?.url;
-        if (!url) throw new Error('Sem imagem resultado do birefnet');
-        const buf = await fetchAsBuffer(url);
-        return { success: true, resultBase64: buf.toString('base64'), mimeType: 'image/png' };
-      }
+    const limitResult = acquireOperationLimit('image-edit', user.id);
+    if (!limitResult.allowed) {
+      return {
+        success: false,
+        error: limitResult.reason === 'concurrency'
+          ? 'Já existe uma edição de imagem em andamento'
+          : 'Limite de edições de imagem excedido',
+        code: 'RATE_LIMITED',
+        retryAfterSeconds: limitResult.retryAfterSeconds,
+      };
+    }
 
-      case 'white-background': {
-        const result = await falPost('fal-ai/birefnet', { image_url: dataUri }, falKey);
-        const url = result.image?.url;
-        if (!url) throw new Error('Sem imagem resultado do birefnet');
-        const pngBuf = await fetchAsBuffer(url);
-        // Flatten transparent pixels onto white, output JPEG
-        const finalBuf = await sharp(pngBuf)
-          .flatten({ background: { r: 255, g: 255, b: 255 } })
-          .jpeg({ quality: 95 })
-          .toBuffer();
-        return { success: true, resultBase64: finalBuf.toString('base64'), mimeType: 'image/jpeg' };
-      }
-
-      case 'lifestyle-scene': {
-        const prompt = operation.prompt.trim() || 'professional product photography, clean studio, soft light, elegant background';
-        const result = await falPost('fal-ai/flux/dev/image-to-image', {
-          image_url: dataUri,
-          prompt,
-          strength: 0.85,
-          image_size: 'square_hd',
-          num_images: 1,
-        }, falKey);
-        const url = result.images?.[0]?.url;
-        if (!url) throw new Error('Sem imagem resultado do FLUX img2img');
-        const buf = await fetchAsBuffer(url);
-        const jpegBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
-        return { success: true, resultBase64: jpegBuf.toString('base64'), mimeType: 'image/jpeg' };
-      }
-
-      case 'enhance': {
-        const result = await falPost('fal-ai/esrgan', { image_url: dataUri }, falKey);
-        const url = result.image?.url;
-        if (!url) throw new Error('Sem imagem resultado do ESRGAN');
-        const buf = await fetchAsBuffer(url);
-        const jpegBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
-        return { success: true, resultBase64: jpegBuf.toString('base64'), mimeType: 'image/jpeg' };
-      }
-
-      default:
-        return { success: false, error: 'Operação desconhecida' };
+    try {
+      const falKey = await getFalKey();
+      return await performImageEdit(imageBase64, operation, falKey);
+    } finally {
+      limitResult.lease.release();
     }
   } catch (error: any) {
     return { success: false, error: error.message };

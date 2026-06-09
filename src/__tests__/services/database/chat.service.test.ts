@@ -12,6 +12,29 @@ describe('ChatService', () => {
     chatService = new ChatService();
   });
 
+  describe('getConversationForUser()', () => {
+    it('should load a conversation only when it belongs to the user', async () => {
+      const conversation = { id: 'conv_123', user_id: 'user_123', title: 'Chat' };
+      mockQuery.mockResolvedValueOnce({ rows: [conversation] });
+
+      const result = await chatService.getConversationForUser('conv_123', 'user_123');
+
+      expect(result).toEqual(conversation);
+      expect(mockQuery).toHaveBeenCalledWith(
+        'SELECT * FROM chat_conversations WHERE id = $1 AND user_id = $2',
+        ['conv_123', 'user_123']
+      );
+    });
+
+    it('should return null when the conversation does not belong to the user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await chatService.getConversationForUser('conv_123', 'user_other');
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('loadSystemMessage()', () => {
     it('should load system message for user', async () => {
       const userId = 'user_123';
@@ -177,6 +200,26 @@ describe('ChatService', () => {
       expect(result.success).toBe(false);
       expect((result as any).error).toBeDefined();
     });
+
+    it('should scope pin updates by user when userId is provided', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+      const result = await chatService.pinConversation('conv_123', true, 'user_123');
+
+      expect(result.success).toBe(true);
+      expect(mockQuery).toHaveBeenCalledWith(
+        'UPDATE chat_conversations SET pinned = $1 WHERE id = $2 AND user_id = $3',
+        [true, 'conv_123', 'user_123']
+      );
+    });
+
+    it('should fail pin updates when no owned conversation was updated', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const result = await chatService.pinConversation('conv_123', true, 'user_123');
+
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('loadMessages()', () => {
@@ -213,6 +256,18 @@ describe('ChatService', () => {
 
       expect(result).toEqual([]);
     });
+
+    it('should join conversations and scope messages by user when userId is provided', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      await chatService.loadMessages('conv_123', 'user_123');
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('JOIN chat_conversations cc ON cc.id = cm.conversation_id'),
+        ['conv_123', 'user_123']
+      );
+      expect(mockQuery.mock.calls[0][0]).toContain('cc.user_id = $2');
+    });
   });
 
   describe('createConversation()', () => {
@@ -228,8 +283,8 @@ describe('ChatService', () => {
 
       expect(result).toBe('conv_new_123');
       expect(mockQuery).toHaveBeenCalledWith(
-        'INSERT INTO chat_conversations (user_id, title) VALUES ($1, $2) RETURNING id',
-        [userId, title]
+        'INSERT INTO chat_conversations (user_id, title, domain_slug) VALUES ($1, $2, $3) RETURNING id',
+        [userId, title, 'chat']
       );
     });
 
@@ -270,7 +325,7 @@ describe('ChatService', () => {
       // Check both queries
       const firstCall = mockQuery.mock.calls[0];
       expect(firstCall[0]).toContain('INSERT INTO chat_messages');
-      expect(firstCall[1]).toEqual([conversationId, role, content]);
+      expect(firstCall[1]).toEqual([conversationId, role, content, null]);
 
       const secondCall = mockQuery.mock.calls[1];
       expect(secondCall[0]).toContain('UPDATE chat_conversations SET updated_at');
@@ -309,6 +364,30 @@ describe('ChatService', () => {
 
       expect(result.success).toBe(false);
     });
+
+    it('should check conversation ownership before saving when userId is provided', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'conv_123', user_id: 'user_123' }] });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await chatService.saveMessage('conv_123', 'user', 'text', { userId: 'user_123' });
+
+      expect(result.success).toBe(true);
+      expect(mockQuery.mock.calls[0]).toEqual([
+        'SELECT * FROM chat_conversations WHERE id = $1 AND user_id = $2',
+        ['conv_123', 'user_123'],
+      ]);
+      expect(mockQuery).toHaveBeenCalledTimes(3);
+    });
+
+    it('should reject saves when the conversation is not owned by the user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await chatService.saveMessage('conv_123', 'user', 'text', { userId: 'user_123' });
+
+      expect(result.success).toBe(false);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('renameConversation()', () => {
@@ -344,6 +423,18 @@ describe('ChatService', () => {
       expect(result.success).toBe(false);
       expect((result as any).error).toBeDefined();
     });
+
+    it('should scope renames by user when userId is provided', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+      const result = await chatService.renameConversation('conv_123', 'New', 'user_123');
+
+      expect(result.success).toBe(true);
+      expect(mockQuery).toHaveBeenCalledWith(
+        'UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3',
+        ['New', 'conv_123', 'user_123']
+      );
+    });
   });
 
   describe('deleteConversation()', () => {
@@ -368,6 +459,18 @@ describe('ChatService', () => {
 
       expect(result.success).toBe(false);
       expect((result as any).error).toBeDefined();
+    });
+
+    it('should scope deletes by user when userId is provided', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+      const result = await chatService.deleteConversation('conv_123', 'user_123');
+
+      expect(result.success).toBe(true);
+      expect(mockQuery).toHaveBeenCalledWith(
+        'DELETE FROM chat_conversations WHERE id = $1 AND user_id = $2',
+        ['conv_123', 'user_123']
+      );
     });
   });
 });

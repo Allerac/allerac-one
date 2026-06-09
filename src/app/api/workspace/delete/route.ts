@@ -1,33 +1,26 @@
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
 import { ShellTool } from '@/app/tools/shell.tool';
-import path from 'path';
+import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { getUserWorkspaceRoot, resolveUserWorkspaceFilePath } from '@/app/lib/workspace-paths';
 
-const authService = new AuthService();
-const WORKSPACE_BASE = '/workspace/projects';
-
-function safePath(input: string, userId: string): string | null {
-  const userRoot = `${WORKSPACE_BASE}/${userId}`;
-  const resolved = path.resolve(input || '');
-  if (resolved === userRoot) return null; // never delete user root
-  if (!resolved.startsWith(userRoot + '/')) return null;
-  return resolved;
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 export async function DELETE(request: Request): Promise<Response> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await requireCurrentUser();
+    const { path: inputPath } = await request.json();
+    const safe = resolveUserWorkspaceFilePath(user.id, inputPath);
+    if (!safe || safe === getUserWorkspaceRoot(user.id)) return Response.json({ error: 'Invalid path' }, { status: 400 });
 
-  const { path: inputPath } = await request.json();
-  const safe = safePath(inputPath, user.id);
-  if (!safe) return Response.json({ error: 'Invalid path' }, { status: 400 });
+    const shell = new ShellTool();
+    const result = await shell.execute(`rm -rf -- ${shellQuote(safe)}`);
+    if (!result.success) return Response.json({ error: result.stderr || 'Delete failed' }, { status: 500 });
 
-  const shell = new ShellTool();
-  const result = await shell.execute(`rm -rf -- "${safe}"`);
-  if (!result.success) return Response.json({ error: result.stderr || 'Delete failed' }, { status: 500 });
-
-  return Response.json({ ok: true });
+    return Response.json({ ok: true });
+  } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: error instanceof Error ? error.message : 'Delete failed' }, { status: 500 });
+  }
 }

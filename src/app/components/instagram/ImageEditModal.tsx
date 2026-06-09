@@ -59,7 +59,7 @@ export default function ImageEditModal({
           ? { type: 'lifestyle-scene', prompt }
           : { type: selectedOp };
 
-      const res = await editProductImage(userId, imageBase64, operation);
+      const res = await editProductImage(imageBase64, operation);
       if (!res.success) { setError(res.error); return; }
 
       const preview = `data:${res.mimeType};base64,${res.resultBase64}`;

@@ -49,7 +49,7 @@ export default function MyAlleracModal({
     if (!userId) return;
     setInstructionsLoading(true);
     try {
-      const content = await userActions.getDomainInstructions(userId, domainSlug);
+      const content = await userActions.getDomainInstructions(domainSlug);
       const value = content || buildDefault();
       setInstructions(value);
       setInstructionsEdit(value);
@@ -88,7 +88,7 @@ export default function MyAlleracModal({
     if (!userId) return;
     setInstructionsSaving(true);
     try {
-      await userActions.saveDomainInstructions(userId, domainSlug, instructionsEdit.trim());
+      await userActions.saveDomainInstructions(domainSlug, instructionsEdit.trim());
       setInstructions(instructionsEdit.trim());
     } finally {
       setInstructionsSaving(false);

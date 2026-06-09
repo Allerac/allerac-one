@@ -2,18 +2,26 @@
 
 import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
+import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+import { requireCurrentUser } from '@/app/lib/auth-session';
 
-export async function getRelevantContext(query: string, userId: string, githubToken: string) {
-    console.log('[RAG] getRelevantContext called:', { query: query.substring(0, 50), userId, hasToken: !!githubToken });
+const userSettingsService = new UserSettingsService();
+const systemSettingsService = new SystemSettingsService();
 
+export async function getRelevantContext(query: string) {
     try {
-        const embeddingService = new EmbeddingService(githubToken);
+        const user = await requireCurrentUser();
+        const [settings, systemSettings] = await Promise.all([
+            userSettingsService.loadUserSettings(user.id),
+            systemSettingsService.loadAll(),
+        ]);
+        const token = settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN || '';
+        const embeddingService = new EmbeddingService(token);
         const vectorService = new VectorSearchService(embeddingService);
-        const result = await vectorService.getRelevantContext(query, userId);
-        console.log('[RAG] Context found:', result.substring(0, 100) + '...');
-        return result;
-    } catch (error: any) {
-        console.error('[RAG] Error getting context:', error.message);
+        return await vectorService.getRelevantContext(query, user.id);
+    } catch (error: unknown) {
+        console.error('[RAG] Error getting context:', error instanceof Error ? error.message : error);
         throw error;
     }
 }

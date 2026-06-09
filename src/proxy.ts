@@ -6,13 +6,13 @@ import type { NextRequest } from 'next/server';
  * before forwarding to the origin. This causes Next.js route matching to fail
  * because the query string becomes part of the path segment (no route matches).
  *
- * This middleware detects the encoded '?' in the pathname and rewrites the URL
+ * This proxy detects the encoded '?' in the pathname and rewrites the URL
  * to restore proper path + query string structure before route matching runs.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const idx = pathname.indexOf('%3F');
+  const idx = pathname.toLowerCase().indexOf('%3f');
   if (idx !== -1) {
     const url = request.nextUrl.clone();
     url.pathname = pathname.slice(0, idx);

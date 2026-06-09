@@ -26,7 +26,7 @@ export function useConversations(userId: string, domainSlug: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const reload = useCallback(async () => {
-    const data = await chatActions.loadConversations(userId, domainSlug);
+    const data = await chatActions.loadConversations(domainSlug);
     setConversations(data || []);
   }, [userId, domainSlug]);
 

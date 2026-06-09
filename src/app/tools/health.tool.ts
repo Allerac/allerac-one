@@ -2,7 +2,6 @@
 // Used by the AI in conversations to surface Garmin health data.
 
 import pool from '@/app/clients/db';
-import { getRecentActivities as fetchRecentActivities, getActivitiesInRange } from '@/app/actions/health';
 
 export interface HealthUser {
   id: string;
@@ -105,6 +104,46 @@ function compressActivity(a: any): ActivitySummary {
       .join(', ');
   }
   return summary;
+}
+
+async function getActivitiesFromDatabase(
+  userId: string,
+  limit: number,
+  startDate?: string,
+  endDate?: string,
+): Promise<any[]> {
+  const params: Array<string | number> = [userId];
+  let dateFilter = '';
+
+  if (startDate && endDate) {
+    params.push(startDate, endDate);
+    dateFilter = 'AND date BETWEEN $2 AND $3';
+  }
+  params.push(limit);
+
+  const result = await pool.query(
+    `SELECT *
+     FROM health_activities
+     WHERE user_id = $1 ${dateFilter}
+     ORDER BY date DESC, start_time_seconds DESC
+     LIMIT $${params.length}`,
+    params,
+  );
+
+  return result.rows.map((row: any) => ({
+    ...(row.raw_data
+      ? (typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data)
+      : {}),
+    activityId: row.activity_id,
+    activityName: row.activity_name,
+    activityType: row.activity_type,
+    startTimeInSeconds: row.start_time_seconds ? Number(row.start_time_seconds) : null,
+    startTimeLocal: row.start_time_local,
+    duration: row.duration_seconds ? Number(row.duration_seconds) : null,
+    calories: row.calories ? Number(row.calories) : null,
+    distance: row.distance_meters ? Number(row.distance_meters) : null,
+    avgHeartRate: row.avg_heart_rate ? Number(row.avg_heart_rate) : null,
+  }));
 }
 
 export class HealthTool {
@@ -213,12 +252,12 @@ export class HealthTool {
 
   async getRecentActivities(user: HealthUser, limit: number = 10, startDate?: string, endDate?: string): Promise<RecentActivitiesResult> {
     try {
-      let raw: any[];
-      if (startDate && endDate) {
-        raw = await getActivitiesInRange(user.id, startDate, endDate, Math.min(limit, 50));
-      } else {
-        raw = await fetchRecentActivities(user.id, Math.min(limit, 50));
-      }
+      const raw = await getActivitiesFromDatabase(
+        user.id,
+        Math.min(limit, 50),
+        startDate,
+        endDate,
+      );
       return { activities: raw.map(compressActivity) };
     } catch (e: any) {
       return { error: e.message };

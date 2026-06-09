@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import pool from '@/app/clients/db';
 import { safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { GITHUB_MODELS } from '@/app/constants/models';
+import { requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
 
 const BACKUP_DIR = process.env.BACKUP_DIR || '/app/backups';
 
@@ -90,6 +91,7 @@ export interface SystemDashboard {
  * Get system information
  */
 export async function getSystemInfo(): Promise<SystemInfo> {
+  await requireCurrentUser();
   return {
     hostname: os.hostname(),
     platform: os.platform(),
@@ -103,6 +105,7 @@ export async function getSystemInfo(): Promise<SystemInfo> {
  * Get memory information
  */
 export async function getMemoryInfo(): Promise<MemoryInfo> {
+  await requireCurrentUser();
   const total = os.totalmem();
   const free = os.freemem();
   const used = total - free;
@@ -119,6 +122,7 @@ export async function getMemoryInfo(): Promise<MemoryInfo> {
  * Get CPU information
  */
 export async function getCpuInfo(): Promise<CpuInfo> {
+  await requireCurrentUser();
   const cpus = os.cpus();
 
   return {
@@ -132,6 +136,7 @@ export async function getCpuInfo(): Promise<CpuInfo> {
  * Get Ollama status and models (with short timeout)
  */
 export async function getOllamaInfo(): Promise<OllamaInfo> {
+  await requireCurrentUser();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 2000); // 2 second timeout
 
@@ -190,24 +195,23 @@ export async function getOllamaInfo(): Promise<OllamaInfo> {
 /**
  * Get GitHub Models status (fast check - just verifies if token is configured)
  */
-export async function getGithubModelsInfo(userId?: string): Promise<GithubModelsInfo> {
+export async function getGithubModelsInfo(): Promise<GithubModelsInfo> {
+  const user = await requireCurrentUser();
   try {
     // Just check if user has configured a GitHub token (don't test connection - that's slow)
-    if (userId) {
-      const result = await pool.query(
-        'SELECT github_token FROM user_settings WHERE user_id = $1',
-        [userId]
-      );
-      if (result.rows.length > 0 && result.rows[0].github_token) {
-        const token = safeDecrypt(result.rows[0].github_token);
-        if (token && token.length > 0) {
-          return {
-            configured: true,
-            connected: true, // Assume connected if configured (actual test happens on chat)
-            models: GITHUB_MODELS,
-          };
+    const result = await pool.query(
+      'SELECT github_token FROM user_settings WHERE user_id = $1',
+      [user.id]
+    );
+    if (result.rows.length > 0 && result.rows[0].github_token) {
+      const token = safeDecrypt(result.rows[0].github_token);
+      if (token && token.length > 0) {
+        return {
+          configured: true,
+          connected: true, // Assume connected if configured (actual test happens on chat)
+          models: GITHUB_MODELS,
+        };
         }
-      }
     }
 
     return {
@@ -228,9 +232,10 @@ export async function getGithubModelsInfo(userId?: string): Promise<GithubModels
 /**
  * Get AI Models info (both providers)
  */
-export async function getAIModelsInfo(userId?: string): Promise<AIModelsInfo> {
+export async function getAIModelsInfo(): Promise<AIModelsInfo> {
+  await requireCurrentUser();
   const [github, ollama] = await Promise.all([
-    getGithubModelsInfo(userId),
+    getGithubModelsInfo(),
     getOllamaInfo(),
   ]);
 
@@ -252,7 +257,8 @@ async function countBackups(): Promise<number> {
 /**
  * Get database statistics for a specific user
  */
-export async function getDatabaseInfo(userId?: string): Promise<DatabaseInfo> {
+export async function getDatabaseInfo(): Promise<DatabaseInfo> {
+  const user = await requireCurrentUser();
   try {
     // Test connection and get version
     const versionResult = await pool.query('SELECT version()');
@@ -260,18 +266,10 @@ export async function getDatabaseInfo(userId?: string): Promise<DatabaseInfo> {
 
     // Get table counts filtered by user (if userId provided)
     const [conversationsResult, messagesResult, memoriesResult, documentsResult, backupsCount] = await Promise.all([
-      userId
-        ? pool.query('SELECT COUNT(*) as count FROM chat_conversations WHERE user_id = $1', [userId])
-        : pool.query('SELECT COUNT(*) as count FROM chat_conversations'),
-      userId
-        ? pool.query('SELECT COUNT(*) as count FROM chat_messages WHERE conversation_id IN (SELECT id FROM chat_conversations WHERE user_id = $1)', [userId])
-        : pool.query('SELECT COUNT(*) as count FROM chat_messages'),
-      userId
-        ? pool.query('SELECT COUNT(*) as count FROM conversation_summaries WHERE conversation_id IN (SELECT id FROM chat_conversations WHERE user_id = $1)', [userId]).catch(() => ({ rows: [{ count: 0 }] }))
-        : pool.query('SELECT COUNT(*) as count FROM conversation_summaries').catch(() => ({ rows: [{ count: 0 }] })),
-      userId
-        ? pool.query('SELECT COUNT(*) as count FROM documents WHERE uploaded_by = $1', [userId]).catch(() => ({ rows: [{ count: 0 }] }))
-        : pool.query('SELECT COUNT(*) as count FROM documents').catch(() => ({ rows: [{ count: 0 }] })),
+      pool.query('SELECT COUNT(*) as count FROM chat_conversations WHERE user_id = $1', [user.id]),
+      pool.query('SELECT COUNT(*) as count FROM chat_messages WHERE conversation_id IN (SELECT id FROM chat_conversations WHERE user_id = $1)', [user.id]),
+      pool.query('SELECT COUNT(*) as count FROM conversation_summaries WHERE conversation_id IN (SELECT id FROM chat_conversations WHERE user_id = $1)', [user.id]).catch(() => ({ rows: [{ count: 0 }] })),
+      pool.query('SELECT COUNT(*) as count FROM documents WHERE uploaded_by = $1', [user.id]).catch(() => ({ rows: [{ count: 0 }] })),
       countBackups(),
     ]);
 
@@ -307,6 +305,7 @@ export async function getDatabaseInfo(userId?: string): Promise<DatabaseInfo> {
  */
 export async function pullOllamaModel(modelId: string): Promise<{ success: boolean; message: string }> {
   try {
+    await requireCurrentAdmin();
     // First check if Ollama is connected
     const ollamaInfo = await getOllamaInfo();
     if (!ollamaInfo.connected) {
@@ -357,13 +356,14 @@ export async function pullOllamaModel(modelId: string): Promise<{ success: boole
 /**
  * Get full system dashboard data for a specific user
  */
-export async function getSystemDashboard(userId?: string): Promise<SystemDashboard> {
+export async function getSystemDashboard(): Promise<SystemDashboard> {
+  await requireCurrentUser();
   const [system, memory, cpu, aiModels, database] = await Promise.all([
     getSystemInfo(),
     getMemoryInfo(),
     getCpuInfo(),
-    getAIModelsInfo(userId),
-    getDatabaseInfo(userId),
+    getAIModelsInfo(),
+    getDatabaseInfo(),
   ]);
 
   return {

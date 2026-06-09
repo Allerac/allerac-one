@@ -19,7 +19,15 @@ const customJestConfig = {
   testPathIgnorePatterns: [
     '/__tests__/__mocks__/',
     '/__tests__/setup.ts',
+    '/\\.claude/worktrees/',
+    '/\\.next/',
     '/e2e/',
+    '/workspace/projects/',
+  ],
+  modulePathIgnorePatterns: [
+    '<rootDir>/.claude/worktrees/',
+    '<rootDir>/.next/',
+    '<rootDir>/workspace/projects/',
   ],
   transformIgnorePatterns: [
     'node_modules/(?!(react-syntax-highlighter|remark-gfm)/)',

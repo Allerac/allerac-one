@@ -7,22 +7,19 @@
  * DELETE /api/agents?runId=... — Cancel a running agent
  */
 
-import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
-import { AuthService } from '@/app/services/auth/auth.service';
-import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { ChatService } from '@/app/services/database/chat.service';
 import { WorkerRunRepository } from '@/app/services/agents/worker-run.repository';
 import pool from '@/app/clients/db';
 import { v4 as uuid } from 'uuid';
 
-const authService = new AuthService();
-const userSettingsService = new UserSettingsService();
 const chatService = new ChatService();
 const repo = new WorkerRunRepository();
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    const user = await requireCurrentUser();
     const body = await request.json();
     const { message, conversationId: inputConversationId, model, provider, skillName }: {
       message: string;
@@ -34,17 +31,6 @@ export async function POST(request: Request): Promise<Response> {
 
     if (!message) {
       return Response.json({ error: 'message is required' }, { status: 400 });
-    }
-
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get('session_token')?.value;
-    if (!sessionToken) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await authService.validateSession(sessionToken);
-    if (!user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const userId = user.id;
@@ -59,14 +45,22 @@ export async function POST(request: Request): Promise<Response> {
       if (!convId) {
         return Response.json({ error: 'Failed to create conversation' }, { status: 500 });
       }
+    } else {
+      const conversation = await chatService.getConversationForUser(convId, userId);
+      if (!conversation) {
+        return Response.json({ error: 'Conversation not found' }, { status: 404 });
+      }
     }
 
     // Resolve skill name → skill_id if provided
     let skillId: string | null = null;
     if (skillName) {
       const skillResult = await pool.query(
-        `SELECT id FROM skills WHERE name = $1 AND (user_id IS NULL OR is_system = true) LIMIT 1`,
-        [skillName]
+        `SELECT id FROM skills
+         WHERE name = $1 AND (user_id = $2 OR user_id IS NULL OR is_system = true)
+         ORDER BY CASE WHEN user_id = $2 THEN 0 ELSE 1 END
+         LIMIT 1`,
+        [skillName, userId]
       );
       skillId = skillResult.rows[0]?.id ?? null;
       if (skillId) console.log(`[AgentRoute] Resolved skill "${skillName}" → ${skillId}`);
@@ -82,53 +76,42 @@ export async function POST(request: Request): Promise<Response> {
     );
 
     // Save user message to conversation
-    await chatService.saveMessage(convId, 'user', message);
+    const savedUserMessage = await chatService.saveMessage(convId, 'user', message, { userId });
+    if (!savedUserMessage.success) {
+      return Response.json({ error: 'Failed to save user message' }, { status: 500 });
+    }
 
     // Save assistant placeholder message with agent_run_id so it persists across navigation
-    await chatService.saveMessage(convId, 'assistant', '', { agentRunId: runId });
+    const savedAssistantMessage = await chatService.saveMessage(convId, 'assistant', '', { agentRunId: runId, userId });
+    if (!savedAssistantMessage.success) {
+      return Response.json({ error: 'Failed to save assistant message' }, { status: 500 });
+    }
 
     console.log('[AgentRoute] Created pending run:', runId);
     return Response.json({ runId });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    const message = error instanceof Error ? error.message : 'Failed to create agent run';
     console.error('[AgentRoute] Error creating run:', error);
-    return Response.json({ error: error.message || 'Failed to create agent run' }, { status: 500 });
+    return Response.json({ error: message }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
   try {
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get('session_token')?.value;
-    if (!sessionToken) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await authService.validateSession(sessionToken);
-    if (!user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const user = await requireCurrentUser();
 
     const runId = request.nextUrl.searchParams.get('runId');
 
     // Single run detail
     if (runId) {
-      const runResult = await pool.query(
-        `SELECT id, status, prompt, plan, result, error_message, started_at, completed_at, cancelled_at, llm_model, llm_provider
-         FROM agent_runs WHERE id = $1 AND user_id = $2`,
-        [runId, user.id]
-      );
-
-      if (runResult.rows.length === 0) {
+      const run = await repo.getRunForUser(runId, user.id);
+      if (!run) {
         return Response.json({ error: 'Run not found' }, { status: 404 });
       }
 
-      const run = runResult.rows[0];
-
-      const workersResult = await pool.query(
-        `SELECT id, name, task, status, result, tokens_used, progress_log, started_at, completed_at
-         FROM agent_workers WHERE run_id = $1 ORDER BY started_at`,
-        [runId]
-      );
+      const workers = await repo.getRunWorkersForUser(runId, user.id);
 
       return Response.json({
         runId: run.id,
@@ -140,7 +123,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         startedAt: run.started_at,
         completedAt: run.completed_at,
         cancelledAt: run.cancelled_at,
-        workers: workersResult.rows.map((w: any) => ({
+        workers: workers.map(w => ({
           id: w.id,
           name: w.name,
           task: w.task,
@@ -182,49 +165,36 @@ export async function GET(request: NextRequest): Promise<Response> {
         })),
       })),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    const message = error instanceof Error ? error.message : 'Failed to fetch run';
     console.error('[AgentRoute] Error fetching run:', error);
-    return Response.json({ error: error.message || 'Failed to fetch run' }, { status: 500 });
+    return Response.json({ error: message }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest): Promise<Response> {
   try {
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get('session_token')?.value;
-    if (!sessionToken) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await authService.validateSession(sessionToken);
-    if (!user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const user = await requireCurrentUser();
 
     const runId = request.nextUrl.searchParams.get('runId');
     if (!runId) {
       return Response.json({ error: 'runId is required' }, { status: 400 });
     }
 
-    // Verify run belongs to user
-    const runResult = await pool.query(
-      `SELECT id FROM agent_runs WHERE id = $1 AND user_id = $2`,
-      [runId, user.id]
-    );
-
-    if (runResult.rows.length === 0) {
-      return Response.json({ error: 'Run not found' }, { status: 404 });
-    }
-
-    const cancelled = await repo.cancelRun(runId);
+    const cancelled = await repo.cancelRunForUser(runId, user.id);
     if (!cancelled) {
-      return Response.json({ error: 'Run cannot be cancelled (already completed or failed)' }, { status: 409 });
+      return Response.json({ error: 'Run not found or cannot be cancelled' }, { status: 404 });
     }
 
     console.log('[AgentRoute] Cancelled run:', runId);
     return Response.json({ cancelled: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    const message = error instanceof Error ? error.message : 'Failed to cancel run';
     console.error('[AgentRoute] Error cancelling run:', error);
-    return Response.json({ error: error.message || 'Failed to cancel run' }, { status: 500 });
+    return Response.json({ error: message }, { status: 500 });
   }
 }

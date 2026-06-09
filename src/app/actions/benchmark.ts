@@ -1,6 +1,7 @@
 'use server';
 
 import pool from '@/app/clients/db';
+import { requireCurrentUser } from '@/app/lib/auth-session';
 
 export interface BenchmarkRun {
   run_id: string;
@@ -21,15 +22,16 @@ export interface BenchmarkRun {
 /**
  * Load the last N benchmark runs for a user.
  */
-export async function getBenchmarkHistory(userId: string, limit = 5): Promise<BenchmarkRun[]> {
+export async function getBenchmarkHistory(limit = 5): Promise<BenchmarkRun[]> {
   try {
+    const user = await requireCurrentUser();
     // Get distinct run_ids ordered by most recent
     const runsRes = await pool.query<{ run_id: string; model: string; provider: string; created_at: string }>(
       `SELECT DISTINCT ON (run_id) run_id, model, provider, created_at
        FROM benchmark_results
        WHERE user_id = $1
        ORDER BY run_id, created_at DESC`,
-      [userId]
+      [user.id]
     );
 
     if (runsRes.rows.length === 0) return [];
@@ -48,7 +50,7 @@ export async function getBenchmarkHistory(userId: string, limit = 5): Promise<Be
            FROM benchmark_results
            WHERE user_id = $1 AND run_id = $2
            ORDER BY created_at ASC`,
-          [userId, run.run_id]
+          [user.id, run.run_id]
         );
         return {
           run_id: run.run_id,
@@ -69,6 +71,7 @@ export async function getBenchmarkHistory(userId: string, limit = 5): Promise<Be
 /**
  * Delete all benchmark results for a user.
  */
-export async function clearBenchmarkHistory(userId: string): Promise<void> {
-  await pool.query('DELETE FROM benchmark_results WHERE user_id = $1', [userId]);
+export async function clearBenchmarkHistory(): Promise<void> {
+  const user = await requireCurrentUser();
+  await pool.query('DELETE FROM benchmark_results WHERE user_id = $1', [user.id]);
 }

@@ -5,6 +5,7 @@ import {
   GRAMPEADOR_OPTIONS,
   buildGrampeadorPrompt,
 } from '@/app/config/grampeador';
+import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434';
 
@@ -25,6 +26,11 @@ function sanitize(raw: string): string {
 }
 
 export async function generateClippyBubble(domain: string, locale = 'pt'): Promise<string | null> {
+  const user = await requireCurrentUser();
+  if (!/^[a-z0-9][a-z0-9_-]{0,49}$/.test(domain)) return null;
+  await assertDomainAccess(user, domain);
+  if (!Object.hasOwn(TIME_LABEL, locale)) locale = 'en';
+
   const hour = new Date().getHours();
   const timeFn = TIME_LABEL[locale] ?? TIME_LABEL['en'];
   const timeLabel = timeFn(hour);

@@ -10,7 +10,7 @@
 #   ALLERAC_PRODUCT_LINE=local ./update.sh
 #   ALLERAC_PRODUCT_LINE=cloud ./update.sh
 
-set -e
+set -eo pipefail
 
 # ============================================
 # Colors
@@ -20,6 +20,57 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
+
+PREVIOUS_COMMIT=""
+PREVIOUS_BRANCH=""
+PRE_UPDATE_BACKUP=""
+MIGRATIONS_STARTED=false
+BACKUP_PATH_FILE=""
+
+cleanup_update_state() {
+    [ -z "$BACKUP_PATH_FILE" ] || rm -f "$BACKUP_PATH_FILE"
+}
+trap cleanup_update_state EXIT
+
+print_rollback_instructions() {
+    local phase="$1"
+
+    echo ""
+    echo -e "${YELLOW}Rollback instructions (${phase}):${NC}"
+    echo "  1. Inspect the failure:"
+    echo "     docker compose -f $COMPOSE_FILE logs --tail=200 app migrations"
+
+    if [ "$MIGRATIONS_STARTED" = true ] && [ -n "$PRE_UPDATE_BACKUP" ]; then
+        echo "  2. If the database must return to its pre-update state:"
+        printf '     INSTALL_DIR=%q bash ./allerac.sh restore %q\n' "$(pwd)" "$PRE_UPDATE_BACKUP"
+    else
+        echo "  2. The database was not migrated; no database restore is required."
+    fi
+
+    if [ -n "$PREVIOUS_COMMIT" ]; then
+        echo "  3. Restore the previous application revision:"
+        printf '     git checkout --detach %q\n' "$PREVIOUS_COMMIT"
+        echo "     docker compose -f $COMPOSE_FILE build"
+        echo "     docker compose -f $COMPOSE_FILE up -d"
+        if [ -n "$PREVIOUS_BRANCH" ]; then
+            echo "  4. After resolving the update, return to the tracked branch:"
+            printf '     git checkout %q\n' "$PREVIOUS_BRANCH"
+        fi
+    fi
+
+    if [ -n "$PRE_UPDATE_BACKUP" ]; then
+        echo "  Pre-update backup: $PRE_UPDATE_BACKUP"
+    fi
+    echo ""
+}
+
+fail_update() {
+    local phase="$1"
+    local message="$2"
+    echo -e "${RED}${message}${NC}"
+    print_rollback_instructions "$phase"
+    exit 1
+}
 
 # ============================================
 # Product line detection
@@ -44,14 +95,16 @@ detect_product_line() {
 # ============================================
 verify_deployment() {
     echo ""
-    echo -e "${YELLOW}[6/6]${NC} Verifying deployment..."
+    echo -e "${YELLOW}Verifying deployment services...${NC}"
 
-    # Core (both product lines)
-    if docker ps --format '{{.Names}}' | grep -q "allerac-app"; then
-        echo -e "${GREEN}✓ App is running${NC}"
+    local app_status
+    app_status="$(docker inspect allerac-app \
+        --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+        2>/dev/null || echo "missing")"
+    if [ "$app_status" = "healthy" ]; then
+        echo -e "${GREEN}✓ App is healthy${NC}"
     else
-        echo -e "${RED}✗ App failed to start — check logs: docker compose -f $COMPOSE_FILE logs app${NC}"
-        exit 1
+        fail_update "health verification" "App health verification failed (status: $app_status)."
     fi
 
     if [ "$PRODUCT_LINE" = "cloud" ]; then
@@ -90,6 +143,9 @@ if [ ! -f "$COMPOSE_FILE" ]; then
     echo "Run this script from the allerac-one directory."
     exit 1
 fi
+
+PREVIOUS_COMMIT="$(git rev-parse HEAD)"
+PREVIOUS_BRANCH="$(git symbolic-ref --quiet --short HEAD || true)"
 
 # Step 0: Local hostname + HTTPS certs (idempotent)
 setup_local_hostname() {
@@ -138,20 +194,31 @@ setup_local_hostname() {
 }
 
 if [ "$PRODUCT_LINE" = "local" ]; then
-    echo -e "${YELLOW}[0/8]${NC} Configuring local hostname (allerac.home)..."
+    echo -e "${YELLOW}[0/9]${NC} Configuring local hostname (allerac.home)..."
     setup_local_hostname
     echo -e "${GREEN}✓ Local hostname ready${NC}"
     echo ""
 fi
 
-# Step 1: Pull latest changes
-echo -e "${YELLOW}[1/8]${NC} Pulling latest changes from GitHub..."
-git pull origin main || { echo -e "${RED}Failed to pull changes${NC}"; exit 1; }
+# Step 1: Back up the database before changing code or schema
+echo -e "${YELLOW}[1/9]${NC} Creating pre-update database backup..."
+BACKUP_PATH_FILE="$(mktemp)"
+ALLERAC_BACKUP_PATH_FILE="$BACKUP_PATH_FILE" INSTALL_DIR="$(pwd)" \
+    bash ./allerac.sh backup pre-update \
+    || fail_update "pre-update backup" "Update aborted: a verified database backup could not be created."
+PRE_UPDATE_BACKUP="$(cat "$BACKUP_PATH_FILE")"
+[ -n "$PRE_UPDATE_BACKUP" ] \
+    || fail_update "pre-update backup" "Update aborted: backup path was not recorded."
+echo ""
+
+# Step 2: Pull latest changes
+echo -e "${YELLOW}[2/9]${NC} Pulling latest changes from GitHub..."
+git pull origin main || fail_update "source update" "Failed to pull changes."
 echo -e "${GREEN}✓ Changes pulled${NC}"
 echo ""
 
-# Step 2: Generate build info
-echo -e "${YELLOW}[2/8]${NC} Generating build information..."
+# Step 3: Generate build info
+echo -e "${YELLOW}[3/9]${NC} Generating build information..."
 export COMMIT_HASH=$(git rev-parse HEAD)
 export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 echo "   Commit: ${COMMIT_HASH:0:7}"
@@ -159,42 +226,43 @@ echo "   Date:   $BUILD_DATE"
 echo -e "${GREEN}✓ Build info ready${NC}"
 echo ""
 
-# Step 3: Ensure named data volumes exist (safe to run on every update)
+# Step 4: Ensure named data volumes exist (safe to run on every update)
 # These are declared as external in docker-compose.yml so they must exist before `up`.
-echo -e "${YELLOW}[3/8]${NC} Ensuring data volumes exist..."
+echo -e "${YELLOW}[4/9]${NC} Ensuring data volumes exist..."
 docker volume create allerac_db_data      > /dev/null 2>&1 || true
 docker volume create allerac_ollama_data  > /dev/null 2>&1 || true
 docker volume create allerac_backups_data > /dev/null 2>&1 || true
 echo -e "${GREEN}✓ Volumes ready${NC}"
 echo ""
 
-# Step 4: Run database migrations
-echo -e "${YELLOW}[4/8]${NC} Running database migrations..."
-docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up --force-recreate migrations || {
-    echo -e "${RED}Failed to run migrations${NC}"
-    exit 1
-}
+# Step 5: Run database migrations
+echo -e "${YELLOW}[5/9]${NC} Running database migrations..."
+MIGRATIONS_STARTED=true
+docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up --force-recreate migrations \
+    || fail_update "database migration" "Failed to run migrations."
 echo -e "${GREEN}✓ Migrations complete${NC}"
 echo ""
 
-# Step 5: Rebuild app images
-echo -e "${YELLOW}[5/8]${NC} Rebuilding application images..."
+# Step 6: Rebuild app images
+echo -e "${YELLOW}[6/9]${NC} Rebuilding application images..."
 if [ "$PRODUCT_LINE" = "cloud" ]; then
-    docker compose -f "$COMPOSE_FILE" build --no-cache app allerac-telegram notifier
+    docker compose -f "$COMPOSE_FILE" build --no-cache app allerac-telegram notifier \
+        || fail_update "image build" "Failed to rebuild application images."
 else
     # Only rebuild images that exist in this deployment
     BUILD_TARGETS="app health-worker"
     docker ps --format '{{.Names}}' | grep -q "allerac-telegram" && BUILD_TARGETS="$BUILD_TARGETS allerac-telegram"
     docker ps --format '{{.Names}}' | grep -q "allerac-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
-    docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS build --no-cache $BUILD_TARGETS
+    docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS build --no-cache $BUILD_TARGETS \
+        || fail_update "image build" "Failed to rebuild application images."
 fi
 echo -e "${GREEN}✓ Images rebuilt${NC}"
 echo ""
 
-# Step 6: Remove containers from other projects that would conflict.
+# Step 7: Remove containers from other projects that would conflict.
 # Catches both name conflicts (explicit container_name) and port conflicts
 # from old non-prefixed monitoring containers (loki, grafana, prometheus, etc.).
-echo -e "${YELLOW}[6/8]${NC} Cleaning up orphan containers..."
+echo -e "${YELLOW}[7/9]${NC} Cleaning up orphan containers..."
 OLD_CONTAINERS=$(docker ps -a \
     --filter "label=com.docker.compose.project=allerac-one" \
     --format "{{.Names}}" 2>/dev/null)
@@ -215,20 +283,19 @@ done
 echo -e "${GREEN}✓ Cleanup done${NC}"
 echo ""
 
-# Step 7: Restart services
-echo -e "${YELLOW}[7/8]${NC} Restarting services..."
+# Step 8: Restart services
+echo -e "${YELLOW}[8/9]${NC} Restarting services..."
 COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
-    docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up -d || {
-    echo -e "${RED}Failed to restart services${NC}"
-    exit 1
-}
+    docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up -d \
+    || fail_update "service restart" "Failed to restart services."
 echo -e "${GREEN}✓ Services restarted${NC}"
 echo ""
 
-# Step 8: Verify — wait up to 30s for the app to be ready
-echo -e "${YELLOW}[8/8]${NC} Verifying deployment..."
+# Step 9: Verify - wait up to 60s for the app to be healthy
+echo -e "${YELLOW}[9/9]${NC} Verifying deployment..."
 WAIT=0
-until docker ps --format '{{.Names}}' | grep -q "allerac-app" || [ $WAIT -ge 30 ]; do
+until [ "$(docker inspect allerac-app --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' 2>/dev/null || true)" = "healthy" ] \
+    || [ $WAIT -ge 60 ]; do
     sleep 2
     WAIT=$((WAIT + 2))
 done

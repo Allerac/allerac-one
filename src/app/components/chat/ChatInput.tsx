@@ -229,6 +229,12 @@ export default function ChatInput({
         disabled={isSending}
         style={{ minHeight: '48px', maxHeight: '200px', lineHeight: '28px' }}
       />
+
+      {providerHint && (
+        <div className={`px-4 pb-2 text-xs ${isDarkMode ? 'text-amber-300' : 'text-amber-700'}`}>
+          {providerHint}
+        </div>
+      )}
       
       {/* Line 2: Action buttons */}
       <div className="flex items-center justify-between px-2 pb-2">

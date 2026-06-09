@@ -5,25 +5,14 @@
  * POST /api/tickets              — create a ticket
  */
 
-import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
-import { AuthService } from '@/app/services/auth/auth.service';
+import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { ticketService, TicketStatus, TicketType } from '@/app/services/tickets/ticket.service';
 import type { PriorityLevel } from '@/app/services/tickets/priority.service';
 
-const authService = new AuthService();
-
-async function getUser() {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return null;
-  return authService.validateSession(sessionToken);
-}
-
 export async function GET(request: NextRequest): Promise<Response> {
   try {
-    const user = await getUser();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await requireCurrentUser();
 
     const { searchParams } = request.nextUrl;
     const status        = searchParams.get('status')        as TicketStatus | null;
@@ -43,6 +32,8 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     return Response.json({ tickets });
   } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[TicketsRoute] GET error:', error);
     return Response.json({ error: message }, { status: 500 });
@@ -51,8 +42,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const user = await getUser();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await requireCurrentUser();
 
     const body = await request.json();
     const { title, description, type, explicitUrgency, tags, context } = body;
@@ -71,6 +61,8 @@ export async function POST(request: Request): Promise<Response> {
 
     return Response.json({ ticket }, { status: 201 });
   } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[TicketsRoute] POST error:', error);
     return Response.json({ error: message }, { status: 500 });

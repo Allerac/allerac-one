@@ -60,7 +60,6 @@ export default function CorrectAndMemorize({
 
       const res = await memoryActions.saveCorrectionMemory(
         conversationId,
-        userId,
         memoryContent,
         importanceValue,
         emotion,

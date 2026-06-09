@@ -85,7 +85,7 @@ export class NotesService {
   } = {}): Promise<Note[]> {
     const limit = options.limit ?? 20;
     const conditions: string[] = ['user_id = $1'];
-    const values: any[] = [userId];
+    const values: unknown[] = [userId];
     let i = 2;
 
     if (options.tag) {
@@ -165,7 +165,10 @@ export class NotesService {
     await pool.query('DELETE FROM user_notes WHERE id = $1 AND user_id = $2', [noteId, userId]);
 
     if (documentId) {
-      await pool.query('DELETE FROM documents WHERE id = $1', [documentId]);
+      await pool.query(
+        'DELETE FROM documents WHERE id = $1 AND uploaded_by = $2',
+        [documentId, userId]
+      );
     }
 
     return true;
@@ -173,7 +176,7 @@ export class NotesService {
 
   async updateNote(userId: string, noteId: string, input: UpdateNoteInput): Promise<Note | null> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let i = 1;
 
     if (input.content !== undefined)   { fields.push(`content = $${i++}`);   values.push(input.content); }

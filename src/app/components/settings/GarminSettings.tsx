@@ -43,7 +43,7 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
 
   async function loadStatus() {
     setState('loading');
-    const data = await healthActions.getGarminStatus(userId!);
+    const data = await healthActions.getGarminStatus();
     if (data.is_connected) {
       setLastSync(data.last_sync_at ? new Date(data.last_sync_at).toLocaleString() : '');
       setState('connected');
@@ -59,7 +59,7 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
     setState('connecting');
     setMessage(null);
     try {
-      const data = await healthActions.connectGarmin(userId!, email, password);
+      const data = await healthActions.connectGarmin(email, password);
       if (data.mfa_pending) {
         setMfaMessage(data.message || 'Check your email or phone for the MFA code.');
         setState('mfa_required');
@@ -78,7 +78,7 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
     e.preventDefault();
     setState('connecting');
     try {
-      const data = await healthActions.submitGarminMfa(userId!, mfaCode);
+      const data = await healthActions.submitGarminMfa(mfaCode);
       if (data.is_connected) {
         setEmail(''); setPassword(''); setMfaCode('');
         await loadStatus();
@@ -92,7 +92,7 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
 
   async function handleDisconnect() {
     try {
-      await healthActions.disconnectGarmin(userId!);
+      await healthActions.disconnectGarmin();
       setState('disconnected');
       setMessage({ type: 'success', text: 'Garmin disconnected.' });
     } catch (e: any) {
@@ -102,7 +102,7 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
 
   async function handleSync() {
     try {
-      await healthActions.triggerHealthSync(userId!);
+      await healthActions.triggerHealthSync();
       setMessage({ type: 'success', text: 'Sync started. Data will update in a few minutes.' });
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });

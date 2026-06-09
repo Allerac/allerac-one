@@ -10,7 +10,7 @@
 
 Allow users to upload and publish multiple photos (2–10) as an Instagram carousel album from the post studio.
 
-Instagram's Graph API natively supports `CAROUSEL_ALBUM` posts. The current infrastructure (Imgur upload + Graph API publish) already handles the single-image flow; carousel is an extension of the same pipeline.
+Instagram's Graph API natively supports `CAROUSEL_ALBUM` posts. The current infrastructure (Azure Blob Storage upload + Graph API publish) already handles the single-image flow; carousel is an extension of the same pipeline.
 
 ---
 
@@ -46,7 +46,7 @@ POST /{businessUserId}/media_publish
 
 **Limits:**
 - 2–10 images per carousel
-- Each image must be a public URL (already handled via Imgur)
+- Each image must be a public URL (already handled via Azure Blob Storage)
 - All images must finish processing (`status = FINISHED`) before creating the carousel container
 - Caption goes on the carousel container, not on individual images
 
@@ -91,11 +91,11 @@ export async function publishInstagramCarousel(
 
 **Steps:**
 1. Validate: 2–10 images
-2. For each base64: convert → JPEG via Sharp (same as current single-image logic) → upload to Imgur → collect public URLs
+2. For each base64: convert → JPEG via Sharp (same as current single-image logic) → upload to Azure Blob Storage → collect public URLs
 3. Call `igService.publishCarousel(userId, caption, urls)`
 4. Return result
 
-Extract the single-image "base64 → JPEG → Imgur" logic into a shared helper `prepareImageForInstagram(base64: string): Promise<string>` so both actions reuse it.
+Extract the single-image "base64 → JPEG → Azure Blob Storage" logic into a shared helper `prepareImageForInstagram(base64: string): Promise<string>` so both actions reuse it.
 
 ---
 
@@ -150,9 +150,9 @@ This keeps full backward compatibility — single image = same behavior as today
 |------|-----------|
 | User selects 1 image | Single-image flow (no carousel) |
 | User selects > 10 images | Truncate to 10, show warning |
-| One image fails Imgur upload | Abort entire carousel, show error |
+| One image fails Azure Blob Storage upload | Abort entire carousel, show error |
 | One child container stuck in ERROR status | Abort, show which image failed |
-| Carousel container creation fails | Show error, uploaded images are orphaned on Imgur (acceptable) |
+| Carousel container creation fails | Show error, uploaded blobs remain in Azure Storage and require lifecycle cleanup |
 
 ---
 

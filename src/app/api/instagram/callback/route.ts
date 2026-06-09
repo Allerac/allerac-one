@@ -7,29 +7,37 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { AuthService } from '@/app/services/auth/auth.service';
+import {
+  assertDomainAccess,
+  ForbiddenError,
+  requireCurrentUser,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { InstagramGraphService } from '@/app/services/instagram/instagram-graph.service';
 import { InstagramCredentialsService } from '@/app/services/instagram/instagram-credentials.service';
 
-const authService      = new AuthService();
 const instagramService = new InstagramGraphService();
 const credService      = new InstagramCredentialsService();
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) redirect('/login');
-
-  const user = await authService.validateSession(sessionToken);
-  if (!user) redirect('/login');
+  let user;
+  try {
+    user = await requireCurrentUser();
+    await assertDomainAccess(user, 'social');
+  } catch (error) {
+    if (error instanceof UnauthorizedError) redirect('/login');
+    if (error instanceof ForbiddenError) redirect('/?error=social_access_denied');
+    throw error;
+  }
 
   const { searchParams } = new URL(request.url);
   const code  = searchParams.get('code');
   const state = searchParams.get('state');
   const error = searchParams.get('error');
+  const cookieStore = await cookies();
 
   // User denied or error from Instagram
-  if (error || !code) {
+  if (error || !code || code.length > 2_000) {
     await credService.setError(user.id, error ?? 'Authorization denied');
     redirect('/social?instagram=error');
   }

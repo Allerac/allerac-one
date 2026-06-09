@@ -221,7 +221,7 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
     if (!convId) return;
     setMemoryOpen(true); setMemoryLoading(true); setMemoryResult(null);
     try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, githubToken, 'search');
+      const summary = await memoryActions.generateConversationSummary(convId, 'search');
       setMemoryResult(summary
         ? { success: true, message: 'Summary generated!', summary: summary.summary, topics: summary.key_topics }
         : { success: false, message: 'Not enough messages to summarize' }

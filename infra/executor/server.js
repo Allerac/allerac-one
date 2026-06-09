@@ -25,9 +25,13 @@ function installLogInterceptor(apiUrl, serviceName) {
   }
 
   function sendLogToAPI(context, message, level) {
+    const serviceSecret = process.env.EXECUTOR_SECRET || '';
     fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(serviceSecret ? { Authorization: `Bearer ${serviceSecret}` } : {}),
+      },
       body: JSON.stringify({ context, message, level }),
     }).catch(() => {});
   }

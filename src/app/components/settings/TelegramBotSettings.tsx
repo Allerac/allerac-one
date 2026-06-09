@@ -58,7 +58,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
 
   const loadBots = async () => {
     setLoading(true);
-    const result = await getUserBotConfigs(userId);
+    const result = await getUserBotConfigs();
     if (result.success && result.configs) {
       setBots(result.configs);
     }
@@ -104,7 +104,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
 
     let result;
     if (editingBot) {
-      result = await updateBotConfig(userId, editingBot.id, {
+      result = await updateBotConfig(editingBot.id, {
         botName: formData.botName,
         botToken: formData.botToken !== '••••••••' ? formData.botToken : undefined,
         botUsername: formData.botUsername || undefined,
@@ -112,7 +112,6 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
       });
     } else {
       result = await createBotConfig(
-        userId,
         formData.botName,
         formData.botToken,
         allowedIds,
@@ -147,7 +146,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
   };
 
   const handleToggle = async (botId: string) => {
-    const result = await toggleBotEnabled(userId, botId);
+    const result = await toggleBotEnabled(botId);
     if (result.success) {
       loadBots();
     }
@@ -158,7 +157,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
       return;
     }
 
-    const result = await deleteBotConfig(userId, botId);
+    const result = await deleteBotConfig(botId);
     if (result.success) {
       loadBots();
     }

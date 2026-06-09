@@ -6,9 +6,15 @@
 import pool from '@/app/clients/db';
 import crypto from 'crypto';
 
-// Encryption key from environment (should be 32 bytes for AES-256)
-const ENCRYPTION_KEY = process.env.TELEGRAM_TOKEN_ENCRYPTION_KEY || 'default-key-change-in-production!!';
 const ALGORITHM = 'aes-256-cbc';
+
+function getEncryptionKey(): Buffer {
+  const encryptionKey = process.env.TELEGRAM_TOKEN_ENCRYPTION_KEY;
+  if (!encryptionKey || encryptionKey.length < 32) {
+    throw new Error('TELEGRAM_TOKEN_ENCRYPTION_KEY must contain at least 32 characters');
+  }
+  return Buffer.from(encryptionKey.padEnd(32, '0').slice(0, 32));
+}
 
 export interface TelegramBotConfig {
   id: string;
@@ -38,7 +44,7 @@ interface DbBotConfig {
  * Encrypt a bot token for storage
  */
 function encryptToken(token: string): string {
-  const key = Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32));
+  const key = getEncryptionKey();
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   
@@ -53,7 +59,7 @@ function encryptToken(token: string): string {
  * Decrypt a bot token from storage
  */
 function decryptToken(encryptedToken: string): string {
-  const key = Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32));
+  const key = getEncryptionKey();
   const parts = encryptedToken.split(':');
   const iv = Buffer.from(parts[0], 'hex');
   const encryptedText = parts[1];

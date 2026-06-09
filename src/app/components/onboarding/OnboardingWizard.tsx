@@ -54,7 +54,7 @@ export default function OnboardingWizard({
     setGoogleKeySaved(false);
     if (value.startsWith('AIza') && value.length > 20) {
       setIsSaving(true);
-      await userActions.saveUserSettings(userId, undefined, undefined, undefined, value);
+      await userActions.saveUserSettings(undefined, undefined, undefined, value);
       setGoogleKeySaved(true);
       setIsSaving(false);
     }
@@ -65,7 +65,7 @@ export default function OnboardingWizard({
     setGithubTokenSaved(false);
     if ((value.startsWith('ghp_') || value.startsWith('github_pat_')) && value.length > 20) {
       setIsSaving(true);
-      await userActions.saveUserSettings(userId, value);
+      await userActions.saveUserSettings(value);
       setGithubTokenSaved(true);
       setIsSaving(false);
     }
@@ -74,10 +74,17 @@ export default function OnboardingWizard({
   const handleSaveAboutMe = async () => {
     setIsSaving(true);
     if (location.trim()) {
-      await userActions.saveUserSettings(userId, undefined, undefined, undefined, undefined, location.trim());
+      await userActions.saveUserSettings(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        location.trim(),
+      );
     }
     if (aboutMe.trim()) {
-      await chatActions.saveSystemMessage(userId, aboutMe);
+      await chatActions.saveSystemMessage(aboutMe);
       setAboutMeSaved(true);
     }
     setIsSaving(false);
@@ -86,7 +93,7 @@ export default function OnboardingWizard({
 
   const handleFinish = async () => {
     setIsSaving(true);
-    await userActions.completeOnboarding(userId);
+    await userActions.completeOnboarding();
     setIsSaving(false);
     onComplete({
       googleApiKey: googleKeySaved ? googleKey : undefined,
@@ -96,7 +103,7 @@ export default function OnboardingWizard({
   };
 
   const handleSkip = async () => {
-    await userActions.completeOnboarding(userId);
+    await userActions.completeOnboarding();
     onComplete({});
   };
 

@@ -156,7 +156,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
 
   const handleStep3Submit = async () => {
     if (userId && selectedModel) {
-      await setupActions.saveDefaultModel(userId, selectedModel);
+      await setupActions.saveDefaultModel(selectedModel);
     }
     await setupActions.markSetupComplete();
     setCurrentStep(4);

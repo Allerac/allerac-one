@@ -1,17 +1,12 @@
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
 import { ShellTool } from '@/app/tools/shell.tool';
 import path from 'path';
+import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { resolveUserWorkspaceFilePath } from '@/app/lib/workspace-paths';
 
-const authService = new AuthService();
-const WORKSPACE_BASE = '/workspace/projects';
 const MAX_BYTES = 500 * 1024; // 500 KB
 
-function sanitizePath(input: string, userId: string): string | null {
-  const userRoot = `${WORKSPACE_BASE}/${userId}`;
-  const resolved = path.resolve(input || '');
-  if (!resolved.startsWith(userRoot + '/')) return null;
-  return resolved;
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 const EXT_LANG: Record<string, string> = {
@@ -25,64 +20,68 @@ const EXT_LANG: Record<string, string> = {
 };
 
 export async function GET(request: Request): Promise<Response> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await requireCurrentUser();
 
-  const url = new URL(request.url);
-  const inputPath = url.searchParams.get('path') || '';
-  const safePath = sanitizePath(inputPath, user.id);
-  if (!safePath) return Response.json({ error: 'Invalid path' }, { status: 400 });
+    const url = new URL(request.url);
+    const inputPath = url.searchParams.get('path') || '';
+    const safePath = resolveUserWorkspaceFilePath(user.id, inputPath);
+    if (!safePath) return Response.json({ error: 'Invalid path' }, { status: 400 });
 
-  const shell = new ShellTool();
+    const shell = new ShellTool();
 
-  // Check size first
-  const sizeResult = await shell.execute(`stat -c%s -- "${safePath}" 2>/dev/null || echo 0`);
-  const fileSize = parseInt(sizeResult.stdout.trim() || '0', 10);
-  if (fileSize > MAX_BYTES) {
-    return Response.json({ error: `File too large to display (${Math.round(fileSize / 1024)} KB > 500 KB)` }, { status: 413 });
+    // Check size first
+    const sizeResult = await shell.execute(`stat -c%s -- ${shellQuote(safePath)} 2>/dev/null || echo 0`);
+    const fileSize = parseInt(sizeResult.stdout.trim() || '0', 10);
+    if (fileSize > MAX_BYTES) {
+      return Response.json({ error: `File too large to display (${Math.round(fileSize / 1024)} KB > 500 KB)` }, { status: 413 });
+    }
+
+    const result = await shell.execute(`cat -- ${shellQuote(safePath)} 2>&1`);
+
+    if (!result.success) {
+      return Response.json({ error: result.stderr || 'Could not read file' }, { status: 500 });
+    }
+
+    // Detect binary by null bytes
+    if (result.stdout.includes('\x00')) {
+      return Response.json({ error: 'Binary file — cannot display' }, { status: 422 });
+    }
+
+    const ext = path.extname(safePath).slice(1).toLowerCase();
+    const basename = path.basename(safePath).toLowerCase();
+    const language = EXT_LANG[ext] || EXT_LANG[basename] || 'text';
+
+    return Response.json({ content: result.stdout, path: safePath, language });
+  } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: error instanceof Error ? error.message : 'Could not read file' }, { status: 500 });
   }
-
-  const result = await shell.execute(`cat -- "${safePath}" 2>&1`);
-
-  if (!result.success) {
-    return Response.json({ error: result.stderr || 'Could not read file' }, { status: 500 });
-  }
-
-  // Detect binary by null bytes
-  if (result.stdout.includes('\x00')) {
-    return Response.json({ error: 'Binary file — cannot display' }, { status: 422 });
-  }
-
-  const ext = path.extname(safePath).slice(1).toLowerCase();
-  const basename = path.basename(safePath).toLowerCase();
-  const language = EXT_LANG[ext] || EXT_LANG[basename] || 'text';
-
-  return Response.json({ content: result.stdout, path: safePath, language });
 }
 
 export async function PUT(request: Request): Promise<Response> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await requireCurrentUser();
 
-  const { path: inputPath, content } = await request.json();
-  if (typeof content !== 'string') return Response.json({ error: 'Missing content' }, { status: 400 });
-  const safePath = sanitizePath(inputPath || '', user.id);
-  if (!safePath) return Response.json({ error: 'Invalid path' }, { status: 400 });
+    const { path: inputPath, content } = await request.json();
+    if (typeof content !== 'string') return Response.json({ error: 'Missing content' }, { status: 400 });
+    const safePath = resolveUserWorkspaceFilePath(user.id, inputPath || '');
+    if (!safePath) return Response.json({ error: 'Invalid path' }, { status: 400 });
 
-  const b64 = Buffer.from(content, 'utf8').toString('base64');
-  const shell = new ShellTool();
-  const tmpFile = `/tmp/allerac-write-${Date.now()}`;
-  const result = await shell.execute(
-    `printf '%s' '${b64}' > '${tmpFile}.b64' && base64 -d '${tmpFile}.b64' > '${tmpFile}' && mv '${tmpFile}' '${safePath}' && rm -f '${tmpFile}.b64'`
-  );
-  if (!result.success) {
-    return Response.json({ error: result.stderr || 'Write failed' }, { status: 500 });
+    const b64 = Buffer.from(content, 'utf8').toString('base64');
+    const shell = new ShellTool();
+    const tmpFile = `/tmp/allerac-write-${Date.now()}`;
+    const result = await shell.execute(
+      `printf '%s' ${shellQuote(b64)} > ${shellQuote(`${tmpFile}.b64`)} && base64 -d ${shellQuote(`${tmpFile}.b64`)} > ${shellQuote(tmpFile)} && mv ${shellQuote(tmpFile)} ${shellQuote(safePath)} && rm -f ${shellQuote(`${tmpFile}.b64`)}`
+    );
+    if (!result.success) {
+      return Response.json({ error: result.stderr || 'Write failed' }, { status: 500 });
+    }
+    return Response.json({ ok: true });
+  } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: error instanceof Error ? error.message : 'Write failed' }, { status: 500 });
   }
-  return Response.json({ ok: true });
 }

@@ -7,19 +7,25 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { AuthService } from '@/app/services/auth/auth.service';
+import {
+  assertDomainAccess,
+  ForbiddenError,
+  requireCurrentUser,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { InstagramGraphService } from '@/app/services/instagram/instagram-graph.service';
 
-const authService      = new AuthService();
 const instagramService = new InstagramGraphService();
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) redirect('/login');
-
-  const user = await authService.validateSession(sessionToken);
-  if (!user) redirect('/login');
+  try {
+    const user = await requireCurrentUser();
+    await assertDomainAccess(user, 'social');
+  } catch (error) {
+    if (error instanceof UnauthorizedError) redirect('/login');
+    if (error instanceof ForbiddenError) redirect('/?error=social_access_denied');
+    throw error;
+  }
 
   if (!instagramService.isConfigured()) {
     redirect('/social?error=instagram_not_configured');
@@ -27,6 +33,7 @@ export async function GET() {
 
   // Generate and store state to prevent CSRF
   const state = crypto.randomUUID();
+  const cookieStore = await cookies();
   cookieStore.set('instagram_oauth_state', state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

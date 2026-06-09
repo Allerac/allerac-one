@@ -3,18 +3,12 @@
 import { sendEmail } from '@/app/services/email/email.service';
 import { welcomeEmail } from '@/app/services/email/templates';
 import pool from '@/app/clients/db';
-import { getCurrentUser } from '@/app/actions/auth';
-import { redirect } from 'next/navigation';
-import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
+import { requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
+import { encrypt } from '@/app/services/crypto/encryption.service';
 import { ImapService } from '@/app/services/email/imap.service';
 import { SmtpService } from '@/app/services/email/smtp.service';
 import type { EmailAccount } from '@/app/services/email/imap.service';
-
-async function assertUser() {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
-  return user;
-}
+import { loadEmailAccountForUser } from '@/app/services/email/email-account.service';
 
 export interface EmailAccountRow {
   id: string;
@@ -42,30 +36,8 @@ export interface CreateEmailAccountInput {
   password: string;
 }
 
-export async function loadAccountForUser(accountId: string, userId: string): Promise<EmailAccount> {
-  const result = await pool.query(
-    `SELECT * FROM user_email_accounts WHERE id = $1 AND user_id = $2`,
-    [accountId, userId]
-  );
-  const row = result.rows[0];
-  if (!row) throw new Error('Account not found');
-  return {
-    id: row.id,
-    label: row.label,
-    email_address: row.email_address,
-    imap_host: row.imap_host,
-    imap_port: row.imap_port,
-    imap_secure: row.imap_secure,
-    smtp_host: row.smtp_host,
-    smtp_port: row.smtp_port,
-    smtp_secure: row.smtp_secure,
-    username: row.username,
-    password: safeDecrypt(row.password_encrypted) ?? '',
-  };
-}
-
 export async function listEmailAccounts(): Promise<EmailAccountRow[]> {
-  const user = await assertUser();
+  const user = await requireCurrentUser();
   const result = await pool.query(
     `SELECT id, label, email_address, imap_host, imap_port, imap_secure,
             smtp_host, smtp_port, smtp_secure, username
@@ -93,7 +65,7 @@ function formatConnectionError(protocol: string, raw?: string): string {
 }
 
 export async function createEmailAccount(input: CreateEmailAccountInput): Promise<{ id: string } | { error: string }> {
-  const user = await assertUser();
+  const user = await requireCurrentUser();
   const imap = new ImapService();
   const smtp = new SmtpService();
 
@@ -134,19 +106,19 @@ export async function createEmailAccount(input: CreateEmailAccountInput): Promis
 }
 
 export async function deleteEmailMessage(accountId: string, uid: number): Promise<{ error?: string }> {
-  const user = await assertUser();
-  const account = await loadAccountForUser(accountId, user.id);
+  const user = await requireCurrentUser();
+  const account = await loadEmailAccountForUser(accountId, user.id);
   const imap = new ImapService();
   try {
     await imap.deleteMessage(account, uid);
     return {};
-  } catch (err: any) {
-    return { error: err?.message ?? 'Failed to delete message' };
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to delete message' };
   }
 }
 
 export async function deleteEmailAccount(accountId: string): Promise<void> {
-  const user = await assertUser();
+  const user = await requireCurrentUser();
   await pool.query(
     `DELETE FROM user_email_accounts WHERE id = $1 AND user_id = $2`,
     [accountId, user.id]
@@ -158,6 +130,7 @@ export async function sendWelcomeEmail(
   toEmail: string,
   apiKey: string
 ): Promise<{ success: boolean; error?: string }> {
+  await requireCurrentAdmin();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.allerac.ai';
 
   return sendEmail({

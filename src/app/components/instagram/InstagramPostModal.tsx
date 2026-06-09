@@ -166,7 +166,7 @@ export default function InstagramPostModal({
       const fullCaption = buildFullCaption();
       // If we have base64, use publishInstagramPost server action. Otherwise use imageUrl
       const result = base64ToPublish
-        ? await publishInstagramPost(userId, base64ToPublish as string, fullCaption)
+        ? await publishInstagramPost(base64ToPublish as string, fullCaption)
         : // For imageUrl, call the tool directly via API
           await fetch('/api/instagram/publish', {
             method: 'POST',
@@ -385,4 +385,3 @@ export default function InstagramPostModal({
     </div>
   );
 }
-

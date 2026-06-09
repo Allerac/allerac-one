@@ -158,7 +158,7 @@ describe('ConversationMemoryService', () => {
     it('should return false if summary already exists', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [{ id: 'summary_123' }] }); // Summary exists
 
-      const result = await memoryService.shouldSummarizeConversation('conv_123');
+      const result = await memoryService.shouldSummarizeConversation('conv_123', 'user_456');
 
       expect(result).toBe(false);
       expect(mockQuery).toHaveBeenCalledTimes(1);
@@ -168,7 +168,7 @@ describe('ConversationMemoryService', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] }); // No summary
       mockQuery.mockResolvedValueOnce({ rows: [{ count: '2' }] }); // 2 messages
 
-      const result = await memoryService.shouldSummarizeConversation('conv_123');
+      const result = await memoryService.shouldSummarizeConversation('conv_123', 'user_456');
 
       expect(result).toBe(false);
     });
@@ -177,7 +177,7 @@ describe('ConversationMemoryService', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] }); // No summary
       mockQuery.mockResolvedValueOnce({ rows: [{ count: '4' }] }); // 4 messages
 
-      const result = await memoryService.shouldSummarizeConversation('conv_123');
+      const result = await memoryService.shouldSummarizeConversation('conv_123', 'user_456');
 
       expect(result).toBe(true);
     });
@@ -186,7 +186,7 @@ describe('ConversationMemoryService', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] }); // No summary
       mockQuery.mockResolvedValueOnce({ rows: [{ count: '10' }] }); // 10 messages
 
-      const result = await memoryService.shouldSummarizeConversation('conv_123');
+      const result = await memoryService.shouldSummarizeConversation('conv_123', 'user_456');
 
       expect(result).toBe(true);
     });
@@ -194,7 +194,7 @@ describe('ConversationMemoryService', () => {
     it('should handle database errors gracefully', async () => {
       mockQuery.mockRejectedValueOnce(new Error('DB error'));
 
-      const result = await memoryService.shouldSummarizeConversation('conv_123');
+      const result = await memoryService.shouldSummarizeConversation('conv_123', 'user_456');
 
       expect(result).toBe(false);
     });
@@ -563,18 +563,18 @@ describe('ConversationMemoryService', () => {
     it('should delete summary by ID', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
-      await memoryService.deleteSummary('summary_123');
+      await memoryService.deleteSummary('summary_123', 'user_456');
 
       expect(mockQuery).toHaveBeenCalledWith(
-        'DELETE FROM conversation_summaries WHERE id = $1',
-        ['summary_123']
+        'DELETE FROM conversation_summaries WHERE id = $1 AND user_id = $2',
+        ['summary_123', 'user_456']
       );
     });
 
     it('should throw error on database failure', async () => {
       mockQuery.mockRejectedValueOnce(new Error('Delete failed'));
 
-      await expect(memoryService.deleteSummary('summary_123')).rejects.toThrow(
+      await expect(memoryService.deleteSummary('summary_123', 'user_456')).rejects.toThrow(
         'Failed to delete summary'
       );
     });

@@ -57,13 +57,21 @@ export interface SkillUsage {
 }
 
 export class SkillsService {
+  async getSkillTools(skillId: string): Promise<string[]> {
+    const result = await pool.query<{ tool_name: string }>(
+      'SELECT tool_name FROM skill_tools WHERE skill_id = $1 ORDER BY tool_name',
+      [skillId],
+    );
+    return result.rows.map(row => row.tool_name);
+  }
+
   /**
    * Get all skills available to a user (own + public shared skills)
    */
   async getAvailableSkills(userId: string): Promise<Skill[]> {
     const result = await pool.query<Skill>(
       `SELECT * FROM skills 
-       WHERE user_id = $1 OR shared = true
+       WHERE user_id = $1 OR shared = true OR is_system = true
        ORDER BY verified DESC, install_count DESC, category, name`,
       [userId]
     );
@@ -113,6 +121,15 @@ export class SkillsService {
     const result = await pool.query<Skill>(
       'SELECT * FROM skills WHERE id = $1',
       [skillId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async getSkillForUser(skillId: string, userId: string): Promise<Skill | null> {
+    const result = await pool.query<Skill>(
+      `SELECT * FROM skills
+       WHERE id = $1 AND (user_id = $2 OR shared = true OR is_system = true)`,
+      [skillId, userId]
     );
     return result.rows[0] || null;
   }
@@ -419,33 +436,31 @@ No explanation. Just one word.`;
     console.log(`[SkillRouter] FALLBACK START`);
     for (const skill of routableSkills) {
       console.log(`[SkillRouter] checking ${skill.name}`);
-      if (!skill.auto_switch_rules) continue;
-      const rules = skill.auto_switch_rules as any;
-
-      // Check keywords from database
-      if (rules.keywords && Array.isArray(rules.keywords)) {
-        const hasKeyword = rules.keywords.some((kw: string) =>
-          message.toLowerCase().includes(kw.toLowerCase())
-        );
-        if (hasKeyword) {
-          console.log(`[SkillRouter] Keyword fallback matched: ${skill.name}`);
-          return skill;
-        }
-      }
-
-      // Check file types
-      if (rules.file_types && Array.isArray(rules.file_types)) {
-        const hasFileType = rules.file_types.some((ft: string) =>
-          message.includes(ft)
-        );
-        if (hasFileType) {
-          console.log(`[SkillRouter] File type match: ${skill.name}`);
-          return skill;
-        }
+      if (this.shouldAutoActivate(skill, { message })) {
+        console.log(`[SkillRouter] Rule fallback matched: ${skill.name}`);
+        return skill;
       }
     }
 
     return null;
+  }
+
+  shouldAutoActivate(
+    skill: Pick<Skill, 'auto_switch_rules'>,
+    context: { message: string }
+  ): boolean {
+    const rules = skill.auto_switch_rules;
+    if (!rules) return false;
+
+    const message = context.message.toLowerCase();
+    const keywordMatch = rules.keywords?.some(keyword =>
+      message.includes(keyword.toLowerCase())
+    ) ?? false;
+    const fileTypeMatch = rules.file_types?.some(fileType =>
+      message.includes(fileType.toLowerCase())
+    ) ?? false;
+
+    return keywordMatch || fileTypeMatch;
   }
 
 
@@ -679,7 +694,12 @@ No explanation. Just one word.`;
   /**
    * Update an existing skill
    */
-  async updateSkill(skillId: string, skillData: Partial<Skill>): Promise<Skill> {
+  async updateSkill(
+    skillId: string,
+    userId: string,
+    isAdmin: boolean,
+    skillData: Partial<Skill>
+  ): Promise<Skill | null> {
     const result = await pool.query<Skill>(
       `UPDATE skills SET
         display_name = COALESCE($2, display_name),
@@ -693,7 +713,7 @@ No explanation. Just one word.`;
         force_tool = COALESCE($10, force_tool),
         version = COALESCE($11, version),
         shared = COALESCE($12, shared)
-       WHERE id = $1
+       WHERE id = $1 AND (user_id = $13 OR $14 = true)
        RETURNING *`,
       [
         skillId,
@@ -708,9 +728,11 @@ No explanation. Just one word.`;
         skillData.force_tool,
         skillData.version,
         skillData.shared,
+        userId,
+        isAdmin,
       ]
     );
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
   /**

@@ -2,6 +2,7 @@
 
 import { scheduledJobsService } from '../services/scheduled-jobs/scheduled-jobs.service';
 import type { ScheduledJob, JobExecution } from '../types';
+import { assertDomainAccess, requireCurrentUser } from '../lib/auth-session';
 
 const CRON_REGEX =
   /^(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)$/;
@@ -13,11 +14,10 @@ function validateCron(expr: string): string | null {
   return null;
 }
 
-export async function getScheduledJobs(
-  userId: string
-): Promise<{ success: boolean; data?: ScheduledJob[]; error?: string }> {
+export async function getScheduledJobs(): Promise<{ success: boolean; data?: ScheduledJob[]; error?: string }> {
   try {
-    const data = await scheduledJobsService.getScheduledJobs(userId);
+    const user = await requireCurrentUser();
+    const data = await scheduledJobsService.getScheduledJobs(user.id);
     return { success: true, data };
   } catch (error) {
     console.error('[Actions] Error getting scheduled jobs:', error);
@@ -26,7 +26,6 @@ export async function getScheduledJobs(
 }
 
 export async function createScheduledJob(
-  userId: string,
   data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null }
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (!data.name?.trim()) {
@@ -44,7 +43,11 @@ export async function createScheduledJob(
   }
 
   try {
-    const job = await scheduledJobsService.createScheduledJob(userId, {
+    const user = await requireCurrentUser();
+    if (data.domainSlug) {
+      await assertDomainAccess(user, data.domainSlug);
+    }
+    const job = await scheduledJobsService.createScheduledJob(user.id, {
       ...data,
       cronExpr: data.cronExpr.trim(),
     });
@@ -57,7 +60,6 @@ export async function createScheduledJob(
 
 export async function updateScheduledJob(
   jobId: string,
-  userId: string,
   data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; enabled?: boolean }
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (data.cronExpr !== undefined) {
@@ -68,7 +70,8 @@ export async function updateScheduledJob(
   }
 
   try {
-    const job = await scheduledJobsService.updateScheduledJob(jobId, userId, data);
+    const user = await requireCurrentUser();
+    const job = await scheduledJobsService.updateScheduledJob(jobId, user.id, data);
     if (!job) {
       return { success: false, error: 'Job not found' };
     }
@@ -80,11 +83,11 @@ export async function updateScheduledJob(
 }
 
 export async function deleteScheduledJob(
-  jobId: string,
-  userId: string
+  jobId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const deleted = await scheduledJobsService.deleteScheduledJob(jobId, userId);
+    const user = await requireCurrentUser();
+    const deleted = await scheduledJobsService.deleteScheduledJob(jobId, user.id);
     if (!deleted) {
       return { success: false, error: 'Job not found' };
     }
@@ -96,11 +99,11 @@ export async function deleteScheduledJob(
 }
 
 export async function toggleJobEnabled(
-  jobId: string,
-  userId: string
+  jobId: string
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   try {
-    const job = await scheduledJobsService.toggleJobEnabled(jobId, userId);
+    const user = await requireCurrentUser();
+    const job = await scheduledJobsService.toggleJobEnabled(jobId, user.id);
     if (!job) {
       return { success: false, error: 'Job not found' };
     }
@@ -115,7 +118,8 @@ export async function getJobExecutions(
   jobId: string
 ): Promise<{ success: boolean; data?: JobExecution[]; error?: string }> {
   try {
-    const data = await scheduledJobsService.getJobExecutions(jobId);
+    const user = await requireCurrentUser();
+    const data = await scheduledJobsService.getJobExecutions(jobId, user.id);
     return { success: true, data };
   } catch (error) {
     console.error('[Actions] Error getting job executions:', error);

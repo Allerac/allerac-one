@@ -159,11 +159,12 @@ services:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
       - NEXT_PUBLIC_VISIBLE_DOMAINS=${NEXT_PUBLIC_VISIBLE_DOMAINS:-}
       - APP_URL=${APP_URL:-http://localhost:8080}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      - TELEGRAM_TOKEN_ENCRYPTION_KEY=${TELEGRAM_TOKEN_ENCRYPTION_KEY:?TELEGRAM_TOKEN_ENCRYPTION_KEY is required}
       - BACKUP_DIR=/app/backups
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - EXECUTOR_URL=http://executor:3001
-      - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+      - EXECUTOR_SECRET=${EXECUTOR_SECRET:?EXECUTOR_SECRET is required}
       - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
       - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
       - INSTAGRAM_APP_ID=${INSTAGRAM_APP_ID:-}
@@ -194,6 +195,16 @@ services:
         condition: service_completed_successfully
       executor:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8080/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
     deploy:
       resources:
         limits:

@@ -1,4 +1,9 @@
-import { ticketService } from '@/app/services/tickets/ticket.service';
+import {
+  ticketService,
+  TicketStatus,
+  TicketType,
+} from '@/app/services/tickets/ticket.service';
+import type { PriorityLevel } from '@/app/services/tickets/priority.service';
 export { TICKETS_TOOL_DEFINITIONS } from './tickets.tool.definitions';
 
 export function buildTicketsTools(userId: string) {
@@ -6,8 +11,8 @@ export function buildTicketsTools(userId: string) {
     list_tickets: async (args: { status?: string; type?: string; limit?: number }) => {
       const tickets = await ticketService.list({
         userId,
-        status: args.status as any,
-        type: args.type as any,
+        status: args.status as TicketStatus | undefined,
+        type: args.type as TicketType | undefined,
         limit: args.limit ?? 20,
       });
       return {
@@ -30,8 +35,8 @@ export function buildTicketsTools(userId: string) {
         userId,
         title: args.title,
         description: args.description,
-        type: args.type as any,
-        explicitUrgency: args.explicit_urgency as any,
+        type: args.type as TicketType,
+        explicitUrgency: args.explicit_urgency as PriorityLevel | undefined,
       });
       return {
         success: true,
@@ -45,7 +50,7 @@ export function buildTicketsTools(userId: string) {
 
     update_ticket_status: async (args: { ticket_id: string; status: string; resolution_notes?: string }) => {
       const updated = await ticketService.update(args.ticket_id, userId, {
-        status: args.status as any,
+        status: args.status as TicketStatus,
         resolvedByType: args.status === 'resolved' ? 'user' : undefined,
         resolutionNotes: args.resolution_notes,
       });
@@ -61,7 +66,7 @@ export function buildTicketsTools(userId: string) {
     get_ticket: async (args: { ticket_id: string }) => {
       const ticket = await ticketService.getById(args.ticket_id, userId);
       if (!ticket) return { error: 'Ticket not found' };
-      const events = await ticketService.getEvents(args.ticket_id);
+      const events = await ticketService.getEvents(args.ticket_id, userId);
       return {
         ticket_id: ticket.id,
         title: ticket.title,

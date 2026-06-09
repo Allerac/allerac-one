@@ -139,7 +139,7 @@ export default function SystemTab({ isDarkMode, userId }: SystemTabProps) {
   const loadDashboard = async () => {
     try {
       setIsLoading(true);
-      const dashboard = await systemActions.getSystemDashboard(userId);
+      const dashboard = await systemActions.getSystemDashboard();
       setData(dashboard);
       setError(null);
     } catch (err: any) {

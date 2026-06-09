@@ -2,6 +2,7 @@ import pool from '@/app/clients/db';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 
 const KEYS = ['github_token', 'tavily_api_key', 'anthropic_api_key', 'google_api_key', 'fal_ai_api_key', 'resend_api_key', 'resend_from_email'] as const;
+const KEY_SET = new Set<string>(KEYS);
 export type SystemSettingKey = typeof KEYS[number];
 
 export interface SystemSettings {
@@ -39,6 +40,10 @@ export class SystemSettingsService {
   }
 
   async set(key: SystemSettingKey, value: string): Promise<void> {
+    if (!KEY_SET.has(key)) throw new Error('Invalid system setting key');
+    if (typeof value !== 'string' || value.length > 10_000) {
+      throw new Error('Invalid system setting value');
+    }
     const encrypted = value.trim() ? encrypt(value.trim()) : '';
     await pool.query(
       `INSERT INTO system_settings (key, value_encrypted, updated_at)
@@ -50,7 +55,7 @@ export class SystemSettingsService {
 
   async saveAll(settings: Partial<SystemSettings>): Promise<void> {
     for (const [key, value] of Object.entries(settings)) {
-      if (value !== undefined) {
+      if (KEY_SET.has(key) && value !== undefined) {
         await this.set(key as SystemSettingKey, value ?? '');
       }
     }

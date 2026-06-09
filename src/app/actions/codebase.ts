@@ -2,13 +2,11 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-
-// Whitelist of directories the programmer can read from
-const READABLE_BASE_PATHS = [
-  '/home/gianclaudiocarella/wsp/',
-  '/workspace',
-  '/tmp',
-];
+import { requireCurrentUser } from '@/app/lib/auth-session';
+import {
+  getUserWorkspaceRoot,
+  resolveUserWorkspacePath,
+} from '@/app/lib/workspace-paths';
 
 // File extensions to include when listing directories
 const RELEVANT_EXTENSIONS = [
@@ -46,11 +44,22 @@ interface ReadProjectResult {
   error?: string;
 }
 
-function isPathAllowed(filePath: string): boolean {
-  const normalized = path.normalize(filePath);
-  return READABLE_BASE_PATHS.some(base =>
-    normalized.startsWith(base) || normalized === base
-  );
+async function resolveReadablePath(userId: string, filePath: string): Promise<string | null> {
+  const resolved = resolveUserWorkspacePath(userId, filePath);
+  if (!resolved) return null;
+
+  try {
+    const [realRoot, realPath] = await Promise.all([
+      fs.realpath(getUserWorkspaceRoot(userId)),
+      fs.realpath(resolved),
+    ]);
+    if (realPath !== realRoot && !realPath.startsWith(`${realRoot}${path.sep}`)) {
+      return null;
+    }
+    return realPath;
+  } catch {
+    return null;
+  }
 }
 
 function isRelevantFile(filename: string): boolean {
@@ -129,6 +138,7 @@ async function listDirectory(dirPath: string, maxFiles = 20): Promise<FileConten
 
     for (const entry of entries) {
       if (relevant.length >= maxFiles) break;
+      if (entry.isSymbolicLink()) continue;
 
       if (entry.isDirectory()) {
         if (shouldSkipDir(entry.name)) {
@@ -163,44 +173,33 @@ async function listDirectory(dirPath: string, maxFiles = 20): Promise<FileConten
 }
 
 export async function readProjectFiles(filePath: string): Promise<ReadProjectResult> {
+  const user = await requireCurrentUser();
   try {
-    // Log the received path for debugging
-    console.log(`[readProjectFiles] Received path: "${filePath}"`);
+    if (typeof filePath !== 'string' || filePath.length > 4_096) {
+      return {
+        success: false,
+        requestedPath: String(filePath),
+        type: 'file',
+        files: [],
+        error: 'Invalid path',
+      };
+    }
 
-    // Security: Validate path
-    if (!isPathAllowed(filePath)) {
-      console.log(`[readProjectFiles] Path not allowed: "${filePath}"`);
+    const readablePath = await resolveReadablePath(user.id, filePath);
+    if (!readablePath) {
       return {
         success: false,
         requestedPath: filePath,
         type: 'file',
         files: [],
-        error: `Access denied: Path must be under ${READABLE_BASE_PATHS.join(' or ')}`,
+        error: 'Access denied or path not found',
       };
     }
 
-    const normalized = path.normalize(filePath);
-    console.log(`[readProjectFiles] Normalized path: "${normalized}"`);
-
-    // Check if path exists
-    let stat;
-    try {
-      stat = await fs.stat(normalized);
-      console.log(`[readProjectFiles] Path exists, isFile: ${stat.isFile()}, isDirectory: ${stat.isDirectory()}`);
-    } catch (err) {
-      console.log(`[readProjectFiles] Path not found error: ${(err as Error).message}`);
-      return {
-        success: false,
-        requestedPath: filePath,
-        type: 'file',
-        files: [],
-        error: `Path not found: ${filePath}`,
-      };
-    }
-
+    const stat = await fs.stat(readablePath);
     if (stat.isFile()) {
       // Single file
-      const content = await readFile(normalized);
+      const content = await readFile(readablePath);
       return {
         success: true,
         requestedPath: filePath,
@@ -209,7 +208,7 @@ export async function readProjectFiles(filePath: string): Promise<ReadProjectRes
       };
     } else if (stat.isDirectory()) {
       // Directory: list relevant files
-      const files = await listDirectory(normalized);
+      const files = await listDirectory(readablePath);
       return {
         success: true,
         requestedPath: filePath,

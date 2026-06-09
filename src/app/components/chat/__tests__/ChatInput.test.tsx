@@ -294,7 +294,7 @@ describe('ChatInput', () => {
       render(<ChatInput {...defaultProps} />);
 
       const textarea = screen.getByPlaceholderText(/type.*message/i);
-      expect(textarea).toHaveFocus() || textarea.tabIndex >= -1;
+      expect(textarea).toHaveFocus();
     });
   });
 

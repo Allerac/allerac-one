@@ -6,6 +6,7 @@ import { SystemSettingsService } from '@/app/services/system/system-settings.ser
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { requireCurrentUser } from '@/app/lib/auth-session';
 
 const authService = new AuthService();
 const sysSettings = new SystemSettingsService();
@@ -161,9 +162,10 @@ export async function getCurrentUser(): Promise<User | null> {
  * Admins go to the desktop (/). Domain users go to their first assigned domain.
  * If no domain is assigned, falls back to /.
  */
-export async function getLoginRedirect(userId: string, isAdmin: boolean): Promise<string> {
-  if (isAdmin) return '/';
-  const slug = await authService.getFirstDomainSlug(userId);
+export async function getLoginRedirect(): Promise<string> {
+  const user = await requireCurrentUser();
+  if (user.is_admin) return '/';
+  const slug = await authService.getFirstDomainSlug(user.id);
   return slug ? `/${slug}` : '/login?error=no-access';
 }
 

@@ -1,17 +1,9 @@
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { AuthService } from '@/app/services/auth/auth.service';
+import { requireAdmin } from '@/app/lib/domain-access';
 import { MODELS } from '@/app/services/llm/models';
 import LogsClient from './LogsClient';
 
-const authService = new AuthService();
-
 export default async function LogsPage() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('session_token')?.value;
-  if (!token) redirect('/login');
-  const user = await authService.validateSession(token);
-  if (!user) redirect('/login');
+  const user = await requireAdmin();
 
   return (
     <LogsClient

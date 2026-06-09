@@ -33,8 +33,8 @@ export default function ConversationMemoriesView({
     setIsLoading(true);
     try {
       const [summaries, statistics] = await Promise.all([
-        memoryActions.getRecentSummaries(userId, undefined, 10, 1, domainSlug),
-        memoryActions.getSummaryStats(userId, undefined, domainSlug),
+        memoryActions.getRecentSummaries(10, 1, domainSlug),
+        memoryActions.getSummaryStats(domainSlug),
       ]);
 
       setMemories(summaries);
@@ -56,7 +56,7 @@ export default function ConversationMemoriesView({
 
     setIsDeleting(true);
     try {
-      await memoryActions.deleteSummary(memoryToDelete.id, undefined);
+      await memoryActions.deleteSummary(memoryToDelete.id);
       await loadMemories();
       setDeleteConfirmOpen(false);
       setMemoryToDelete(null);

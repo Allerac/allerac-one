@@ -37,7 +37,7 @@ Instagram management assistant. The AI helps draft captions and hashtags, genera
 
 - **Instagram Graph API** (Meta) — requires a connected Business or Creator account
 - **OAuth 2.0 flow** — stored in `instagram_credentials` table (encrypted)
-- **Image hosting** — Imgur (default) or Azure Blob Storage for image URLs
+- **Image hosting** — Azure Blob Storage for public image URLs
 
 ## DB Tables
 
@@ -51,7 +51,7 @@ Instagram management assistant. The AI helps draft captions and hashtags, genera
 
 - Instagram API requires **Business or Creator** account (personal accounts are not supported).
 - Comment trigger (auto-reply to comments with a keyword) requires **Meta app verification** — currently blocked pending business verification.
-- Images must be hosted at a public URL before publishing (Imgur or Azure Blob).
+- Images must be hosted at a public URL before publishing (Azure Blob Storage).
 
 ## Settings
 

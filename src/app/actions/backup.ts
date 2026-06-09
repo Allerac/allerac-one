@@ -1,14 +1,78 @@
 'use server';
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import pool from '@/app/clients/db';
-
-const execAsync = promisify(exec);
+import { requireCurrentAdmin } from '@/app/lib/auth-session';
 
 const BACKUP_DIR = process.env.BACKUP_DIR || '/app/backups';
+const BACKUP_FILENAME_PATTERN = /^allerac-backup-[a-zA-Z0-9.-]{1,180}\.sql$/;
+const MAX_BACKUP_BYTES = 50 * 1024 * 1024;
+const POSTGRES_DUMP_HEADER = 'PostgreSQL database dump';
+
+function isValidBackupFilename(filename: string): boolean {
+  return typeof filename === 'string' && BACKUP_FILENAME_PATTERN.test(filename);
+}
+
+function databaseConnection() {
+  return {
+    host: process.env.POSTGRES_HOST || 'postgres',
+    port: process.env.POSTGRES_PORT || '5432',
+    database: process.env.POSTGRES_DB || 'allerac',
+    user: process.env.POSTGRES_USER || 'allerac',
+    password: process.env.POSTGRES_PASSWORD || 'allerac',
+  };
+}
+
+async function runDatabaseCommand(
+  executable: 'pg_dump' | 'psql',
+  args: string[],
+  options: { outputPath?: string } = {},
+): Promise<void> {
+  const { password } = databaseConnection();
+  const output = options.outputPath ? await fs.open(options.outputPath, 'wx') : undefined;
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(executable, args, {
+        env: { ...process.env, PGPASSWORD: password },
+        stdio: ['ignore', output?.fd ?? 'ignore', 'pipe'],
+      });
+      let stderr = '';
+
+      child.stderr?.on('data', (chunk) => {
+        if (stderr.length < 8_192) stderr += chunk.toString();
+      });
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`${executable} failed${stderr ? `: ${stderr.trim()}` : ''}`));
+      });
+    });
+  } finally {
+    await output?.close();
+  }
+}
+
+async function validateSqlBackup(backupPath: string): Promise<void> {
+  const stats = await fs.stat(backupPath);
+  if (!stats.isFile() || stats.size === 0 || stats.size > MAX_BACKUP_BYTES) {
+    throw new Error('Backup file is empty, too large, or invalid');
+  }
+
+  const handle = await fs.open(backupPath, 'r');
+  try {
+    const sampleSize = Math.min(stats.size, 16 * 1024);
+    const sample = Buffer.alloc(sampleSize);
+    await handle.read(sample, 0, sampleSize, 0);
+    if (!sample.toString('utf8').includes(POSTGRES_DUMP_HEADER)) {
+      throw new Error('Backup does not contain a PostgreSQL plain-text dump');
+    }
+  } finally {
+    await handle.close();
+  }
+}
 
 export interface BackupInfo {
   filename: string;
@@ -69,24 +133,28 @@ async function ensureBackupDir(): Promise<void> {
  * Create a database backup
  */
 export async function createBackup(): Promise<BackupResult> {
+  await requireCurrentAdmin();
   try {
     await ensureBackupDir();
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `allerac-backup-${timestamp}.sql`;
     const backupPath = path.join(BACKUP_DIR, filename);
+    const temporaryPath = `${backupPath}.tmp`;
 
-    // Get database connection info from environment
-    const dbHost = process.env.POSTGRES_HOST || 'postgres';
-    const dbPort = process.env.POSTGRES_PORT || '5432';
-    const dbName = process.env.POSTGRES_DB || 'allerac';
-    const dbUser = process.env.POSTGRES_USER || 'allerac';
-    const dbPassword = process.env.POSTGRES_PASSWORD || 'allerac';
-
-    // Run pg_dump
-    const command = `PGPASSWORD="${dbPassword}" pg_dump -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -F p > "${backupPath}"`;
-
-    await execAsync(command);
+    const db = databaseConnection();
+    try {
+      await runDatabaseCommand(
+        'pg_dump',
+        ['-h', db.host, '-p', db.port, '-U', db.user, '-d', db.database, '-F', 'p'],
+        { outputPath: temporaryPath },
+      );
+      await validateSqlBackup(temporaryPath);
+      await fs.rename(temporaryPath, backupPath);
+    } catch (error) {
+      await fs.rm(temporaryPath, { force: true });
+      throw error;
+    }
 
     // Get file stats
     const stats = await fs.stat(backupPath);
@@ -118,6 +186,7 @@ export async function createBackup(): Promise<BackupResult> {
  * List all available backups
  */
 export async function listBackups(): Promise<BackupInfo[]> {
+  await requireCurrentAdmin();
   try {
     await ensureBackupDir();
 
@@ -154,9 +223,10 @@ export async function listBackups(): Promise<BackupInfo[]> {
  * Delete a backup
  */
 export async function deleteBackup(filename: string): Promise<BackupResult> {
+  await requireCurrentAdmin();
   try {
     // Validate filename to prevent path traversal
-    if (!filename.startsWith('allerac-backup-') || !filename.endsWith('.sql')) {
+    if (!isValidBackupFilename(filename)) {
       return {
         success: false,
         message: 'Invalid backup filename',
@@ -183,9 +253,10 @@ export async function deleteBackup(filename: string): Promise<BackupResult> {
  * Restore from a backup
  */
 export async function restoreBackup(filename: string): Promise<RestoreResult> {
+  await requireCurrentAdmin();
   try {
     // Validate filename to prevent path traversal
-    if (!filename.startsWith('allerac-backup-') || !filename.endsWith('.sql')) {
+    if (!isValidBackupFilename(filename)) {
       return {
         success: false,
         message: 'Invalid backup filename',
@@ -204,17 +275,17 @@ export async function restoreBackup(filename: string): Promise<RestoreResult> {
       };
     }
 
-    // Get database connection info from environment
-    const dbHost = process.env.POSTGRES_HOST || 'postgres';
-    const dbPort = process.env.POSTGRES_PORT || '5432';
-    const dbName = process.env.POSTGRES_DB || 'allerac';
-    const dbUser = process.env.POSTGRES_USER || 'allerac';
-    const dbPassword = process.env.POSTGRES_PASSWORD || 'allerac';
+    await validateSqlBackup(backupPath);
 
-    // Run psql to restore
-    const command = `PGPASSWORD="${dbPassword}" psql -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -f "${backupPath}"`;
-
-    await execAsync(command);
+    const db = databaseConnection();
+    await runDatabaseCommand('psql', [
+      '-v', 'ON_ERROR_STOP=1',
+      '-h', db.host,
+      '-p', db.port,
+      '-U', db.user,
+      '-d', db.database,
+      '-f', backupPath,
+    ]);
 
     return {
       success: true,
@@ -233,9 +304,10 @@ export async function restoreBackup(filename: string): Promise<RestoreResult> {
  * Download a backup file (returns the file content as base64)
  */
 export async function downloadBackup(filename: string): Promise<{ success: boolean; data?: string; message?: string }> {
+  await requireCurrentAdmin();
   try {
     // Validate filename to prevent path traversal
-    if (!filename.startsWith('allerac-backup-') || !filename.endsWith('.sql')) {
+    if (!isValidBackupFilename(filename)) {
       return {
         success: false,
         message: 'Invalid backup filename',
@@ -263,7 +335,16 @@ export async function downloadBackup(filename: string): Promise<{ success: boole
  * Upload/Import a backup file from user's machine
  */
 export async function uploadBackup(base64Content: string, originalFilename: string): Promise<BackupResult> {
+  await requireCurrentAdmin();
   try {
+    void originalFilename;
+    if (
+      typeof base64Content !== 'string'
+      || base64Content.length > Math.ceil(MAX_BACKUP_BYTES * 4 / 3) + 4
+      || !/^[a-zA-Z0-9+/]*={0,2}$/.test(base64Content)
+    ) {
+      return { success: false, message: 'Invalid or oversized backup' };
+    }
     await ensureBackupDir();
 
     // Generate a new filename with timestamp
@@ -273,6 +354,9 @@ export async function uploadBackup(base64Content: string, originalFilename: stri
 
     // Decode base64 and write to file
     const content = Buffer.from(base64Content, 'base64');
+    if (content.length === 0 || content.length > MAX_BACKUP_BYTES) {
+      return { success: false, message: 'Invalid or oversized backup' };
+    }
     await fs.writeFile(backupPath, content);
 
     // Get file stats
@@ -309,6 +393,7 @@ export async function getBackupStats(): Promise<{
   totalSize: string;
   lastBackup: string | null;
 }> {
+  await requireCurrentAdmin();
   try {
     const backups = await listBackups();
     const totalSize = backups.reduce((sum, b) => sum + b.size, 0);

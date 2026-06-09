@@ -26,7 +26,7 @@
 #   help                Show this help message
 #
 
-set -e
+set -eo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-$HOME/allerac-one}"
 COMPOSE_FILE="docker-compose.yml"
@@ -64,6 +64,43 @@ compose_flags() {
     docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-notifier"  && flags="$flags --profile notifications"
     docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-prometheus" && flags="$flags --profile monitoring"
     echo "$flags"
+}
+
+create_database_backup() {
+    local label="${1:-manual}"
+    local backup_dir="$INSTALL_DIR/backups"
+    local filename="allerac-${label}-$(date +%Y-%m-%d_%H-%M-%S).sql.gz"
+    local filepath="$backup_dir/$filename"
+    local tempfile="${filepath}.tmp"
+
+    mkdir -p "$backup_dir"
+    rm -f "$tempfile"
+
+    log_info "Backing up database..."
+    if ! docker compose -f "$COMPOSE_FILE" exec -T db sh -c \
+        'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+        | gzip > "$tempfile"; then
+        rm -f "$tempfile"
+        log_error "Database backup failed."
+        return 1
+    fi
+
+    if [ ! -s "$tempfile" ] || ! gzip -t "$tempfile"; then
+        rm -f "$tempfile"
+        log_error "Database backup validation failed."
+        return 1
+    fi
+
+    mv "$tempfile" "$filepath"
+    LAST_BACKUP_PATH="$filepath"
+    if [ -n "${ALLERAC_BACKUP_PATH_FILE:-}" ]; then
+        printf '%s\n' "$filepath" > "$ALLERAC_BACKUP_PATH_FILE"
+    fi
+}
+
+start_app_after_restore() {
+    docker compose -f "$COMPOSE_FILE" start app 2>/dev/null \
+        || docker compose -f "$COMPOSE_FILE" up -d app
 }
 
 # ============================================
@@ -148,28 +185,20 @@ cmd_update() {
 
 cmd_backup() {
     require_install_dir
-    local backup_dir="$INSTALL_DIR/backups"
-    mkdir -p "$backup_dir"
+    local label="${1:-manual}"
+    case "$label" in
+        *[!A-Za-z0-9_-]*)
+            log_error "Invalid backup label: $label"
+            exit 1
+            ;;
+    esac
 
-    local filename="allerac-$(date +%Y-%m-%d_%H-%M-%S).sql.gz"
-    local filepath="$backup_dir/$filename"
-
-    local db_container
-    db_container=$(docker ps --format '{{.Names}}' | grep -E 'allerac-db|allerac-postgres' | head -1)
-
-    if [ -z "$db_container" ]; then
-        log_error "Database container not found. Is Allerac One running?"
-        exit 1
-    fi
-
-    log_info "Backing up database..."
-    docker exec "$db_container" pg_dump -U postgres allerac | gzip > "$filepath"
-
+    create_database_backup "$label"
     local size
-    size=$(du -h "$filepath" | cut -f1)
-    log_ok "Backup saved: $filepath ($size)"
+    size=$(du -h "$LAST_BACKUP_PATH" | cut -f1)
+    log_ok "Backup saved: $LAST_BACKUP_PATH ($size)"
     echo ""
-    echo -e "  To restore: ${YELLOW}allerac restore $filename${NC}"
+    echo -e "  To restore: ${YELLOW}allerac restore $(basename "$LAST_BACKUP_PATH")${NC}"
     echo ""
 }
 
@@ -196,29 +225,53 @@ cmd_restore() {
         exit 1
     fi
 
+    if ! gzip -t "$filepath"; then
+        log_error "Backup is not a valid gzip archive: $filepath"
+        exit 1
+    fi
+
+    if ! gzip -cd "$filepath" | awk '
+        NR <= 100 && /PostgreSQL database dump/ { found = 1 }
+        END { exit found ? 0 : 1 }
+    '; then
+        log_error "Backup does not contain a PostgreSQL plain-text dump."
+        exit 1
+    fi
+
     echo ""
     log_warn "This will REPLACE ALL current data with the backup."
     read -rp "  Continue? [y/N]: " CONFIRM
     [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "  Cancelled."; exit 0; }
 
-    local db_container
-    db_container=$(docker ps --format '{{.Names}}' | grep -E 'allerac-db|allerac-postgres' | head -1)
-
-    if [ -z "$db_container" ]; then
-        log_error "Database container not found. Is Allerac One running?"
-        exit 1
-    fi
+    log_info "Creating a safety backup of the current database..."
+    create_database_backup "pre-restore"
+    local safety_backup="$LAST_BACKUP_PATH"
+    log_ok "Safety backup saved: $safety_backup"
 
     log_info "Stopping app..."
     docker compose -f "$COMPOSE_FILE" stop app 2>/dev/null || true
 
+    log_info "Resetting the public schema..."
+    if ! docker compose -f "$COMPOSE_FILE" exec -T db sh -c \
+        'PGPASSWORD="$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'; then
+        start_app_after_restore
+        log_error "Could not reset the database schema. Current data was not replaced."
+        exit 1
+    fi
+
     log_info "Restoring database from $filepath..."
-    gunzip < "$filepath" | docker exec -i "$db_container" psql -U postgres -d allerac
+    if ! gzip -cd "$filepath" | docker compose -f "$COMPOSE_FILE" exec -T db sh -c \
+        'PGPASSWORD="$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'; then
+        start_app_after_restore
+        log_error "Restore failed. Recovery backup: $safety_backup"
+        exit 1
+    fi
 
     log_info "Starting app..."
-    docker compose -f "$COMPOSE_FILE" start app 2>/dev/null || docker compose -f "$COMPOSE_FILE" up -d app
+    start_app_after_restore
 
     log_ok "Database restored from $file"
+    log_ok "Pre-restore safety backup retained at $safety_backup"
 }
 
 cmd_models() {

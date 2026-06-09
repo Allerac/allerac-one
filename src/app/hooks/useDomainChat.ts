@@ -69,7 +69,7 @@ export function useDomainChat({
   const setSelectedModel = useCallback((m: string) => {
     setModelState(m);
     localStorage.setItem('selected_model', m);
-    saveSelectedModel(userId, m);
+    saveSelectedModel(m);
   }, [userId]);
 
   const toggleAgentMode = useCallback(() => {
@@ -178,7 +178,7 @@ export function useDomainChat({
     setMemoryLoading(true);
     setMemoryResult(null);
     try {
-      const summary = await memoryActions.generateConversationSummary(convIdRef.current, userId, githubToken, domain);
+      const summary = await memoryActions.generateConversationSummary(convIdRef.current, domain);
       setMemoryResult(summary
         ? { success: true, message: 'Summary generated!', summary: summary.summary, topics: summary.key_topics }
         : { success: false, message: 'Not enough messages to summarize' }

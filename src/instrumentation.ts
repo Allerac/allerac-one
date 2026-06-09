@@ -1,5 +1,8 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const { validateRuntimeConfig } = await import('./lib/runtime-config');
+    validateRuntimeConfig();
+
     // Install console interceptor first so skill sync logs are captured
     const { installConsoleInterceptor } = await import('./lib/logger');
     installConsoleInterceptor();
@@ -33,18 +36,25 @@ async function startSchedulerLogger() {
     return;
   }
 
-  let lastSeenAt = new Date();
+  let lastSeenEpoch = (Date.now() / 1000).toString();
+  let lastSeenId = '';
 
   const poll = async () => {
     try {
       const pool = (await import('./app/clients/db')).default;
       const result = await pool.query(
-        `SELECT je.id, je.status, je.result, je.started_at, je.completed_at, sj.name
+        `SELECT je.id, je.status, je.result, je.started_at, je.completed_at,
+                EXTRACT(EPOCH FROM je.completed_at)::text AS completed_epoch,
+                sj.name
          FROM job_executions je
          JOIN scheduled_jobs sj ON sj.id = je.job_id
-         WHERE je.completed_at > $1
-         ORDER BY je.completed_at ASC`,
-        [lastSeenAt]
+         WHERE EXTRACT(EPOCH FROM je.completed_at) > $1::numeric
+            OR (
+              EXTRACT(EPOCH FROM je.completed_at) = $1::numeric
+              AND je.id::text > $2
+            )
+         ORDER BY je.completed_at ASC, je.id::text ASC`,
+        [lastSeenEpoch, lastSeenId]
       );
 
       for (const row of result.rows) {
@@ -58,7 +68,8 @@ async function startSchedulerLogger() {
         const msg = `[Scheduler] ${icon} "${row.name}" ${duration}${resultSnippet ? ` — ${resultSnippet}` : ''}`;
         if (row.status === 'failed') console.error(msg);
         else console.log(msg);
-        lastSeenAt = new Date(row.completed_at);
+        lastSeenEpoch = row.completed_epoch;
+        lastSeenId = row.id;
       }
     } catch { /* silent — DB might not be ready yet */ }
   };

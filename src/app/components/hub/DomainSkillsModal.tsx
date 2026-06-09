@@ -81,7 +81,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
     setLoading(true);
     const [b, s] = await Promise.all([
       skillActions.getAllDomainSkillDefaults(),
-      skillActions.getAllSkills(userId),
+      skillActions.getAllSkills(),
     ]);
     setBindings(b);
     setSkills(s as Skill[]);

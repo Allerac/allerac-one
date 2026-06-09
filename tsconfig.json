@@ -30,5 +30,10 @@
     ".next/dev/types/**/*.ts",
     "src/**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    ".claude",
+    ".next",
+    "workspace/projects"
+  ]
 }

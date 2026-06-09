@@ -1,7 +1,9 @@
 // LLM Service with automatic metrics tracking
 // Supports GitHub Models, Ollama, Gemini, and Anthropic providers
-import * as metricActions from '@/app/actions/metrics';
+import { MetricsService } from '@/app/services/infrastructure/metrics.service';
 import Anthropic from '@anthropic-ai/sdk';
+
+const metricsService = new MetricsService();
 
 export interface MessageContentPart {
   type: 'text' | 'image_url';
@@ -841,7 +843,7 @@ export class LLMService {
   }
 
   /**
-   * Log metrics to database using Server Action
+   * Log metrics directly from the authenticated runtime context.
    */
   private async logMetrics(data: {
     model: string;
@@ -861,7 +863,7 @@ export class LLMService {
   }) {
     try {
       // Log API call metrics
-      await metricActions.logApiCall({
+      await metricsService.logApiCall({
         api_name: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : 'ollama',
         endpoint: '/chat/completions',
         method: 'POST',
@@ -870,6 +872,7 @@ export class LLMService {
         success: data.success,
         error_message: data.errorMessage,
         error_type: data.errorType,
+        user_id: this._userId,
         metadata: {
           model: data.model,
           has_tools: data.hasTools,
@@ -883,7 +886,7 @@ export class LLMService {
           ? this.calculateCost(data.model, data.usage)
           : 0;
 
-        await metricActions.logTokenUsage({
+        await metricsService.logTokenUsage({
           model: data.model,
           provider: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : data.provider === 'anthropic' ? 'anthropic' : 'ollama',
           prompt_tokens: data.usage.prompt_tokens,

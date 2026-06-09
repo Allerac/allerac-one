@@ -2,6 +2,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { requireCurrentAdmin } from '@/app/lib/auth-session';
 
 const GITHUB_REPO = 'Allerac/allerac-one';
 const GITHUB_API = 'https://api.github.com';
@@ -87,6 +88,7 @@ async function getLatestCommits(since?: string): Promise<CommitInfo[]> {
  * Check for updates by comparing local build commit with remote HEAD
  */
 export async function checkForUpdates(): Promise<UpdateStatus> {
+  await requireCurrentAdmin();
   try {
     const buildInfo = await getBuildInfo();
     const commits = await getLatestCommits();
@@ -150,6 +152,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
  * Get current version from package.json (kept for backward compatibility)
  */
 export async function getCurrentVersion(): Promise<string> {
+  await requireCurrentAdmin();
   try {
     const packageJsonPath = path.join(process.cwd(), 'package.json');
     const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
@@ -165,6 +168,7 @@ export async function getCurrentVersion(): Promise<string> {
  */
 export async function applyUpdate(): Promise<{ success: boolean; message: string }> {
   'use server';
+  await requireCurrentAdmin();
   
   try {
     // Create a flag file that signals the host to run update

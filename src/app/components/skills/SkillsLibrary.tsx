@@ -80,7 +80,7 @@ export default function SkillsLibrary({
     if (!userId) return;
     
     try {
-      const bot = await getUserTelegramBot(userId);
+      const bot = await getUserTelegramBot();
       setHasTelegramBot(!!bot);
       setTelegramBotId(bot?.id || null);
     } catch (err) {
@@ -92,7 +92,7 @@ export default function SkillsLibrary({
     setLoading(true);
     setError(null);
     try {
-      const data = await getAllSkills(userId);
+      const data = await getAllSkills();
       setSkills(data);
       
       // Load stats for each skill
@@ -124,7 +124,6 @@ export default function SkillsLibrary({
     setError(null);
     try {
       const newSkill = await createSkill({
-        userId,
         name: formData.name.toLowerCase().replace(/\s+/g, '-'),
         displayName: formData.displayName,
         description: formData.description,
@@ -208,7 +207,7 @@ export default function SkillsLibrary({
     setLoading(true);
     setError(null);
     try {
-      await deleteSkill(skillId, userId);
+      await deleteSkill(skillId);
       await loadSkills();
       if (selectedSkill?.id === skillId) {
         setSelectedSkill(null);

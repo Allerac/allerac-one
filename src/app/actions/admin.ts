@@ -5,15 +5,29 @@ import pool from '@/app/clients/db';
 import { AuthService } from '@/app/services/auth/auth.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import type { SystemSettings } from '@/app/services/system/system-settings.service';
-import { getCurrentUser } from './auth';
+import { requireCurrentAdmin } from '@/app/lib/auth-session';
 
 const authService = new AuthService();
 const systemSettingsService = new SystemSettingsService();
 
 async function assertAdmin() {
-  const user = await getCurrentUser();
-  if (!user || !user.is_admin) throw new Error('Unauthorized');
-  return user;
+  return requireCurrentAdmin();
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_DOMAIN_ASSIGNMENTS = 100;
+
+function isUuid(value: string): boolean {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+function validIds(ids: string[]): boolean {
+  return (
+    Array.isArray(ids)
+    && ids.length <= MAX_DOMAIN_ASSIGNMENTS
+    && ids.every(isUuid)
+    && new Set(ids).size === ids.length
+  );
 }
 
 export interface AdminUser {
@@ -66,6 +80,7 @@ export async function listAllDomains(): Promise<AdminDomain[]> {
 
 export async function reorderDomains(orderedIds: string[]): Promise<void> {
   await assertAdmin();
+  if (!validIds(orderedIds)) throw new Error('Invalid domain IDs');
   await Promise.all(
     orderedIds.map((id, i) =>
       pool.query(`UPDATE domains SET sort_order = $1 WHERE id = $2`, [i + 1, id])
@@ -78,6 +93,7 @@ export async function toggleDomainActive(
   isActive: boolean
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!isUuid(domainId)) return { success: false, error: 'Invalid domain ID' };
   await pool.query('UPDATE domains SET is_active = $1 WHERE id = $2', [isActive, domainId]);
   return { success: true };
 }
@@ -90,8 +106,9 @@ export async function createDomainUser(
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
 
-  if (!email || !email.includes('@')) return { success: false, error: 'Invalid email' };
+  if (!email || email.length > 254 || !email.includes('@')) return { success: false, error: 'Invalid email' };
   if (!password || password.length < 8) return { success: false, error: 'Password must be at least 8 characters' };
+  if (!validIds(domainIds)) return { success: false, error: 'Invalid domain selection' };
   if (!isAdmin && !domainIds.length) return { success: false, error: 'Select at least one domain' };
 
   // Match client-side login flow: bcrypt(sha256(plaintext))
@@ -138,6 +155,7 @@ export async function deleteUser(
   userId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   const currentUser = await assertAdmin();
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   if (currentUser.id === userId) return { success: false, error: 'Cannot delete your own account' };
 
   await pool.query('DELETE FROM users WHERE id = $1 AND is_admin = false', [userId]);
@@ -149,6 +167,9 @@ export async function updateUserDomains(
   domainIds: string[]
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!isUuid(userId) || !validIds(domainIds)) {
+    return { success: false, error: 'Invalid user or domain IDs' };
+  }
 
   const client = await pool.connect();
   try {
@@ -176,6 +197,7 @@ export async function toggleUserActive(
   isActive: boolean
 ): Promise<{ success: true } | { success: false; error: string }> {
   const currentUser = await assertAdmin();
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   if (currentUser.id === userId) return { success: false, error: 'Cannot disable your own account' };
 
   await pool.query('UPDATE users SET is_active = $1 WHERE id = $2', [isActive, userId]);
@@ -187,6 +209,7 @@ export async function updateUserRole(
   makeAdmin: boolean
 ): Promise<{ success: true } | { success: false; error: string }> {
   const currentUser = await assertAdmin();
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   if (currentUser.id === userId) return { success: false, error: 'Cannot change your own role' };
 
   await pool.query('UPDATE users SET is_admin = $1 WHERE id = $2', [makeAdmin, userId]);
@@ -199,6 +222,7 @@ export async function resetUserPassword(
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
 
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   if (!newPassword || newPassword.length < 8) return { success: false, error: 'Password must be at least 8 characters' };
 
   const sha256Hash = crypto.createHash('sha256').update(newPassword).digest('hex');
@@ -275,7 +299,8 @@ export async function registerInstagramAccount(
   label: string
 ): Promise<{ success: true; id: string } | { success: false; error: string }> {
   await assertAdmin();
-  if (!label.trim()) return { success: false, error: 'Label is required' };
+  if (!isUuid(ownerUserId)) return { success: false, error: 'Invalid owner ID' };
+  if (!label.trim() || label.trim().length > 100) return { success: false, error: 'Invalid label' };
 
   // Verify the owner has connected Instagram
   const cred = await pool.query(
@@ -295,6 +320,7 @@ export async function deleteInstagramAccount(
   accountId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!isUuid(accountId)) return { success: false, error: 'Invalid account ID' };
   await pool.query('DELETE FROM instagram_accounts WHERE id = $1', [accountId]);
   return { success: true };
 }
@@ -304,6 +330,9 @@ export async function assignInstagramAccount(
   accountId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!isUuid(userId) || !isUuid(accountId)) {
+    return { success: false, error: 'Invalid user or account ID' };
+  }
   await pool.query(
     `INSERT INTO user_instagram_account (user_id, instagram_account_id)
      VALUES ($1, $2)
@@ -317,6 +346,7 @@ export async function unassignInstagramAccount(
   userId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   await pool.query('DELETE FROM user_instagram_account WHERE user_id = $1', [userId]);
   return { success: true };
 }

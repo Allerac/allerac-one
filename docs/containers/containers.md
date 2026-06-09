@@ -25,7 +25,17 @@ Some containers (migrations, ollama-setup) are one-shot services that run once o
 ### `allerac-migrations` *(one-shot)*
 **Image:** `postgres:16-alpine`
 **Role:** Applies pending SQL migrations on every deploy, then exits with code 0.
-Migrations are tracked in the `schema_migrations` table — already-applied ones are skipped.
+Migrations are tracked by filename in the `_migrations` table. Duplicate
+migration numbers are rejected, and each migration plus its tracking record is
+applied in a single transaction with `ON_ERROR_STOP`.
+
+The migration compatibility smoke test uses a disposable PostgreSQL container
+to compare a fresh install with an upgrade from the former duplicate `020/021`
+migration history:
+
+```bash
+npm run test:schema
+```
 
 ### `allerac-executor`
 **Image:** custom build (`infra/executor/Dockerfile`)

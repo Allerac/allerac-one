@@ -4,26 +4,23 @@
  * Sends the full in-memory buffer on connect, then streams every new entry
  * in real-time. Used by the retro System Monitor terminal in the hub.
  *
- * Auth: session_token cookie (same as all other routes).
+ * Auth: admin session.
  */
 
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
+import {
+  authenticationErrorResponse,
+  requireCurrentAdmin,
+} from '@/app/lib/auth-session';
 import { logBuffer } from '@/lib/logger';
 import type { LogEntry } from '@/lib/logger-shared';
 
-const authService = new AuthService();
-
 export async function GET(request: Request): Promise<Response> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-
-  if (!sessionToken) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-  const user = await authService.validateSession(sessionToken);
-  if (!user) {
-    return new Response('Unauthorized', { status: 401 });
+  try {
+    await requireCurrentAdmin();
+  } catch (error) {
+    const authError = authenticationErrorResponse(error, { format: 'text' });
+    if (authError) return authError;
+    return new Response('Authentication failed', { status: 500 });
   }
 
   const encoder = new TextEncoder();

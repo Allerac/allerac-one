@@ -7,6 +7,7 @@ COPY src/telegram-bot.ts ./src/
 COPY src/telegram-multi-bot.ts ./src/
 COPY src/lib/ ./src/lib/
 COPY src/app/clients/ ./src/app/clients/
+COPY src/app/lib/ ./src/app/lib/
 COPY src/app/actions/ ./src/app/actions/
 COPY src/app/services/ ./src/app/services/
 COPY src/app/tools/ ./src/app/tools/

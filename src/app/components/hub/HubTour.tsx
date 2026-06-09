@@ -79,7 +79,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
       // Mark tour as complete if checkbox is checked
       if (dontShowAgain) {
         setIsSubmitting(true);
-        await userActions.completeHubTour(userId);
+        await userActions.completeHubTour();
         setIsSubmitting(false);
       }
       onDone();
@@ -89,7 +89,7 @@ export default function HubTour({ userId, onDone }: { userId: string; onDone: ()
   const handleSkip = async () => {
     if (dontShowAgain) {
       setIsSubmitting(true);
-      await userActions.completeHubTour(userId);
+      await userActions.completeHubTour();
       setIsSubmitting(false);
     }
     onDone();

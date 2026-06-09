@@ -255,7 +255,7 @@ describe('SkillsService', () => {
 
       mockQuery.mockResolvedValueOnce({ rows: [updatedSkill] });
 
-      const result = await skillsService.updateSkill('skill_123', updates);
+      const result = await skillsService.updateSkill('skill_123', 'user_123', false, updates);
 
       expect(result).toEqual(updatedSkill);
       expect(mockQuery).toHaveBeenCalledWith(
@@ -272,10 +272,10 @@ describe('SkillsService', () => {
 
       mockQuery.mockResolvedValueOnce({ rows: [{ id: 'skill_456', name: 'Original', ...skillData }] });
 
-      const result = await skillsService.updateSkill('skill_456', skillData);
+      const result = await skillsService.updateSkill('skill_456', 'user_123', false, skillData);
 
-      expect(result.id).toBe('skill_456');
-      expect(result.display_name).toBe('New Name');
+      expect(result?.id).toBe('skill_456');
+      expect(result?.display_name).toBe('New Name');
     });
   });
 
@@ -283,7 +283,7 @@ describe('SkillsService', () => {
     it('should mark skill usage as complete', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
-      await skillsService.completeSkillUsage('conv_123', true, 150, 2, null);
+      await skillsService.completeSkillUsage('conv_123', true, 150, 2, undefined);
 
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE skill_usage'),
@@ -294,7 +294,7 @@ describe('SkillsService', () => {
     it('should handle error message', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
-      await skillsService.completeSkillUsage('conv_123', false, null, 0, 'Timeout error');
+      await skillsService.completeSkillUsage('conv_123', false, undefined, 0, 'Timeout error');
 
       const call = mockQuery.mock.calls[0];
       expect(call[1][4]).toBe('Timeout error');

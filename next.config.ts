@@ -6,6 +6,9 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 const nextConfig: NextConfig = {
   output: "standalone",
   reactCompiler: true,
+  turbopack: {
+    root: process.cwd(),
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',

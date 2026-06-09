@@ -36,7 +36,7 @@ export default function ConfigModal({ isOpen, onClose, userId, userName, userEma
       try {
         const savedToken    = localStorage.getItem('github_token') || '';
         const savedTavilyKey = localStorage.getItem('tavily_api_key') || '';
-        const settings = await userActions.loadUserSettings(userId);
+        const settings = await userActions.loadUserSettings();
         if (settings) {
           setGithubToken(!savedToken && settings.github_token ? settings.github_token : savedToken);
           setTavilyApiKey(!savedTavilyKey && settings.tavily_api_key ? settings.tavily_api_key : savedTavilyKey);
@@ -70,7 +70,6 @@ export default function ConfigModal({ isOpen, onClose, userId, userName, userEma
       if (newAnthropicKey) { setAnthropicApiKey(newAnthropicKey); setAnthropicKeyInput(''); }
 
       const result = await userActions.saveUserSettings(
-        userId,
         newGithubToken || undefined,
         newTavilyKey || undefined,
         undefined,

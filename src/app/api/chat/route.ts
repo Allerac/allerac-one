@@ -13,49 +13,61 @@
  */
 
 import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
-import { UserSettingsService } from '@/app/services/user/user-settings.service';
-import { SystemSettingsService } from '@/app/services/system/system-settings.service';
-import { LLMService } from '@/app/services/llm/llm.service';
+import {
+  authenticationErrorResponse,
+  assertDomainAccess,
+  ForbiddenError,
+  requireCurrentUser,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { ChatService } from '@/app/services/database/chat.service';
 import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
 import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
-import { buildSoul } from '@/app/config/allerac-soul';
-import { SearchWebTool } from '@/app/tools/search-web.tool';
-import { ReadUrlTool } from '@/app/tools/read-url.tool';
-import { ShellTool } from '@/app/tools/shell.tool';
-import { HealthTool } from '@/app/tools/health.tool';
-import { buildNotesTools, NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
-import { buildEmailTools, EMAIL_TOOL_DEFINITIONS } from '@/app/tools/email.tool';
-import { buildJobsTools, JOBS_TOOL_DEFINITIONS } from '@/app/tools/jobs.tool';
-import { buildTicketsTools, TICKETS_TOOL_DEFINITIONS } from '@/app/tools/tickets.tool';
-import { InstagramTool } from '@/app/tools/instagram.tool';
 import { skillsService } from '@/app/services/skills/skills.service';
-import { TOOLS } from '@/app/tools/tools';
-import { getSkillTools } from '@/app/actions/skills';
-import pool from '@/app/clients/db';
-import * as instagramActions from '@/app/actions/instagram';
-import { getImageUploadService } from '@/app/services/image-upload';
+import {
+  InvalidChatRequestError,
+  parseChatRequestBody,
+} from '@/app/services/chat/chat-request-parser';
+import {
+  encodeSseEvent as encode,
+  SSE_RESPONSE_HEADERS,
+  SseWriter,
+} from '@/app/services/chat/sse-writer';
+import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
+import { resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
+import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
+import {
+  ChatProviderConfigurationError,
+  loadChatRuntimeContext,
+} from '@/app/services/chat/chat-runtime-context';
+import { processChatImages } from '@/app/services/chat/chat-image-processor';
+import {
+  acquireOperationLimit,
+  operationLimitResponse,
+} from '@/app/lib/operation-limiter';
 
-const authService = new AuthService();
-const userSettingsService = new UserSettingsService();
-const systemSettingsService = new SystemSettingsService();
 const chatService = new ChatService();
-
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434';
-const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
-const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
-
-function encode(data: object): Uint8Array {
-  return new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`);
-}
-
 export async function POST(request: Request): Promise<Response> {
-  // Parse request body and cookies BEFORE creating the stream
-  // (request.json() can only be called once, and must happen before the response is sent)
-  const body = await request.json();
+  let user;
+  try {
+    user = await requireCurrentUser();
+  } catch (error) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: 'Authentication failed' }, { status: 500 });
+  }
+
+  let body;
+  try {
+    body = parseChatRequestBody(await request.json());
+  } catch (error) {
+    const message = error instanceof SyntaxError ? 'Invalid JSON' : 'Invalid chat request';
+    const status = error instanceof SyntaxError || error instanceof InvalidChatRequestError ? 400 : 500;
+    return Response.json({ error: message }, { status });
+  }
+
   const {
     message,
     conversationId: inputConversationId,
@@ -64,258 +76,89 @@ export async function POST(request: Request): Promise<Response> {
     imageAttachments,
     preSelectedSkillId,
     defaultSkillName,
-    domain,
+    domain: effectiveDomain,
     postContext,
-  }: {
-    message: string;
-    conversationId: string | null;
-    model: string;
-    provider: 'github' | 'ollama' | 'gemini' | 'anthropic';
-    imageAttachments?: Array<{ url: string }>;
-    preSelectedSkillId?: string;
-    defaultSkillName?: string;
-    domain?: string;
-    postContext?: string;
   } = body;
 
+  try {
+    await assertDomainAccess(user, effectiveDomain);
+  } catch (error) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: 'Failed to verify domain access' }, { status: 500 });
+  }
+
+  const userId = user.id;
+  const limitResult = acquireOperationLimit('chat', userId);
+  if (!limitResult.allowed) {
+    return operationLimitResponse(limitResult);
+  }
+
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
+  const locale = cookieStore.get('locale')?.value || 'en';
 
   const stream = new ReadableStream({
     async start(controller) {
-      // Enqueue immediately so Next.js flushes the 200 + text/event-stream headers
-      // before any async work. Without this, Cloudflare waits for the first byte
-      // and issues a 524 if the LLM or DB takes more than ~100 s.
-      controller.enqueue(new TextEncoder().encode(': keepalive\n\n'));
-
-      // Guard against writing to a closed controller (client disconnect mid-stream)
-      let streamClosed = false;
-      request.signal?.addEventListener('abort', () => { streamClosed = true; });
-      const safeEnqueue = (data: Uint8Array) => {
-        if (streamClosed) return;
-        try { controller.enqueue(data); } catch { streamClosed = true; }
-      };
+      const writer = new SseWriter(controller, request.signal);
+      writer.keepalive();
+      const safeEnqueue = (data: Uint8Array) => writer.write(data);
 
       try {
-        // 1. Authenticate via session cookie
-        if (!sessionToken) {
-          safeEnqueue(encode({ type: 'error', message: 'Unauthorized' }));
-          controller.close();
-          return;
-        }
-
-        const user = await authService.validateSession(sessionToken);
-        if (!user) {
-          safeEnqueue(encode({ type: 'error', message: 'Unauthorized' }));
-          controller.close();
-          return;
-        }
-
-        const userId = user.id;
-
         // Log domain entry — visible in System Monitor
         const providerLabel = provider === 'ollama' ? `● LOCAL · ${modelId}` : `◌ ${provider} · ${modelId}`;
-        console.log(`[ChatRoute] ► ${domain ?? 'Chat'} — ${providerLabel}`);
+        console.log(`[ChatRoute] ► ${effectiveDomain} — ${providerLabel}`);
 
-        // Auto-upload images before processing
-        console.log('[ChatRoute] Received imageAttachments:', imageAttachments?.length ?? 0);
-        let processedImages = imageAttachments;
-        if (imageAttachments && imageAttachments.length > 0) {
-          try {
-            const uploadService = getImageUploadService();
-            const uploadedImages: Array<{ url: string }> = [];
-
-            for (const img of imageAttachments) {
-              // Extract base64 from data URI
-              const dataUriMatch = img.url.match(/^data:image\/(\w+);base64,(.+)$/);
-              if (dataUriMatch) {
-                const [, mimeType, base64] = dataUriMatch;
-                const buffer = Buffer.from(base64, 'base64');
-                const filename = `chat-image-${Date.now()}.${mimeType === 'jpeg' ? 'jpg' : mimeType}`;
-
-                console.log(`[ChatRoute] Uploading image: ${filename}`);
-                const uploaded = await uploadService.upload(buffer, filename);
-                uploadedImages.push({ url: uploaded.publicUrl });
-                console.log(`[ChatRoute] Image uploaded to: ${uploaded.publicUrl}`);
-              } else {
-                // If not a data URI, assume it's already a public URL
-                uploadedImages.push(img);
-              }
-            }
-
-            // Use uploaded URLs instead
-            processedImages = uploadedImages;
-          } catch (err: any) {
-            console.warn('[ChatRoute] Image upload failed:', err.message);
-            // Continue anyway — images might fail but we can still process the message
+        const processedImages = await processChatImages(imageAttachments);
+        let runtimeContext;
+        try {
+          runtimeContext = await loadChatRuntimeContext(userId, effectiveDomain, provider);
+        } catch (error) {
+          if (error instanceof ChatProviderConfigurationError) {
+            writer.event({ type: 'error', message: error.message });
+            writer.close();
+            return;
           }
+          throw error;
         }
-
-        // 2. Load user settings — fallback chain: user_settings → system_settings → env vars
-        const [settings, sysSettings] = await Promise.all([
-          userSettingsService.loadUserSettings(userId),
-          systemSettingsService.loadAll(),
-        ]);
-        const githubToken = settings?.github_token || sysSettings.github_token || process.env.GITHUB_TOKEN || '';
-        const tavilyApiKey = settings?.tavily_api_key || sysSettings.tavily_api_key || process.env.TAVILY_API_KEY || undefined;
-        const googleApiKey = settings?.google_api_key || sysSettings.google_api_key || '';
-        const anthropicApiKey = settings?.anthropic_api_key || sysSettings.anthropic_api_key || '';
-        const userLocation = settings?.location || null;
-
-        // Validate provider has required keys
-        if (provider === 'anthropic' && !anthropicApiKey) {
-          safeEnqueue(encode({
-            type: 'error',
-            message: '❌ **Anthropic API key not configured**\n\nPlease add your Anthropic API key in Settings → Developer API Keys.',
-          }));
-          controller.close();
-          return;
-        }
-
-        // Always start from Soul, never replace it
-        let systemMessage = buildSoul(domain);
-
-        // Inject structured user context
-        const locale = cookieStore.get('locale')?.value || 'en';
-        const languageNames: Record<string, string> = { en: 'English', pt: 'Portuguese', es: 'Spanish', ca: 'Catalan' };
-        const language = languageNames[locale] || 'English';
-        const contextLines: string[] = [];
-        if (user.name) contextLines.push(`- Name: ${user.name}`);
-        contextLines.push(`- Language: ${language} — always reply in this language`);
-
-        // Inject current date and time
-        const now = new Date();
-        const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const todayDate = now.toISOString().split('T')[0];
-        const todayTime = now.toTimeString().split(' ')[0];
-        const todayWeekday = weekdays[now.getDay()];
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        contextLines.push(`- Current date & time: ${todayDate} ${todayWeekday}, ${todayTime} (${timezone})`);
-
-        if (userLocation) contextLines.push(`- Location: ${userLocation}`);
-        systemMessage += `\n\n## User context\n${contextLines.join('\n')}`;
-
-        // Inject user instructions — domain-specific first, fall back to global system_message
-        let userInstructions = '';
-        if (domain) {
-          try {
-            const instrRes = await pool.query(
-              `SELECT content FROM user_domain_instructions WHERE user_id = $1 AND domain_slug = $2`,
-              [userId, domain]
-            );
-            if (instrRes.rows[0]?.content?.trim()) {
-              userInstructions = instrRes.rows[0].content.trim();
-            }
-          } catch { /* ignore */ }
-        }
-        if (!userInstructions) {
-          const fallback = settings?.system_message;
-          if (fallback && fallback !== 'You are a helpful AI assistant.') {
-            userInstructions = fallback;
-          }
-        }
-        if (userInstructions) {
-          systemMessage += `\n\n## User instructions\n${userInstructions}`;
-        }
-
-        if (userLocation) {
-          systemMessage += '\n\nWhen the user asks about weather, temperature, or anything requiring real-time local information, use the search_web tool to find current data for their location.';
-        } else if (tavilyApiKey) {
-          systemMessage += '\n\nWhen the user asks about current weather, news, prices, or any real-time information, use the search_web tool.';
-        }
-
-        if (postContext) {
-          systemMessage += `\n\n${postContext}`;
-        }
-
-        if (!message && (!imageAttachments || imageAttachments.length === 0)) {
-          safeEnqueue(encode({ type: 'error', message: 'Message is required' }));
-          controller.close();
-          return;
-        }
-
-        if (provider === 'gemini' && !googleApiKey) {
-          safeEnqueue(encode({ type: 'error', message: 'Google API key is not configured. Please add it in Configuration → API Keys.' }));
-          controller.close();
-          return;
-        }
-
-        // Server-side base URL (never goes through client-side proxy)
-        const modelBaseUrl = provider === 'ollama' ? OLLAMA_BASE_URL
-                           : provider === 'gemini' ? GEMINI_BASE_URL
-                           : provider === 'anthropic' ? ANTHROPIC_BASE_URL
-                           : GITHUB_BASE_URL;
+        const {
+          githubToken,
+          tavilyApiKey,
+          googleApiKey,
+          anthropicApiKey,
+          userLocation,
+          userInstructions,
+          modelBaseUrl,
+        } = runtimeContext;
 
         // 4. Create or find conversation
         let convId = inputConversationId ?? null;
         if (!convId) {
           const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
-          convId = await chatService.createConversation(userId, title, domain ?? 'chat');
+          convId = await chatService.createConversation(userId, title, effectiveDomain);
           if (!convId) throw new Error('Failed to create conversation');
-        }
-
-        // 5. Load active skill; for new conversations prefer pre-selected, then default
-        let activeSkill = await skillsService.getActiveSkill(convId);
-
-        if (!activeSkill && !inputConversationId) {
-          // Client explicitly selected a skill before sending the first message (by ID)
-          if (preSelectedSkillId) {
-            const preSelected = await skillsService.getSkillById(preSelectedSkillId);
-            if (preSelected) {
-              await skillsService.activateSkill(preSelected.id, convId, userId, 'manual', 'Pre-selected by user');
-              activeSkill = preSelected;
-              console.log(`[ChatRoute] Activated pre-selected skill: ${preSelected.name}`);
-            }
+        } else {
+          const conversation = await chatService.getConversationForUser(convId, userId);
+          if (!conversation) {
+            safeEnqueue(encode({ type: 'error', message: 'Conversation not found' }));
+            writer.close();
+            return;
           }
-
-          // Fallback: resolve by name (handles race condition where client-side lookup didn't complete)
-          if (!activeSkill && defaultSkillName) {
-            const byName = await skillsService.getSkillByName(defaultSkillName, userId);
-            if (byName) {
-              await skillsService.activateSkill(byName.id, convId, userId, 'manual', 'Domain default skill');
-              activeSkill = byName;
-              console.log(`[ChatRoute] Activated domain default skill: ${byName.name}`);
-            }
-          }
-
-          // Fall back to the user's default skill
-          if (!activeSkill) {
-            const defaultSkill = await skillsService.getDefaultUserSkill(userId);
-            if (defaultSkill) {
-              await skillsService.activateSkill(defaultSkill.id, convId, userId, 'auto', 'Default skill activated');
-              activeSkill = defaultSkill;
-              console.log(`[ChatRoute] Activated default skill: ${defaultSkill.name}`);
-            }
+          if (conversation.domain_slug !== effectiveDomain) {
+            safeEnqueue(encode({ type: 'error', message: 'Conversation not found' }));
+            writer.close();
+            return;
           }
         }
 
-        // Auto-activate or auto-switch skills via LLM intent detection (keyword fallback).
-        // Skip if:
-        //   (a) skill was just pre-selected by domain on THIS message (first msg, new conversation), OR
-        //   (b) the active skill was manually activated (domain-locked conversation — user chose a specific domain)
-        const isManuallyLocked = activeSkill
-          ? await pool.query(
-              `SELECT trigger_type FROM skill_usage
-               WHERE conversation_id = $1 AND skill_id = $2
-               ORDER BY started_at DESC LIMIT 1`,
-              [convId, activeSkill.id]
-            ).then(r => r.rows[0]?.trigger_type === 'manual').catch(() => false)
-          : false;
-
-        if (!isManuallyLocked && (!preSelectedSkillId || inputConversationId)) {
-          const availableSkills = await skillsService.getAvailableSkills(userId);
-          const candidates = availableSkills.filter(s => s.id !== activeSkill?.id);
-          const detected = await skillsService.detectIntent(message, candidates);
-          if (detected) {
-            await skillsService.activateSkill(detected.id, convId, userId, 'auto', message);
-            activeSkill = detected;
-            console.log(`[ChatRoute] Auto-activated skill: ${detected.name}`);
-            safeEnqueue(encode({
-              type: 'skill_activated',
-              skill: { id: detected.id, name: detected.name, display_name: detected.display_name },
-            }));
-          }
-        }
+        const activeSkill = await resolveActiveChatSkill({
+          conversationId: convId,
+          userId,
+          message,
+          isNewConversation: !inputConversationId,
+          preSelectedSkillId,
+          defaultSkillName,
+          emit: (event) => safeEnqueue(encode(event)),
+        });
 
         // 6. Build final message with image URLs
         let finalMessage = message;
@@ -328,12 +171,13 @@ export async function POST(request: Request): Promise<Response> {
         const messageToSave = processedImages && processedImages.length > 0
           ? `${finalMessage} [Image attached: ${processedImages.length} file(s)]`
           : message;
-        await chatService.saveMessage(convId, 'user', messageToSave);
+        const savedUserMessage = await chatService.saveMessage(convId, 'user', messageToSave, { userId });
+        if (!savedUserMessage.success) throw new Error('Failed to save user message');
 
         // 7. Load memory context (domain-scoped)
         let conversationMemories = '';
         try {
-          const memoryService = new ConversationMemoryService(githubToken, domain ?? null);
+          const memoryService = new ConversationMemoryService(githubToken, effectiveDomain);
           const summaries = await memoryService.getRecentSummaries(userId, 3, 4);
           if (summaries && summaries.length > 0) {
             conversationMemories = memoryService.formatMemoryContext(summaries);
@@ -347,82 +191,40 @@ export async function POST(request: Request): Promise<Response> {
         try {
           const embeddingService = new EmbeddingService(githubToken);
           const vectorService = new VectorSearchService(embeddingService);
-          relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: domain ?? null });
+          relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: effectiveDomain });
         } catch (e) {
           console.log('[ChatRoute] RAG search failed:', e);
         }
 
         // 9. Build enriched system message
-        let enrichedSystemMessage = systemMessage;
-
+        let skillContent = '';
         if (activeSkill) {
           try {
-            const skillContent = await skillsService.getEnrichedSkillContent(activeSkill.id, userId, message);
-            enrichedSystemMessage = `# Active Skill: ${activeSkill.display_name}\n\n${skillContent}\n\n---\n\n${enrichedSystemMessage}`;
+            skillContent = await skillsService.getEnrichedSkillContent(activeSkill.id, userId, message);
             console.log(`[ChatRoute] Loaded skill: ${activeSkill.name}`);
           } catch (e) {
             console.error('[ChatRoute] Skill content failed:', e);
           }
         }
 
-        // Load tools from DB skill assignment, fall back to universal tools
-        let activeTools: any[] = TOOLS;
-        if (activeSkill?.id) {
-          const allowedToolNames = await getSkillTools(activeSkill.id);
-          if (allowedToolNames.length > 0) {
-            activeTools = TOOLS.filter(t => allowedToolNames.includes(t.function.name));
-          }
-        }
+        const enrichedSystemMessage = buildChatSystemPrompt({
+          user,
+          locale,
+          domain: effectiveDomain,
+          userLocation,
+          tavilyConfigured: Boolean(tavilyApiKey),
+          userInstructions,
+          postContext,
+          activeSkill,
+          skillContent,
+          conversationMemories,
+          relevantContext,
+        });
 
-        // Notes tools are always available across all domains
-        const noteToolNames    = ['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note'];
-        const emailToolNames   = ['list_emails', 'read_email', 'send_email'];
-        const jobToolNames     = ['list_jobs', 'create_job', 'update_job', 'delete_job', 'toggle_job'];
-        const ticketToolNames  = ['list_tickets', 'create_ticket', 'update_ticket_status', 'get_ticket'];
-        activeTools = [
-          ...activeTools.filter((t: any) =>
-            !noteToolNames.includes(t.function.name) &&
-            !emailToolNames.includes(t.function.name) &&
-            !jobToolNames.includes(t.function.name) &&
-            !ticketToolNames.includes(t.function.name)
-          ),
-          ...NOTES_TOOL_DEFINITIONS,
-          ...(domain === 'email'   ? EMAIL_TOOL_DEFINITIONS   : []),
-          ...(domain === 'jobs'    ? JOBS_TOOL_DEFINITIONS    : []),
-          ...(domain === 'tickets' ? TICKETS_TOOL_DEFINITIONS : []),
-        ];
-
-        if (conversationMemories) {
-          enrichedSystemMessage = conversationMemories + '\n\n' + enrichedSystemMessage;
-        }
-
-        if (relevantContext && !relevantContext.includes('No relevant documents found')) {
-          enrichedSystemMessage += '\n\n' + relevantContext;
-        }
-
-        // Only inject workspace path if skill needs it (e.g., programmer skill for file operations)
-        const WORKSPACE_SKILLS = ['programmer'];
-        if (activeSkill && WORKSPACE_SKILLS.includes(activeSkill.name)) {
-          const workspacePath = `/workspace/projects/${userId}`;
-          const beforePathInject = enrichedSystemMessage;
-          enrichedSystemMessage = enrichedSystemMessage.replace(
-            /\/workspace\/projects\//g,
-            `${workspacePath}/`
-          );
-          // Also handle cases where the path appears at end of string or without trailing slash
-          enrichedSystemMessage = enrichedSystemMessage.replace(
-            /\/workspace\/projects(?=\s|$|["'])/g,
-            workspacePath
-          );
-
-          const pathReplacements = (beforePathInject.match(/\/workspace\/projects/g) || []).length;
-          if (pathReplacements > 0) {
-            console.log(`[ChatRoute] Injected workspace path for ${activeSkill.name}: replaced ${pathReplacements} instances`);
-          }
-        }
+        const activeTools = await resolveChatTools(activeSkill?.id, effectiveDomain);
 
         // Load conversation history and build messages array
-        const history = await chatService.loadMessages(convId);
+        const history = await chatService.loadMessages(convId, userId);
         const conversationMessages: Array<{
           role: string;
           content: string | any[];
@@ -452,249 +254,28 @@ export async function POST(request: Request): Promise<Response> {
           conversationMessages.push({ role: 'user', content: message });
         }
 
-        const llmService = new LLMService(provider, modelBaseUrl, { githubToken, geminiToken: googleApiKey, anthropicToken: anthropicApiKey });
-
-        // 10. First LLM call — non-streaming for tool detection
-        {
-          // Send periodic keepalives during long LLM calls to prevent client timeout
-          const keepaliveInterval = setInterval(() => {
-            try {
-              safeEnqueue(new TextEncoder().encode(': keepalive\n\n'));
-            } catch {
-              clearInterval(keepaliveInterval);
-            }
-          }, 15000); // Every 15 seconds
-
-          // Determine tool_choice: force a specific tool if the active skill requires it,
-          // otherwise use 'auto' (Gemini doesn't support tool_choice, so skip for gemini)
-          const forceTool = activeSkill?.force_tool ?? null;
-          const initialToolChoice = forceTool
-            ? { type: 'function', function: { name: forceTool } }
-            : provider !== 'gemini' ? 'auto' : undefined;
-
-          console.log('[ChatRoute] Starting first LLM call (tool detection)...');
-          const lastMsg = conversationMessages[conversationMessages.length - 1];
-          console.log('[ChatRoute] Last message content type:', Array.isArray(lastMsg?.content) ? 'multimodal' : typeof lastMsg?.content);
-          if (Array.isArray(lastMsg?.content)) {
-            console.log('[ChatRoute] Multimodal parts:', lastMsg.content.map((p: any) => p.type));
-          }
-          let data = await llmService.chatCompletion({
-            messages: conversationMessages,
-            model: modelId,
-            temperature: 0.7,
-            max_tokens: 2000,
-            tools: activeTools,
-            ...(initialToolChoice !== undefined && { tool_choice: initialToolChoice }),
-            userId,
-            conversationId: convId ?? undefined,
-          });
-          console.log('[ChatRoute] First LLM call completed');
-          clearInterval(keepaliveInterval);
-          let assistantMessage = data.choices[0].message;
-
-          // 11. Tool loop — non-streaming until no more tool calls
-          while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-            conversationMessages.push(assistantMessage);
-
-            for (const toolCall of assistantMessage.tool_calls) {
-              const toolName = toolCall.function.name;
-              const toolCallId = toolCall.id || `call_${toolName}_${Date.now()}`;
-              const rawArgs = toolCall.function.arguments;
-              const toolArgs = rawArgs == null
-                ? {}
-                : typeof rawArgs === 'object'
-                  ? rawArgs
-                  : (() => { try { return JSON.parse(rawArgs); } catch { return {}; } })();
-
-              safeEnqueue(encode({ type: 'tool_call', name: toolName, args: toolArgs }));
-
-              try {
-                let toolResult: any;
-                if (toolName === 'update_instagram_form') {
-                  const { caption, tags, price, is_product, image_url } = toolArgs;
-                  const update: any = { type: 'studio_update' };
-                  if (caption !== undefined) update.caption = caption;
-                  if (tags !== undefined) update.tags = tags;
-                  if (price !== undefined) update.price = price;
-                  if (is_product !== undefined) update.isProduct = is_product;
-                  if (image_url !== undefined) update.imageUrl = image_url;
-                  safeEnqueue(encode(update));
-                  toolResult = { success: true, message: 'Form updated.' };
-                } else if (toolName === 'get_today_info') {
-                  const { TodayTool } = await import('@/app/tools/today.tool');
-                  toolResult = new TodayTool().execute();
-                } else if (toolName === 'search_web' && tavilyApiKey) {
-                  const searchTool = new SearchWebTool(tavilyApiKey, githubToken);
-                  toolResult = await searchTool.execute(toolArgs.query);
-                } else if (toolName === 'read_url' && tavilyApiKey) {
-                  const readUrlTool = new ReadUrlTool(tavilyApiKey);
-                  toolResult = await readUrlTool.execute(toolArgs.url);
-                } else if (toolName === 'execute_shell') {
-                  const shellTool = new ShellTool();
-                  toolResult = await shellTool.execute(toolArgs.command, toolArgs.cwd, toolArgs.timeout);
-                } else if (['update_instagram_form','instagram_publish_post','instagram_get_profile','instagram_get_recent_posts','instagram_create_post_draft'].includes(toolName)) {
-                  const igTool = new InstagramTool();
-                  if (toolName === 'instagram_create_post_draft') {
-                    let { caption, tags, image_url } = toolArgs;
-
-                    // Only auto-generate if image_url is a public URL (not data URI)
-                    // Data URIs will be handled client-side
-                    const isPublicUrl = image_url && (image_url.startsWith('http://') || image_url.startsWith('https://'));
-
-                    // Auto-generate caption and tags if image_url is public URL but caption is empty
-                    if (isPublicUrl && !caption) {
-                      try {
-                        console.log('[Instagram] Generating caption from image...');
-                        // Pass user's message as context for caption generation
-                        const captionRes = await instagramActions.generateCaption(image_url, userId, message, locale);
-                        if (captionRes.success) {
-                          caption = captionRes.caption;
-                          console.log('[Instagram] Caption generated:', caption);
-                        } else {
-                          console.warn('[Instagram] Failed to generate caption:', captionRes.error);
-                        }
-                      } catch (err: any) {
-                        console.error('[Instagram] Caption generation error:', err.message);
-                      }
-                    }
-
-                    // Auto-generate tags if caption is available but tags are empty
-                    if (caption && !tags) {
-                      try {
-                        console.log('[Instagram] Generating tags from caption...');
-                        const tagsRes = await instagramActions.generateTags(userId, caption, locale);
-                        if (tagsRes.success) {
-                          tags = tagsRes.tags;
-                          console.log('[Instagram] Tags generated:', tags);
-                        } else {
-                          console.warn('[Instagram] Failed to generate tags:', tagsRes.error);
-                        }
-                      } catch (err: any) {
-                        console.error('[Instagram] Tags generation error:', err.message);
-                      }
-                    }
-
-                    safeEnqueue(encode({
-                      type: 'instagram_draft',
-                      caption: caption || '',
-                      tags: tags || '',
-                      image_url: image_url || '',
-                    }));
-                    toolResult = {
-                      success: true,
-                      message: 'Post draft prepared. A preview button has been shown to the user.',
-                    };
-                  } else if (toolName === 'instagram_publish_post') {
-                    toolResult = await igTool.publishPost(userId, toolArgs.caption, toolArgs.image_url);
-                  } else if (toolName === 'instagram_get_profile') {
-                    toolResult = await igTool.getProfile(userId);
-                  } else {
-                    toolResult = await igTool.getRecentMedia(userId, toolArgs.limit ?? 6);
-                  }
-                } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'].includes(toolName)) {
-                  const healthTool = new HealthTool();
-                  const healthUser = { id: userId, email: user.email, name: user.name || user.email };
-                  if (toolName === 'get_health_summary') {
-                    toolResult = await healthTool.getSummary(healthUser, toolArgs.period || 'week');
-                  } else if (toolName === 'get_health_metrics') {
-                    toolResult = await healthTool.getMetrics(healthUser, toolArgs.start_date, toolArgs.end_date);
-                  } else if (toolName === 'get_daily_snapshot') {
-                    toolResult = await healthTool.getDailySnapshot(healthUser, toolArgs.date);
-                  } else if (toolName === 'get_recent_activities') {
-                    toolResult = await healthTool.getRecentActivities(healthUser, toolArgs.limit || 10, toolArgs.start_date, toolArgs.end_date);
-                  } else {
-                    toolResult = await healthTool.getGarminStatus(healthUser);
-                  }
-                } else if (toolName === 'draw_canvas') {
-                  // Client renders from the tool_call SSE event; just ack here
-                  toolResult = { success: true, rendered: (toolArgs.elements || []).length };
-                } else if (toolName === 'edit_file') {
-                  const { path: rawPath, new_content: newContent, explanation } = toolArgs;
-                  const nodePath = await import('path');
-                  const userRoot = `/workspace/projects/${userId}`;
-                  const resolved = nodePath.resolve(rawPath || '');
-                  if (!resolved.startsWith(userRoot)) {
-                    toolResult = { error: 'Path is outside the user workspace. Only files in /workspace/projects/ can be edited.' };
-                  } else {
-                    const shellTool = new ShellTool();
-                    const readResult = await shellTool.execute(`cat "${resolved}" 2>/dev/null || echo ""`);
-                    const oldContent = readResult.stdout.endsWith('\n') ? readResult.stdout.slice(0, -1) : readResult.stdout;
-                    safeEnqueue(encode({
-                      type: 'file_edit_proposal',
-                      path: resolved,
-                      oldContent,
-                      newContent,
-                      explanation,
-                    }));
-                    toolResult = { success: true, message: 'Edit proposal shown to the user for review. Do not write the file yourself — wait for the user to accept or reject before continuing.' };
-                  }
-                } else if (noteToolNames.includes(toolName)) {
-                  const noteHandlers = buildNotesTools({ id: userId, githubToken: githubToken || null });
-                  const handler = noteHandlers[toolName as keyof typeof noteHandlers];
-                  toolResult = await handler(toolArgs);
-                } else if (emailToolNames.includes(toolName)) {
-                  const emailHandlers = buildEmailTools(userId);
-                  const handler = emailHandlers[toolName as keyof typeof emailHandlers];
-                  toolResult = await handler(toolArgs as any);
-                } else if (jobToolNames.includes(toolName)) {
-                  const jobHandlers = buildJobsTools(userId);
-                  const handler = jobHandlers[toolName as keyof typeof jobHandlers];
-                  toolResult = await handler(toolArgs as any);
-                } else if (ticketToolNames.includes(toolName)) {
-                  const ticketHandlers = buildTicketsTools(userId);
-                  const handler = ticketHandlers[toolName as keyof typeof ticketHandlers];
-                  toolResult = await handler(toolArgs as any);
-                } else {
-                  toolResult = { error: `Tool ${toolName} not available` };
-                }
-                const resultPayload: any = { type: 'tool_result', name: toolName, success: true };
-                if (toolName === 'search_web') resultPayload.data = toolResult;
-                safeEnqueue(encode(resultPayload));
-                conversationMessages.push({
-                  role: 'tool',
-                  tool_call_id: toolCallId,
-                  content: JSON.stringify(toolResult),
-                });
-              } catch (error: any) {
-                safeEnqueue(encode({ type: 'tool_result', name: toolName, success: false }));
-                conversationMessages.push({
-                  role: 'tool',
-                  tool_call_id: toolCallId,
-                  content: JSON.stringify({ error: error.message }),
-                });
-              }
-            }
-
-            data = await llmService.chatCompletion({
-              messages: conversationMessages,
-              model: modelId,
-              temperature: 0.7,
-              max_tokens: 2000,
-              tools: activeTools,
-              tool_choice: 'auto',
-              userId,
-              conversationId: convId ?? undefined,
-            });
-            assistantMessage = data.choices[0].message;
-          }
-        }
-
-        // 12. Final LLM call — streaming for the user-facing response
-        let fullContent = '';
-        for await (const token of llmService.streamChatCompletion({
+        const fullContent = await runChatPipeline({
+          provider,
+          modelBaseUrl,
+          modelId,
+          githubToken,
+          googleApiKey,
+          anthropicApiKey,
+          tavilyApiKey,
+          user,
+          conversationId: convId,
+          message,
+          locale,
+          activeSkill,
+          activeTools,
           messages: conversationMessages,
-          model: modelId,
-          temperature: 0.7,
-          max_tokens: 2000,
-          userId,
-          conversationId: convId ?? undefined,
-        })) {
-          fullContent += token;
-          safeEnqueue(encode({ type: 'token', content: token }));
-        }
+          emit: (event) => safeEnqueue(encode(event)),
+          keepalive: () => writer.keepalive(),
+        });
 
         // 13. Save assistant message to DB
-        await chatService.saveMessage(convId, 'assistant', fullContent);
+        const savedAssistantMessage = await chatService.saveMessage(convId, 'assistant', fullContent, { userId });
+        if (!savedAssistantMessage.success) throw new Error('Failed to save assistant message');
 
         // Track skill usage
         if (activeSkill) {
@@ -707,7 +288,7 @@ export async function POST(request: Request): Promise<Response> {
 
         // 14. Signal completion
         safeEnqueue(encode({ type: 'done', conversationId: convId }));
-        controller.close();
+        writer.close();
       } catch (error: any) {
         console.error('[ChatRoute] Caught error:', {
           message: error.message,
@@ -716,20 +297,20 @@ export async function POST(request: Request): Promise<Response> {
         });
         try {
           safeEnqueue(encode({ type: 'error', message: error.message || 'Internal server error' }));
-          controller.close();
+          writer.close();
         } catch (closeError: any) {
           console.error('[ChatRoute] Failed to send error event (controller already closed):', closeError.message);
         }
+      } finally {
+        limitResult.lease.release();
       }
     },
   });
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',  // disable nginx buffering if present
+      ...SSE_RESPONSE_HEADERS,
+      ...limitResult.headers,
     },
   });
 }

@@ -15,12 +15,16 @@ export async function sendLogToAPI(
   apiUrl: string,
   context: string,
   message: string,
-  level: 'log' | 'warn' | 'error' | 'info' = 'log'
+  level: 'log' | 'warn' | 'error' | 'info' = 'log',
+  serviceSecret: string = process.env.EXECUTOR_SECRET || ''
 ): Promise<void> {
   try {
     await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(serviceSecret ? { Authorization: `Bearer ${serviceSecret}` } : {}),
+      },
       body: JSON.stringify({ context, message, level }),
     });
   } catch (err) {

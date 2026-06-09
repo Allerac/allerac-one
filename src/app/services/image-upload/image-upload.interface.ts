@@ -1,14 +1,12 @@
 /**
  * Image Upload Service — Strategy Pattern
  *
- * Abstracts image upload implementation.
- * Can be swapped between Imgur (PoC), S3, CloudFlare R2, etc.
+ * Abstracts image upload implementation from its consumers.
  */
 
 export interface UploadedImage {
   publicUrl: string;
   id?: string;
-  deletedHash?: string; // For Imgur, in case we want to delete later
 }
 
 export interface ImageUploadService {

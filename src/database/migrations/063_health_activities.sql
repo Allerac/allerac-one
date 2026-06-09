@@ -1,5 +1,5 @@
 -- Store Garmin activities for faster retrieval and historical tracking
-CREATE TABLE health_activities (
+CREATE TABLE IF NOT EXISTS health_activities (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   activity_id VARCHAR(255) NOT NULL,
@@ -22,6 +22,6 @@ CREATE TABLE health_activities (
   UNIQUE(user_id, activity_id)
 );
 
-CREATE INDEX idx_health_activities_user_id ON health_activities(user_id);
-CREATE INDEX idx_health_activities_date ON health_activities(date);
-CREATE INDEX idx_health_activities_user_date ON health_activities(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_health_activities_user_id ON health_activities(user_id);
+CREATE INDEX IF NOT EXISTS idx_health_activities_date ON health_activities(date);
+CREATE INDEX IF NOT EXISTS idx_health_activities_user_date ON health_activities(user_id, date);

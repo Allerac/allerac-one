@@ -11,7 +11,6 @@ import { handleChatMessage } from '@/app/services/chat/chat-handler';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { buildSoul } from '@/app/config/allerac-soul';
-import { MODELS } from '@/app/services/llm/models';
 import pool from '@/app/clients/db';
 
 const userSettingsService   = new UserSettingsService();
@@ -26,19 +25,37 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { jobId: string; userId: string; prompt: string };
+  let body: { jobId?: string };
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { jobId, userId, prompt } = body;
-  if (!jobId || !userId || !prompt) {
-    return Response.json({ error: 'Missing jobId, userId or prompt' }, { status: 400 });
+  const { jobId } = body;
+  if (!jobId) {
+    return Response.json({ error: 'Missing jobId' }, { status: 400 });
   }
 
   try {
+    const jobResult = await pool.query<{
+      user_id: string;
+      prompt: string;
+      domain_slug: string | null;
+    }>(
+      `SELECT user_id, prompt, domain_slug
+       FROM scheduled_jobs
+       WHERE id = $1 AND enabled = TRUE`,
+      [jobId]
+    );
+    const job = jobResult.rows[0];
+    if (!job) {
+      return Response.json({ error: 'Job not found or disabled' }, { status: 404 });
+    }
+
+    const userId = job.user_id;
+    const prompt = job.prompt;
+
     // Load settings
     const [settings, sysSettings] = await Promise.all([
       userSettingsService.loadUserSettings(userId),
@@ -98,14 +115,15 @@ export async function POST(request: Request): Promise<Response> {
       modelProvider,
       modelBaseUrl,
       systemMessage,
-      domainSlug: 'jobs',
+      domainSlug: job.domain_slug ?? 'jobs',
     });
 
     console.log(`[JobsRunner] Job ${jobId} completed — ${result.response.length} chars`);
     return Response.json({ result: result.response });
 
-  } catch (error: any) {
-    console.error(`[JobsRunner] Job ${jobId} failed:`, error.message);
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[JobsRunner] Job ${jobId} failed:`, message);
+    return Response.json({ error: message }, { status: 500 });
   }
 }

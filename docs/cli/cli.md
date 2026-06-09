@@ -59,9 +59,32 @@ allerac open               # Open Allerac in the browser
 
 ```bash
 allerac update             # Pull latest version and restart
-allerac backup             # Back up the database
-allerac restore <file>     # Restore from backup
+allerac backup             # Create and validate a local database backup
+allerac restore <file>     # Validate and restore a local backup
 allerac uninstall [opts]   # Remove services (--clean / --all)
+```
+
+Backups are compressed PostgreSQL plain-text dumps stored in
+`$ALLERAC_HOME/backups`. `allerac update` creates a `pre-update` backup before
+pulling code or running migrations and aborts if the backup cannot be validated.
+
+`allerac restore` validates the gzip archive and dump header before making
+changes. After confirmation, it creates a `pre-restore` safety backup, stops the
+app, recreates the database's `public` schema, imports with PostgreSQL
+`ON_ERROR_STOP`, and starts the app again. The safety backup is retained after a
+successful restore.
+
+If an update fails during migrations, image build, service restart, or health
+verification, the updater prints the exact pre-update backup and previous Git
+commit. It provides commands to inspect logs, optionally restore the database,
+run the previous revision in detached mode, and return to the tracked branch.
+Rollback is never performed automatically.
+
+Example:
+
+```bash
+allerac backup
+allerac restore allerac-manual-2026-06-09_10-00-00.sql.gz
 ```
 
 ### Models (Ollama)

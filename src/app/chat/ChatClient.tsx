@@ -284,7 +284,7 @@ export default function AdminChat({
     },
     onConversationCreatedWithSkill: async (conversationId, skillId) => {
       if (userId) {
-        await skillActions.activateSkill(skillId, conversationId, userId);
+        await skillActions.activateSkill(skillId, conversationId);
         await loadActiveSkill(conversationId);
         setPreSelectedSkill(null);
       }
@@ -392,7 +392,7 @@ const savedModel = localStorage.getItem('selected_model');
   // Load available skills for user
   const loadAvailableSkills = async (uid: string) => {
     try {
-      const skills = await skillActions.getAllSkills(uid);
+      const skills = await skillActions.getAllSkills();
       setAvailableSkills(skills || []);
       if (defaultSkillName && skills) {
         const skill = skills.find((s: any) => s.name === defaultSkillName);
@@ -428,7 +428,7 @@ const savedModel = localStorage.getItem('selected_model');
     }
     
     try {
-      await skillActions.activateSkill(skillId, currentConversationId, userId);
+      await skillActions.activateSkill(skillId, currentConversationId);
       await loadActiveSkill(currentConversationId);
       console.log('[Skills] Skill activated, activeSkill state:', activeSkill);
     } catch (err) {
@@ -472,7 +472,7 @@ const savedModel = localStorage.getItem('selected_model');
       let savedToken = localStorage.getItem('github_token') || process.env.NEXT_PUBLIC_GITHUB_TOKEN || '';
       let savedTavilyKey = localStorage.getItem('tavily_api_key') || process.env.NEXT_PUBLIC_TAVILY_API_KEY || '';
 
-      const settings = await userActions.loadUserSettings(user.id);
+      const settings = await userActions.loadUserSettings();
       if (settings) {
         if (!savedToken && settings.github_token) savedToken = settings.github_token;
         if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
@@ -503,14 +503,14 @@ const savedModel = localStorage.getItem('selected_model');
   const loadSystemMessage = async () => {
     if (!userId) return;
     const slug = domainName?.toLowerCase() ?? 'chat';
-    const message = await userActions.getDomainInstructions(userId, slug);
+    const message = await userActions.getDomainInstructions(slug);
     if (message) setSystemMessage(message);
   };
 
   const loadConversations = async (uid: string) => {
     // chat (no domainName) = hub, shows all conversations; other domains filter by their own slug
     const slug = domainName ? domainName.toLowerCase() : null;
-    const data = await chatActions.loadConversations(uid, slug);
+    const data = await chatActions.loadConversations(slug);
     setConversations(data);
   };
 
@@ -520,13 +520,13 @@ const savedModel = localStorage.getItem('selected_model');
       console.log(`[Memory] Switching from conversation ${currentConversationId} to ${conversationId}`);
       try {
         // Check if current conversation should be summarized
-        const shouldSummarize = await memoryActions.shouldSummarizeConversation(currentConversationId, githubToken);
+        const shouldSummarize = await memoryActions.shouldSummarizeConversation(currentConversationId);
         console.log(`[Memory] Should summarize ${currentConversationId}:`, shouldSummarize);
 
         if (shouldSummarize) {
           console.log(`[Memory] Generating summary for conversation ${currentConversationId}...`);
           // Generate summary in background (don't wait for it)
-          memoryActions.generateConversationSummary(currentConversationId, userId, githubToken, domainName?.toLowerCase() ?? 'chat')
+          memoryActions.generateConversationSummary(currentConversationId, domainName?.toLowerCase() ?? 'chat')
             .then(summary => console.log('[Memory] Summary generated:', summary))
             .catch(err => console.error('[Memory] Failed to generate summary:', err));
         }
@@ -566,7 +566,7 @@ const savedModel = localStorage.getItem('selected_model');
     await loadActiveSkill(conversationId);
 
     // Check if this conversation already has a memory
-    const existingMemory = await memoryActions.shouldSummarizeConversation(conversationId, githubToken); // Wait, shouldSummarize returns true if NO memory. So if false, it MIGHT mean it has memory OR not enough messages.
+    const existingMemory = await memoryActions.shouldSummarizeConversation(conversationId); // Wait, shouldSummarize returns true if NO memory. So if false, it MIGHT mean it has memory OR not enough messages.
     // Better to have a specific check.
     // Let's assume for now we don't show the memory flag urgently or we implement a checkHasMemory action.
     // Implementing checkHasMemory requires importing DB. let's skip for now to save time, or use `shouldSummarize` implication carefully.
@@ -587,7 +587,7 @@ const savedModel = localStorage.getItem('selected_model');
 
     try {
       // Direct action call instead of service
-      const summary = await memoryActions.generateConversationSummary(currentConversationId, userId, githubToken, domainName?.toLowerCase() ?? 'chat');
+      const summary = await memoryActions.generateConversationSummary(currentConversationId, domainName?.toLowerCase() ?? 'chat');
 
       if (summary) {
         setMemorySaveResult({
@@ -670,7 +670,7 @@ const savedModel = localStorage.getItem('selected_model');
       }
 
       // Save to DB
-      const result = await userActions.saveUserSettings(userId, newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined, newTimezone || undefined);
+      const result = await userActions.saveUserSettings(newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined, newTimezone || undefined);
 
       if (!result?.success) {
         alert('Error saving keys to database. Please check server configuration.');

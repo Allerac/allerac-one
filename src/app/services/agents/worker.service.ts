@@ -4,6 +4,7 @@ import { ShellTool } from '../../tools/shell.tool';
 import { TOOLS } from '../../tools/tools';
 import { WorkerSpec } from './orchestrator.service';
 import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
+import { getUserWorkspaceRoot, normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
 
 export interface WorkerExecutionConfig {
   userId: string;
@@ -49,7 +50,7 @@ export class WorkerService {
       enrichedSystemMessage += `\n\n## Your Task\n${spec.task}`;
 
       // Inject user-scoped workspace path
-      const workspacePath = `/workspace/projects/${userId}`;
+      const workspacePath = getUserWorkspaceRoot(userId);
       enrichedSystemMessage = enrichedSystemMessage.replace(/\/workspace\/projects\//g, `${workspacePath}/`);
       enrichedSystemMessage = enrichedSystemMessage.replace(/\/workspace\/projects(?=\s|$|["'])/g, workspacePath);
 
@@ -132,15 +133,13 @@ export class WorkerService {
               toolResult = await searchTool.execute(toolArgs.query);
             } else if (toolName === 'execute_shell') {
               const shellTool = new ShellTool();
-              const uuidRegex = /\/workspace\/projects\/[a-f0-9-]{36}\//g;
-              const basePrefix = '/workspace/projects/';
-              const scopedCommand = (toolArgs.command as string || '')
-                .replace(uuidRegex, basePrefix)
-                .replace(new RegExp(basePrefix.replace('/', '\\/'), 'g'), `/workspace/projects/${userId}/`);
-              const scopedCwd = toolArgs.cwd
-                ? (toolArgs.cwd as string).replace(uuidRegex, basePrefix).replace(new RegExp(basePrefix.replace('/', '\\/'), 'g'), `/workspace/projects/${userId}/`)
-                : toolArgs.cwd;
-              toolResult = await shellTool.execute(scopedCommand, scopedCwd, toolArgs.timeout);
+              const safeCwd = resolveShellCwd(userId, toolArgs.cwd);
+              if (!safeCwd) {
+                toolResult = { error: 'Invalid cwd. Shell commands must run inside your workspace.' };
+              } else {
+                const scopedCommand = normalizeWorkspaceReferences(userId, String(toolArgs.command || ''));
+                toolResult = await shellTool.execute(scopedCommand, safeCwd, toolArgs.timeout);
+              }
             } else {
               toolResult = { error: `Tool ${toolName} not available in worker context` };
             }

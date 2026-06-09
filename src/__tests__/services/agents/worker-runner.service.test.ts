@@ -19,6 +19,7 @@ function createMockRepository(): jest.Mocked<WorkerRunRepository> {
     appendWorkerProgress: jest.fn(),
     getRunWorkers: jest.fn(),
     getUserSettings: jest.fn(),
+    isRunCancelled: jest.fn().mockResolvedValue(false),
   } as any;
 }
 
@@ -48,9 +49,11 @@ function makePendingRun(overrides?: Partial<AgentRunRecord>): AgentRunRecord {
     error_message: null,
     started_at: new Date(),
     completed_at: null,
+    cancelled_at: null,
     last_heartbeat: new Date(),
     llm_model: null,
     llm_provider: null,
+    skill_id: null,
     ...overrides,
   };
 }
@@ -70,8 +73,11 @@ describe('WorkerRunnerService', () => {
   let orchestrator: jest.Mocked<OrchestratorService>;
   let worker: jest.Mocked<WorkerService>;
   let service: WorkerRunnerService;
+  let previousOrchestration: string | undefined;
 
   beforeEach(() => {
+    previousOrchestration = process.env.AGENT_ORCHESTRATION;
+    process.env.AGENT_ORCHESTRATION = 'true';
     repo = createMockRepository();
     orchestrator = createMockOrchestrator();
     worker = createMockWorker();
@@ -112,6 +118,11 @@ describe('WorkerRunnerService', () => {
 
   afterEach(() => {
     service.stop();
+    if (previousOrchestration === undefined) {
+      delete process.env.AGENT_ORCHESTRATION;
+    } else {
+      process.env.AGENT_ORCHESTRATION = previousOrchestration;
+    }
   });
 
   describe('start/stop', () => {
@@ -185,7 +196,8 @@ describe('WorkerRunnerService', () => {
       expect(worker.executeWorker).toHaveBeenCalled();
       expect(repo.updateWorkerStatus).toHaveBeenCalledWith(
         'w1',
-        'running'
+        'running',
+        expect.any(Object)
       );
       expect(repo.updateWorkerStatus).toHaveBeenCalledWith(
         'w1',

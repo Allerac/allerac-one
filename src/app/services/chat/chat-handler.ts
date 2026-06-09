@@ -17,9 +17,9 @@ import { TOOLS } from '../../tools/tools';
 import { buildNotesTools } from '../../tools/notes.tool';
 import { buildEmailTools } from '../../tools/email.tool';
 import { HealthTool } from '../../tools/health.tool';
-import { getSkillTools } from '../../actions/skills';
 import { buildSoul } from '@/app/config/allerac-soul';
 import pool from '@/app/clients/db';
+import { normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
 
 export interface ChatHandlerConfig {
   userId: string;
@@ -123,7 +123,7 @@ export async function handleChatMessage(
   // Filter available tools by skill assignment
   let activeTools: typeof TOOLS = TOOLS;
   if (activeSkill?.id) {
-    const allowedToolNames = await getSkillTools(activeSkill.id);
+    const allowedToolNames = await skillsService.getSkillTools(activeSkill.id);
     if (allowedToolNames.length > 0) {
       activeTools = TOOLS.filter(t => allowedToolNames.includes(t.function.name));
     }
@@ -348,15 +348,13 @@ export async function handleChatMessage(
           }
         } else if (toolName === 'execute_shell') {
           const shellTool = new ShellTool();
-          // Enforce user-scoped workspace paths regardless of what the LLM wrote
-          const scopedCommand = (toolArgs.command as string || '').replace(
-            /\/workspace\/projects\//g,
-            `/workspace/projects/${userId}/`
-          );
-          const scopedCwd = toolArgs.cwd
-            ? (toolArgs.cwd as string).replace(/\/workspace\/projects\//g, `/workspace/projects/${userId}/`)
-            : toolArgs.cwd;
-          toolResult = await shellTool.execute(scopedCommand, scopedCwd, toolArgs.timeout);
+          const safeCwd = resolveShellCwd(userId, toolArgs.cwd);
+          if (!safeCwd) {
+            toolResult = { error: 'Invalid cwd. Shell commands must run inside your workspace.' };
+          } else {
+            const scopedCommand = normalizeWorkspaceReferences(userId, String(toolArgs.command || ''));
+            toolResult = await shellTool.execute(scopedCommand, safeCwd, toolArgs.timeout);
+          }
         } else {
           toolResult = { error: `Tool ${toolName} not available` };
         }
@@ -423,7 +421,7 @@ export async function maybeSummarizeConversation(
 ): Promise<void> {
   try {
     const memoryService = new ConversationMemoryService(githubToken, domainSlug);
-    const shouldSummarize = await memoryService.shouldSummarizeConversation(conversationId);
+    const shouldSummarize = await memoryService.shouldSummarizeConversation(conversationId, userId);
     if (shouldSummarize) {
       await memoryService.generateConversationSummary(conversationId, userId);
       console.log(`[ChatHandler] Summary generated for conversation ${conversationId}`);

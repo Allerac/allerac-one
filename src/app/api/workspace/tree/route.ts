@@ -1,18 +1,10 @@
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
 import { ShellTool } from '@/app/tools/shell.tool';
 import path from 'path';
+import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { resolveUserWorkspacePath } from '@/app/lib/workspace-paths';
 
-const authService = new AuthService();
-
-const WORKSPACE_BASE = '/workspace/projects';
-
-function sanitizePath(input: string, userId: string): string | null {
-  const userRoot = `${WORKSPACE_BASE}/${userId}`;
-  const raw = (input || '').trim() || userRoot;
-  const resolved = path.resolve(raw);
-  if (resolved !== userRoot && !resolved.startsWith(userRoot + '/')) return null;
-  return resolved;
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 export interface TreeNode {
@@ -65,43 +57,46 @@ function buildTree(lines: string[], rootPath: string): TreeNode {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await requireCurrentUser();
 
-  const url = new URL(request.url);
-  const inputPath = url.searchParams.get('path') || '';
-  const safePath = sanitizePath(inputPath, user.id);
-  if (!safePath) return Response.json({ error: 'Invalid path' }, { status: 400 });
+    const url = new URL(request.url);
+    const inputPath = url.searchParams.get('path') || '';
+    const safePath = resolveUserWorkspacePath(user.id, inputPath);
+    if (!safePath) return Response.json({ error: 'Invalid path' }, { status: 400 });
 
-  const shell = new ShellTool();
-  const cmd = [
-    `(find "${safePath}" -maxdepth 5`,
+    const shell = new ShellTool();
+    const quotedPath = shellQuote(safePath);
+    const cmd = [
+    `(find ${quotedPath} -maxdepth 5`,
     `  ! -path '*/node_modules/*'`,
     `  ! -path '*/.git/*'`,
     `  ! -path '*/__pycache__/*'`,
     `  ! -path '*/.next/*'`,
     `  -type d -print | sed 's/^/d\\t/'`,
     `;`,
-    `find "${safePath}" -maxdepth 5`,
+    `find ${quotedPath} -maxdepth 5`,
     `  ! -path '*/node_modules/*'`,
     `  ! -path '*/.git/*'`,
     `  ! -path '*/__pycache__/*'`,
     `  ! -path '*/.next/*'`,
     `  -type f -print | sed 's/^/f\\t/'`,
     `) | sort 2>/dev/null | head -500`,
-  ].join(' ');
+    ].join(' ');
 
-  const result = await shell.execute(cmd);
+    const result = await shell.execute(cmd);
 
-  if (!result.success && result.exitCode !== 0) {
-    return Response.json({ error: 'Failed to list directory', detail: result.stderr }, { status: 500 });
+    if (!result.success && result.exitCode !== 0) {
+      return Response.json({ error: 'Failed to list directory', detail: result.stderr }, { status: 500 });
+    }
+
+    const lines = result.stdout.split('\n').filter(Boolean);
+    const tree = buildTree(lines, safePath);
+
+    return Response.json({ tree });
+  } catch (error: unknown) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: error instanceof Error ? error.message : 'Failed to list directory' }, { status: 500 });
   }
-
-  const lines = result.stdout.split('\n').filter(Boolean);
-  const tree = buildTree(lines, safePath);
-
-  return Response.json({ tree });
 }

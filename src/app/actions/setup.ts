@@ -1,8 +1,17 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import pool from '@/app/clients/db';
+import { requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
+
+async function requireUserUnlessFirstRun(): Promise<void> {
+  const result = await pool.query<{ count: string }>('SELECT COUNT(*) as count FROM users');
+  if (parseInt(result.rows[0]?.count ?? '0', 10) > 0) {
+    await requireCurrentUser();
+  }
+}
 
 export interface OllamaModel {
   name: string;
@@ -28,6 +37,7 @@ export interface SystemStatus {
  */
 export async function getOllamaModels(): Promise<{ success: true; models: OllamaModel[] } | { success: false; error: string }> {
   try {
+    await requireUserUnlessFirstRun();
     const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
       method: 'GET',
       headers: {
@@ -55,6 +65,7 @@ export async function testOllamaConnection(model: string): Promise<{ success: tr
   const startTime = Date.now();
 
   try {
+    await requireCurrentUser();
     const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
       method: 'POST',
       headers: {
@@ -89,7 +100,7 @@ export async function testOllamaConnection(model: string): Promise<{ success: tr
  */
 export async function testDatabaseConnection(): Promise<{ success: true } | { success: false; error: string }> {
   try {
-    const pool = (await import('@/app/clients/db')).default;
+    await requireCurrentAdmin();
     await pool.query('SELECT 1');
     return { success: true };
   } catch (error: any) {
@@ -102,9 +113,16 @@ export async function testDatabaseConnection(): Promise<{ success: true } | { su
  * Get full system status
  */
 export async function getSystemStatus(): Promise<SystemStatus> {
+  await requireCurrentAdmin();
   const [ollamaResult, dbResult] = await Promise.all([
-    getOllamaModels(),
-    testDatabaseConnection(),
+    fetch(`${OLLAMA_BASE_URL}/api/tags`).then(async response => {
+      if (!response.ok) return { success: false as const, error: await response.text() };
+      const data = await response.json();
+      return { success: true as const, models: data.models || [] };
+    }).catch((error: Error) => ({ success: false as const, error: error.message })),
+    pool.query('SELECT 1')
+      .then(() => ({ success: true as const }))
+      .catch((error: Error) => ({ success: false as const, error: error.message })),
   ]);
 
   return {
@@ -139,6 +157,7 @@ export async function saveLocale(locale: string): Promise<void> {
  */
 export async function pullOllamaModel(modelName: string): Promise<{ success: true; message: string } | { success: false; error: string }> {
   try {
+    await requireCurrentAdmin();
     console.log(`[Setup] Pulling Ollama model: ${modelName}`);
 
     const response = await fetch(`${OLLAMA_BASE_URL}/api/pull`, {
@@ -169,9 +188,9 @@ export async function pullOllamaModel(modelName: string): Promise<{ success: tru
 /**
  * Save default model preference
  */
-export async function saveDefaultModel(userId: string, model: string): Promise<{ success: boolean }> {
+export async function saveDefaultModel(model: string): Promise<{ success: boolean }> {
   try {
-    const pool = (await import('@/app/clients/db')).default;
+    const user = await requireCurrentUser();
 
     // Check if user_settings table exists and has default_model column
     await pool.query(
@@ -179,7 +198,7 @@ export async function saveDefaultModel(userId: string, model: string): Promise<{
        VALUES ($1, $2)
        ON CONFLICT (user_id)
        DO UPDATE SET default_model = $2`,
-      [userId, model]
+      [user.id, model]
     );
 
     return { success: true };

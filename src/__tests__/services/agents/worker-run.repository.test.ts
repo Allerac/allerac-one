@@ -2,7 +2,7 @@ import '../../../__tests__/__mocks__/db';
 import pool from '@/app/clients/db';
 import { WorkerRunRepository } from '@/app/services/agents/worker-run.repository';
 
-const mockQuery = (pool as any).query;
+const mockQuery = pool.query as jest.Mock;
 
 describe('WorkerRunRepository', () => {
   let repo: WorkerRunRepository;
@@ -117,6 +117,44 @@ describe('WorkerRunRepository', () => {
       const result = await repo.getRun('nonexistent');
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('user-owned run access', () => {
+    it('scopes a run lookup to its owner', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await repo.getRunForUser('run_1', 'user_2');
+
+      expect(result).toBeNull();
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE id = $1 AND user_id = $2'),
+        ['run_1', 'user_2']
+      );
+    });
+
+    it('scopes worker lookup through the owning run', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await repo.getRunWorkersForUser('run_1', 'user_2');
+
+      expect(result).toEqual([]);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE aw.run_id = $1 AND ar.user_id = $2'),
+        ['run_1', 'user_2']
+      );
+    });
+
+    it('cancels a run only when it belongs to the user', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const result = await repo.cancelRunForUser('run_1', 'user_2');
+
+      expect(result).toBe(false);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE id = $1 AND user_id = $2'),
+        ['run_1', 'user_2']
+      );
     });
   });
 

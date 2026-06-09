@@ -88,6 +88,8 @@ describe('Perceptron', () => {
       const input = [1, 1];
       const correctOutput = 1;
 
+      (perceptron as any).weights = [-1, -1];
+      (perceptron as any).bias = -1;
       const initialWeights = [...(perceptron as any).weights];
       perceptron.trainOnSingleSample(input, correctOutput, 10);
 

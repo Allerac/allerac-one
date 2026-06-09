@@ -32,7 +32,7 @@ export default function DomainChip({ isDark: d, domainId, userId, isAdmin }: Pro
   const meta = DOMAIN_META[domainId] ?? { label: domainId, icon: '◆' };
 
   useEffect(() => {
-    getUserAccessibleDomains(userId, isAdmin).then(setDomains);
+    getUserAccessibleDomains().then(setDomains);
   }, [userId, isAdmin]);
 
   useEffect(() => {

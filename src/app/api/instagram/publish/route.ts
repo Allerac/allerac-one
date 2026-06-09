@@ -2,28 +2,52 @@
  * /api/instagram/publish — Publish post with public image URL
  */
 
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
+import {
+  authenticationErrorResponse,
+  assertDomainAccess,
+  ForbiddenError,
+  requireCurrentUser,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 
-const authService = new AuthService();
 const igTool = new InstagramTool();
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  let user;
+  try {
+    user = await requireCurrentUser();
+    await assertDomainAccess(user, 'social');
+  } catch (error) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: 'Authentication failed' }, { status: 500 });
+  }
 
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-
-  const { caption, image_url } = await request.json();
-  if (!caption || !image_url) {
-    return new Response(JSON.stringify({ error: 'caption and image_url required' }), { status: 400 });
+  let body: { caption?: string; image_url?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const { caption, image_url } = body;
+  let imageUrl: URL;
+  try {
+    imageUrl = new URL(image_url ?? '');
+  } catch {
+    return Response.json({ error: 'Invalid image_url' }, { status: 400 });
+  }
+  if (
+    typeof caption !== 'string'
+    || !caption.trim()
+    || caption.length > 2_200
+    || imageUrl.protocol !== 'https:'
+  ) {
+    return Response.json({ error: 'Invalid caption or image_url' }, { status: 400 });
   }
 
   try {
-    const result = await igTool.publishPost(user.id, caption, image_url);
+    const result = await igTool.publishPost(user.id, caption, imageUrl.toString());
     return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });

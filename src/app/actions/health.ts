@@ -1,6 +1,7 @@
 'use server';
 
 import pool from '@/app/clients/db';
+import { requireCurrentUser } from '@/app/lib/auth-session';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { submitLog } from '@/lib/submit-log';
 
@@ -9,6 +10,11 @@ const WORKER_SECRET = process.env.HEALTH_WORKER_SECRET || '';
 
 export async function isHealthConfigured(): Promise<boolean> {
   return Boolean(WORKER_SECRET);
+}
+
+async function getSessionUserId(): Promise<string> {
+  const user = await requireCurrentUser();
+  return user.id;
 }
 
 async function workerFetch(method: string, path: string, body?: object) {
@@ -30,7 +36,8 @@ async function workerFetch(method: string, path: string, body?: object) {
 
 // ─── Garmin status ─────────────────────────────────────────────────────────────
 
-export async function getGarminStatus(userId: string) {
+export async function getGarminStatus() {
+  const userId = await getSessionUserId();
   try {
     const res = await pool.query(
       'SELECT is_connected, mfa_pending, last_sync_at, last_error, sync_enabled FROM garmin_credentials WHERE user_id = $1',
@@ -54,7 +61,8 @@ export async function getGarminStatus(userId: string) {
 
 // ─── Connect ───────────────────────────────────────────────────────────────────
 
-export async function connectGarmin(userId: string, email: string, password: string) {
+export async function connectGarmin(email: string, password: string) {
+  const userId = await getSessionUserId();
   await submitLog('Health', `Garmin connect started for ${email}`);
   const result = await workerFetch('POST', '/connect', { email, password });
 
@@ -110,7 +118,8 @@ export async function connectGarmin(userId: string, email: string, password: str
 
 // ─── MFA ───────────────────────────────────────────────────────────────────────
 
-export async function submitGarminMfa(userId: string, mfaCode: string) {
+export async function submitGarminMfa(mfaCode: string) {
+  const userId = await getSessionUserId();
   await submitLog('Health', `Garmin MFA submitted`);
   const res = await pool.query(
     'SELECT session_data_encrypted, expires_at FROM health_mfa_sessions WHERE user_id = $1',
@@ -156,7 +165,8 @@ export async function submitGarminMfa(userId: string, mfaCode: string) {
 
 // ─── Disconnect ────────────────────────────────────────────────────────────────
 
-export async function disconnectGarmin(userId: string) {
+export async function disconnectGarmin() {
+  const userId = await getSessionUserId();
   await pool.query('DELETE FROM garmin_credentials WHERE user_id = $1', [userId]);
   await pool.query('DELETE FROM health_mfa_sessions WHERE user_id = $1', [userId]);
   return { success: true };
@@ -164,11 +174,13 @@ export async function disconnectGarmin(userId: string) {
 
 // ─── Sync ──────────────────────────────────────────────────────────────────────
 
-export async function triggerHealthSync(userId: string, days = 2) {
+export async function triggerHealthSync(days = 2) {
+  const userId = await getSessionUserId();
   return _runSync(userId, 'manual', days);
 }
 
-export async function triggerInitialSync(userId: string) {
+export async function triggerInitialSync() {
+  const userId = await getSessionUserId();
   return _runSync(userId, 'full', 30);
 }
 
@@ -268,7 +280,8 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
 
 // ─── Metrics queries ───────────────────────────────────────────────────────────
 
-export async function getHealthMetrics(userId: string, startDate: string, endDate: string) {
+export async function getHealthMetrics(startDate: string, endDate: string) {
+  const userId = await getSessionUserId();
   // Try from database first
   const res = await pool.query(
     `SELECT * FROM health_daily_metrics
@@ -314,7 +327,8 @@ export async function getHealthMetrics(userId: string, startDate: string, endDat
   return metrics;
 }
 
-export async function getHealthSummary(userId: string, period: 'day' | '3days' | 'week' | 'month' | 'year') {
+export async function getHealthSummary(period: 'day' | '3days' | 'week' | 'month' | 'year') {
+  const userId = await getSessionUserId();
   const days = { day: 1, '3days': 3, week: 7, month: 30, year: 365 }[period];
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -336,7 +350,12 @@ export async function getHealthSummary(userId: string, period: 'day' | '3days' |
   return { period, ...res.rows[0] };
 }
 
-export async function getDailySnapshot(userId: string, date: string) {
+export async function getDailySnapshot(date: string) {
+  const userId = await getSessionUserId();
+  return getDailySnapshotForUser(userId, date);
+}
+
+async function getDailySnapshotForUser(userId: string, date: string) {
   const res = await pool.query(
     'SELECT * FROM health_daily_metrics WHERE user_id = $1 AND date = $2',
     [userId, date]
@@ -376,11 +395,12 @@ async function getActivitiesFromDB(userId: string, startDate: string, endDate: s
 
 // ─── Daily Health ──────────────────────────────────────────────────────────
 
-export async function getDailyHealth(userId: string, date: string) {
+export async function getDailyHealth(date: string) {
+  const userId = await getSessionUserId();
   await submitLog('Health', `Fetching daily health for ${date}`);
 
   // Try cache first
-  const cached = await getDailySnapshot(userId, date);
+  const cached = await getDailySnapshotForUser(userId, date);
   if (cached) {
     await submitLog('Health', `Daily health from cache for ${date}`);
     return cached;
@@ -407,7 +427,8 @@ export async function getDailyHealth(userId: string, date: string) {
   return data;
 }
 
-export async function getActivitiesRange(userId: string, startDate: string, endDate: string) {
+export async function getActivitiesRange(startDate: string, endDate: string) {
+  const userId = await getSessionUserId();
   await submitLog('Health', `Fetching activities from ${startDate} to ${endDate}`);
 
   // Try to get from database first
@@ -459,7 +480,8 @@ export async function getActivitiesRange(userId: string, startDate: string, endD
 
 // ─── Activities ────────────────────────────────────────────────────────────
 
-export async function getRecentActivities(userId: string, limit: number = 10, filterDate?: string) {
+export async function getRecentActivities(limit: number = 10, filterDate?: string) {
+  const userId = await getSessionUserId();
   const filterMsg = filterDate ? ` for ${filterDate}` : '';
   await submitLog('Health', `Fetching recent activities (limit=${limit})${filterMsg}...`);
 
@@ -526,7 +548,8 @@ export async function getRecentActivities(userId: string, limit: number = 10, fi
   return activities;
 }
 
-export async function getActivitiesInRange(userId: string, startDate: string, endDate: string, limit: number = 50) {
+export async function getActivitiesInRange(startDate: string, endDate: string, limit: number = 50) {
+  const userId = await getSessionUserId();
   const cached = await getActivitiesFromDB(userId, startDate, endDate);
   return cached.slice(0, limit);
 }

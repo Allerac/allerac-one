@@ -117,10 +117,15 @@ export class ScheduledJobsService {
     return result.rows[0] ? mapJob(result.rows[0]) : null;
   }
 
-  async getJobExecutions(jobId: string, limit = 5): Promise<JobExecution[]> {
+  async getJobExecutions(jobId: string, userId: string, limit = 5): Promise<JobExecution[]> {
     const result = await pool.query<DBJobExecution>(
-      `SELECT * FROM job_executions WHERE job_id = $1 ORDER BY started_at DESC LIMIT $2`,
-      [jobId, limit]
+      `SELECT je.*
+       FROM job_executions je
+       INNER JOIN scheduled_jobs sj ON sj.id = je.job_id
+       WHERE je.job_id = $1 AND sj.user_id = $2
+       ORDER BY je.started_at DESC
+       LIMIT $3`,
+      [jobId, userId, limit]
     );
     return result.rows.map(mapExecution);
   }

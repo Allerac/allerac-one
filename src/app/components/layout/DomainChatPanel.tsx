@@ -148,7 +148,7 @@ export default function DomainChatPanel({
     setMemoryLoading(true);
     setMemoryResult(null);
     try {
-      const summary = await memoryActions.generateConversationSummary(convId, userId, undefined, domainSlug);
+      const summary = await memoryActions.generateConversationSummary(convId, domainSlug);
       if (summary) {
         setMemoryResult({ success: true, message: 'Summary generated successfully!', summary: summary.summary, topics: summary.key_topics });
       } else {
@@ -212,7 +212,7 @@ export default function DomainChatPanel({
         <div className="flex-1" />
         <select
           value={selectedModel}
-          onChange={e => { setModel(e.target.value); localStorage.setItem('selected_model', e.target.value); saveSelectedModel(userId, e.target.value); }}
+          onChange={e => { setModel(e.target.value); localStorage.setItem('selected_model', e.target.value); saveSelectedModel(e.target.value); }}
           className={`text-xs rounded-md px-2 py-1 border outline-none cursor-pointer ${d ? 'bg-gray-800 text-gray-400 border-gray-700' : 'bg-gray-100 text-gray-600 border-gray-200'}`}
         >
           {MODELS.map(m => (
@@ -246,7 +246,7 @@ export default function DomainChatPanel({
               isDarkMode={d}
               setIsDocumentModalOpen={() => {}}
               selectedModel={selectedModel}
-              setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(userId, m); }}
+              setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(m); }}
               MODELS={MODELS}
               githubConfigured={true}
               googleConfigured={true}
@@ -286,7 +286,7 @@ export default function DomainChatPanel({
                 isDarkMode={d}
                 setIsDocumentModalOpen={() => {}}
                 selectedModel={selectedModel}
-                setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(userId, m); }}
+                setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); saveSelectedModel(m); }}
                 MODELS={MODELS}
                 githubConfigured={true}
                 googleConfigured={true}

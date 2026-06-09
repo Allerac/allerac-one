@@ -6,7 +6,7 @@ export interface AgentRunRecord {
   user_id: string;
   status: 'pending' | 'planning' | 'running' | 'aggregating' | 'completed' | 'failed';
   prompt: string;
-  plan: any | null;
+  plan: unknown | null;
   result: string | null;
   error_message: string | null;
   started_at: Date | null;
@@ -67,10 +67,10 @@ export class WorkerRunRepository {
   async updateRunStatus(
     runId: string,
     status: AgentRunRecord['status'],
-    fields?: { plan?: any; result?: string; error_message?: string }
+    fields?: { plan?: unknown; result?: string; error_message?: string }
   ): Promise<void> {
     const updateParts = [`status = $2`, `last_heartbeat = NOW()`];
-    const values: any[] = [runId, status];
+    const values: unknown[] = [runId, status];
     let paramIdx = 3;
 
     if (fields?.plan !== undefined) {
@@ -114,6 +114,14 @@ export class WorkerRunRepository {
     return result.rows[0] || null;
   }
 
+  async getRunForUser(runId: string, userId: string): Promise<AgentRunRecord | null> {
+    const result = await pool.query<AgentRunRecord>(
+      `SELECT * FROM agent_runs WHERE id = $1 AND user_id = $2`,
+      [runId, userId]
+    );
+    return result.rows[0] || null;
+  }
+
   async createWorkers(
     runId: string,
     workers: Array<{ id: string; name: string; task: string }>
@@ -133,7 +141,7 @@ export class WorkerRunRepository {
     fields?: { result?: string; tokens_used?: number; progress_log?: string }
   ): Promise<void> {
     const updateParts = [`status = $2`];
-    const values: any[] = [workerId, status];
+    const values: unknown[] = [workerId, status];
     let paramIdx = 3;
 
     if (fields?.result !== undefined) {
@@ -183,6 +191,18 @@ export class WorkerRunRepository {
     return result.rows;
   }
 
+  async getRunWorkersForUser(runId: string, userId: string): Promise<AgentWorkerRecord[]> {
+    const result = await pool.query<AgentWorkerRecord>(
+      `SELECT aw.*
+       FROM agent_workers aw
+       INNER JOIN agent_runs ar ON ar.id = aw.run_id
+       WHERE aw.run_id = $1 AND ar.user_id = $2
+       ORDER BY aw.started_at`,
+      [runId, userId]
+    );
+    return result.rows;
+  }
+
   async getUserSettings(userId: string): Promise<UserSettings | null> {
     const result = await pool.query<UserSettings>(
       `SELECT github_token, tavily_api_key, google_api_key, anthropic_api_key,
@@ -210,8 +230,12 @@ export class WorkerRunRepository {
 
     const runIds = runs.map(r => r.id);
     const workersResult = await pool.query<AgentWorkerRecord>(
-      `SELECT * FROM agent_workers WHERE run_id = ANY($1) ORDER BY started_at`,
-      [runIds]
+      `SELECT aw.*
+       FROM agent_workers aw
+       INNER JOIN agent_runs ar ON ar.id = aw.run_id
+       WHERE aw.run_id = ANY($1) AND ar.user_id = $2
+       ORDER BY aw.started_at`,
+      [runIds, userId]
     );
 
     const workersByRun = new Map<string, AgentWorkerRecord[]>();
@@ -231,6 +255,20 @@ export class WorkerRunRepository {
            completed_at = NOW()
        WHERE id = $1 AND cancelled_at IS NULL AND status NOT IN ('completed', 'failed')`,
       [runId]
+    );
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async cancelRunForUser(runId: string, userId: string): Promise<boolean> {
+    const result = await pool.query(
+      `UPDATE agent_runs
+       SET cancelled_at = NOW(), status = 'failed',
+           error_message = COALESCE(error_message, '') || CASE WHEN error_message IS NULL THEN '' ELSE ' | ' END || 'Cancelled by user',
+           completed_at = NOW()
+       WHERE id = $1 AND user_id = $2
+         AND cancelled_at IS NULL
+         AND status NOT IN ('completed', 'failed')`,
+      [runId, userId]
     );
     return result.rowCount !== null && result.rowCount > 0;
   }

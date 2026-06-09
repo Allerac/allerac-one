@@ -244,10 +244,14 @@ export class TicketService {
     return updated;
   }
 
-  async getEvents(ticketId: string): Promise<TicketEvent[]> {
+  async getEvents(ticketId: string, userId: string): Promise<TicketEvent[]> {
     const result = await pool.query(
-      'SELECT * FROM ticket_events WHERE ticket_id = $1 ORDER BY created_at ASC',
-      [ticketId]
+      `SELECT te.*
+       FROM ticket_events te
+       INNER JOIN tickets t ON t.id = te.ticket_id
+       WHERE te.ticket_id = $1 AND t.user_id = $2
+       ORDER BY te.created_at ASC`,
+      [ticketId, userId]
     );
     return result.rows.map(rowToEvent);
   }

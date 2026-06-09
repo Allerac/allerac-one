@@ -1,6 +1,19 @@
 import pool from '@/app/clients/db';
 
 export class ChatService {
+    async getConversationForUser(conversationId: string, userId: string) {
+        try {
+            const res = await pool.query(
+                'SELECT * FROM chat_conversations WHERE id = $1 AND user_id = $2',
+                [conversationId, userId]
+            );
+            return res.rows[0] || null;
+        } catch (error) {
+            console.error('[DB] getConversationForUser failed:', error);
+            return null;
+        }
+    }
+
     /**
      * Load system message from database (per user)
      */
@@ -67,13 +80,18 @@ export class ChatService {
         }
     }
 
-    async pinConversation(conversationId: string, pinned: boolean) {
+    async pinConversation(conversationId: string, pinned: boolean, userId?: string) {
         try {
-            await pool.query(
-                'UPDATE chat_conversations SET pinned = $1 WHERE id = $2',
-                [pinned, conversationId]
-            );
-            return { success: true };
+            const res = userId
+                ? await pool.query(
+                    'UPDATE chat_conversations SET pinned = $1 WHERE id = $2 AND user_id = $3',
+                    [pinned, conversationId, userId]
+                  )
+                : await pool.query(
+                    'UPDATE chat_conversations SET pinned = $1 WHERE id = $2',
+                    [pinned, conversationId]
+                  );
+            return { success: !userId || (res.rowCount ?? 0) > 0 };
         } catch (error) {
             console.error('[DB] pinConversation failed:', error);
             return { success: false, error };
@@ -83,12 +101,21 @@ export class ChatService {
     /**
      * Load messages for a conversation
      */
-    async loadMessages(conversationId: string) {
+    async loadMessages(conversationId: string, userId?: string) {
         try {
-            const res = await pool.query(
-                'SELECT * FROM chat_messages WHERE conversation_id = $1 ORDER BY created_at ASC',
-                [conversationId]
-            );
+            const res = userId
+                ? await pool.query(
+                    `SELECT cm.*
+                     FROM chat_messages cm
+                     JOIN chat_conversations cc ON cc.id = cm.conversation_id
+                     WHERE cm.conversation_id = $1 AND cc.user_id = $2
+                     ORDER BY cm.created_at ASC`,
+                    [conversationId, userId]
+                  )
+                : await pool.query(
+                    'SELECT * FROM chat_messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+                    [conversationId]
+                  );
             return res.rows;
         } catch (error) {
             console.error('[DB] loadMessages failed:', error);
@@ -115,9 +142,16 @@ export class ChatService {
     /**
      * Save a message to a conversation
      */
-    async saveMessage(conversationId: string, role: string, content: string, options?: { agentRunId?: string }) {
+    async saveMessage(conversationId: string, role: string, content: string, options?: { agentRunId?: string; userId?: string }) {
         try {
             const agentRunId = options?.agentRunId;
+            if (options?.userId) {
+                const conversation = await this.getConversationForUser(conversationId, options.userId);
+                if (!conversation) {
+                    return { success: false, error: 'Conversation not found' };
+                }
+            }
+
             await pool.query(
                 'INSERT INTO chat_messages (conversation_id, role, content, agent_run_id) VALUES ($1, $2, $3, $4)',
                 [conversationId, role, content, agentRunId || null]
@@ -139,13 +173,18 @@ export class ChatService {
     /**
      * Rename a conversation
      */
-    async renameConversation(conversationId: string, title: string) {
+    async renameConversation(conversationId: string, title: string, userId?: string) {
         try {
-            await pool.query(
-                'UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2',
-                [title, conversationId]
-            );
-            return { success: true };
+            const res = userId
+                ? await pool.query(
+                    'UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3',
+                    [title, conversationId, userId]
+                  )
+                : await pool.query(
+                    'UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2',
+                    [title, conversationId]
+                  );
+            return { success: !userId || (res.rowCount ?? 0) > 0 };
         } catch (error) {
             console.error('[DB] renameConversation failed:', error);
             return { success: false, error };
@@ -155,10 +194,12 @@ export class ChatService {
     /**
      * Delete a conversation and all its messages
      */
-    async deleteConversation(conversationId: string) {
+    async deleteConversation(conversationId: string, userId?: string) {
         try {
-            await pool.query('DELETE FROM chat_conversations WHERE id = $1', [conversationId]);
-            return { success: true };
+            const res = userId
+                ? await pool.query('DELETE FROM chat_conversations WHERE id = $1 AND user_id = $2', [conversationId, userId])
+                : await pool.query('DELETE FROM chat_conversations WHERE id = $1', [conversationId]);
+            return { success: !userId || (res.rowCount ?? 0) > 0 };
         } catch (error) {
             console.error('[DB] deleteConversation failed:', error);
             return { success: false, error };

@@ -95,7 +95,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
     if (!userId) return;
     setLoading(true);
     try {
-      const status = await healthActions.getGarminStatus(userId);
+      const status = await healthActions.getGarminStatus();
       setGarminConnected(!!status.is_connected);
       setLastSync(status.last_sync_at ? new Date(status.last_sync_at).toLocaleString() : null);
 
@@ -107,13 +107,13 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
           ? selectedDate
           : new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        const met = await healthActions.getHealthMetrics(userId, startDate, endDate);
+        const met = await healthActions.getHealthMetrics(startDate, endDate);
         setMetrics(met);
 
         // Always keep 7-day resting HR history for the sparkline (independent of period)
         const hrEnd   = getTodayStr();
         const hrStart = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const hrMet   = await healthActions.getHealthMetrics(userId, hrStart, hrEnd);
+        const hrMet   = await healthActions.getHealthMetrics(hrStart, hrEnd);
         setHrHistory(
           hrMet
             .filter((m: any) => m.resting_hr != null)
@@ -141,7 +141,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
     setSyncing(true);
     setSyncMessage(null);
     try {
-      const result = await healthActions.triggerHealthSync(userId, PERIOD_CONFIG[period].days);
+      const result = await healthActions.triggerHealthSync(PERIOD_CONFIG[period].days);
       setSyncMessage({ type: 'success', text: t('syncSuccess', { records: result.records }) });
       await loadData();
     } catch (e: any) {

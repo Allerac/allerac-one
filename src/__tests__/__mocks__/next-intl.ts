@@ -1,5 +1,3 @@
-import { createIntl, createIntlCache } from 'react-intl';
-
 // Mock translations database
 const translations: Record<string, Record<string, any>> = {
   en: {

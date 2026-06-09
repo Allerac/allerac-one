@@ -156,8 +156,8 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
     setSaving(true); setError('');
     const data = { name: form.name, cronExpr: derivedCron.trim(), prompt: form.prompt, channels: form.channels, enabled: form.enabled, domainSlug: domainSlug ?? null };
     const res = job
-      ? await updateScheduledJob(job.id, userId, data)
-      : await createScheduledJob(userId, data);
+      ? await updateScheduledJob(job.id, data)
+      : await createScheduledJob(data);
     setSaving(false);
     if (res.success) { setSuccess(job ? t('success.saved') : t('success.created')); onSaved(); setTimeout(() => setSuccess(''), 2000); }
     else setError(res.error ?? 'Error');
@@ -165,7 +165,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
 
   const handleDelete = async () => {
     if (!job || !confirm(t('confirm.delete'))) return;
-    const res = await deleteScheduledJob(job.id, userId);
+    const res = await deleteScheduledJob(job.id);
     if (res.success) onDeleted();
     else setError(res.error ?? 'Error');
   };
@@ -384,7 +384,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
   const [mobileTab, setMobileTab]     = useState<'list' | 'editor'>('list');
 
   const load = useCallback(async () => {
-    const res = await getScheduledJobs(userId);
+    const res = await getScheduledJobs();
     if (res.success) setJobs(res.data ?? []);
     setLoading(false);
   }, [userId]);
@@ -392,7 +392,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
   useEffect(() => { load(); }, [load]);
 
   const handleToggle = async (job: ScheduledJob) => {
-    const res = await toggleJobEnabled(job.id, userId);
+    const res = await toggleJobEnabled(job.id);
     if (res.success && res.data) setJobs(prev => prev.map(j => j.id === job.id ? res.data! : j));
   };
 

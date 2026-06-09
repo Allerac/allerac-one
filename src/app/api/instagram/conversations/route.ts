@@ -2,33 +2,44 @@
  * /api/instagram/conversations — List DM threads + messages
  */
 
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
+import {
+  authenticationErrorResponse,
+  assertDomainAccess,
+  ForbiddenError,
+  requireCurrentUser,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { InstagramCredentialsService } from '@/app/services/instagram/instagram-credentials.service';
 import { InstagramGraphService } from '@/app/services/instagram/instagram-graph.service';
 
-const authService      = new AuthService();
 const credService      = new InstagramCredentialsService();
 const instagramService = new InstagramGraphService();
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  let user;
+  try {
+    user = await requireCurrentUser();
+    await assertDomainAccess(user, 'social');
+  } catch (error) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: 'Authentication failed' }, { status: 500 });
+  }
 
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-
-  const status = await credService.getStatus(user.id);
+  const credentialsUserId = await credService.resolveCredentialsUserId(user.id);
+  const status = await credService.getStatus(credentialsUserId);
   if (!status.is_connected || !status.ig_user_id) {
     return new Response(JSON.stringify({ error: 'Instagram not connected' }), { status: 400 });
   }
 
-  const accessToken = await credService.getAccessToken(user.id);
+  const accessToken = await credService.getAccessToken(credentialsUserId);
   if (!accessToken) return new Response(JSON.stringify({ error: 'No access token' }), { status: 400 });
 
   const { searchParams } = new URL(request.url);
   const conversationId = searchParams.get('conversationId');
+  if (conversationId && (conversationId.length > 200 || !/^[a-zA-Z0-9._:-]+$/.test(conversationId))) {
+    return Response.json({ error: 'Invalid conversationId' }, { status: 400 });
+  }
 
   try {
     if (conversationId) {

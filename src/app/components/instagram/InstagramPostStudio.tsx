@@ -97,7 +97,7 @@ export default function InstagramPostStudio({
     }
     const savedInstructions = localStorage.getItem('ig_purchase_instructions');
     if (savedInstructions !== null) setPurchaseInstructions(savedInstructions);
-    getInstagramRefSettings(userId).then((r) => {
+    getInstagramRefSettings().then((r) => {
       setRefManaged(r.managed);
       setRefPrefix(r.prefix);
       setRefCounter(r.counter);
@@ -143,10 +143,10 @@ export default function InstagramPostStudio({
     setIsGenerating(true);
     setError('');
     try {
-      const captionResult = await generateCaption(imageInput, userId, undefined, locale, selectedModel, selectedProvider);
+      const captionResult = await generateCaption(imageInput, undefined, locale, selectedModel, selectedProvider);
       if (!captionResult.success) { setError(captionResult.error); return; }
       setCaption(captionResult.caption);
-      const tagsResult = await generateTags(userId, captionResult.caption, locale, selectedModel, selectedProvider);
+      const tagsResult = await generateTags(captionResult.caption, locale, selectedModel, selectedProvider);
       if (tagsResult.success) setTags(tagsResult.tags);
       else setError(tagsResult.error);
     } catch (err: any) { setError(err.message); }
@@ -246,9 +246,9 @@ export default function InstagramPostStudio({
       let result;
 
       if (images.length >= 2) {
-        result = await publishInstagramCarousel(userId, images.map(i => i.base64), fullCaption);
+        result = await publishInstagramCarousel(images.map(i => i.base64), fullCaption);
       } else if (images.length === 1) {
-        result = await publishInstagramPost(userId, images[0].base64, fullCaption);
+        result = await publishInstagramPost(images[0].base64, fullCaption);
       } else {
         // imageUrl path (image provided by AI tool)
         let base64ToPublish: string | null = null;
@@ -263,7 +263,7 @@ export default function InstagramPostStudio({
           });
         } catch { /* fall through to imageUrl path */ }
         result = base64ToPublish
-          ? await publishInstagramPost(userId, base64ToPublish, fullCaption)
+          ? await publishInstagramPost(base64ToPublish, fullCaption)
           : await fetch('/api/instagram/publish', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -273,7 +273,7 @@ export default function InstagramPostStudio({
 
       if (result.success) {
         if (isProduct && refManaged) {
-          const next = await incrementRefCounter(userId);
+          const next = await incrementRefCounter();
           if (next) setRefCounter(refCounter + 1);
         }
         setSuccess(result.message);

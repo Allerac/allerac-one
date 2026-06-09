@@ -2,34 +2,53 @@
  * /api/instagram/send — Send an approved DM reply
  */
 
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
+import {
+  authenticationErrorResponse,
+  assertDomainAccess,
+  ForbiddenError,
+  requireCurrentUser,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { InstagramCredentialsService } from '@/app/services/instagram/instagram-credentials.service';
 import { InstagramGraphService } from '@/app/services/instagram/instagram-graph.service';
 
-const authService      = new AuthService();
 const credService      = new InstagramCredentialsService();
 const instagramService = new InstagramGraphService();
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-
-  const { recipientId, text } = await request.json() as { recipientId: string; text: string };
-  if (!recipientId || !text?.trim()) {
-    return new Response(JSON.stringify({ error: 'recipientId and text required' }), { status: 400 });
+  let user;
+  try {
+    user = await requireCurrentUser();
+    await assertDomainAccess(user, 'social');
+  } catch (error) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: 'Authentication failed' }, { status: 500 });
   }
 
-  const status = await credService.getStatus(user.id);
+  let body: { recipientId?: string; text?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const { recipientId, text } = body;
+  if (
+    !recipientId
+    || !/^\d{1,40}$/.test(recipientId)
+    || !text?.trim()
+    || text.length > 1_000
+  ) {
+    return Response.json({ error: 'Invalid recipientId or text' }, { status: 400 });
+  }
+
+  const credentialsUserId = await credService.resolveCredentialsUserId(user.id);
+  const status = await credService.getStatus(credentialsUserId);
   if (!status.is_connected || !status.ig_user_id) {
     return new Response(JSON.stringify({ error: 'Instagram not connected' }), { status: 400 });
   }
 
-  const accessToken = await credService.getAccessToken(user.id);
+  const accessToken = await credService.getAccessToken(credentialsUserId);
   if (!accessToken) return new Response(JSON.stringify({ error: 'No access token' }), { status: 400 });
 
   try {

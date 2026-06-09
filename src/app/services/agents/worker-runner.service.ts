@@ -12,7 +12,10 @@ const STALE_RUN_MAX_AGE_MINUTES = 5;
 const POLL_INTERVAL_MS = parseInt(process.env.AGENT_WORKER_POLL_MS || '3000', 10);
 const MAX_CONCURRENT_RUNS = parseInt(process.env.AGENT_WORKER_MAX_CONCURRENT || '5', 10);
 const WORKER_TIMEOUT_MS = parseInt(process.env.AGENT_WORKER_TIMEOUT_MS || '600000', 10); // 10 min
-const ORCHESTRATION_ENABLED = process.env.AGENT_ORCHESTRATION === 'true';
+
+function isOrchestrationEnabled(): boolean {
+  return process.env.AGENT_ORCHESTRATION === 'true';
+}
 
 interface WorkerRunnerConfig {
   repository?: WorkerRunRepository;
@@ -34,6 +37,7 @@ export class WorkerRunnerService {
   private pollIntervalMs: number;
   private maxConcurrentRuns: number;
   private staleRunMaxAgeMinutes: number;
+  private orchestratorInjected: boolean;
   private running: boolean;
   private activeRuns: Set<string>;
   private timer: NodeJS.Timeout | null;
@@ -42,6 +46,7 @@ export class WorkerRunnerService {
     this.repository = config?.repository || new WorkerRunRepository();
     this.orchestrator = config?.orchestrator || new OrchestratorService();
     this.worker = config?.worker || new WorkerService();
+    this.orchestratorInjected = Boolean(config?.orchestrator);
     this.pollIntervalMs = config?.pollIntervalMs ?? POLL_INTERVAL_MS;
     this.maxConcurrentRuns = config?.maxConcurrentRuns ?? MAX_CONCURRENT_RUNS;
     this.staleRunMaxAgeMinutes = config?.staleRunMaxAgeMinutes ?? STALE_RUN_MAX_AGE_MINUTES;
@@ -166,7 +171,7 @@ export class WorkerRunnerService {
       }
 
       // Orchestration disabled — run as single worker with user system message
-      if (!ORCHESTRATION_ENABLED) {
+      if (!isOrchestrationEnabled()) {
         const systemMessage = settings.system_message || 'You are a helpful AI assistant.';
         console.log(`[WorkerRunner] ${tag} Orchestration disabled — single worker run`);
         await this.executeSkillRun(
@@ -181,11 +186,13 @@ export class WorkerRunnerService {
 
       if (await this.checkCancelled(run.id)) return;
 
-      const orchestrator = new OrchestratorService({
-        githubToken: settings.github_token || undefined,
-        geminiToken: settings.google_api_key || undefined,
-        anthropicToken: settings.anthropic_api_key || undefined,
-      });
+      const orchestrator = this.orchestratorInjected
+        ? this.orchestrator
+        : new OrchestratorService({
+            githubToken: settings.github_token || undefined,
+            geminiToken: settings.google_api_key || undefined,
+            anthropicToken: settings.anthropic_api_key || undefined,
+          });
 
       const plan = await orchestrator.createPlan(run.prompt, modelName, modelProvider, modelBaseUrl);
       await this.repository.updateRunStatus(run.id, 'planning', { plan });

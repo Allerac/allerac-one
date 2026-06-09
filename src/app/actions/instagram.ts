@@ -7,6 +7,7 @@ import { LLMService } from '@/app/services/llm/llm.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { InstagramTool } from '@/app/tools/instagram.tool';
+import { requireCurrentUser } from '@/app/lib/auth-session';
 import pool from '@/app/clients/db';
 import sharp from 'sharp';
 
@@ -18,6 +19,11 @@ const systemSettingsService = new SystemSettingsService();
 const LOCALE_NAMES: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English', fr: 'French', de: 'German', it: 'Italian', ca: 'Catalan' };
 
 type LLMProviderType = 'github' | 'gemini' | 'anthropic' | 'ollama';
+
+async function getSessionUserId(): Promise<string> {
+  const user = await requireCurrentUser();
+  return user.id;
+}
 
 async function resolveLLMConfig(userId: string, provider: LLMProviderType): Promise<{ token: string; baseUrl: string }> {
   const [settings, sysSettings] = await Promise.all([
@@ -70,11 +76,13 @@ async function buildSocialSystemPrompt(userId: string, locale: string): Promise<
   return `You are a social media expert. Always respond in ${language}.\n\n${userInstructions}`;
 }
 
-export async function getInstagramStatus(userId: string) {
+export async function getInstagramStatus() {
+  const userId = await getSessionUserId();
   return credService.getStatus(userId);
 }
 
-export async function getInstagramRefSettings(userId: string): Promise<{ managed: boolean; prefix: string; counter: number }> {
+export async function getInstagramRefSettings(): Promise<{ managed: boolean; prefix: string; counter: number }> {
+  const userId = await getSessionUserId();
   const result = await pool.query(
     `SELECT ref_managed, ref_prefix, ref_counter FROM instagram_credentials WHERE user_id = $1`,
     [userId]
@@ -87,8 +95,9 @@ export async function getInstagramRefSettings(userId: string): Promise<{ managed
 }
 
 export async function saveInstagramRefSettings(
-  userId: string, managed: boolean, prefix: string, counter: number
+  managed: boolean, prefix: string, counter: number
 ): Promise<{ success: boolean; message: string }> {
+  const userId = await getSessionUserId();
   try {
     const cleanPrefix = prefix.trim().toUpperCase().replace(/[^A-Z0-9-_]/g, '') || 'REF';
     await pool.query(
@@ -103,7 +112,8 @@ export async function saveInstagramRefSettings(
   }
 }
 
-export async function incrementRefCounter(userId: string): Promise<string | null> {
+export async function incrementRefCounter(): Promise<string | null> {
+  const userId = await getSessionUserId();
   try {
     const result = await pool.query(
       `UPDATE instagram_credentials
@@ -119,12 +129,14 @@ export async function incrementRefCounter(userId: string): Promise<string | null
   }
 }
 
-export async function disconnectInstagram(userId: string) {
+export async function disconnectInstagram() {
+  const userId = await getSessionUserId();
   await credService.disconnect(userId);
 }
 
 /** Debug: show current subscribed fields and token status */
-export async function debugTokenPermissions(userId: string): Promise<{ success: boolean; data: any }> {
+export async function debugTokenPermissions(): Promise<{ success: boolean; data: any }> {
+  const userId = await getSessionUserId();
   try {
     const [accessToken, status] = await Promise.all([
       credService.getAccessToken(userId),
@@ -155,7 +167,8 @@ export async function debugTokenPermissions(userId: string): Promise<{ success: 
 }
 
 /** Revoke app permissions from Instagram side, forcing fresh re-authorization on next connect */
-export async function revokeInstagramAccess(userId: string): Promise<{ success: boolean; message: string }> {
+export async function revokeInstagramAccess(): Promise<{ success: boolean; message: string }> {
+  const userId = await getSessionUserId();
   try {
     const accessToken = await credService.getAccessToken(userId);
     if (!accessToken) return { success: false, message: 'No token found' };
@@ -176,7 +189,8 @@ export async function revokeInstagramAccess(userId: string): Promise<{ success: 
 }
 
 /** Re-subscribe the connected account to both messages and comments webhooks */
-export async function resubscribeWebhooks(userId: string): Promise<{ success: boolean; message: string }> {
+export async function resubscribeWebhooks(): Promise<{ success: boolean; message: string }> {
+  const userId = await getSessionUserId();
   try {
     const status = await credService.getStatus(userId);
     if (!status.is_connected) return { success: false, message: 'No connected Instagram account' };
@@ -212,12 +226,12 @@ export async function resubscribeWebhooks(userId: string): Promise<{ success: bo
  */
 export async function generateCaption(
   imageInput: string,
-  userId: string,
   topic?: string,
   locale = 'en',
   modelId = 'gpt-4o-mini',
   provider: LLMProviderType = 'github'
 ): Promise<{ success: true; caption: string } | { success: false; error: string }> {
+  const userId = await getSessionUserId();
   try {
     const language = LOCALE_NAMES[locale] ?? 'English';
     const [llmConfig, systemPrompt] = await Promise.all([
@@ -281,12 +295,12 @@ export async function generateCaption(
  * Generate Instagram hashtags using LLM
  */
 export async function generateTags(
-  userId: string,
   caption?: string,
   locale = 'en',
   modelId = 'gpt-4o-mini',
   provider: LLMProviderType = 'github'
 ): Promise<{ success: true; tags: string } | { success: false; error: string }> {
+  const userId = await getSessionUserId();
   try {
     const language = LOCALE_NAMES[locale] ?? 'English';
     const [llmConfig, systemPrompt] = await Promise.all([
@@ -328,7 +342,7 @@ export async function generateTags(
 }
 
 
-/** Convert base64 image → validate → JPEG → upload to Imgur → return public URL */
+/** Convert base64 image, validate it, and upload it to Azure Blob Storage. */
 async function prepareImageForInstagram(imageBase64: string): Promise<string> {
   const rawBuffer = Buffer.from(imageBase64, 'base64');
   const image = sharp(rawBuffer);
@@ -351,10 +365,10 @@ async function prepareImageForInstagram(imageBase64: string): Promise<string> {
  * Publish Instagram post (single image)
  */
 export async function publishInstagramPost(
-  userId: string,
   imageBase64: string,
   caption: string
 ): Promise<{ success: true; postId: string; message: string } | { success: false; error: string }> {
+  const userId = await getSessionUserId();
   try {
     const publicUrl = await prepareImageForInstagram(imageBase64);
     const result = await igTool.publishPost(userId, caption, publicUrl);
@@ -377,10 +391,10 @@ export async function publishInstagramPost(
  * Publish Instagram carousel (2–10 images)
  */
 export async function publishInstagramCarousel(
-  userId: string,
   imagesBase64: string[],
   caption: string
 ): Promise<{ success: true; postId: string; message: string } | { success: false; error: string }> {
+  const userId = await getSessionUserId();
   try {
     if (imagesBase64.length < 2 || imagesBase64.length > 10) {
       return { success: false, error: `O carrossel requer entre 2 e 10 imagens (recebido: ${imagesBase64.length}).` };

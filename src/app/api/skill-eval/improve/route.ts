@@ -8,17 +8,22 @@
  * Response: { analysis: string, changes: ProposedChange[] }
  */
 
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
+import {
+  authenticationErrorResponse,
+  ForbiddenError,
+  requireCurrentAdmin,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SkillsService } from '@/app/services/skills/skills.service';
 import pool from '@/app/clients/db';
 
-const authService         = new AuthService();
 const userSettingsService = new UserSettingsService();
 const skillsService       = new SkillsService();
 
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
+const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,99}$/;
+const RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f-]{27,35}$/i;
 
 export interface ProposedChange {
   old: string;
@@ -32,15 +37,29 @@ interface ImproveResponse {
 }
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return new Response(JSON.stringify({ error: 'Not authenticated' }), { status: 401 });
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return new Response(JSON.stringify({ error: 'Invalid session' }), { status: 401 });
+  let user;
+  try {
+    user = await requireCurrentAdmin();
+  } catch (error) {
+    const authError = authenticationErrorResponse(error);
+    if (authError) return authError;
+    return Response.json({ error: 'Authentication failed' }, { status: 500 });
+  }
 
-  const { skillName, runId } = await request.json() as { skillName: string; runId: string };
-  if (!skillName || !runId) {
-    return new Response(JSON.stringify({ error: 'skillName and runId required' }), { status: 400 });
+  let body: { skillName?: string; runId?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const { skillName, runId } = body;
+  if (
+    !skillName
+    || !SKILL_NAME_PATTERN.test(skillName)
+    || !runId
+    || !RUN_ID_PATTERN.test(runId)
+  ) {
+    return Response.json({ error: 'Invalid skillName or runId' }, { status: 400 });
   }
 
   const settings = await userSettingsService.loadUserSettings(user.id);

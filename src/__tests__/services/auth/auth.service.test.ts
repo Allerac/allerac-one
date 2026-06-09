@@ -112,6 +112,8 @@ describe('AuthService', () => {
       // Query: check existing user
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // Query: insert user
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }] });
+      // Query: insert user
       mockQuery.mockResolvedValueOnce({
         rows: [
           {
@@ -137,6 +139,7 @@ describe('AuthService', () => {
       const email = 'TestUser@EXAMPLE.COM';
 
       mockQuery.mockResolvedValueOnce({ rows: [] }); // No existing user
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }] }); // First user check
       mockQuery.mockResolvedValueOnce({
         rows: [
           {
@@ -172,6 +175,7 @@ describe('AuthService', () => {
 
     it('should use null for name if not provided', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] }); // No existing
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }] }); // First user check
       mockQuery.mockResolvedValueOnce({
         rows: [
           {
@@ -187,7 +191,7 @@ describe('AuthService', () => {
       await authService.register('test@test.com', 'password123');
 
       // Check INSERT call used null for name
-      const insertCall = mockQuery.mock.calls[1];
+      const insertCall = mockQuery.mock.calls[2];
       expect(insertCall[1]).toContain(null);
     });
 

@@ -281,7 +281,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
     if (!userId) return;
     setLoading(true);
     setError(null);
-    const res = await getScheduledJobs(userId);
+    const res = await getScheduledJobs();
     setLoading(false);
     if (!res.success) { setError(res.error ?? t('errors.loadFailed')); return; }
     const jobList = res.data ?? [];
@@ -324,7 +324,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
     if (!userId) return;
     if (!confirm(t('confirm.delete'))) return;
     setLoading(true);
-    const res = await deleteScheduledJob(jobId, userId);
+    const res = await deleteScheduledJob(jobId);
     setLoading(false);
     if (res.success) {
       setSuccess(t('success.deleted'));
@@ -336,7 +336,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
 
   const handleToggle = async (job: ScheduledJob) => {
     if (!userId) return;
-    const res = await toggleJobEnabled(job.id, userId);
+    const res = await toggleJobEnabled(job.id);
     if (res.success && res.data) {
       setJobs(prev => prev.map(j => j.id === job.id ? res.data! : j));
     }
@@ -355,7 +355,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
     setError(null);
 
     if (activeTab === 'create') {
-      const res = await createScheduledJob(userId, {
+      const res = await createScheduledJob({
         name: formData.name,
         cronExpr: cron,
         prompt: formData.prompt,
@@ -372,7 +372,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
         setError(res.error ?? t('errors.createFailed'));
       }
     } else if (activeTab === 'edit' && selectedJob) {
-      const res = await updateScheduledJob(selectedJob.id, userId, {
+      const res = await updateScheduledJob(selectedJob.id, {
         name: formData.name,
         cronExpr: cron,
         prompt: formData.prompt,

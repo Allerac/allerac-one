@@ -11,7 +11,7 @@ export default async function RootPage() {
   try {
     const [tourRes, domains] = await Promise.all([
       pool.query('SELECT completed_onboarding_tour FROM users WHERE id = $1', [user.id]),
-      getUserAccessibleDomains(String(user.id), true),
+      getUserAccessibleDomains(),
     ]);
     completedHubTour = tourRes.rows[0]?.completed_onboarding_tour ?? false;
     allowedDomains = domains;

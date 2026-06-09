@@ -15,8 +15,12 @@
  *   {"type":"error","message":"..."}
  */
 
-import { cookies } from 'next/headers';
-import { AuthService } from '@/app/services/auth/auth.service';
+import {
+  authenticationErrorResponse,
+  ForbiddenError,
+  requireCurrentAdmin,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SkillsService } from '@/app/services/skills/skills.service';
 import pool from '@/app/clients/db';
@@ -24,12 +28,13 @@ import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'js-yaml';
 
-const authService        = new AuthService();
 const userSettingsService = new UserSettingsService();
 const skillsService      = new SkillsService();
 
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
+const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,99}$/;
+const ALLOWED_PROVIDERS = new Set(['github', 'ollama']);
 
 interface EvalCase {
   id: string;
@@ -53,6 +58,12 @@ interface CriterionResult {
 
 function encode(obj: object): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`);
+}
+
+function authErrorResponse(error: unknown): Response | null {
+  const authError = authenticationErrorResponse(error);
+  if (authError) return authError;
+  return null;
 }
 
 async function generateResponse(
@@ -176,25 +187,38 @@ Return ONLY a valid JSON array with exactly ${criteria.length} objects, no other
 }
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) {
-    return new Response(JSON.stringify({ error: 'Not authenticated' }), { status: 401 });
-  }
-  const user = await authService.validateSession(sessionToken);
-  if (!user) {
-    return new Response(JSON.stringify({ error: 'Invalid session' }), { status: 401 });
+  let user;
+  try {
+    user = await requireCurrentAdmin();
+  } catch (error) {
+    return authErrorResponse(error)
+      ?? Response.json({ error: 'Authentication failed' }, { status: 500 });
   }
 
-  const body = await request.json();
-  const { skill: skillName, model: modelId, provider } = body as { skill: string; model: string; provider: string };
+  let body: { skill?: string; model?: string; provider?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const { skill: skillName, model: modelId, provider } = body;
 
-  if (!skillName || !modelId || !provider) {
-    return new Response(JSON.stringify({ error: 'skill, model, and provider are required' }), { status: 400 });
+  if (
+    !skillName
+    || !SKILL_NAME_PATTERN.test(skillName)
+    || !modelId
+    || modelId.length > 200
+    || !provider
+    || !ALLOWED_PROVIDERS.has(provider)
+  ) {
+    return Response.json({ error: 'Invalid skill, model, or provider' }, { status: 400 });
   }
 
   const settings = await userSettingsService.loadUserSettings(user.id);
   const githubToken = settings?.github_token || '';
+  if (provider === 'github' && !githubToken) {
+    return Response.json({ error: 'GitHub token not configured' }, { status: 422 });
+  }
   const userId = user.id;
 
   const stream = new ReadableStream({
@@ -315,15 +339,23 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return new Response(JSON.stringify({ error: 'Not authenticated' }), { status: 401 });
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return new Response(JSON.stringify({ error: 'Invalid session' }), { status: 401 });
+  let user;
+  try {
+    user = await requireCurrentAdmin();
+  } catch (error) {
+    return authErrorResponse(error)
+      ?? Response.json({ error: 'Authentication failed' }, { status: 500 });
+  }
 
   const { searchParams } = new URL(request.url);
   const skillName = searchParams.get('skill');
-  const limit = parseInt(searchParams.get('limit') ?? '10');
+  if (skillName && !SKILL_NAME_PATTERN.test(skillName)) {
+    return Response.json({ error: 'Invalid skill name' }, { status: 400 });
+  }
+  const requestedLimit = Number.parseInt(searchParams.get('limit') ?? '10', 10);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(requestedLimit, 1), 100)
+    : 10;
 
   const query = skillName
     ? `SELECT run_id, skill_name, skill_version, model, provider, AVG(score_pct) as overall_pct, COUNT(*) as case_count, MIN(created_at) as created_at
@@ -344,11 +376,13 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('session_token')?.value;
-  if (!sessionToken) return new Response(JSON.stringify({ error: 'Not authenticated' }), { status: 401 });
-  const user = await authService.validateSession(sessionToken);
-  if (!user) return new Response(JSON.stringify({ error: 'Invalid session' }), { status: 401 });
+  let user;
+  try {
+    user = await requireCurrentAdmin();
+  } catch (error) {
+    return authErrorResponse(error)
+      ?? Response.json({ error: 'Authentication failed' }, { status: 500 });
+  }
 
   await pool.query('DELETE FROM skill_eval_results WHERE user_id = $1', [user.id]);
   return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });

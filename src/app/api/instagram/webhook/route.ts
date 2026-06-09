@@ -14,11 +14,13 @@
 import { InstagramCredentialsService } from '@/app/services/instagram/instagram-credentials.service';
 import { InstagramGraphService } from '@/app/services/instagram/instagram-graph.service';
 import { LLMService } from '@/app/services/llm/llm.service';
+import { verifySha256WebhookSignature } from '@/app/lib/webhook-signature';
 
 const credService      = new InstagramCredentialsService();
 const instagramService = new InstagramGraphService();
 
 const VERIFY_TOKEN = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN ?? 'allerac-ig-webhook';
+const APP_SECRET   = process.env.INSTAGRAM_APP_SECRET ?? '';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN ?? '';
 const OLLAMA_URL   = process.env.OLLAMA_URL ?? 'http://ollama:11434';
 
@@ -35,6 +37,25 @@ const DEFAULT_SYSTEM_PROMPT = `You are a helpful, friendly Instagram DM assistan
 Reply concisely and naturally — this is a DM conversation, not an email.
 Keep replies short (1-3 sentences max). Be warm, professional, and helpful.
 Never reveal you are an AI unless directly asked.`;
+
+interface InstagramWebhookBody {
+  object?: string;
+  entry?: Array<{
+    id?: string;
+    messaging?: Array<{
+      sender?: { id?: string };
+      message?: { mid?: string; text?: string };
+    }>;
+    changes?: Array<{
+      field?: string;
+      value?: {
+        id?: string;
+        text?: string;
+        from?: { id?: string };
+      };
+    }>;
+  }>;
+}
 
 // ── GET — webhook verification ───────────────────────────────────────────────
 
@@ -56,9 +77,21 @@ export async function GET(request: Request) {
 // ── POST — incoming events ───────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  let body: any;
+  if (!APP_SECRET) {
+    console.error('[Instagram Webhook] INSTAGRAM_APP_SECRET is not configured');
+    return new Response('Webhook not configured', { status: 503 });
+  }
+
+  const rawBody = await request.text();
+  const signature = request.headers.get('x-hub-signature-256');
+  if (!verifySha256WebhookSignature(rawBody, signature, APP_SECRET)) {
+    console.warn('[Instagram Webhook] Invalid request signature');
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  let body: InstagramWebhookBody;
   try {
-    body = await request.json();
+    body = JSON.parse(rawBody);
   } catch {
     return new Response('Bad Request', { status: 400 });
   }
@@ -76,7 +109,7 @@ export async function POST(request: Request) {
 
 // ── Event processing ─────────────────────────────────────────────────────────
 
-async function processEvents(body: any) {
+async function processEvents(body: InstagramWebhookBody) {
   if (body.object !== 'instagram') {
     console.log('[Instagram Webhook] Ignoring non-instagram object:', body.object);
     return;

@@ -4,6 +4,67 @@ This document describes the security and reliability work required before Allera
 
 The goal is not to slow feature development. The goal is to make the product safe enough that new features can be added without repeatedly reopening the same classes of risk.
 
+## Current Status (June 9, 2026)
+
+### Priority 1: Security Boundaries - Complete
+
+Completed or substantially implemented:
+
+- Shared session helpers exist in `src/app/lib/auth-session.ts`.
+- Conversation/message ownership checks were added to chat actions and services.
+- Ownership checks were added for documents, notes, jobs, tickets, email accounts, memories, and agent runs.
+- Health and Instagram actions now derive the effective user from the session.
+- RAG, benchmark, domain, setup preference, login redirect, and system dashboard actions now derive identity and privileges from the session.
+- Domain access checks were added to major chat, document, memory, and user-instruction flows.
+- All operational API routes now require a session, an admin session, a verified webhook signature, or an explicit internal Bearer secret.
+- Benchmark, finance, Instagram, search, skill evaluation, logs, chat support, Ollama pull, and the Ollama chat proxy now use shared authentication helpers.
+- Finance, search, Instagram, chat, image editing, and Clippy enforce domain access where applicable.
+- System logs, model downloads, skill evaluation/mutation, backups, updates, pricing, and aggregate metrics are admin-only.
+- Shell working directories, file edit paths, and codebase reads are bounded to the user's workspace.
+- Workspace shell arguments are quoted, and codebase reads reject real-path/symlink escapes.
+- Workspace file, tree, project, process, delete, and command APIs use shared authentication and strict path boundaries.
+- Chat validates provider/model/domain identifiers and payload limits before opening the stream, and preselected skills must be visible to the current user.
+- Instagram DM routes use the account assigned to the current user instead of assuming the user's own credential row.
+- Central log submission requires either a valid user session or the internal `EXECUTOR_SECRET`.
+- Instagram webhook requests require an HMAC signature.
+- System settings reject unknown keys and oversized values.
+- Expensive chat, benchmark, image-editing, and model-download operations now have request-rate and active-concurrency limits.
+- Chat, benchmark, and image-edit limits are isolated per user; model downloads use a global limit across administrators.
+- Streaming operation leases are released in `finally` blocks, and HTTP limit rejections return `429` with `Retry-After` metadata.
+- The limiter matches the current single-app-instance deployment. Before horizontal scaling, move its counters to a shared PostgreSQL or Redis backend as described in [`distributed-rate-limiting.md`](./distributed-rate-limiting.md).
+- Cross-user and authorization regression tests exist for major services, actions, workspace routes, admin-only actions, skill mutation, logs, and Ollama proxy access.
+- Cross-user action tests now cover documents and scheduled jobs, including session-derived ownership and restricted-domain rejection before service access.
+- Administrative route tests verify non-admin rejection, and domain tests verify that client-supplied identities and admin flags are ignored.
+- Ordinary client-facing server actions no longer accept legacy `userId` parameters. Explicit user selectors remain only in admin actions protected by `requireCurrentAdmin`.
+- API routes use the shared `authenticationErrorResponse` mapper for JSON and text `401/403` responses. Instagram OAuth routes retain explicit redirects for authentication failures.
+- The current automated baseline is 42 Jest suites / 356 tests, plus the disposable PostgreSQL schema-equivalence smoke test, `tsc --noEmit`, and production build validation.
+
+### Priority 2: Split the Chat Route - Complete
+
+- `src/app/api/chat/route.ts` was reduced from approximately 806 lines to approximately 303 lines.
+- Request validation, runtime/provider context, image processing, prompt construction, skill resolution, tool allowlisting, tool execution, LLM orchestration, and SSE writing now live in focused modules under `src/app/services/chat`.
+- The route is limited to HTTP authentication/authorization, stream creation, conversation orchestration, context loading, and persistence.
+- Focused Jest coverage exists for request parsing, provider key validation, prompt composition, skill activation, tool allowlisting, workspace rejection, tool loops, image fallback, and SSE behavior.
+
+### Priority 3: Install and Upgrade Strictness - Complete
+
+Completed or substantially implemented:
+
+- Migrations run in sorted order and are tracked in the `_migrations` table.
+- Duplicate migration numbers were resolved, and the runner rejects future duplicates.
+- Each migration and its tracking record run atomically with `ON_ERROR_STOP`.
+- Failed migrations stop deployment without recording a partial success.
+- Docker health dependencies prevent the app from starting before migrations and core services succeed.
+- Install and update scripts perform basic dependency and deployment checks.
+- Updates create and validate a local database backup before pulling code or running migrations.
+- `allerac restore` validates the archive and dump content, creates a pre-restore safety backup, resets the target schema, and imports with `ON_ERROR_STOP`.
+- Migration, update ordering, and restore safety invariants have automated regression coverage.
+- A disposable PostgreSQL smoke test verifies semantic schema equivalence between fresh installs and upgrades from the former duplicate `020/021` migration history.
+- Node.js startup now validates the database URL, executor endpoint, encryption keys, and executor secret before starting background services.
+- The Telegram token service no longer falls back to a public default encryption key.
+- Update failures preserve the previous Git revision and exact backup path, then print phase-specific rollback commands for migration, build, restart, and health-check failures.
+- Deployment verification waits for the app's HTTP healthcheck instead of accepting a merely running container.
+
 ## Priorities
 
 1. Enforce security boundaries everywhere.
