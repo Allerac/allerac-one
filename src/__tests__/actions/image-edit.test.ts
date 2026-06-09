@@ -132,4 +132,23 @@ describe('image editing action', () => {
       error: 'Gemini não retornou uma imagem (SAFETY)',
     });
   });
+
+  it('explains when the user Google key has no image-model quota', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: {
+        status: 'RESOURCE_EXHAUSTED',
+        message: 'Quota exceeded for model gemini-3.1-flash-image',
+      },
+    }), { status: 429 }));
+
+    const result = await editProductImage(PNG_BASE64, { type: 'enhance' });
+
+    expect(result).toEqual({
+      success: false,
+      error: 'A sua Google API key não tem quota disponível para o Gemini 3.1 Flash Image. '
+        + 'Ative o billing no projeto dessa chave no Google AI Studio ou configure outra chave com acesso ao modelo.',
+      code: 'GEMINI_QUOTA_EXCEEDED',
+      keySource: 'user',
+    });
+  });
 });

@@ -605,7 +605,9 @@
     "errNoImage": "Por favor selecione uma imagem primeiro",
     "errCopyFailed": "Erro ao copiar para a área de transferência",
     "errImageRequired": "Por favor selecione uma imagem",
-    "errCaptionRequired": "Por favor adicione uma caption"
+    "errCaptionRequired": "Por favor adicione uma caption",
+    "errGeminiUserQuota": "A tua chave de API do Google não tem quota disponível para o Gemini 3.1 Flash Image. Ativa o billing do projeto desta chave no Google AI Studio ou configura outra chave com acesso ao modelo.",
+    "errGeminiSystemQuota": "A chave de API do Google configurada pelo administrador não tem quota disponível para o Gemini 3.1 Flash Image. Pede ao administrador para ativar o billing do projeto no Google AI Studio ou configurar outra chave."
   },
   "grampeador": {
     "title": "Allerac Assistant",

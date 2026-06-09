@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { editProductImage, type ImageEditOperation } from '@/app/actions/image-edit';
 
 interface ImageEditModalProps {
@@ -29,6 +30,7 @@ export default function ImageEditModal({
   isDarkMode,
   onApply,
 }: ImageEditModalProps) {
+  const t = useTranslations('instagramStudio');
   const [selectedOp, setSelectedOp] = useState<OperationType>('white-background');
   const [prompt, setPrompt] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -58,7 +60,14 @@ export default function ImageEditModal({
           : { type: selectedOp };
 
       const res = await editProductImage(imageBase64, operation);
-      if (!res.success) { setError(res.error); return; }
+      if (!res.success) {
+        if (res.code === 'GEMINI_QUOTA_EXCEEDED') {
+          setError(t(res.keySource === 'system' ? 'errGeminiSystemQuota' : 'errGeminiUserQuota'));
+        } else {
+          setError(res.error);
+        }
+        return;
+      }
 
       const preview = `data:${res.mimeType};base64,${res.resultBase64}`;
       setResult({ base64: res.resultBase64, preview });

@@ -411,7 +411,9 @@
     "errNoImage": "Si us plau selecciona una imatge primer",
     "errCopyFailed": "Error en copiar al porta-retalls",
     "errImageRequired": "Si us plau selecciona una imatge",
-    "errCaptionRequired": "Si us plau afegeix una descripció"
+    "errCaptionRequired": "Si us plau afegeix una descripció",
+    "errGeminiUserQuota": "La teva clau API de Google no té quota disponible per a Gemini 3.1 Flash Image. Activa la facturació del projecte d'aquesta clau a Google AI Studio o configura una altra clau amb accés al model.",
+    "errGeminiSystemQuota": "La clau API de Google de l'administrador no té quota disponible per a Gemini 3.1 Flash Image. Demana a l'administrador que activi la facturació del projecte a Google AI Studio o que configuri una altra clau."
   },
   "scheduledJobs": {
     "title": "Tasques programades",

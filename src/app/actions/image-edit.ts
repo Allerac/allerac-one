@@ -30,18 +30,32 @@ type EditResult =
   | {
       success: false;
       error: string;
-      code?: 'RATE_LIMITED';
+      code?: 'RATE_LIMITED' | 'GEMINI_QUOTA_EXCEEDED';
+      keySource?: GoogleKeySource;
       retryAfterSeconds?: number;
     };
 
-async function getGoogleKey(userId: string): Promise<string> {
+type GoogleKeySource = 'user' | 'system';
+
+class ImageEditError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'GEMINI_QUOTA_EXCEEDED',
+    readonly keySource: GoogleKeySource,
+  ) {
+    super(message);
+    this.name = 'ImageEditError';
+  }
+}
+
+async function getGoogleKey(userId: string): Promise<{ key: string; source: GoogleKeySource }> {
   const [settings, systemSettings] = await Promise.all([
     userSettings.loadUserSettings(userId),
     sysSettings.loadAll(),
   ]);
-  const key = settings?.google_api_key || systemSettings.google_api_key;
-  if (!key) throw new Error('Google API key não configurada. Adiciona em Settings → API Keys.');
-  return key;
+  if (settings?.google_api_key) return { key: settings.google_api_key, source: 'user' };
+  if (systemSettings.google_api_key) return { key: systemSettings.google_api_key, source: 'system' };
+  throw new Error('Google API key não configurada. Adiciona em Settings → API Keys.');
 }
 
 function detectImageMimeType(imageBase64: string): 'image/jpeg' | 'image/png' | 'image/webp' {
@@ -77,6 +91,7 @@ async function geminiImageEdit(
   imageBase64: string,
   operation: ImageEditOperation,
   googleKey: string,
+  keySource: GoogleKeySource,
 ): Promise<{ data: string; mimeType: string }> {
   const res = await fetch(`${GEMINI_BASE}/${GEMINI_IMAGE_MODEL}:generateContent`, {
     method: 'POST',
@@ -100,8 +115,27 @@ async function geminiImageEdit(
     }),
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Gemini Image (${res.status}): ${text}`);
+    const body = await res.json().catch(() => null) as {
+      error?: { status?: string; message?: string };
+    } | null;
+    const message = body?.error?.message || `HTTP ${res.status}`;
+
+    if (res.status === 429 && (
+      body?.error?.status === 'RESOURCE_EXHAUSTED'
+      || message.toLowerCase().includes('quota exceeded')
+    )) {
+      const location = keySource === 'user'
+        ? 'A sua Google API key'
+        : 'A Google API key configurada pelo administrador';
+      throw new ImageEditError(
+        `${location} não tem quota disponível para o Gemini 3.1 Flash Image. `
+        + 'Ative o billing no projeto dessa chave no Google AI Studio ou configure outra chave com acesso ao modelo.',
+        'GEMINI_QUOTA_EXCEEDED',
+        keySource,
+      );
+    }
+
+    throw new Error(`Gemini Image (${res.status}): ${message}`);
   }
 
   const result = await res.json();
@@ -120,8 +154,9 @@ async function performImageEdit(
   imageBase64: string,
   operation: ImageEditOperation,
   googleKey: string,
+  keySource: GoogleKeySource,
 ): Promise<EditResult> {
-  const result = await geminiImageEdit(imageBase64, operation, googleKey);
+  const result = await geminiImageEdit(imageBase64, operation, googleKey, keySource);
   const buffer = Buffer.from(result.data, 'base64');
 
   switch (operation.type) {
@@ -186,11 +221,19 @@ export async function editProductImage(
 
     try {
       const googleKey = await getGoogleKey(user.id);
-      return await performImageEdit(imageBase64, operation, googleKey);
+      return await performImageEdit(imageBase64, operation, googleKey.key, googleKey.source);
     } finally {
       limitResult.lease.release();
     }
   } catch (error: any) {
+    if (error instanceof ImageEditError) {
+      return {
+        success: false,
+        error: error.message,
+        code: error.code,
+        keySource: error.keySource,
+      };
+    }
     return { success: false, error: error.message };
   }
 }
