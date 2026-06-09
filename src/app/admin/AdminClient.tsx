@@ -3,8 +3,9 @@
 import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useEffect, useTransition } from 'react';
 import * as adminActions from '@/app/actions/admin';
-import type { AdminUser, AdminDomain, InstagramAccountEntry } from '@/app/actions/admin';
+import type { AdminUser, AdminDomain, InstagramAccountEntry, ApiKeyAuditEntry } from '@/app/actions/admin';
 import type { SystemSettings } from '@/app/services/system/system-settings.service';
+import ApiKeyField from '@/app/components/settings/ApiKeyField';
 
 interface AdminClientProps {
   initialUsers: AdminUser[];
@@ -29,6 +30,13 @@ export default function AdminClient({
   const [sysSettings, setSysSettings] = useState<SystemSettings>(initialSystemSettings);
   const [sysSettingsPending, setSysSettingsPending] = useState(false);
   const [sysSettingsMsg, setSysSettingsMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Audit log state
+  const [auditLog, setAuditLog] = useState<ApiKeyAuditEntry[]>([]);
+
+  useEffect(() => {
+    adminActions.getApiKeyAuditLog(50).then(setAuditLog).catch(() => {});
+  }, []);
 
   // Instagram accounts state
   const [igAccounts, setIgAccounts] = useState<InstagramAccountEntry[]>(initialInstagramAccounts);
@@ -543,22 +551,100 @@ export default function AdminClient({
 
         {/* System Settings */}
         <section>
-          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>System Settings</h2>
-          <div className={`border rounded-lg p-6 ${cardBg} space-y-4`}>
-            {(['github_token', 'anthropic_api_key', 'tavily_api_key', 'google_api_key', 'fal_ai_api_key', 'resend_api_key', 'resend_from_email'] as const).map(key => (
-              <div key={key}>
-                <label className={labelCls}>{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</label>
-                <input
-                  type="password"
-                  value={sysSettings[key] ?? ''}
-                  onChange={e => setSysSettings(prev => ({ ...prev, [key]: e.target.value }))}
-                  disabled={sysSettingsPending}
-                  placeholder="••••••••"
-                  className={inputCls}
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-1 ${textMuted}`}>System Settings</h2>
+          <p className={`text-xs mb-4 ${textMuted}`}>These keys are used as fallback when users have no personal key configured.</p>
+
+          <div className={`border rounded-lg p-6 ${cardBg} space-y-6`}>
+            {/* LLM Providers */}
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>LLM Providers</p>
+              <div className="space-y-5">
+                <ApiKeyField
+                  label="Allerac / GitHub Models"
+                  description="(GPT-4o, Ministral, embeddings)"
+                  placeholder="ghp_... or similar"
+                  provider="github"
+                  hasStoredValue={!!sysSettings.github_token}
+                  value={sysSettings.github_token ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, github_token: v }))}
+                  isDarkMode={isDarkMode}
+                  helpText="Used for GitHub Models API (GPT-4o, embeddings)."
+                />
+                <ApiKeyField
+                  label="Anthropic API Key"
+                  description="(Claude models)"
+                  placeholder="sk-ant-..."
+                  provider="anthropic"
+                  hasStoredValue={!!sysSettings.anthropic_api_key}
+                  value={sysSettings.anthropic_api_key ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, anthropic_api_key: v }))}
+                  isDarkMode={isDarkMode}
+                  helpText="Default key for Claude (Haiku, Sonnet, Opus)."
+                />
+                <ApiKeyField
+                  label="Google API Key"
+                  description="(Gemini models)"
+                  placeholder="AIza..."
+                  provider="google"
+                  hasStoredValue={!!sysSettings.google_api_key}
+                  value={sysSettings.google_api_key ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, google_api_key: v }))}
+                  isDarkMode={isDarkMode}
+                  helpText="Default key for Gemini models."
                 />
               </div>
-            ))}
-            <div className="flex items-center gap-3 pt-1">
+            </div>
+
+            {/* Services */}
+            <div className={`border-t pt-5 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Services</p>
+              <div className="space-y-5">
+                <ApiKeyField
+                  label="Tavily API Key"
+                  description="(web search)"
+                  placeholder="tvly-..."
+                  provider="tavily"
+                  hasStoredValue={!!sysSettings.tavily_api_key}
+                  value={sysSettings.tavily_api_key ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, tavily_api_key: v }))}
+                  isDarkMode={isDarkMode}
+                  helpText="Default key for web search tool."
+                />
+                <ApiKeyField
+                  label="FAL.ai API Key"
+                  description="(image editing)"
+                  placeholder="fal-..."
+                  hasStoredValue={!!sysSettings.fal_ai_api_key}
+                  value={sysSettings.fal_ai_api_key ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, fal_ai_api_key: v }))}
+                  isDarkMode={isDarkMode}
+                  helpText="Used for background removal and image processing."
+                />
+                <ApiKeyField
+                  label="Resend API Key"
+                  description="(email sending)"
+                  placeholder="re_..."
+                  hasStoredValue={!!sysSettings.resend_api_key}
+                  value={sysSettings.resend_api_key ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, resend_api_key: v }))}
+                  isDarkMode={isDarkMode}
+                  helpText="Used to send transactional emails."
+                />
+                <ApiKeyField
+                  label="Resend From Email"
+                  description="(sender address)"
+                  placeholder="noreply@yourdomain.com"
+                  hasStoredValue={!!sysSettings.resend_from_email}
+                  value={sysSettings.resend_from_email ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, resend_from_email: v }))}
+                  isDarkMode={isDarkMode}
+                  inputType="email"
+                  helpText="The sender address for outgoing emails."
+                />
+              </div>
+            </div>
+
+            <div className={`flex items-center gap-3 pt-1 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`}>
               <button onClick={handleSaveSystemSettings} disabled={sysSettingsPending} className={btnPrimary}>
                 {sysSettingsPending ? 'Saving...' : 'Save Settings'}
               </button>
@@ -741,6 +827,61 @@ export default function AdminClient({
                 </button>
               </div>
             </form>
+          </div>
+        </section>
+
+        {/* API Key Audit Log */}
+        <section>
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>API Key Audit Log</h2>
+          <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
+            {auditLog.length === 0 ? (
+              <p className={`px-6 py-4 text-sm ${textMuted}`}>No key changes recorded yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
+                    <th className="px-4 py-3 text-left font-medium">When</th>
+                    <th className="px-4 py-3 text-left font-medium">Scope</th>
+                    <th className="px-4 py-3 text-left font-medium">Key</th>
+                    <th className="px-4 py-3 text-left font-medium">Action</th>
+                    <th className="px-4 py-3 text-left font-medium">User</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLog.map((entry, i) => (
+                    <tr key={entry.id} className={`border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
+                      <td className={`px-4 py-2.5 text-xs ${textMuted}`}>
+                        {new Date(entry.changed_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
+                          entry.scope === 'system'
+                            ? d ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700'
+                            : d ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-50 text-blue-700'
+                        }`}>
+                          {entry.scope}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-2.5 font-mono text-xs ${d ? 'text-gray-300' : 'text-gray-700'}`}>
+                        {entry.key_name}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
+                          entry.action === 'set'
+                            ? d ? 'bg-green-900/40 text-green-300' : 'bg-green-50 text-green-700'
+                            : d ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {entry.action}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-2.5 text-xs ${textMuted}`}>
+                        {entry.user_email ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 

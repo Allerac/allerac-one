@@ -39,7 +39,7 @@ export class SystemSettingsService {
     return safeDecrypt(result.rows[0].value_encrypted);
   }
 
-  async set(key: SystemSettingKey, value: string): Promise<void> {
+  async set(key: SystemSettingKey, value: string, changedByUserId?: string): Promise<void> {
     if (!KEY_SET.has(key)) throw new Error('Invalid system setting key');
     if (typeof value !== 'string' || value.length > 10_000) {
       throw new Error('Invalid system setting value');
@@ -51,12 +51,19 @@ export class SystemSettingsService {
        ON CONFLICT (key) DO UPDATE SET value_encrypted = EXCLUDED.value_encrypted, updated_at = NOW()`,
       [key, encrypted]
     );
+    if (changedByUserId) {
+      const action = value.trim() ? 'set' : 'cleared';
+      pool.query(
+        `INSERT INTO api_key_audit_log (user_id, scope, key_name, action) VALUES ($1, 'system', $2, $3)`,
+        [changedByUserId, key, action]
+      ).catch(() => {});
+    }
   }
 
-  async saveAll(settings: Partial<SystemSettings>): Promise<void> {
+  async saveAll(settings: Partial<SystemSettings>, changedByUserId?: string): Promise<void> {
     for (const [key, value] of Object.entries(settings)) {
       if (KEY_SET.has(key) && value !== undefined) {
-        await this.set(key as SystemSettingKey, value ?? '');
+        await this.set(key as SystemSettingKey, value ?? '', changedByUserId);
       }
     }
   }

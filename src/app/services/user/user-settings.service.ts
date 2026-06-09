@@ -1,14 +1,17 @@
-// User settings service for managing API keys
-
 import pool from '@/app/clients/db';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 
+async function writeAuditLog(userId: string, keyName: string, value: string | undefined) {
+  if (value === undefined) return;
+  const action = value ? 'set' : 'cleared';
+  pool.query(
+    `INSERT INTO api_key_audit_log (user_id, scope, key_name, action) VALUES ($1, 'user', $2, $3)`,
+    [userId, keyName, action]
+  ).catch(() => {});
+}
+
 export class UserSettingsService {
 
-  /**
-   * Load user settings (API keys) from database
-   * Decrypts sensitive fields before returning
-   */
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
@@ -16,13 +19,9 @@ export class UserSettingsService {
         [userId]
       );
 
-      if (res.rows.length === 0) {
-        return null;
-      }
+      if (res.rows.length === 0) return null;
 
       const row = res.rows[0];
-
-      // Decrypt tokens before returning
       return {
         github_token: row.github_token ? safeDecrypt(row.github_token) : null,
         tavily_api_key: row.tavily_api_key ? safeDecrypt(row.tavily_api_key) : null,
@@ -42,20 +41,14 @@ export class UserSettingsService {
     }
   }
 
-  /**
-   * Save or update user API keys
-   * Encrypts sensitive fields before storing
-   */
   async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string) {
     try {
-      // Encrypt tokens before storing
       const encryptedGithubToken = githubToken ? encrypt(githubToken) : undefined;
       const encryptedTavilyKey = tavilyApiKey ? encrypt(tavilyApiKey) : undefined;
       const encryptedTelegramToken = telegramBotToken ? encrypt(telegramBotToken) : undefined;
       const encryptedGoogleKey = googleApiKey ? encrypt(googleApiKey) : undefined;
       const encryptedAnthropicKey = anthropicApiKey ? encrypt(anthropicApiKey) : undefined;
 
-      // Check if settings already exist (query directly to avoid decrypt overhead)
       const existingCheck = await pool.query(
         'SELECT 1 FROM user_settings WHERE user_id = $1',
         [userId]
@@ -109,6 +102,13 @@ export class UserSettingsService {
           [userId, encryptedGithubToken || '', encryptedTavilyKey || '', encryptedTelegramToken || '', encryptedGoogleKey || '', encryptedAnthropicKey || '']
         );
       }
+
+      // Fire-and-forget audit log for API key fields only
+      writeAuditLog(userId, 'github_token', githubToken);
+      writeAuditLog(userId, 'tavily_api_key', tavilyApiKey);
+      writeAuditLog(userId, 'telegram_bot_token', telegramBotToken);
+      writeAuditLog(userId, 'google_api_key', googleApiKey);
+      writeAuditLog(userId, 'anthropic_api_key', anthropicApiKey);
 
       return { success: true };
     } catch (error) {

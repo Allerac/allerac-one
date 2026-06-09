@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import ApiKeyField from '@/app/components/settings/ApiKeyField';
 
 interface TokenConfigurationProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface TokenConfigurationProps {
   tavilyApiKey: string;
   telegramBotToken: string;
   anthropicApiKey: string;
+  googleApiKey?: string;
   tokenInput: string;
   setTokenInput: (value: string) => void;
   tavilyKeyInput: string;
@@ -18,6 +20,8 @@ interface TokenConfigurationProps {
   setTelegramBotTokenInput: (value: string) => void;
   anthropicApiKeyInput: string;
   setAnthropicApiKeyInput: (value: string) => void;
+  googleApiKeyInput?: string;
+  setGoogleApiKeyInput?: (value: string) => void;
   locationInput: string;
   setLocationInput: (value: string) => void;
   onSave: () => void;
@@ -31,6 +35,7 @@ export default function TokenConfiguration({
   tavilyApiKey,
   telegramBotToken,
   anthropicApiKey,
+  googleApiKey = '',
   tokenInput,
   setTokenInput,
   tavilyKeyInput,
@@ -39,9 +44,11 @@ export default function TokenConfiguration({
   setTelegramBotTokenInput,
   anthropicApiKeyInput,
   setAnthropicApiKeyInput,
+  googleApiKeyInput = '',
+  setGoogleApiKeyInput,
   locationInput,
   setLocationInput,
-  onSave
+  onSave,
 }: TokenConfigurationProps) {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -77,141 +84,92 @@ export default function TokenConfiguration({
       }
     );
   }
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape' && isOpen) onClose();
     };
-    
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
+  const hasAnyValue = tokenInput.trim() || tavilyKeyInput.trim() || telegramBotTokenInput.trim() || anthropicApiKeyInput.trim() || locationInput.trim() || googleApiKeyInput.trim();
+
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.3)' }}>
-      <div className={`rounded-lg shadow-xl p-6 w-full max-w-md ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-        <h2 className={`text-2xl font-bold mb-4 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Configure API Keys</h2>
-        <div className="space-y-4">
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Allerac API Key
-            </label>
-            <input
-              type="password"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              placeholder={githubToken ? '••••••••' : 'Enter your Allerac API key...'}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-            />
-            <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Your API key unlocks Pro models (GPT-4o, Ministral, Gemini). Contact Allerac to get yours.
-            </p>
-          </div>
-          
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Tavily API Key (Optional - for web search)
-            </label>
-            <input
-              type="password"
-              value={tavilyKeyInput}
-              onChange={(e) => setTavilyKeyInput(e.target.value)}
-              placeholder={tavilyApiKey ? '••••••••' : 'tvly-...'}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-            />
-            <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Get a free API key at{' '}
-              <a
-                href="https://app.tavily.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-600 hover:underline"
-              >
-                tavily.com
-              </a>
-              {' '}to enable web search capabilities
-            </p>
-          </div>
+    <div className="fixed inset-0 flex items-center justify-center z-50 overflow-y-auto py-8" style={{ backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.3)' }}>
+      <div className={`rounded-lg shadow-xl p-6 w-full max-w-md mx-4 ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+        <h2 className={`text-2xl font-bold mb-5 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Configure API Keys</h2>
 
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Anthropic API Key (Optional - for Claude models)
-            </label>
-            <input
-              type="password"
-              value={anthropicApiKeyInput}
-              onChange={(e) => setAnthropicApiKeyInput(e.target.value)}
-              placeholder={anthropicApiKey ? '••••••••' : 'sk-ant-...'}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-            />
-            <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Get an API key at{' '}
-              <a
-                href="https://console.anthropic.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-600 hover:underline"
-              >
-                console.anthropic.com
-              </a>
-              {' '}to use Claude models (Haiku, Sonnet, Opus)
-            </p>
-          </div>
+        <div className="space-y-5">
+          <ApiKeyField
+            label="Allerac API Key"
+            description="(Pro models)"
+            placeholder="Enter your Allerac API key..."
+            provider="github"
+            hasStoredValue={!!githubToken}
+            value={tokenInput}
+            onChange={setTokenInput}
+            isDarkMode={isDarkMode}
+            helpText="Unlocks GPT-4o, Ministral, Gemini. Contact Allerac to get yours."
+          />
 
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Google Models API Key (Optional - for Gemini models)
-            </label>
-            <input
-              type="password"
-              placeholder="Enter your Google API key..."
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-            />
-            <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Get your API key from{' '}
-              <a
-                href="https://aistudio.google.com/apikey"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-600 hover:underline"
-              >
-                Google AI Studio
-              </a>
-              {' '}(aistudio.google.com) to use Gemini models
-            </p>
-          </div>
+          <ApiKeyField
+            label="Tavily API Key"
+            description="(optional — web search)"
+            placeholder="tvly-..."
+            provider="tavily"
+            hasStoredValue={!!tavilyApiKey}
+            value={tavilyKeyInput}
+            onChange={setTavilyKeyInput}
+            isDarkMode={isDarkMode}
+            helpUrl="https://app.tavily.com"
+            helpText="Get a free key at "
+          />
 
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Telegram Bot Token (Optional - for Telegram access)
-            </label>
-            <input
-              type="password"
-              value={telegramBotTokenInput}
-              onChange={(e) => setTelegramBotTokenInput(e.target.value)}
-              placeholder={telegramBotToken ? '••••••••' : 'Enter bot token...'}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
-            />
-            <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Create a bot via{' '}
-              <a
-                href="https://t.me/BotFather"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-600 hover:underline"
-              >
-                @BotFather
-              </a>
-              {' '}on Telegram to get your token
-            </p>
-          </div>
+          <ApiKeyField
+            label="Anthropic API Key"
+            description="(optional — Claude models)"
+            placeholder="sk-ant-..."
+            provider="anthropic"
+            hasStoredValue={!!anthropicApiKey}
+            value={anthropicApiKeyInput}
+            onChange={setAnthropicApiKeyInput}
+            isDarkMode={isDarkMode}
+            helpUrl="https://console.anthropic.com"
+            helpText="Get a key at "
+          />
 
+          <ApiKeyField
+            label="Google API Key"
+            description="(optional — Gemini models)"
+            placeholder="Enter your Google API key..."
+            provider="google"
+            hasStoredValue={!!googleApiKey}
+            value={googleApiKeyInput}
+            onChange={setGoogleApiKeyInput ?? (() => {})}
+            isDarkMode={isDarkMode}
+            helpUrl="https://aistudio.google.com/apikey"
+            helpText="Get a key at Google AI Studio: "
+          />
+
+          <ApiKeyField
+            label="Telegram Bot Token"
+            description="(optional — Telegram access)"
+            placeholder="Enter bot token..."
+            hasStoredValue={!!telegramBotToken}
+            value={telegramBotTokenInput}
+            onChange={setTelegramBotTokenInput}
+            isDarkMode={isDarkMode}
+            helpUrl="https://t.me/BotFather"
+            helpText="Create a bot via @BotFather: "
+          />
+
+          {/* Location field */}
           <div>
-            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Your Location (Optional - for weather and local context)
+            <label className={`block text-sm font-medium mb-1.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Your Location <span className={`text-xs font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(optional — weather & local context)</span>
             </label>
             <div className="flex gap-2">
               <input
@@ -219,7 +177,7 @@ export default function TokenConfiguration({
                 value={locationInput}
                 onChange={(e) => { setLocationInput(e.target.value); setLocationError(null); }}
                 placeholder="e.g. Lisbon, Portugal"
-                className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
+                className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm ${isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'}`}
               />
               <button
                 onClick={detectLocation}
@@ -239,23 +197,23 @@ export default function TokenConfiguration({
                 )}
               </button>
             </div>
-            {locationError && <p className="text-xs mt-1 text-red-500">{locationError}</p>}
-            {!locationError && <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Used to answer questions like "what&apos;s the weather here?". Click 📍 to detect automatically.
-            </p>}
+            {locationError
+              ? <p className="text-xs mt-1 text-red-500">{locationError}</p>
+              : <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Used for "what&apos;s the weather here?". Click 📍 to auto-detect.</p>
+            }
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-1">
             <button
               onClick={onSave}
-              disabled={!tokenInput.trim() && !tavilyKeyInput.trim() && !telegramBotTokenInput.trim() && !anthropicApiKeyInput.trim() && !locationInput.trim()}
-              className="flex-1 px-4 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              disabled={!hasAnyValue}
+              className="flex-1 px-4 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
             >
               Save Keys
             </button>
             <button
               onClick={onClose}
-              className={`flex-1 px-4 py-2 rounded-md transition-colors ${isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'}`}
+              className={`flex-1 px-4 py-2 rounded-md transition-colors text-sm font-medium ${isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
             >
               {githubToken || telegramBotToken ? 'Cancel' : 'Skip for Now'}
             </button>

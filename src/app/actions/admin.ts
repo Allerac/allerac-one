@@ -248,13 +248,36 @@ export async function getSystemSettings(): Promise<SystemSettings> {
 export async function saveSystemSettings(
   settings: Partial<SystemSettings>
 ): Promise<{ success: true } | { success: false; error: string }> {
-  await assertAdmin();
+  const admin = await assertAdmin();
   try {
-    await systemSettingsService.saveAll(settings);
+    await systemSettingsService.saveAll(settings, admin.id);
     return { success: true };
   } catch {
     return { success: false, error: 'Failed to save settings' };
   }
+}
+
+export interface ApiKeyAuditEntry {
+  id: number;
+  user_id: string | null;
+  user_email: string | null;
+  scope: 'user' | 'system';
+  key_name: string;
+  action: 'set' | 'cleared';
+  changed_at: string;
+}
+
+export async function getApiKeyAuditLog(limit = 50): Promise<ApiKeyAuditEntry[]> {
+  await assertAdmin();
+  const result = await pool.query(
+    `SELECT l.id, l.user_id, u.email AS user_email, l.scope, l.key_name, l.action, l.changed_at
+     FROM api_key_audit_log l
+     LEFT JOIN users u ON u.id = l.user_id
+     ORDER BY l.changed_at DESC
+     LIMIT $1`,
+    [Math.min(limit, 200)]
+  );
+  return result.rows;
 }
 
 // ─── Instagram Accounts ───────────────────────────────────────────────────────
