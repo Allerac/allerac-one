@@ -138,7 +138,8 @@ export default function InstagramPostStudio({
   };
 
   const handleGenerateAll = async () => {
-    const imageInput = images[0]?.base64 || imageUrl;
+    const selectedImageIndex = Math.min(previewIndex, Math.max(0, images.length - 1));
+    const imageInput = images[selectedImageIndex]?.base64 || imageUrl;
     if (!imageInput) { setError(t('errNoImage')); return; }
     setIsGenerating(true);
     setError('');
@@ -354,12 +355,45 @@ export default function InstagramPostStudio({
                 {/* Thumbnail strip */}
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {images.map((img, i) => (
-                    <div key={i} className={`relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border ${borderIn}`}>
+                    <div
+                      key={`${img.name}-${i}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setPreviewIndex(i)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setPreviewIndex(i);
+                        }
+                      }}
+                      aria-label={t('selectImage', { number: i + 1 })}
+                      aria-pressed={i === clampedPreviewIndex}
+                      className={`relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 transition ${
+                        i === clampedPreviewIndex
+                          ? 'border-brand-500 ring-2 ring-brand-500/30'
+                          : borderIn
+                      }`}
+                    >
                       <img src={img.preview} alt={img.name} className="w-full h-full object-cover" />
                       <button
-                        onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setImages(prev => prev.filter((_, j) => j !== i));
+                          setPreviewIndex(current => {
+                            if (current > i) return current - 1;
+                            if (current === i) return Math.max(0, current - 1);
+                            return current;
+                          });
+                        }}
+                        aria-label={t('removeImage', { number: i + 1 })}
                         className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/70 hover:bg-red-600 text-white text-[10px] rounded-full flex items-center justify-center leading-none"
                       >×</button>
+                      {i === clampedPreviewIndex && images.length > 1 && (
+                        <span className="absolute bottom-0.5 left-0.5 px-1 py-0.5 rounded bg-brand-600 text-white text-[9px] leading-none">
+                          {t('selected')}
+                        </span>
+                      )}
                     </div>
                   ))}
                   {imageUrl && images.length === 0 && (
@@ -394,7 +428,7 @@ export default function InstagramPostStudio({
                   disabled={isGenerating}
                   className="mt-3 w-full px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition"
                 >
-                  {isGenerating ? t('generating') : t('generateWithAI')}
+                  {isGenerating ? t('generating') : t('generateCaptionWithAI')}
                 </button>
 
                 <div className="mt-3">
@@ -431,7 +465,7 @@ export default function InstagramPostStudio({
                 className={`mt-2 w-full px-3 py-2 rounded-lg border ${borderIn} ${txtSub} hover:border-brand-500 hover:text-brand-400 text-sm transition flex items-center justify-center gap-2`}
               >
                 <span>✨</span>
-                <span>Editar com IA</span>
+                <span>{t('editPhotosWithAI')}</span>
               </button>
             )}
           </div>

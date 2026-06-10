@@ -101,7 +101,7 @@ export default function ImageEditModal({
 
         {/* Header */}
         <div className={`flex-shrink-0 flex items-center justify-between px-5 py-4 border-b ${border}`}>
-          <h2 className={`text-sm font-semibold ${txt}`}>✨ Editar com IA</h2>
+          <h2 className={`text-sm font-semibold ${txt}`}>✨ {t('editPhotosWithAI')}</h2>
           <button onClick={handleClose} className={`${txtMuted} hover:${txt} text-xl font-light leading-none`}>×</button>
         </div>
 
