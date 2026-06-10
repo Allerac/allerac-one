@@ -15,7 +15,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, anthropic_api_key, location, timezone, onboarding_completed, selected_model, language FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, google_key_preference, anthropic_api_key, location, timezone, onboarding_completed, selected_model, language FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -28,6 +28,7 @@ export class UserSettingsService {
         telegram_bot_token: row.telegram_bot_token ? safeDecrypt(row.telegram_bot_token) : null,
         system_message: row.system_message || null,
         google_api_key: row.google_api_key ? safeDecrypt(row.google_api_key) : null,
+        google_key_preference: row.google_key_preference || 'personal',
         anthropic_api_key: row.anthropic_api_key ? safeDecrypt(row.anthropic_api_key) : null,
         location: row.location || null,
         timezone: row.timezone || null,
@@ -39,6 +40,28 @@ export class UserSettingsService {
       console.error('Error loading user settings:', error);
       return null;
     }
+  }
+
+  async setGoogleKeyPreference(userId: string, preference: 'personal' | 'allerac') {
+    await pool.query(
+      `INSERT INTO user_settings (user_id, google_key_preference)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE SET google_key_preference = $2`,
+      [userId, preference],
+    );
+    return { success: true };
+  }
+
+  async clearGoogleApiKey(userId: string) {
+    await pool.query(
+      `INSERT INTO user_settings (user_id, google_api_key, google_key_preference)
+       VALUES ($1, NULL, 'allerac')
+       ON CONFLICT (user_id) DO UPDATE
+       SET google_api_key = NULL, google_key_preference = 'allerac'`,
+      [userId],
+    );
+    await writeAuditLog(userId, 'google_api_key', '');
+    return { success: true };
   }
 
   async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string) {
@@ -56,7 +79,7 @@ export class UserSettingsService {
 
       if (existingCheck.rows.length > 0) {
         const updateFields: string[] = [];
-        const values: any[] = [];
+        const values: unknown[] = [];
         let paramCount = 1;
 
         if (encryptedGithubToken !== undefined) {
@@ -74,6 +97,8 @@ export class UserSettingsService {
         if (encryptedGoogleKey !== undefined) {
           updateFields.push(`google_api_key = $${paramCount++}`);
           values.push(encryptedGoogleKey);
+          updateFields.push(`google_key_preference = $${paramCount++}`);
+          values.push('personal');
         }
         if (encryptedAnthropicKey !== undefined) {
           updateFields.push(`anthropic_api_key = $${paramCount++}`);
@@ -97,9 +122,20 @@ export class UserSettingsService {
         }
       } else {
         await pool.query(
-          `INSERT INTO user_settings (user_id, github_token, tavily_api_key, telegram_bot_token, google_api_key, anthropic_api_key)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [userId, encryptedGithubToken || '', encryptedTavilyKey || '', encryptedTelegramToken || '', encryptedGoogleKey || '', encryptedAnthropicKey || '']
+          `INSERT INTO user_settings (
+             user_id, github_token, tavily_api_key, telegram_bot_token,
+             google_api_key, google_key_preference, anthropic_api_key
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            userId,
+            encryptedGithubToken || '',
+            encryptedTavilyKey || '',
+            encryptedTelegramToken || '',
+            encryptedGoogleKey || '',
+            encryptedGoogleKey ? 'personal' : 'allerac',
+            encryptedAnthropicKey || '',
+          ]
         );
       }
 

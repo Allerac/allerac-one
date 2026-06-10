@@ -17,6 +17,16 @@ export async function saveUserSettings(githubToken?: string, tavilyApiKey?: stri
     return await userSettingsService.saveUserSettings(user.id, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location, timezone);
 }
 
+export async function setGoogleKeyPreference(preference: 'personal' | 'allerac') {
+    const user = await requireCurrentUser();
+    return userSettingsService.setGoogleKeyPreference(user.id, preference);
+}
+
+export async function clearGoogleApiKey() {
+    const user = await requireCurrentUser();
+    return userSettingsService.clearGoogleApiKey(user.id);
+}
+
 export async function saveSelectedModel(modelId: string) {
     const user = await requireCurrentUser();
     return await userSettingsService.saveSelectedModel(user.id, modelId);

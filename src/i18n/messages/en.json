@@ -237,7 +237,14 @@
     "updateCheckFailed": "Failed to check for updates",
     "googleApiKey": "Google API Key",
     "googleApiKeyPlaceholder": "AIza...",
-    "googleApiKeyHint": "Get your API key from Google AI Studio (aistudio.google.com)"
+    "googleApiKeyHint": "Get your API key from Google AI Studio (aistudio.google.com)",
+    "googleKeyUsage": "Key used for image editing",
+    "googleKeyUsageHint": "Choose who pays for Google image edits.",
+    "usePersonalGoogleKey": "Use my personal key",
+    "personalGoogleKeyHint": "Does not consume Allerac credits.",
+    "useAlleracGoogleKey": "Use the Allerac key",
+    "alleracGoogleKeyHint": "Consumes credits from your plan.",
+    "removePersonalGoogleKey": "Remove my personal key"
   },
   "backup": {
     "title": "Backups",

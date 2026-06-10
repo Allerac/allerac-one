@@ -237,7 +237,14 @@
     "updateCheckFailed": "Error al buscar actualizaciones",
     "googleApiKey": "Google API Key",
     "googleApiKeyPlaceholder": "AIza...",
-    "googleApiKeyHint": "Obtén tu clave en Google AI Studio (aistudio.google.com)"
+    "googleApiKeyHint": "Obtén tu clave en Google AI Studio (aistudio.google.com)",
+    "googleKeyUsage": "Clave utilizada para editar imágenes",
+    "googleKeyUsageHint": "Elige quién paga las ediciones de imagen con Google.",
+    "usePersonalGoogleKey": "Usar mi clave personal",
+    "personalGoogleKeyHint": "No consume créditos Allerac.",
+    "useAlleracGoogleKey": "Usar la clave de Allerac",
+    "alleracGoogleKeyHint": "Consume créditos de tu plan.",
+    "removePersonalGoogleKey": "Eliminar mi clave personal"
   },
   "backup": {
     "title": "Copias de Seguridad",

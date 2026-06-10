@@ -1346,6 +1346,7 @@ const savedModel = localStorage.getItem('selected_model');
         githubToken={githubToken}
         tavilyApiKey={tavilyApiKey}
         googleApiKey={googleApiKey}
+        setGoogleApiKey={setGoogleApiKey}
         anthropicApiKey={anthropicApiKey}
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}

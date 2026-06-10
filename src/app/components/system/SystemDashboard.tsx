@@ -22,6 +22,7 @@ interface SystemDashboardProps {
   githubToken: string;
   tavilyApiKey: string;
   googleApiKey: string;
+  setGoogleApiKey: (v: string) => void;
   anthropicApiKey: string;
   tokenInput: string;
   setTokenInput: (v: string) => void;
@@ -59,6 +60,7 @@ export default function SystemDashboardModal({
   githubToken,
   tavilyApiKey,
   googleApiKey,
+  setGoogleApiKey,
   anthropicApiKey,
   tokenInput,
   setTokenInput,
@@ -340,6 +342,7 @@ export default function SystemDashboardModal({
                 githubToken={githubToken}
                 tavilyApiKey={tavilyApiKey}
                 googleApiKey={googleApiKey}
+                setGoogleApiKey={setGoogleApiKey}
                 anthropicApiKey={anthropicApiKey}
                 tokenInput={tokenInput}
                 setTokenInput={setTokenInput}

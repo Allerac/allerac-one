@@ -188,6 +188,28 @@ describe('image editing action', () => {
     expect(fetchMock.mock.calls[0][1].headers['x-goog-api-key']).toBe('system-google-key');
   });
 
+  it('uses the system key when the user explicitly selects Allerac billing', async () => {
+    jest.spyOn(UserSettingsService.prototype, 'loadUserSettings').mockResolvedValue({
+      google_api_key: 'user-google-key',
+      google_key_preference: 'allerac',
+    } as never);
+    const fetchMock = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{
+        content: {
+          parts: [{ inlineData: { mimeType: 'image/png', data: PNG_BASE64 } }],
+        },
+      }],
+    }), { status: 200 }));
+    global.fetch = fetchMock;
+
+    const result = await editProductImage(PNG_BASE64, { type: 'enhance' });
+
+    if (!result.success) throw new Error(result.error);
+    expect(result.credentialSource).toBe('system');
+    expect(creditService.reserve).toHaveBeenCalled();
+    expect(fetchMock.mock.calls[0][1].headers['x-goog-api-key']).toBe('system-google-key');
+  });
+
   it('blocks system-key image editing when the user has insufficient credits', async () => {
     jest.spyOn(UserSettingsService.prototype, 'loadUserSettings').mockResolvedValue({} as never);
     creditService.reserve.mockRejectedValueOnce(new InsufficientCreditsError(100_000, 60_000));

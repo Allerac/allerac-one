@@ -90,8 +90,11 @@ async function getGoogleKey(userId: string): Promise<{ key: string; source: Goog
     userSettings.loadUserSettings(userId),
     sysSettings.loadAll(),
   ]);
-  if (settings?.google_api_key) return { key: settings.google_api_key, source: 'user' };
+  if (settings?.google_key_preference !== 'allerac' && settings?.google_api_key) {
+    return { key: settings.google_api_key, source: 'user' };
+  }
   if (systemSettings.google_api_key) return { key: systemSettings.google_api_key, source: 'system' };
+  if (settings?.google_api_key) return { key: settings.google_api_key, source: 'user' };
   throw new Error('Google API key não configurada. Adiciona em Settings → API Keys.');
 }
 

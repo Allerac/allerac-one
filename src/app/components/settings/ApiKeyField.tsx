@@ -38,6 +38,10 @@ export default function ApiKeyField({
 
   const canTest = !!provider && value.trim().length > 0;
 
+  const displayedStatus = status === 'configured' || status === 'idle'
+    ? hasStoredValue ? 'configured' : 'idle'
+    : status;
+
   async function handleTest() {
     if (!provider || !value.trim()) return;
     setStatus('testing');
@@ -72,7 +76,7 @@ export default function ApiKeyField({
             </span>
           )}
         </label>
-        <StatusBadge status={status} isDarkMode={isDarkMode} />
+        <StatusBadge status={displayedStatus} isDarkMode={isDarkMode} />
       </div>
 
       <div className="flex gap-2">

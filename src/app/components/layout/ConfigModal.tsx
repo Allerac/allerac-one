@@ -100,6 +100,7 @@ export default function ConfigModal({ isOpen, onClose, userId, userName, userEma
       githubToken={githubToken}
       tavilyApiKey={tavilyApiKey}
       googleApiKey={googleApiKey}
+      setGoogleApiKey={setGoogleApiKey}
       anthropicApiKey={anthropicApiKey}
       tokenInput={tokenInput}
       setTokenInput={setTokenInput}
