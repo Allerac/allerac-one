@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { ALLERAC_DOMAINS, getDomainByKey, type AlleracDomain } from './allerac-domains';
 import { useTheme } from '@/app/context/ThemeContext';
 import { updateLanguage } from '@/app/actions/user';
+import { getMyCreditBalance } from '@/app/actions/credits';
+import type { CreditBalance } from '@/app/services/credits/credit.service';
 import DomainSkillsModal from '@/app/components/hub/DomainSkillsModal';
 import ConfigModal from './ConfigModal';
 
@@ -35,14 +37,18 @@ const RAISED  = '#ffffff #808080 #808080 #ffffff';
 const SUNKEN  = '#808080 #ffffff #ffffff #808080';
 const TRAY_BG = '#c0c0c0';
 
-export default function AlleracTaskbar({ domainKey, domainName, domainIcon, userId, userName, userEmail, isAdmin, allowedDomains, onLogout }: Props) {
+export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName, userEmail, isAdmin, allowedDomains, onLogout }: Props) {
   const router = useRouter();
   const { isDark, toggleDark } = useTheme();
   const locale = useLocale();
+  const t = useTranslations('userSettings');
   const [langPending, startLangTransition] = useTransition();
   const [time, setTime]               = useState('');
   const [startOpen, setStartOpen]     = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [creditBalance, setCreditBalance] = useState<CreditBalance | null>(null);
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [creditLoadFailed, setCreditLoadFailed] = useState(false);
   const [openDomains, setOpenDomains] = useState<string[]>([]);
   const [domainsModalOpen, setDomainsModalOpen] = useState(false);
   const [configModalOpen, setConfigModalOpen]   = useState(false);
@@ -73,14 +79,17 @@ export default function AlleracTaskbar({ domainKey, domainName, domainIcon, user
 
   // ── Track open domains in sessionStorage ('hub' = desktop, no chip) ───────
   useEffect(() => {
+    let updated: string[];
     if (domainKey === 'hub') {
-      setOpenDomains(JSON.parse(sessionStorage.getItem(OPEN_DOMAINS_KEY) ?? '[]'));
-      return;
+      updated = JSON.parse(sessionStorage.getItem(OPEN_DOMAINS_KEY) ?? '[]');
+    } else {
+      const stored: string[] = JSON.parse(sessionStorage.getItem(OPEN_DOMAINS_KEY) ?? '[]');
+      updated = stored.includes(domainKey) ? stored : [...stored, domainKey];
+      sessionStorage.setItem(OPEN_DOMAINS_KEY, JSON.stringify(updated));
     }
-    const stored: string[] = JSON.parse(sessionStorage.getItem(OPEN_DOMAINS_KEY) ?? '[]');
-    const updated = stored.includes(domainKey) ? stored : [...stored, domainKey];
-    sessionStorage.setItem(OPEN_DOMAINS_KEY, JSON.stringify(updated));
-    setOpenDomains(updated);
+
+    const frame = requestAnimationFrame(() => setOpenDomains(updated));
+    return () => cancelAnimationFrame(frame);
   }, [domainKey]);
 
   // ── Close menus on outside click ──────────────────────────────────────────
@@ -93,6 +102,26 @@ export default function AlleracTaskbar({ domainKey, domainName, domainIcon, user
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, []);
+
+  const toggleUserMenu = () => {
+    const willOpen = !userMenuOpen;
+    setUserMenuOpen(willOpen);
+    if (!willOpen) return;
+
+    setCreditLoading(true);
+    setCreditLoadFailed(false);
+    getMyCreditBalance()
+      .then(balance => {
+        setCreditBalance(balance);
+      })
+      .catch(error => {
+        console.error('[AlleracTaskbar] credit balance load error:', error);
+        setCreditLoadFailed(true);
+      })
+      .finally(() => {
+        setCreditLoading(false);
+      });
+  };
 
   const navigate = (path: string) => {
     setStartOpen(false);
@@ -316,7 +345,7 @@ export default function AlleracTaskbar({ domainKey, domainName, domainIcon, user
           {/* User avatar */}
           <div ref={userRef} style={{ position: 'relative' }}>
             <button
-              onClick={() => setUserMenuOpen(v => !v)}
+              onClick={toggleUserMenu}
               title={userEmail}
               style={{
                 width: 20, height: 20, borderRadius: '50%',
@@ -343,6 +372,25 @@ export default function AlleracTaskbar({ domainKey, domainName, domainIcon, user
                     </div>
                   )}
                   <div style={{ fontSize: 10, color: '#555', fontFamily: 'Arial, sans-serif' }}>{userEmail}</div>
+                </div>
+
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid #808080' }}>
+                  <div style={{ fontSize: 9, color: '#555', fontFamily: 'Arial, sans-serif', marginBottom: 3 }}>
+                    {t('credits')}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 'bold', color: '#000', fontFamily: 'Arial, sans-serif' }}>
+                    {creditLoading && !creditBalance
+                      ? t('loadingCredits')
+                      : creditLoadFailed
+                        ? t('creditsUnavailable')
+                        : creditBalance?.unlimited
+                          ? t('unlimitedCredits')
+                          : t('availableCredits', {
+                              credits: new Intl.NumberFormat(locale, {
+                                maximumFractionDigits: 2,
+                              }).format(creditBalance?.availableCredits ?? 0),
+                            })}
+                  </div>
                 </div>
 
                 {/* Language selector */}

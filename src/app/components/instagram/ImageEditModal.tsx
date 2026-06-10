@@ -1,8 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { editProductImage, type ImageEditOperation } from '@/app/actions/image-edit';
+import {
+  editProductImage,
+  getImageEditBillingInfo,
+  type ImageEditBillingInfo,
+  type ImageEditOperation,
+} from '@/app/actions/image-edit';
 
 interface ImageEditModalProps {
   isOpen: boolean;
@@ -36,6 +41,7 @@ export default function ImageEditModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ base64: string; preview: string } | null>(null);
+  const [billingInfo, setBillingInfo] = useState<ImageEditBillingInfo | null>(null);
 
   const d = isDarkMode;
   const bg      = d ? 'bg-gray-900'  : 'bg-white';
@@ -46,6 +52,11 @@ export default function ImageEditModal({
   const txt     = d ? 'text-white'   : 'text-gray-900';
   const txtSub  = d ? 'text-gray-300': 'text-gray-700';
   const txtMuted = d ? 'text-gray-400': 'text-gray-500';
+
+  useEffect(() => {
+    if (!isOpen) return;
+    getImageEditBillingInfo().then(setBillingInfo).catch(() => setBillingInfo(null));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -63,6 +74,13 @@ export default function ImageEditModal({
       if (!res.success) {
         if (res.code === 'GEMINI_QUOTA_EXCEEDED') {
           setError(t(res.keySource === 'system' ? 'errGeminiSystemQuota' : 'errGeminiUserQuota'));
+        } else if (res.code === 'INSUFFICIENT_CREDITS') {
+          setError(t('errInsufficientCredits', {
+            required: res.requiredCredits ?? 0,
+            available: res.availableCredits ?? 0,
+          }));
+        } else if (res.code === 'CREDIT_ACCOUNT_BLOCKED') {
+          setError(t('errCreditAccountBlocked'));
         } else {
           setError(res.error);
         }
@@ -71,8 +89,17 @@ export default function ImageEditModal({
 
       const preview = `data:${res.mimeType};base64,${res.resultBase64}`;
       setResult({ base64: res.resultBase64, preview });
-    } catch (err: any) {
-      setError(err.message);
+      if (res.credentialSource === 'system' && res.creditsRemaining !== undefined) {
+        setBillingInfo({
+          credentialSource: 'system',
+          estimatedCredits: 10,
+          availableCredits: res.creditsRemaining,
+          unlimited: false,
+          blocked: false,
+        });
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('errImageEditFailed'));
     } finally {
       setIsProcessing(false);
     }
@@ -110,6 +137,20 @@ export default function ImageEditModal({
           {/* Operation selector */}
           {!result && (
             <div>
+              {billingInfo && (
+                <div className={`mb-4 px-3 py-2 rounded-lg border text-xs ${
+                  d ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-indigo-50 border-indigo-100 text-indigo-700'
+                }`}>
+                  {billingInfo.credentialSource === 'user'
+                    ? t('imageEditByok')
+                    : billingInfo.unlimited
+                      ? t('imageEditUnlimited')
+                      : t('imageEditCreditCost', {
+                          cost: billingInfo.estimatedCredits,
+                          balance: billingInfo.availableCredits,
+                        })}
+                </div>
+              )}
               <p className={`text-xs font-semibold uppercase tracking-wider ${txtMuted} mb-3`}>Operação</p>
               <div className="grid grid-cols-2 gap-2">
                 {OPERATIONS.map(op => (

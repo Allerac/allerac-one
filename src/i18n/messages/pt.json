@@ -119,6 +119,11 @@
     "userId": "ID do Usuário",
     "language": "Idioma",
     "selectLanguage": "Selecionar idioma",
+    "credits": "Créditos",
+    "availableCredits": "{credits} disponíveis",
+    "unlimitedCredits": "Ilimitados",
+    "loadingCredits": "Carregando...",
+    "creditsUnavailable": "Saldo indisponível",
     "telegramBotSettings": "Configurações do Bot Telegram",
     "manageBots": "Gerencie seus bots pessoais",
     "logout": "Sair"
@@ -612,7 +617,13 @@
     "errImageRequired": "Por favor selecione uma imagem",
     "errCaptionRequired": "Por favor adicione uma caption",
     "errGeminiUserQuota": "A tua chave de API do Google não tem quota disponível para o Gemini 3.1 Flash Image. Ativa o billing do projeto desta chave no Google AI Studio ou configura outra chave com acesso ao modelo.",
-    "errGeminiSystemQuota": "A chave de API do Google configurada pelo administrador não tem quota disponível para o Gemini 3.1 Flash Image. Pede ao administrador para ativar o billing do projeto no Google AI Studio ou configurar outra chave."
+    "errGeminiSystemQuota": "A chave de API do Google configurada pelo administrador não tem quota disponível para o Gemini 3.1 Flash Image. Pede ao administrador para ativar o billing do projeto no Google AI Studio ou configurar outra chave.",
+    "errInsufficientCredits": "Esta edição requer {required} créditos. O teu saldo disponível é de {available} créditos.",
+    "errCreditAccountBlocked": "A tua conta de créditos Allerac está bloqueada. Contacta o administrador.",
+    "errImageEditFailed": "A edição da imagem falhou. Tenta novamente.",
+    "imageEditByok": "Esta edição usa a tua chave de API do Google e não consome créditos Allerac.",
+    "imageEditUnlimited": "A tua conta tem edições de imagem Allerac ilimitadas.",
+    "imageEditCreditCost": "Esta edição custa {cost} créditos. Saldo disponível: {balance} créditos."
   },
   "grampeador": {
     "title": "Allerac Assistant",

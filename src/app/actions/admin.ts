@@ -6,9 +6,15 @@ import { AuthService } from '@/app/services/auth/auth.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import type { SystemSettings } from '@/app/services/system/system-settings.service';
 import { requireCurrentAdmin } from '@/app/lib/auth-session';
+import {
+  CreditService,
+  type CreditPlan,
+  type OperationPricing,
+} from '@/app/services/credits/credit.service';
 
 const authService = new AuthService();
 const systemSettingsService = new SystemSettingsService();
+const creditService = new CreditService();
 
 async function assertAdmin() {
   return requireCurrentAdmin();
@@ -38,6 +44,12 @@ export interface AdminUser {
   is_active: boolean;
   created_at: string;
   domains: string[];
+  credit_balance: number;
+  credit_reserved: number;
+  credit_unlimited: boolean;
+  credit_blocked: boolean;
+  credit_plan_slug: string | null;
+  credit_plan_name: string | null;
 }
 
 export interface AdminDomain {
@@ -52,11 +64,19 @@ export async function listUsers(): Promise<AdminUser[]> {
   await assertAdmin();
   const result = await pool.query(`
     SELECT u.id, u.email, u.name, u.is_admin, u.is_active, u.created_at,
+           (COALESCE(ca.balance_microusd, 0)::numeric / 10000)::float8 AS credit_balance,
+           (COALESCE(ca.reserved_microusd, 0)::numeric / 10000)::float8 AS credit_reserved,
+           COALESCE(ca.unlimited, false) AS credit_unlimited,
+           COALESCE(ca.blocked, false) AS credit_blocked,
+           cp.slug AS credit_plan_slug,
+           cp.name AS credit_plan_name,
            COALESCE(array_agg(d.slug ORDER BY d.slug) FILTER (WHERE d.slug IS NOT NULL), '{}') AS domains
     FROM users u
+    LEFT JOIN credit_accounts ca ON ca.user_id = u.id
+    LEFT JOIN credit_plans cp ON cp.id = ca.plan_id
     LEFT JOIN user_domain_access uda ON u.id = uda.user_id
     LEFT JOIN domains d ON uda.domain_id = d.id
-    GROUP BY u.id
+    GROUP BY u.id, ca.balance_microusd, ca.reserved_microusd, ca.unlimited, ca.blocked, cp.slug, cp.name
     ORDER BY u.created_at ASC
   `);
   return result.rows;
@@ -132,6 +152,18 @@ export async function createDomainUser(
       [email.toLowerCase(), bcryptHash, isAdmin]
     );
     const userId = userResult.rows[0].id;
+
+    await client.query(
+      `INSERT INTO credit_accounts (
+         user_id, balance_microusd, unlimited, plan_id,
+         period_started_at, period_ends_at
+       )
+       SELECT $1, p.monthly_credits::BIGINT * 10000, false, p.id,
+              NOW(), NOW() + INTERVAL '1 month'
+       FROM credit_plans p
+       WHERE p.slug = $2`,
+      [userId, isAdmin ? 'pro' : 'free'],
+    );
 
     for (const domainId of domainIds) {
       await client.query(
@@ -213,7 +245,15 @@ export async function updateUserRole(
   if (currentUser.id === userId) return { success: false, error: 'Cannot change your own role' };
 
   await pool.query('UPDATE users SET is_admin = $1 WHERE id = $2', [makeAdmin, userId]);
-  return { success: true };
+  try {
+    await creditService.assignPlan(userId, makeAdmin ? 'pro' : 'free', currentUser.id);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Role changed, but default plan assignment failed',
+    };
+  }
 }
 
 export async function resetUserPassword(
@@ -236,6 +276,116 @@ export async function resetUserPassword(
 
   if (result.rowCount === 0) return { success: false, error: 'User not found or is an admin' };
   return { success: true };
+}
+
+// ─── Credits ─────────────────────────────────────────────────────────────────
+
+export async function listCreditPlans(): Promise<CreditPlan[]> {
+  await assertAdmin();
+  return creditService.listPlans();
+}
+
+export async function listOperationPricing(): Promise<OperationPricing[]> {
+  await assertAdmin();
+  return creditService.listOperationPricing();
+}
+
+export async function updateOperationPricing(input: {
+  operationType: string;
+  provider: string;
+  model: string;
+  unit: string;
+  credits: number;
+  providerCost: number | null;
+  providerCostCurrency: string;
+}): Promise<{ success: true; pricing: OperationPricing } | { success: false; error: string }> {
+  const admin = await assertAdmin();
+  if (!/^[a-z0-9_:-]{1,100}$/.test(input.operationType)) {
+    return { success: false, error: 'Invalid operation type' };
+  }
+  if (!/^[a-z0-9_-]{1,50}$/.test(input.provider)) {
+    return { success: false, error: 'Invalid provider' };
+  }
+  if (!/^[a-zA-Z0-9._:-]{1,150}$/.test(input.model)) {
+    return { success: false, error: 'Invalid model' };
+  }
+  if (!/^[a-z0-9_.-]{1,50}$/.test(input.unit)) {
+    return { success: false, error: 'Invalid pricing unit' };
+  }
+  if (!/^[A-Z]{3}$/.test(input.providerCostCurrency)) {
+    return { success: false, error: 'Invalid provider cost currency' };
+  }
+  try {
+    const pricing = await creditService.updateOperationPricing({
+      ...input,
+      adminUserId: admin.id,
+    });
+    return { success: true, pricing };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update operation pricing',
+    };
+  }
+}
+
+export async function assignUserCreditPlan(
+  userId: string,
+  planSlug: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const admin = await assertAdmin();
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
+  if (!/^[a-z0-9-]{1,50}$/.test(planSlug)) {
+    return { success: false, error: 'Invalid credit plan' };
+  }
+  try {
+    await creditService.assignPlan(userId, planSlug, admin.id);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to assign credit plan',
+    };
+  }
+}
+
+export async function adjustUserCredits(
+  userId: string,
+  credits: number,
+  reason: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const admin = await assertAdmin();
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
+  if (!Number.isFinite(credits) || credits === 0) {
+    return { success: false, error: 'Enter a non-zero credit amount' };
+  }
+  if (!reason.trim()) return { success: false, error: 'Adjustment reason is required' };
+  try {
+    await creditService.adjustBalance(userId, credits, admin.id, reason);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to adjust credits',
+    };
+  }
+}
+
+export async function setUserUnlimitedCredits(
+  userId: string,
+  unlimited: boolean,
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
+  try {
+    await creditService.setUnlimited(userId, unlimited);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update credit account',
+    };
+  }
 }
 
 // ─── System Settings ──────────────────────────────────────────────────────────

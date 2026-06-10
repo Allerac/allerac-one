@@ -7,6 +7,7 @@ import { Conversation } from '../../types';
 import SidebarContent from './SidebarContent';
 import { AlleracLogo } from '../ui/AlleracLogo';
 import { updateLanguage } from '@/app/actions/user';
+import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -152,6 +153,10 @@ export default function SidebarMobile({
               <div className={`px-2 py-1 ${d ? 'text-gray-400' : 'text-gray-500'}`}>
                 <p className={`text-xs truncate ${d ? 'text-gray-500' : 'text-gray-400'}`}>{userEmail}</p>
               </div>
+              <UserCreditBalance
+                isDarkMode={d}
+                className={`px-2 border-y ${d ? 'border-gray-800' : 'border-gray-200'}`}
+              />
               {onToggleTheme && (
                 <button onClick={onToggleTheme} className={`w-full flex items-center gap-3 px-2 py-1.5 rounded-lg text-sm transition-colors ${d ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-100'}`}>
                   {d ? (

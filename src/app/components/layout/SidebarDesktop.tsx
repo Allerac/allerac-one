@@ -7,6 +7,7 @@ import { Conversation } from '../../types';
 import SidebarContent from './SidebarContent';
 import { AlleracLogo } from '../ui/AlleracLogo';
 import { updateLanguage } from '@/app/actions/user';
+import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -188,6 +189,11 @@ export default function SidebarDesktop({
                   <p className={`text-sm font-semibold truncate ${d ? 'text-gray-100' : 'text-gray-900'}`}>{userName}</p>
                   <p className={`text-xs truncate ${d ? 'text-gray-400' : 'text-gray-500'}`}>{userEmail}</p>
                 </div>
+
+                <UserCreditBalance
+                  isDarkMode={d}
+                  className={`px-4 border-b ${d ? 'border-gray-700' : 'border-gray-100'}`}
+                />
 
                 {/* Theme toggle */}
                 {onToggleTheme && (

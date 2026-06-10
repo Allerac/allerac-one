@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { updateLanguage } from '@/app/actions/user';
+import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -300,6 +301,11 @@ export default function ChatHeader({
                     <p className={`text-xs font-semibold truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{userName}</p>
                     <p className={`text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{userEmail}</p>
                   </div>
+
+                  <UserCreditBalance
+                    isDarkMode={isDarkMode}
+                    className={`px-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}
+                  />
 
                   {/* Language selector */}
                   <div className={`px-4 py-2 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>

@@ -119,6 +119,11 @@
     "userId": "ID d'usuari",
     "language": "Idioma",
     "selectLanguage": "Seleccionar idioma",
+    "credits": "Crèdits",
+    "availableCredits": "{credits} disponibles",
+    "unlimitedCredits": "Il·limitats",
+    "loadingCredits": "Carregant...",
+    "creditsUnavailable": "Saldo no disponible",
     "telegramBotSettings": "Configuració del Bot de Telegram",
     "manageBots": "Gestiona els teus bots personals",
     "logout": "Tancar sessió"
@@ -418,7 +423,13 @@
     "errImageRequired": "Si us plau selecciona una imatge",
     "errCaptionRequired": "Si us plau afegeix una descripció",
     "errGeminiUserQuota": "La teva clau API de Google no té quota disponible per a Gemini 3.1 Flash Image. Activa la facturació del projecte d'aquesta clau a Google AI Studio o configura una altra clau amb accés al model.",
-    "errGeminiSystemQuota": "La clau API de Google de l'administrador no té quota disponible per a Gemini 3.1 Flash Image. Demana a l'administrador que activi la facturació del projecte a Google AI Studio o que configuri una altra clau."
+    "errGeminiSystemQuota": "La clau API de Google de l'administrador no té quota disponible per a Gemini 3.1 Flash Image. Demana a l'administrador que activi la facturació del projecte a Google AI Studio o que configuri una altra clau.",
+    "errInsufficientCredits": "Aquesta edició requereix {required} crèdits. El teu saldo disponible és de {available} crèdits.",
+    "errCreditAccountBlocked": "El teu compte de crèdits d'Allerac està bloquejat. Contacta amb l'administrador.",
+    "errImageEditFailed": "L'edició de la imatge ha fallat. Torna-ho a provar.",
+    "imageEditByok": "Aquesta edició utilitza la teva clau API de Google i no consumeix crèdits d'Allerac.",
+    "imageEditUnlimited": "El teu compte té edicions d'imatge d'Allerac il·limitades.",
+    "imageEditCreditCost": "Aquesta edició costa {cost} crèdits. Saldo disponible: {balance} crèdits."
   },
   "scheduledJobs": {
     "title": "Tasques programades",

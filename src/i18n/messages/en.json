@@ -119,6 +119,11 @@
     "userId": "User ID",
     "language": "Language",
     "selectLanguage": "Select language",
+    "credits": "Credits",
+    "availableCredits": "{credits} available",
+    "unlimitedCredits": "Unlimited",
+    "loadingCredits": "Loading...",
+    "creditsUnavailable": "Balance unavailable",
     "telegramBotSettings": "Telegram Bot Settings",
     "manageBots": "Manage your personal bots",
     "logout": "Logout"
@@ -612,7 +617,13 @@
     "errImageRequired": "Please select an image",
     "errCaptionRequired": "Please add a caption",
     "errGeminiUserQuota": "Your Google API key has no available quota for Gemini 3.1 Flash Image. Enable billing for this key's project in Google AI Studio or configure another key with access to the model.",
-    "errGeminiSystemQuota": "The administrator's Google API key has no available quota for Gemini 3.1 Flash Image. Ask the administrator to enable billing for the key's project in Google AI Studio or configure another key."
+    "errGeminiSystemQuota": "The administrator's Google API key has no available quota for Gemini 3.1 Flash Image. Ask the administrator to enable billing for the key's project in Google AI Studio or configure another key.",
+    "errInsufficientCredits": "This edit requires {required} credits. Your available balance is {available} credits.",
+    "errCreditAccountBlocked": "Your Allerac credit account is blocked. Contact the administrator.",
+    "errImageEditFailed": "Image editing failed. Please try again.",
+    "imageEditByok": "This edit uses your Google API key and does not consume Allerac credits.",
+    "imageEditUnlimited": "Your account has unlimited Allerac image edits.",
+    "imageEditCreditCost": "This edit costs {cost} credits. Available balance: {balance} credits."
   },
   "grampeador": {
     "title": "Allerac Assistant",

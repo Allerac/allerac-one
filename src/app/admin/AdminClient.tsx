@@ -2,8 +2,10 @@
 
 import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useEffect, useTransition } from 'react';
+import Link from 'next/link';
 import * as adminActions from '@/app/actions/admin';
 import type { AdminUser, AdminDomain, InstagramAccountEntry, ApiKeyAuditEntry } from '@/app/actions/admin';
+import type { CreditPlan, OperationPricing } from '@/app/services/credits/credit.service';
 import type { SystemSettings } from '@/app/services/system/system-settings.service';
 import ApiKeyField from '@/app/components/settings/ApiKeyField';
 
@@ -14,14 +16,33 @@ interface AdminClientProps {
   initialSystemSettings: SystemSettings;
   initialInstagramAccounts: InstagramAccountEntry[];
   initialConnectedAdmins: Array<{ id: string; email: string; username: string }>;
+  initialCreditPlans: CreditPlan[];
+  initialOperationPricing: OperationPricing[];
 }
 
 export default function AdminClient({
   initialUsers, initialDomains, initialAllDomains,
   initialSystemSettings, initialInstagramAccounts, initialConnectedAdmins,
+  initialCreditPlans, initialOperationPricing,
 }: AdminClientProps) {
   const { isDark: isDarkMode, toggleDark } = useTheme();
   const [users, setUsers] = useState<AdminUser[]>(initialUsers);
+  const [creditPlans] = useState<CreditPlan[]>(initialCreditPlans);
+  const [operationPricing, setOperationPricing] = useState<OperationPricing[]>(initialOperationPricing);
+  const [pricingDraft, setPricingDraft] = useState<Record<string, {
+    model: string;
+    credits: string;
+    providerCost: string;
+  }>>(() => Object.fromEntries(initialOperationPricing.map(pricing => [
+    pricing.operationType,
+    {
+      model: pricing.model,
+      credits: String(pricing.credits),
+      providerCost: pricing.providerCost === null ? '' : String(pricing.providerCost),
+    },
+  ])));
+  const [pricingPending, setPricingPending] = useState<string | null>(null);
+  const [pricingMessage, setPricingMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [domains] = useState<AdminDomain[]>(initialDomains);
   const [allDomains, setAllDomains] = useState<AdminDomain[]>(initialAllDomains);
   const [domainTogglingId, setDomainTogglingId] = useState<string | null>(null);
@@ -77,7 +98,13 @@ export default function AdminClient({
   const [resetPending, setResetPending] = useState(false);
   const [resetMsg, setResetMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'users' | 'domains' | 'apikeys' | 'integrations'>('users');
+  // Credits state
+  const [creditAmounts, setCreditAmounts] = useState<Record<string, string>>({});
+  const [creditReasons, setCreditReasons] = useState<Record<string, string>>({});
+  const [creditPendingId, setCreditPendingId] = useState<string | null>(null);
+  const [creditMessage, setCreditMessage] = useState<{ id: string; ok: boolean; text: string } | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'users' | 'credits' | 'domains' | 'apikeys' | 'integrations'>('users');
 
   const toggleTheme = toggleDark;
 
@@ -182,7 +209,7 @@ export default function AdminClient({
     setSysSettingsMsg(null);
     const result = await adminActions.saveSystemSettings(sysSettings);
     setSysSettingsPending(false);
-    setSysSettingsMsg(result.success ? { ok: true, text: 'Saved.' } : { ok: false, text: (result as any).error });
+    setSysSettingsMsg(result.success ? { ok: true, text: 'Saved.' } : { ok: false, text: result.error });
   };
 
   const refreshIgAccounts = async () => {
@@ -197,7 +224,7 @@ export default function AdminClient({
     const result = await adminActions.registerInstagramAccount(igNewOwner, igNewLabel);
     setIgRegisterPending(false);
     if (result.success) { setIgNewLabel(''); setIgNewOwner(''); refreshIgAccounts(); }
-    else setIgRegisterError((result as any).error);
+    else setIgRegisterError(result.error);
   };
 
   const handleDeleteIgAccount = async (accountId: string) => {
@@ -243,8 +270,77 @@ export default function AdminClient({
     }
   };
 
+  const handleCreditAdjustment = async (userId: string) => {
+    const credits = Number(creditAmounts[userId]);
+    const reason = creditReasons[userId] ?? '';
+    setCreditPendingId(userId);
+    setCreditMessage(null);
+    const result = await adminActions.adjustUserCredits(userId, credits, reason);
+    setCreditPendingId(null);
+    if (result.success) {
+      setCreditAmounts(prev => ({ ...prev, [userId]: '' }));
+      setCreditReasons(prev => ({ ...prev, [userId]: '' }));
+      setCreditMessage({ id: userId, ok: true, text: 'Credits updated.' });
+      refreshUsers();
+    } else {
+      setCreditMessage({ id: userId, ok: false, text: result.error });
+    }
+  };
+
+  const handleUnlimitedToggle = async (userId: string, unlimited: boolean) => {
+    setCreditPendingId(userId);
+    setCreditMessage(null);
+    const result = await adminActions.setUserUnlimitedCredits(userId, unlimited);
+    setCreditPendingId(null);
+    if (result.success) {
+      setCreditMessage({ id: userId, ok: true, text: unlimited ? 'Unlimited enabled.' : 'Unlimited disabled.' });
+      refreshUsers();
+    } else {
+      setCreditMessage({ id: userId, ok: false, text: result.error });
+    }
+  };
+
+  const handlePlanChange = async (userId: string, planSlug: string) => {
+    setCreditPendingId(userId);
+    setCreditMessage(null);
+    const result = await adminActions.assignUserCreditPlan(userId, planSlug);
+    setCreditPendingId(null);
+    if (result.success) {
+      setCreditMessage({ id: userId, ok: true, text: 'Plan assigned and monthly balance reset.' });
+      refreshUsers();
+    } else {
+      setCreditMessage({ id: userId, ok: false, text: result.error });
+    }
+  };
+
+  const handlePricingSave = async (pricing: OperationPricing) => {
+    const draft = pricingDraft[pricing.operationType];
+    if (!draft) return;
+    setPricingPending(pricing.operationType);
+    setPricingMessage(null);
+    const result = await adminActions.updateOperationPricing({
+      operationType: pricing.operationType,
+      provider: pricing.provider,
+      model: draft.model.trim(),
+      unit: pricing.unit,
+      credits: Number(draft.credits),
+      providerCost: draft.providerCost.trim() ? Number(draft.providerCost) : null,
+      providerCostCurrency: pricing.providerCostCurrency,
+    });
+    setPricingPending(null);
+    if (result.success) {
+      setOperationPricing(prev => prev.map(item => (
+        item.operationType === pricing.operationType ? result.pricing : item
+      )));
+      setPricingMessage({ ok: true, text: 'Pricing version activated.' });
+    } else {
+      setPricingMessage({ ok: false, text: result.error });
+    }
+  };
+
   const tabs = [
     { id: 'users' as const, label: 'Users', count: users.length },
+    { id: 'credits' as const, label: 'Credits' },
     { id: 'domains' as const, label: 'Domains', count: allDomains.length },
     { id: 'apikeys' as const, label: 'API Keys' },
     { id: 'integrations' as const, label: 'Integrations' },
@@ -254,7 +350,7 @@ export default function AdminClient({
     <div className={`h-full overflow-y-auto ${bg} ${text}`}>
       {/* Header */}
       <div className={`sticky top-0 z-10 border-b ${d ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
-        <div className="max-w-5xl mx-auto px-6">
+        <div className="max-w-5xl mx-auto px-3 sm:px-6">
           <div className="flex items-center justify-between py-3">
             <div className="flex items-center gap-2.5">
               <svg className="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -270,20 +366,20 @@ export default function AdminClient({
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
                 )}
               </button>
-              <a href="/" className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors ${d ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+              <Link href="/" className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors ${d ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-                Desktop
-              </a>
+                <span className="hidden sm:inline">Desktop</span>
+              </Link>
             </div>
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-0.5 -mb-px">
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-0.5 -mb-px">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex items-center justify-center gap-1 px-2 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors min-w-0 ${
                   activeTab === tab.id
                     ? d ? 'border-indigo-400 text-indigo-300' : 'border-indigo-600 text-indigo-600'
                     : d ? 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -303,17 +399,17 @@ export default function AdminClient({
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 sm:space-y-8">
 
         {/* ── Users tab ── */}
         {activeTab === 'users' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Users</h2>
-          <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
+          <div className={`md:border md:rounded-lg md:overflow-hidden ${cardBg}`}>
             {deleteError && (
               <div className="px-4 py-2 bg-red-900/30 text-red-400 text-sm border-b border-red-900/40">{deleteError}</div>
             )}
-            <table className="w-full text-sm">
-              <thead>
+            <table className="block md:table w-full text-sm">
+              <thead className="hidden md:table-header-group">
                 <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
                   <th className="px-4 py-3 text-left font-medium">Email</th>
                   <th className="px-4 py-3 text-left font-medium">Type</th>
@@ -322,16 +418,16 @@ export default function AdminClient({
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="block md:table-row-group space-y-3 md:space-y-0">
                 {users.map((user, i) => (
                   <tr
                     key={user.id}
-                    className={`border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${
+                    className={`block md:table-row border rounded-lg md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:last:border-b-0 ${d ? 'border-gray-700' : 'border-gray-200 md:border-gray-100'} ${
                       i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'
                     }`}
                   >
-                    <td className="px-4 py-3 font-mono text-xs">{user.email}</td>
-                    <td className="px-4 py-3">
+                    <td className="block md:table-cell px-4 pt-4 pb-2 md:py-3 font-mono text-xs break-all">{user.email}</td>
+                    <td className="block md:table-cell px-4 py-2 md:py-3">
                       <div className="flex flex-col gap-1">
                         {user.is_admin ? (
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
@@ -349,7 +445,7 @@ export default function AdminClient({
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="block md:table-cell px-4 py-2 md:py-3">
                       {!user.is_admin && domainEditId === user.id ? (
                         <div className="flex flex-col gap-2">
                           <div className="flex flex-wrap gap-1">
@@ -410,13 +506,14 @@ export default function AdminClient({
                         </div>
                       )}
                     </td>
-                    <td className={`px-4 py-3 text-xs ${textMuted}`}>
+                    <td className={`block md:table-cell px-4 py-2 md:py-3 text-xs ${textMuted}`}>
+                      <span className="md:hidden font-medium mr-1">Created:</span>
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="block md:table-cell px-4 pt-2 pb-4 md:py-3">
                       {user.id !== undefined && (
-                        <div className="flex flex-col gap-2 items-end">
-                          <div className="flex gap-2 flex-wrap justify-end">
+                        <div className="flex flex-col gap-2 items-stretch md:items-end">
+                          <div className="flex gap-2 flex-wrap justify-start md:justify-end">
                             <button
                               onClick={() => handleActiveToggle(user.id, !user.is_active)}
                               disabled={activeChangingId === user.id}
@@ -465,7 +562,7 @@ export default function AdminClient({
                           </div>
 
                           {resetOpenId === user.id && (
-                            <div className="flex gap-2 items-center">
+                            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
                               <input
                                 type="password"
                                 value={resetPassword}
@@ -503,10 +600,256 @@ export default function AdminClient({
 
         }
 
+        {/* ── Credits tab ── */}
+        {activeTab === 'credits' && <section>
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-1 ${textMuted}`}>Credits</h2>
+          <p className={`text-xs mb-4 ${textMuted}`}>
+            Plans are the primary allowance control. Manual adjustments are reserved for support, bonuses, refunds, and corrections.
+          </p>
+          <div className={`border rounded-lg p-4 mb-6 ${cardBg}`}>
+            <h3 className="text-sm font-semibold mb-1">Operation pricing</h3>
+            <p className={`text-xs mb-4 ${textMuted}`}>
+              Changes apply to new operations only. Existing ledger entries keep their original pricing version.
+            </p>
+            <div className="space-y-4">
+              {operationPricing.map(pricing => {
+                const draft = pricingDraft[pricing.operationType];
+                return (
+                  <div
+                    key={pricing.operationType}
+                    className={`grid gap-3 items-end md:grid-cols-2 xl:grid-cols-[1fr_2fr_1fr] border-t pt-4 first:border-t-0 first:pt-0 ${
+                      d ? 'border-gray-700' : 'border-gray-200'
+                    }`}
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{pricing.displayName}</p>
+                      <p className={`text-xs ${textMuted}`}>{pricing.provider} · {pricing.unit}</p>
+                    </div>
+                    <label>
+                      <span className={labelCls}>Active model</span>
+                      <input
+                        value={draft?.model ?? pricing.model}
+                        onChange={event => setPricingDraft(prev => ({
+                          ...prev,
+                          [pricing.operationType]: {
+                            ...prev[pricing.operationType],
+                            model: event.target.value,
+                          },
+                        }))}
+                        className={inputCls}
+                      />
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label>
+                        <span className={labelCls}>Credits</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={draft?.credits ?? pricing.credits}
+                          onChange={event => setPricingDraft(prev => ({
+                            ...prev,
+                            [pricing.operationType]: {
+                              ...prev[pricing.operationType],
+                              credits: event.target.value,
+                            },
+                          }))}
+                          className={inputCls}
+                        />
+                      </label>
+                      <label>
+                        <span className={labelCls}>Cost ({pricing.providerCostCurrency})</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={draft?.providerCost ?? ''}
+                          onChange={event => setPricingDraft(prev => ({
+                            ...prev,
+                            [pricing.operationType]: {
+                              ...prev[pricing.operationType],
+                              providerCost: event.target.value,
+                            },
+                          }))}
+                          className={inputCls}
+                        />
+                      </label>
+                      <button
+                        onClick={() => handlePricingSave(pricing)}
+                        disabled={
+                          pricingPending === pricing.operationType
+                          || !draft?.model.trim()
+                          || !Number.isFinite(Number(draft?.credits))
+                          || Number(draft?.credits) < 0
+                        }
+                        className={`${btnPrimary} col-span-2`}
+                      >
+                        {pricingPending === pricing.operationType ? 'Saving...' : 'Activate pricing'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {pricingMessage && (
+              <p className={`text-xs mt-3 ${pricingMessage.ok ? 'text-green-400' : 'text-red-400'}`}>
+                {pricingMessage.text}
+              </p>
+            )}
+          </div>
+          <div className="space-y-3">
+            {users.map(user => (
+              <div key={user.id} className={`border rounded-lg p-4 ${cardBg}`}>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,1fr)_auto] lg:items-end">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs truncate">{user.email}</p>
+                    <p className={`text-xs mt-1 ${textMuted}`}>
+                      {user.is_admin ? 'Administrator' : 'Domain user'}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className={`text-[11px] uppercase tracking-wide ${textMuted}`}>Balance</p>
+                      <p className="text-lg font-semibold">
+                        {user.credit_unlimited ? '∞' : user.credit_balance.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-[11px] uppercase tracking-wide ${textMuted}`}>Reserved</p>
+                      <p className="text-lg font-semibold">{user.credit_reserved.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <label className="min-w-0">
+                    <span className={labelCls}>Plan</span>
+                    <select
+                      value={user.credit_plan_slug ?? ''}
+                      onChange={event => handlePlanChange(user.id, event.target.value)}
+                      disabled={creditPendingId === user.id || user.credit_unlimited}
+                      className={inputCls}
+                    >
+                      {!user.credit_plan_slug && <option value="">No plan</option>}
+                      {creditPlans.map(plan => (
+                        <option key={plan.id} value={plan.slug}>
+                          {plan.name} · {plan.monthlyCredits.toLocaleString()} credits
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    onClick={() => handleUnlimitedToggle(user.id, !user.credit_unlimited)}
+                    disabled={creditPendingId === user.id}
+                    className={`w-full lg:w-auto px-3 py-2 rounded text-xs font-medium transition-colors ${
+                      user.credit_unlimited
+                        ? d ? 'bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900/70' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                        : d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {user.credit_unlimited ? 'Unlimited exception' : 'Plan limits'}
+                  </button>
+                </div>
+
+                <div className={`mt-4 pt-4 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <p className={`text-[11px] uppercase tracking-wide mb-2 ${textMuted}`}>Manual adjustment</p>
+                  <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_auto]">
+                    <input
+                      type="number"
+                      step="1"
+                      value={creditAmounts[user.id] ?? ''}
+                      onChange={event => setCreditAmounts(prev => ({ ...prev, [user.id]: event.target.value }))}
+                      placeholder="+100 / -25"
+                      disabled={creditPendingId === user.id}
+                      className={inputCls}
+                    />
+                    <input
+                      type="text"
+                      value={creditReasons[user.id] ?? ''}
+                      onChange={event => setCreditReasons(prev => ({ ...prev, [user.id]: event.target.value }))}
+                      placeholder="Reason for the adjustment"
+                      maxLength={500}
+                      disabled={creditPendingId === user.id}
+                      className={inputCls}
+                    />
+                    <button
+                      onClick={() => handleCreditAdjustment(user.id)}
+                      disabled={
+                        creditPendingId === user.id
+                        || !Number(creditAmounts[user.id])
+                        || !(creditReasons[user.id] ?? '').trim()
+                      }
+                      className={`${btnPrimary} w-full sm:w-auto`}
+                    >
+                      {creditPendingId === user.id ? '...' : 'Apply'}
+                    </button>
+                  </div>
+                  {creditMessage?.id === user.id && (
+                    <p className={`text-xs mt-2 ${creditMessage.ok ? 'text-green-400' : 'text-red-400'}`}>
+                      {creditMessage.text}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>}
+
         {/* ── Domains tab ── */}
         {activeTab === 'domains' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Domains</h2>
-          <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
+          <div className="space-y-2 md:hidden">
+            {allDomains.map((domain, i) => (
+              <div key={domain.id} className={`border rounded-lg p-3 ${cardBg}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="font-medium truncate">{domain.display_name}</p>
+                      <span className={`inline-flex shrink-0 items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                        domain.is_active
+                          ? d ? 'bg-green-900/40 text-green-400' : 'bg-green-50 text-green-700'
+                          : d ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {domain.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <p className={`font-mono text-xs truncate mt-0.5 ${textMuted}`}>{domain.slug}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleDomainMove(i, 'up')}
+                      disabled={i === 0}
+                      className={`p-1.5 rounded transition-colors disabled:opacity-20 ${d ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                      title="Move up"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                    </button>
+                    <button
+                      onClick={() => handleDomainMove(i, 'down')}
+                      disabled={i === allDomains.length - 1}
+                      className={`p-1.5 rounded transition-colors disabled:opacity-20 ${d ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                      title="Move down"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDomainToggle(domain.id, !domain.is_active)}
+                  disabled={domainTogglingId === domain.id}
+                  className={`mt-3 w-full px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                    domain.is_active
+                      ? d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      : d ? 'bg-green-900/40 text-green-400 hover:bg-green-900/60' : 'bg-green-50 text-green-700 hover:bg-green-100'
+                  }`}
+                >
+                  {domainTogglingId === domain.id ? '...' : domain.is_active ? 'Deactivate' : 'Activate'}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className={`hidden md:block border rounded-lg overflow-hidden ${cardBg}`}>
             <table className="w-full text-sm">
               <thead>
                 <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
@@ -578,7 +921,7 @@ export default function AdminClient({
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-1 ${textMuted}`}>System Settings</h2>
           <p className={`text-xs mb-4 ${textMuted}`}>These keys are used as fallback when users have no personal key configured.</p>
 
-          <div className={`border rounded-lg p-6 ${cardBg} space-y-6`}>
+          <div className={`border rounded-lg p-4 sm:p-6 ${cardBg} space-y-6`}>
             {/* LLM Providers */}
             <div>
               <p className={`text-xs font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>LLM Providers</p>
@@ -658,8 +1001,8 @@ export default function AdminClient({
               </div>
             </div>
 
-            <div className={`flex items-center gap-3 pt-1 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-              <button onClick={handleSaveSystemSettings} disabled={sysSettingsPending} className={btnPrimary}>
+            <div className={`flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button onClick={handleSaveSystemSettings} disabled={sysSettingsPending} className={`${btnPrimary} w-full sm:w-auto`}>
                 {sysSettingsPending ? 'Saving...' : 'Save Settings'}
               </button>
               {sysSettingsMsg && (
@@ -677,8 +1020,8 @@ export default function AdminClient({
           <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
             {/* Registered accounts */}
             {igAccounts.length > 0 && (
-              <table className="w-full text-sm">
-                <thead>
+              <table className="block md:table w-full text-sm">
+                <thead className="hidden md:table-header-group">
                   <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
                     <th className="px-4 py-3 text-left font-medium">Label</th>
                     <th className="px-4 py-3 text-left font-medium">Account</th>
@@ -686,11 +1029,11 @@ export default function AdminClient({
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="block md:table-row-group">
                   {igAccounts.map((acc, i) => (
-                    <tr key={acc.id} className={`border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
-                      <td className="px-4 py-3 font-medium">{acc.label}</td>
-                      <td className="px-4 py-3">
+                    <tr key={acc.id} className={`block md:table-row border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
+                      <td className="block md:table-cell px-4 pt-4 pb-2 md:py-3 font-medium">{acc.label}</td>
+                      <td className="block md:table-cell px-4 py-2 md:py-3">
                         <div className="flex flex-col">
                           <span className="font-mono text-xs">{acc.username ? `@${acc.username}` : acc.owner_email}</span>
                           <span className={`text-xs ${acc.is_connected ? 'text-green-400' : 'text-red-400'}`}>
@@ -698,7 +1041,7 @@ export default function AdminClient({
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="block md:table-cell px-4 py-2 md:py-3">
                         <div className="flex flex-col gap-1">
                           {/* Current assigned users */}
                           <div className="flex flex-wrap gap-1">
@@ -713,7 +1056,7 @@ export default function AdminClient({
                           <select
                             disabled={igAssignPending !== null}
                             onChange={e => { if (e.target.value) handleAssignIgAccount(e.target.value, acc.id); e.target.value = ''; }}
-                            className={`text-xs px-2 py-1 rounded border w-fit ${d ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-300 text-gray-700'}`}
+                            className={`text-xs px-2 py-2 rounded border w-full sm:w-fit max-w-full ${d ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-300 text-gray-700'}`}
                           >
                             <option value="">+ Assign user…</option>
                             {users.filter(u => !u.is_admin && !acc.assigned_users.find(a => a.id === u.id)).map(u => (
@@ -722,7 +1065,7 @@ export default function AdminClient({
                           </select>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="block md:table-cell px-4 pt-2 pb-4 md:py-3 md:text-right">
                         <button onClick={() => handleDeleteIgAccount(acc.id)} className={btnDanger}>Delete</button>
                       </td>
                     </tr>
@@ -737,21 +1080,21 @@ export default function AdminClient({
               {connectedAdmins.length === 0 ? (
                 <p className={`text-sm ${textMuted}`}>No admin has an active Instagram connection yet. Connect Instagram in Settings first.</p>
               ) : (
-                <div className="flex flex-wrap gap-2 items-end">
-                  <div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] items-end">
+                  <div className="min-w-0">
                     <label className={labelCls}>Label</label>
-                    <input value={igNewLabel} onChange={e => setIgNewLabel(e.target.value)} placeholder="@loja_principal" disabled={igRegisterPending} className={`${inputCls} w-48`} />
+                    <input value={igNewLabel} onChange={e => setIgNewLabel(e.target.value)} placeholder="@loja_principal" disabled={igRegisterPending} className={inputCls} />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <label className={labelCls}>Account owner</label>
-                    <select value={igNewOwner} onChange={e => setIgNewOwner(e.target.value)} disabled={igRegisterPending} className={`px-3 py-2 rounded-md border text-sm ${d ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}>
+                    <select value={igNewOwner} onChange={e => setIgNewOwner(e.target.value)} disabled={igRegisterPending} className={`${inputCls} max-w-full`}>
                       <option value="">Select admin…</option>
                       {connectedAdmins.map(a => (
                         <option key={a.id} value={a.id}>{a.email} (@{a.username})</option>
                       ))}
                     </select>
                   </div>
-                  <button onClick={handleRegisterIgAccount} disabled={igRegisterPending || !igNewLabel || !igNewOwner} className={btnPrimary}>
+                  <button onClick={handleRegisterIgAccount} disabled={igRegisterPending || !igNewLabel || !igNewOwner} className={`${btnPrimary} w-full sm:col-span-2 lg:col-span-1 lg:w-auto`}>
                     {igRegisterPending ? 'Registering...' : 'Register'}
                   </button>
                 </div>
@@ -765,7 +1108,7 @@ export default function AdminClient({
         {/* ── Create user (Users tab) ── */}
         {activeTab === 'users' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Create Domain User</h2>
-          <div className={`border rounded-lg p-6 ${cardBg}`}>
+          <div className={`border rounded-lg p-4 sm:p-6 ${cardBg}`}>
             <form onSubmit={handleCreate} className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -839,7 +1182,7 @@ export default function AdminClient({
               {formSuccess && <p className="text-sm text-green-400">{formSuccess}</p>}
 
               <div>
-                <button type="submit" disabled={isPending} className={btnPrimary}>
+                <button type="submit" disabled={isPending} className={`${btnPrimary} w-full sm:w-auto`}>
                   {isPending ? 'Creating...' : 'Create User'}
                 </button>
               </div>
@@ -856,8 +1199,8 @@ export default function AdminClient({
             {auditLog.length === 0 ? (
               <p className={`px-6 py-4 text-sm ${textMuted}`}>No key changes recorded yet.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
+              <table className="block md:table w-full text-sm">
+                <thead className="hidden md:table-header-group">
                   <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
                     <th className="px-4 py-3 text-left font-medium">When</th>
                     <th className="px-4 py-3 text-left font-medium">Scope</th>
@@ -866,13 +1209,13 @@ export default function AdminClient({
                     <th className="px-4 py-3 text-left font-medium">User</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="block md:table-row-group">
                   {auditLog.map((entry, i) => (
-                    <tr key={entry.id} className={`border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
-                      <td className={`px-4 py-2.5 text-xs ${textMuted}`}>
+                    <tr key={entry.id} className={`block md:table-row border-b last:border-0 p-4 md:p-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
+                      <td className={`block md:table-cell md:px-4 md:py-2.5 text-xs ${textMuted}`}>
                         {new Date(entry.changed_at).toLocaleString()}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="inline-block md:table-cell mt-2 mr-2 md:m-0 md:px-4 md:py-2.5">
                         <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
                           entry.scope === 'system'
                             ? d ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700'
@@ -881,10 +1224,10 @@ export default function AdminClient({
                           {entry.scope}
                         </span>
                       </td>
-                      <td className={`px-4 py-2.5 font-mono text-xs ${d ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <td className={`block md:table-cell mt-2 md:m-0 md:px-4 md:py-2.5 font-mono text-xs break-all ${d ? 'text-gray-300' : 'text-gray-700'}`}>
                         {entry.key_name}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="inline-block md:table-cell mt-2 mr-2 md:m-0 md:px-4 md:py-2.5">
                         <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
                           entry.action === 'set'
                             ? d ? 'bg-green-900/40 text-green-300' : 'bg-green-50 text-green-700'
@@ -893,7 +1236,7 @@ export default function AdminClient({
                           {entry.action}
                         </span>
                       </td>
-                      <td className={`px-4 py-2.5 text-xs ${textMuted}`}>
+                      <td className={`block md:table-cell mt-2 md:m-0 md:px-4 md:py-2.5 text-xs break-all ${textMuted}`}>
                         {entry.user_email ?? '—'}
                       </td>
                     </tr>

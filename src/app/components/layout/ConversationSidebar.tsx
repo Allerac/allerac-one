@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ConvItem } from '@/app/hooks/useConversations';
 import DomainChip from './DomainChip';
+import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
 
 interface Props {
   isDark: boolean;
@@ -375,6 +376,10 @@ export default function ConversationSidebar({
                 <p className={`text-sm font-semibold truncate ${d ? 'text-gray-100' : 'text-gray-900'}`}>{userName || 'User'}</p>
                 <p className={`text-xs truncate ${d ? 'text-gray-500' : 'text-gray-400'}`}>{userEmail}</p>
               </div>
+              <UserCreditBalance
+                isDarkMode={d}
+                className={`mb-1 border-b ${d ? 'border-gray-700' : 'border-gray-100'}`}
+              />
               <button
                 onClick={() => { setUserMenuOpen(false); onLogout(); }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-600/20 rounded-lg transition-colors"

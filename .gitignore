@@ -50,3 +50,6 @@ infra/terraform/**/*.tfstate
 infra/terraform/**/*.tfstate.*
 infra/terraform/**/terraform.tfvars
 infra/terraform/**/.terraform.lock.hcl
+
+# private business and commercial planning
+/docs/business-model/

@@ -5,11 +5,16 @@ import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 import sharp from 'sharp';
 import { acquireOperationLimit } from '@/app/lib/operation-limiter';
+import {
+  CreditAccountBlockedError,
+  CreditService,
+  InsufficientCreditsError,
+} from '@/app/services/credits/credit.service';
 
 const sysSettings = new SystemSettingsService();
 const userSettings = new UserSettingsService();
+const creditService = new CreditService();
 
-const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models';
 const MAX_IMAGE_BASE64_LENGTH = 20 * 1024 * 1024;
 const IMAGE_EDIT_OPERATIONS = new Set<ImageEditOperation['type']>([
@@ -25,17 +30,49 @@ export type ImageEditOperation =
   | { type: 'lifestyle-scene'; prompt: string }
   | { type: 'enhance' };
 
+type ImagePayloadResult = {
+  success: true;
+  resultBase64: string;
+  mimeType: 'image/png' | 'image/jpeg';
+};
+
 type EditResult =
-  | { success: true; resultBase64: string; mimeType: 'image/png' | 'image/jpeg' }
+  | (ImagePayloadResult & {
+      creditsCharged?: number;
+      creditsRemaining?: number;
+      credentialSource: GoogleKeySource;
+    })
   | {
       success: false;
       error: string;
-      code?: 'RATE_LIMITED' | 'GEMINI_QUOTA_EXCEEDED';
+      code?:
+        | 'RATE_LIMITED'
+        | 'GEMINI_QUOTA_EXCEEDED'
+        | 'INSUFFICIENT_CREDITS'
+        | 'CREDIT_ACCOUNT_BLOCKED';
       keySource?: GoogleKeySource;
+      requiredCredits?: number;
+      availableCredits?: number;
       retryAfterSeconds?: number;
     };
 
 type GoogleKeySource = 'user' | 'system';
+type GeminiImagePart = {
+  text?: string;
+  inlineData?: {
+    data?: string;
+    mimeType?: string;
+  };
+};
+
+type GeminiImageResponse = {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: {
+      parts?: GeminiImagePart[];
+    };
+  }>;
+};
 
 class ImageEditError extends Error {
   constructor(
@@ -92,8 +129,9 @@ async function geminiImageEdit(
   operation: ImageEditOperation,
   googleKey: string,
   keySource: GoogleKeySource,
+  model: string,
 ): Promise<{ data: string; mimeType: string }> {
-  const res = await fetch(`${GEMINI_BASE}/${GEMINI_IMAGE_MODEL}:generateContent`, {
+  const res = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
     method: 'POST',
     headers: {
       'x-goog-api-key': googleKey,
@@ -128,7 +166,7 @@ async function geminiImageEdit(
         ? 'A sua Google API key'
         : 'A Google API key configurada pelo administrador';
       throw new ImageEditError(
-        `${location} não tem quota disponível para o Gemini 3.1 Flash Image. `
+        `${location} não tem quota disponível para o modelo ${model}. `
         + 'Ative o billing no projeto dessa chave no Google AI Studio ou configure outra chave com acesso ao modelo.',
         'GEMINI_QUOTA_EXCEEDED',
         keySource,
@@ -138,16 +176,19 @@ async function geminiImageEdit(
     throw new Error(`Gemini Image (${res.status}): ${message}`);
   }
 
-  const result = await res.json();
+  const result = await res.json() as GeminiImageResponse;
   const parts = result.candidates?.[0]?.content?.parts ?? [];
-  const imagePart = parts.find((part: any) => part.inlineData?.data);
+  const imagePart = parts.find(part => part.inlineData?.data);
   if (!imagePart?.inlineData?.data) {
     const reason = result.candidates?.[0]?.finishReason;
     throw new Error(reason
       ? `Gemini não retornou uma imagem (${reason})`
       : 'Gemini não retornou uma imagem');
   }
-  return imagePart.inlineData;
+  return {
+    data: imagePart.inlineData.data,
+    mimeType: imagePart.inlineData.mimeType || 'image/png',
+  };
 }
 
 async function performImageEdit(
@@ -155,8 +196,9 @@ async function performImageEdit(
   operation: ImageEditOperation,
   googleKey: string,
   keySource: GoogleKeySource,
-): Promise<EditResult> {
-  const result = await geminiImageEdit(imageBase64, operation, googleKey, keySource);
+  model: string,
+): Promise<ImagePayloadResult> {
+  const result = await geminiImageEdit(imageBase64, operation, googleKey, keySource, model);
   const buffer = Buffer.from(result.data, 'base64');
 
   switch (operation.type) {
@@ -183,6 +225,37 @@ async function performImageEdit(
       return { success: true, resultBase64: jpegBuf.toString('base64'), mimeType: 'image/jpeg' };
     }
   }
+}
+
+export type ImageEditBillingInfo =
+  | {
+      credentialSource: 'user';
+      estimatedCredits: 0;
+    }
+  | {
+      credentialSource: 'system';
+      estimatedCredits: number;
+      availableCredits: number;
+      unlimited: boolean;
+      blocked: boolean;
+    };
+
+export async function getImageEditBillingInfo(): Promise<ImageEditBillingInfo> {
+  const user = await requireCurrentUser();
+  await assertDomainAccess(user, 'social');
+  const googleKey = await getGoogleKey(user.id);
+  const pricing = await creditService.getOperationPricing('image_edit');
+  if (googleKey.source === 'user') {
+    return { credentialSource: 'user', estimatedCredits: 0 };
+  }
+  const balance = await creditService.getBalance(user.id);
+  return {
+    credentialSource: 'system',
+    estimatedCredits: pricing.credits,
+    availableCredits: balance.availableCredits,
+    unlimited: balance.unlimited,
+    blocked: balance.blocked,
+  };
 }
 
 export async function editProductImage(
@@ -221,11 +294,72 @@ export async function editProductImage(
 
     try {
       const googleKey = await getGoogleKey(user.id);
-      return await performImageEdit(imageBase64, operation, googleKey.key, googleKey.source);
+      const pricing = await creditService.getOperationPricing('image_edit');
+      if (pricing.provider !== 'gemini') {
+        throw new Error(`Unsupported image provider: ${pricing.provider}`);
+      }
+      if (googleKey.source === 'user') {
+        const result = await performImageEdit(
+          imageBase64,
+          operation,
+          googleKey.key,
+          googleKey.source,
+          pricing.model,
+        );
+        return { ...result, credentialSource: 'user' };
+      }
+
+      const reservation = await creditService.reserve({
+        userId: user.id,
+        operationType: 'image_edit',
+        provider: pricing.provider,
+        model: pricing.model,
+        unit: pricing.unit,
+        metadata: { operation: operation.type },
+        ttlSeconds: 600,
+      });
+      try {
+        const result = await performImageEdit(
+          imageBase64,
+          operation,
+          googleKey.key,
+          googleKey.source,
+          pricing.model,
+        );
+        const balance = await creditService.settle(
+          reservation.id,
+          reservation.providerCostMicrousd,
+        );
+        return {
+          ...result,
+          credentialSource: 'system',
+          creditsCharged: reservation.reservedCredits,
+          creditsRemaining: balance.unlimited ? undefined : balance.availableCredits,
+        };
+      } catch (error) {
+        await creditService.release(reservation.id);
+        throw error;
+      }
     } finally {
       limitResult.lease.release();
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof InsufficientCreditsError) {
+      return {
+        success: false,
+        error: 'Insufficient credits',
+        code: 'INSUFFICIENT_CREDITS',
+        requiredCredits: error.requiredMicrousd / 10_000,
+        availableCredits: error.availableMicrousd / 10_000,
+      };
+    }
+    if (error instanceof CreditAccountBlockedError) {
+      return {
+        success: false,
+        error: 'Credit account blocked',
+        code: 'CREDIT_ACCOUNT_BLOCKED',
+      };
+    }
     if (error instanceof ImageEditError) {
       return {
         success: false,
@@ -234,6 +368,9 @@ export async function editProductImage(
         keySource: error.keySource,
       };
     }
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Image editing failed',
+    };
   }
 }
