@@ -179,6 +179,23 @@
     "save": "Salvar",
     "cancel": "Cancelar"
   },
+  "tiktok": {
+    "description": "Conecta a tua conta TikTok para publicar vídeos e posts de fotos pela Allerac.",
+    "loading": "A carregar a conexão TikTok...",
+    "loadFailed": "Não foi possível carregar a conexão TikTok.",
+    "notConfigured": "O TikTok ainda não foi configurado pelo administrador.",
+    "connectPrompt": "Autoriza a Allerac a ver o teu perfil básico e publicar conteúdo no TikTok.",
+    "connect": "Conectar TikTok",
+    "account": "Conta TikTok",
+    "connected": "Conectada",
+    "assignedAccount": "Conta atribuída pelo administrador",
+    "active": "Ativa",
+    "disconnect": "Desconectar",
+    "disconnecting": "A desconectar...",
+    "disconnectConfirm": "Desconectar a tua conta TikTok da Allerac?",
+    "disconnected": "TikTok desconectado.",
+    "disconnectFailed": "Não foi possível desconectar o TikTok."
+  },
   "system": {
     "title": "Configuração",
     "tabSystem": "Sistema",

@@ -536,3 +536,124 @@ export async function listInstagramConnectedAdmins(): Promise<Array<{ id: string
   `);
   return result.rows;
 }
+
+// ─── TikTok Accounts ────────────────────────────────────────────────────────
+
+export interface TikTokAccountEntry {
+  id: string;
+  label: string;
+  owner_user_id: string;
+  owner_email: string;
+  display_name: string | null;
+  is_connected: boolean;
+  assigned_users: Array<{ id: string; email: string }>;
+}
+
+export async function listTikTokAccounts(): Promise<TikTokAccountEntry[]> {
+  await assertAdmin();
+  const result = await pool.query(`
+    SELECT
+      ta.id,
+      ta.label,
+      ta.owner_user_id,
+      u.email AS owner_email,
+      tc.display_name,
+      tc.is_connected,
+      COALESCE(
+        json_agg(json_build_object('id', au.id, 'email', au.email))
+        FILTER (WHERE au.id IS NOT NULL), '[]'
+      ) AS assigned_users
+    FROM tiktok_accounts ta
+    JOIN users u ON u.id = ta.owner_user_id
+    LEFT JOIN tiktok_credentials tc ON tc.user_id = ta.owner_user_id
+    LEFT JOIN user_tiktok_account uta ON uta.tiktok_account_id = ta.id
+    LEFT JOIN users au ON au.id = uta.user_id
+    GROUP BY ta.id, ta.label, ta.owner_user_id, u.email, tc.display_name, tc.is_connected
+    ORDER BY ta.created_at ASC
+  `);
+  return result.rows;
+}
+
+export async function registerTikTokAccount(
+  ownerUserId: string,
+  label: string,
+): Promise<{ success: true; id: string } | { success: false; error: string }> {
+  await assertAdmin();
+  if (!isUuid(ownerUserId)) return { success: false, error: 'Invalid owner ID' };
+  if (!label.trim() || label.trim().length > 100) {
+    return { success: false, error: 'Invalid label' };
+  }
+  const credentials = await pool.query(
+    `SELECT is_connected
+     FROM tiktok_credentials
+     WHERE user_id = $1 AND is_connected = true`,
+    [ownerUserId],
+  );
+  if (!credentials.rows.length) {
+    return { success: false, error: 'This user has no active TikTok connection' };
+  }
+  const result = await pool.query(
+    `INSERT INTO tiktok_accounts (label, owner_user_id)
+     VALUES ($1, $2)
+     ON CONFLICT (owner_user_id) DO NOTHING
+     RETURNING id`,
+    [label.trim(), ownerUserId],
+  );
+  if (!result.rows[0]) {
+    return { success: false, error: 'This TikTok account is already registered' };
+  }
+  return { success: true, id: result.rows[0].id };
+}
+
+export async function deleteTikTokAccount(
+  accountId: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  if (!isUuid(accountId)) return { success: false, error: 'Invalid account ID' };
+  await pool.query('DELETE FROM tiktok_accounts WHERE id = $1', [accountId]);
+  return { success: true };
+}
+
+export async function assignTikTokAccount(
+  userId: string,
+  accountId: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  if (!isUuid(userId) || !isUuid(accountId)) {
+    return { success: false, error: 'Invalid user or account ID' };
+  }
+  await pool.query(
+    `INSERT INTO user_tiktok_account (user_id, tiktok_account_id)
+     VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET
+       tiktok_account_id = EXCLUDED.tiktok_account_id,
+       created_at = NOW()`,
+    [userId, accountId],
+  );
+  return { success: true };
+}
+
+export async function unassignTikTokAccount(
+  userId: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  await assertAdmin();
+  if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
+  await pool.query('DELETE FROM user_tiktok_account WHERE user_id = $1', [userId]);
+  return { success: true };
+}
+
+export async function listTikTokConnectedAdmins(): Promise<Array<{
+  id: string;
+  email: string;
+  display_name: string;
+}>> {
+  await assertAdmin();
+  const result = await pool.query(`
+    SELECT u.id, u.email, tc.display_name
+    FROM users u
+    JOIN tiktok_credentials tc ON tc.user_id = u.id
+    WHERE u.is_admin = true AND tc.is_connected = true
+    ORDER BY u.email ASC
+  `);
+  return result.rows;
+}

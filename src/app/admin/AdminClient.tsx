@@ -4,7 +4,13 @@ import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import * as adminActions from '@/app/actions/admin';
-import type { AdminUser, AdminDomain, InstagramAccountEntry, ApiKeyAuditEntry } from '@/app/actions/admin';
+import type {
+  AdminUser,
+  AdminDomain,
+  InstagramAccountEntry,
+  TikTokAccountEntry,
+  ApiKeyAuditEntry,
+} from '@/app/actions/admin';
 import type { CreditPlan, OperationPricing } from '@/app/services/credits/credit.service';
 import type { SystemSettings } from '@/app/services/system/system-settings.service';
 import ApiKeyField from '@/app/components/settings/ApiKeyField';
@@ -16,6 +22,8 @@ interface AdminClientProps {
   initialSystemSettings: SystemSettings;
   initialInstagramAccounts: InstagramAccountEntry[];
   initialConnectedAdmins: Array<{ id: string; email: string; username: string }>;
+  initialTikTokAccounts: TikTokAccountEntry[];
+  initialTikTokConnectedAdmins: Array<{ id: string; email: string; display_name: string }>;
   initialCreditPlans: CreditPlan[];
   initialOperationPricing: OperationPricing[];
 }
@@ -23,6 +31,7 @@ interface AdminClientProps {
 export default function AdminClient({
   initialUsers, initialDomains, initialAllDomains,
   initialSystemSettings, initialInstagramAccounts, initialConnectedAdmins,
+  initialTikTokAccounts, initialTikTokConnectedAdmins,
   initialCreditPlans, initialOperationPricing,
 }: AdminClientProps) {
   const { isDark: isDarkMode, toggleDark } = useTheme();
@@ -67,6 +76,15 @@ export default function AdminClient({
   const [igRegisterPending, setIgRegisterPending] = useState(false);
   const [igRegisterError, setIgRegisterError] = useState('');
   const [igAssignPending, setIgAssignPending] = useState<string | null>(null);
+
+  // TikTok accounts state
+  const [tiktokAccounts, setTikTokAccounts] = useState<TikTokAccountEntry[]>(initialTikTokAccounts);
+  const [tiktokConnectedAdmins] = useState(initialTikTokConnectedAdmins);
+  const [tiktokNewLabel, setTikTokNewLabel] = useState('');
+  const [tiktokNewOwner, setTikTokNewOwner] = useState('');
+  const [tiktokRegisterPending, setTikTokRegisterPending] = useState(false);
+  const [tiktokRegisterError, setTikTokRegisterError] = useState('');
+  const [tiktokAssignPending, setTikTokAssignPending] = useState<string | null>(null);
 
   // Form state
   const [email, setEmail] = useState('');
@@ -238,6 +256,39 @@ export default function AdminClient({
     else await adminActions.unassignInstagramAccount(userId);
     setIgAssignPending(null);
     refreshIgAccounts();
+  };
+
+  const refreshTikTokAccounts = async () => {
+    const updated = await adminActions.listTikTokAccounts();
+    setTikTokAccounts(updated);
+  };
+
+  const handleRegisterTikTokAccount = async () => {
+    if (!tiktokNewLabel || !tiktokNewOwner) return;
+    setTikTokRegisterPending(true);
+    setTikTokRegisterError('');
+    const result = await adminActions.registerTikTokAccount(tiktokNewOwner, tiktokNewLabel);
+    setTikTokRegisterPending(false);
+    if (result.success) {
+      setTikTokNewLabel('');
+      setTikTokNewOwner('');
+      refreshTikTokAccounts();
+    } else {
+      setTikTokRegisterError(result.error);
+    }
+  };
+
+  const handleDeleteTikTokAccount = async (accountId: string) => {
+    await adminActions.deleteTikTokAccount(accountId);
+    refreshTikTokAccounts();
+  };
+
+  const handleAssignTikTokAccount = async (userId: string, accountId: string) => {
+    setTikTokAssignPending(userId);
+    if (accountId) await adminActions.assignTikTokAccount(userId, accountId);
+    else await adminActions.unassignTikTokAccount(userId);
+    setTikTokAssignPending(null);
+    refreshTikTokAccounts();
   };
 
   const handleDomainToggle = async (domainId: string, isActive: boolean) => {
@@ -1010,6 +1061,7 @@ export default function AdminClient({
               )}
             </div>
           </div>
+
         </section>
 
         }
@@ -1100,6 +1152,109 @@ export default function AdminClient({
                 </div>
               )}
               {igRegisterError && <p className="text-sm text-red-400 mt-2">{igRegisterError}</p>}
+            </div>
+          </div>
+
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mt-8 mb-4 ${textMuted}`}>TikTok Accounts</h2>
+          <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
+            {tiktokAccounts.length > 0 && (
+              <div className={`divide-y ${d ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                {tiktokAccounts.map(account => (
+                  <div key={account.id} className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] lg:items-center">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{account.label}</p>
+                      <p className={`text-xs truncate ${textMuted}`}>
+                        {account.display_name || account.owner_email}
+                      </p>
+                      <p className={`text-xs ${account.is_connected ? 'text-green-400' : 'text-red-400'}`}>
+                        {account.is_connected ? 'Connected' : 'Disconnected'}
+                      </p>
+                    </div>
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap gap-1">
+                        {account.assigned_users.map(user => (
+                          <span
+                            key={user.id}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}
+                          >
+                            {user.email}
+                            <button
+                              onClick={() => handleAssignTikTokAccount(user.id, '')}
+                              className="opacity-60 hover:opacity-100"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <select
+                        disabled={tiktokAssignPending !== null}
+                        onChange={event => {
+                          if (event.target.value) {
+                            handleAssignTikTokAccount(event.target.value, account.id);
+                          }
+                          event.target.value = '';
+                        }}
+                        className={`text-xs px-2 py-2 rounded border w-full sm:w-fit max-w-full ${d ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-300 text-gray-700'}`}
+                      >
+                        <option value="">+ Assign user…</option>
+                        {users
+                          .filter(user => !user.is_admin && !account.assigned_users.some(assigned => assigned.id === user.id))
+                          .map(user => (
+                            <option key={user.id} value={user.id}>{user.email}</option>
+                          ))}
+                      </select>
+                    </div>
+                    <button onClick={() => handleDeleteTikTokAccount(account.id)} className={btnDanger}>
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className={`p-4 ${tiktokAccounts.length > 0 ? `border-t ${d ? 'border-gray-700' : 'border-gray-200'}` : ''}`}>
+              <p className={`text-xs font-medium mb-3 ${textMuted}`}>Register a connected TikTok account as shared</p>
+              {tiktokConnectedAdmins.length === 0 ? (
+                <p className={`text-sm ${textMuted}`}>No admin has an active TikTok connection yet. Connect TikTok in Settings first.</p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] items-end">
+                  <div className="min-w-0">
+                    <label className={labelCls}>Label</label>
+                    <input
+                      value={tiktokNewLabel}
+                      onChange={event => setTikTokNewLabel(event.target.value)}
+                      placeholder="Main TikTok"
+                      disabled={tiktokRegisterPending}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <label className={labelCls}>Account owner</label>
+                    <select
+                      value={tiktokNewOwner}
+                      onChange={event => setTikTokNewOwner(event.target.value)}
+                      disabled={tiktokRegisterPending}
+                      className={`${inputCls} max-w-full`}
+                    >
+                      <option value="">Select admin…</option>
+                      {tiktokConnectedAdmins.map(admin => (
+                        <option key={admin.id} value={admin.id}>
+                          {admin.email} ({admin.display_name})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleRegisterTikTokAccount}
+                    disabled={tiktokRegisterPending || !tiktokNewLabel || !tiktokNewOwner}
+                    className={`${btnPrimary} w-full sm:col-span-2 lg:col-span-1 lg:w-auto`}
+                  >
+                    {tiktokRegisterPending ? 'Registering...' : 'Register'}
+                  </button>
+                </div>
+              )}
+              {tiktokRegisterError && <p className="text-sm text-red-400 mt-2">{tiktokRegisterError}</p>}
             </div>
           </div>
         </section>

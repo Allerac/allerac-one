@@ -179,6 +179,23 @@
     "save": "Desar",
     "cancel": "Cancel·lar"
   },
+  "tiktok": {
+    "description": "Connecta el teu compte de TikTok per publicar vídeos i publicacions de fotos des d'Allerac.",
+    "loading": "Carregant la connexió de TikTok...",
+    "loadFailed": "No s'ha pogut carregar la connexió de TikTok.",
+    "notConfigured": "TikTok encara no està configurat per l'administrador.",
+    "connectPrompt": "Autoritza Allerac a veure el teu perfil bàsic i publicar contingut a TikTok.",
+    "connect": "Connectar TikTok",
+    "account": "Compte de TikTok",
+    "connected": "Connectat",
+    "assignedAccount": "Compte assignat per l'administrador",
+    "active": "Actiu",
+    "disconnect": "Desconnectar",
+    "disconnecting": "Desconnectant...",
+    "disconnectConfirm": "Vols desconnectar el teu compte de TikTok d'Allerac?",
+    "disconnected": "TikTok desconnectat.",
+    "disconnectFailed": "No s'ha pogut desconnectar TikTok."
+  },
   "system": {
     "title": "Configuració",
     "tabSystem": "Sistema",

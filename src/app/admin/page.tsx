@@ -2,6 +2,7 @@ import { requireAdmin } from '@/app/lib/domain-access';
 import {
   listUsers, listActiveDomains, listAllDomains,
   getSystemSettings, listInstagramAccounts, listInstagramConnectedAdmins,
+  listTikTokAccounts, listTikTokConnectedAdmins,
   listCreditPlans, listOperationPricing,
 } from '@/app/actions/admin';
 import AdminClient from './AdminClient';
@@ -15,6 +16,8 @@ export default async function AdminPage() {
     systemSettings,
     instagramAccounts,
     connectedAdmins,
+    tiktokAccounts,
+    tiktokConnectedAdmins,
     creditPlans,
     operationPricing,
   ] = await Promise.all([
@@ -24,6 +27,8 @@ export default async function AdminPage() {
     getSystemSettings(),
     listInstagramAccounts(),
     listInstagramConnectedAdmins(),
+    listTikTokAccounts(),
+    listTikTokConnectedAdmins(),
     listCreditPlans(),
     listOperationPricing(),
   ]);
@@ -35,6 +40,8 @@ export default async function AdminPage() {
       initialSystemSettings={systemSettings}
       initialInstagramAccounts={instagramAccounts}
       initialConnectedAdmins={connectedAdmins}
+      initialTikTokAccounts={tiktokAccounts}
+      initialTikTokConnectedAdmins={tiktokConnectedAdmins}
       initialCreditPlans={creditPlans}
       initialOperationPricing={operationPricing}
     />

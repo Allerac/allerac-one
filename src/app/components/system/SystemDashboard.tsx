@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import BenchmarkPanel from './BenchmarkPanel';
 import GarminSettings from '../settings/GarminSettings';
 import InstagramSettings from '../settings/InstagramSettings';
+import TikTokSettings from '../settings/TikTokSettings';
 import SystemTab from './SystemTab';
 import ApiKeysTab from './ApiKeysTab';
 import PreferencesTab from './PreferencesTab';
@@ -382,7 +383,12 @@ export default function SystemDashboardModal({
             )}
 
             {activeTab === 'social' && (
-              <InstagramSettings userId={userId} isDarkMode={retroMode || isDarkMode} />
+              <div className="space-y-8">
+                <InstagramSettings userId={userId} isDarkMode={retroMode || isDarkMode} />
+                <div className="border-t border-gray-700/40 pt-6">
+                  <TikTokSettings userId={userId} isDarkMode={retroMode || isDarkMode} />
+                </div>
+              </div>
             )}
 
             {activeTab === 'benchmark' && (
