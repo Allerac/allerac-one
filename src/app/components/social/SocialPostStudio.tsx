@@ -3,8 +3,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { generateCaption, generateTags, publishInstagramPost, publishInstagramCarousel, getInstagramRefSettings, incrementRefCounter } from '@/app/actions/instagram';
+import { getTikTokStatus } from '@/app/actions/tiktok';
 import ImageEditModal from '@/app/components/instagram/ImageEditModal';
 import { MODELS } from '@/app/services/llm/models';
+
+export type SocialPlatform = 'instagram' | 'tiktok';
+type TikTokPrivacy = '' | 'PUBLIC_TO_EVERYONE' | 'MUTUAL_FOLLOW_FRIENDS' | 'SELF_ONLY';
 
 interface UploadedImage {
   base64: string;
@@ -13,6 +17,7 @@ interface UploadedImage {
 }
 
 interface PostState {
+  platform: SocialPlatform;
   caption: string;
   tags: string;
   price: string;
@@ -21,6 +26,14 @@ interface PostState {
   images?: UploadedImage[];
   imageUrl?: string | null;
   aspectRatio?: '1/1' | '4/5' | '1.91/1';
+  tiktokTitle?: string;
+  tiktokPrivacy?: TikTokPrivacy;
+  tiktokAllowComment?: boolean;
+  tiktokAllowDuet?: boolean;
+  tiktokAllowStitch?: boolean;
+  tiktokCommercialContent?: boolean;
+  tiktokYourBrand?: boolean;
+  tiktokBrandedContent?: boolean;
 }
 
 interface Props {
@@ -28,7 +41,7 @@ interface Props {
   conversationId?: string | null;
   mobileView?: 'editor' | 'preview';
   isDarkMode?: boolean;
-  externalUpdate?: { caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; timestamp: number } | null;
+  externalUpdate?: { platform?: SocialPlatform; caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; tiktokTitle?: string; timestamp: number } | null;
   onClose?: () => void;
   onSuccess?: (postId: string) => void;
   onPostStateChange?: (state: PostState) => void;
@@ -42,7 +55,7 @@ interface Props {
 // Module-level cache: persists state per conversation across re-renders/navigation
 const studioStateCache = new Map<string, PostState>();
 
-export default function InstagramPostStudio({
+export default function SocialPostStudio({
   userId,
   conversationId,
   mobileView = 'editor',
@@ -57,6 +70,7 @@ export default function InstagramPostStudio({
   initialImagePreview,
   initialImageUrl,
 }: Props) {
+  const [platform, setPlatform] = useState<SocialPlatform>('instagram');
   const [images, setImages] = useState<UploadedImage[]>(
     initialImageBase64 && initialImagePreview
       ? [{ base64: initialImageBase64, preview: initialImagePreview, name: 'imagem carregada' }]
@@ -64,6 +78,17 @@ export default function InstagramPostStudio({
   );
   const [imageUrl, setImageUrl] = useState<string | null>(initialImageUrl ?? null);
   const [aspectRatio, setAspectRatio] = useState<'1/1' | '4/5' | '1.91/1'>('1/1');
+  const [tiktokTitle, setTikTokTitle] = useState('');
+  const [tiktokPrivacy, setTikTokPrivacy] = useState<TikTokPrivacy>('');
+  const [tiktokAllowComment, setTikTokAllowComment] = useState(false);
+  const [tiktokAllowDuet, setTikTokAllowDuet] = useState(false);
+  const [tiktokAllowStitch, setTikTokAllowStitch] = useState(false);
+  const [tiktokCommercialContent, setTikTokCommercialContent] = useState(false);
+  const [tiktokYourBrand, setTikTokYourBrand] = useState(false);
+  const [tiktokBrandedContent, setTikTokBrandedContent] = useState(false);
+  const [tiktokConsent, setTikTokConsent] = useState(false);
+  const [tiktokAccountName, setTikTokAccountName] = useState('');
+  const [tiktokConnected, setTikTokConnected] = useState(false);
   const [caption, setCaption] = useState(initialCaption ?? '');
   const [tags, setTags] = useState(initialTags ?? '');
   const [isProduct, setIsProduct] = useState(false);
@@ -79,7 +104,7 @@ export default function InstagramPostStudio({
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
   const [selectedProvider, setSelectedProvider] = useState<'github' | 'gemini' | 'anthropic' | 'ollama'>('github');
-  const t = useTranslations('instagramStudio');
+  const t = useTranslations('socialStudio');
   const locale = useLocale();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -101,6 +126,12 @@ export default function InstagramPostStudio({
       setRefManaged(r.managed);
       setRefPrefix(r.prefix);
       setRefCounter(r.counter);
+    });
+    getTikTokStatus().then((status) => {
+      setTikTokConnected(status.is_connected);
+      setTikTokAccountName(status.display_name ?? '');
+    }).catch(() => {
+      setTikTokConnected(false);
     });
   }, []);
 
@@ -161,11 +192,16 @@ export default function InstagramPostStudio({
     if (prevId === conversationId) return;
 
     // Save state under the previous conversation
-    studioStateCache.set(prevId ?? 'new', { caption, tags, price, productRef, isProduct, images, imageUrl, aspectRatio });
+    studioStateCache.set(prevId ?? 'new', {
+      platform, caption, tags, price, productRef, isProduct, images, imageUrl, aspectRatio,
+      tiktokTitle, tiktokPrivacy, tiktokAllowComment, tiktokAllowDuet, tiktokAllowStitch,
+      tiktokCommercialContent, tiktokYourBrand, tiktokBrandedContent,
+    });
 
     // Restore state for the new conversation
     const saved = studioStateCache.get(conversationId ?? 'new');
     if (saved) {
+      setPlatform(saved.platform ?? 'instagram');
       setCaption(saved.caption);
       setTags(saved.tags);
       setPrice(saved.price);
@@ -174,13 +210,29 @@ export default function InstagramPostStudio({
       setImages(saved.images ?? []);
       setImageUrl(saved.imageUrl ?? null);
       setAspectRatio(saved.aspectRatio ?? '1/1');
+      setTikTokTitle(saved.tiktokTitle ?? '');
+      setTikTokPrivacy(saved.tiktokPrivacy ?? '');
+      setTikTokAllowComment(saved.tiktokAllowComment ?? false);
+      setTikTokAllowDuet(saved.tiktokAllowDuet ?? false);
+      setTikTokAllowStitch(saved.tiktokAllowStitch ?? false);
+      setTikTokCommercialContent(saved.tiktokCommercialContent ?? false);
+      setTikTokYourBrand(saved.tiktokYourBrand ?? false);
+      setTikTokBrandedContent(saved.tiktokBrandedContent ?? false);
     } else if (prevId == null) {
       // null → real ID: first message created a new conversation — keep current state
-      studioStateCache.set(conversationId ?? 'new', { caption, tags, price, productRef, isProduct, images, imageUrl, aspectRatio });
+      studioStateCache.set(conversationId ?? 'new', {
+        platform, caption, tags, price, productRef, isProduct, images, imageUrl, aspectRatio,
+        tiktokTitle, tiktokPrivacy, tiktokAllowComment, tiktokAllowDuet, tiktokAllowStitch,
+        tiktokCommercialContent, tiktokYourBrand, tiktokBrandedContent,
+      });
     } else {
       // real ID → different ID with no saved state — reset
       setCaption(''); setTags(''); setPrice(''); setProductRef(''); setIsProduct(false);
       setImages([]); setImageUrl(null); setAspectRatio('1/1');
+      setPlatform('instagram'); setTikTokTitle(''); setTikTokPrivacy('');
+      setTikTokAllowComment(false); setTikTokAllowDuet(false); setTikTokAllowStitch(false);
+      setTikTokCommercialContent(false); setTikTokYourBrand(false); setTikTokBrandedContent(false);
+      setTikTokConsent(false);
     }
 
     prevConvIdRef.current = conversationId;
@@ -200,11 +252,20 @@ export default function InstagramPostStudio({
   }, [images.length]);
 
   useEffect(() => {
-    onPostStateChange?.({ caption, tags, price, productRef, isProduct });
-  }, [caption, tags, price, productRef, isProduct]);
+    onPostStateChange?.({
+      platform, caption, tags, price, productRef, isProduct,
+      tiktokTitle, tiktokPrivacy, tiktokAllowComment, tiktokAllowDuet, tiktokAllowStitch,
+      tiktokCommercialContent, tiktokYourBrand, tiktokBrandedContent,
+    });
+  }, [
+    platform, caption, tags, price, productRef, isProduct, tiktokTitle, tiktokPrivacy,
+    tiktokAllowComment, tiktokAllowDuet, tiktokAllowStitch, tiktokCommercialContent,
+    tiktokYourBrand, tiktokBrandedContent,
+  ]);
 
   useEffect(() => {
     if (!externalUpdate) return;
+    if (externalUpdate.platform !== undefined) setPlatform(externalUpdate.platform);
     if (externalUpdate.caption !== undefined) setCaption(externalUpdate.caption);
     if (externalUpdate.tags !== undefined) setTags(externalUpdate.tags);
     if (externalUpdate.price !== undefined) setPrice(externalUpdate.price);
@@ -213,6 +274,7 @@ export default function InstagramPostStudio({
       setImageUrl(externalUpdate.imageUrl);
       setImages([]);
     }
+    if (externalUpdate.tiktokTitle !== undefined) setTikTokTitle(externalUpdate.tiktokTitle);
   }, [externalUpdate?.timestamp]);
 
   const buildFullCaption = () => {
@@ -237,6 +299,10 @@ export default function InstagramPostStudio({
   };
 
   const handlePublish = async () => {
+    if (platform === 'tiktok') {
+      setError(t('tiktokPublishPending'));
+      return;
+    }
     if (images.length === 0 && !imageUrl) { setError(t('errImageRequired')); return; }
     if (!caption.trim()) { setError(t('errCaptionRequired')); return; }
     setIsLoading(true);
@@ -337,6 +403,42 @@ export default function InstagramPostStudio({
 
         {/* Editor Fields */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-5">
+          <div>
+            <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('platform')}</label>
+            <div className={`grid grid-cols-2 gap-1 p-1 rounded-lg ${d ? 'bg-gray-800' : 'bg-gray-100'}`}>
+              {(['instagram', 'tiktok'] as const).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    setPlatform(item);
+                    setError('');
+                    setSuccess('');
+                  }}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition ${
+                    platform === item
+                      ? item === 'instagram'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow'
+                        : 'bg-black text-white shadow'
+                      : `${txtMuted} hover:${txt}`
+                  }`}
+                >
+                  {item === 'instagram' ? 'Instagram' : 'TikTok'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {platform === 'tiktok' && (
+            <div className={`rounded-lg border p-3 ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}>
+              <p className={`text-sm font-medium ${txt}`}>
+                {tiktokConnected
+                  ? t('tiktokPostingAs', { name: tiktokAccountName || 'TikTok' })
+                  : t('tiktokNotConnected')}
+              </p>
+              <p className={`text-xs mt-1 ${txtMuted}`}>{t('tiktokCreatorInfoNotice')}</p>
+            </div>
+          )}
 
           {/* Onboarding hint — visible only when no image is selected */}
           {images.length === 0 && !imageUrl && (
@@ -431,7 +533,7 @@ export default function InstagramPostStudio({
                   {isGenerating ? t('generating') : t('generateCaptionWithAI')}
                 </button>
 
-                <div className="mt-3">
+                {platform === 'instagram' && <div className="mt-3">
                   <label className={`block text-xs ${txtMuted} mb-1.5`}>{t('aspectRatio')}</label>
                   <select
                     value={aspectRatio}
@@ -442,7 +544,7 @@ export default function InstagramPostStudio({
                     <option value="4/5">{t('portrait')}</option>
                     <option value="1.91/1">{t('landscape')}</option>
                   </select>
-                </div>
+                </div>}
               </div>
             ) : (
               <button
@@ -471,8 +573,23 @@ export default function InstagramPostStudio({
           </div>
 
           {/* Caption */}
+          {platform === 'tiktok' && (
+            <div>
+              <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('tiktokTitle')}</label>
+              <input
+                type="text"
+                value={tiktokTitle}
+                onChange={(e) => setTikTokTitle(e.target.value)}
+                placeholder={t('tiktokTitlePlaceholder')}
+                className={`w-full px-3 py-2 rounded-lg ${bgInput} border ${borderIn} ${txt} placeholder-gray-400 focus:outline-none focus:border-brand-500 text-sm`}
+              />
+            </div>
+          )}
+
           <div>
-            <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('caption')}</label>
+            <label className={`block text-sm font-medium ${txtSub} mb-2`}>
+              {platform === 'instagram' ? t('caption') : t('description')}
+            </label>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
@@ -495,7 +612,8 @@ export default function InstagramPostStudio({
             />
           </div>
 
-          {/* Purchase instructions */}
+          {/* Instagram-specific commerce fields */}
+          {platform === 'instagram' && <>
           <div>
             <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('purchaseInstructions')}</label>
             <textarea
@@ -546,6 +664,94 @@ export default function InstagramPostStudio({
               </div>
             )}
           </div>
+          </>}
+
+          {platform === 'tiktok' && (
+            <>
+              <div>
+                <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('privacy')}</label>
+                <select
+                  value={tiktokPrivacy}
+                  onChange={(e) => setTikTokPrivacy(e.target.value as TikTokPrivacy)}
+                  className={`w-full px-3 py-2 rounded-lg ${bgInput} border ${borderIn} ${txt} text-sm focus:outline-none focus:border-brand-500`}
+                >
+                  <option value="">{t('privacySelect')}</option>
+                  <option value="PUBLIC_TO_EVERYONE">{t('privacyEveryone')}</option>
+                  <option value="MUTUAL_FOLLOW_FRIENDS">{t('privacyFriends')}</option>
+                  <option value="SELF_ONLY">{t('privacyOnlyMe')}</option>
+                </select>
+                <p className={`text-xs mt-1 ${txtFaint}`}>{t('privacyCreatorInfo')}</p>
+              </div>
+
+              <div>
+                <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('interactions')}</label>
+                <div className="space-y-2">
+                  {[
+                    [t('allowComments'), tiktokAllowComment, setTikTokAllowComment],
+                    [t('allowDuet'), tiktokAllowDuet, setTikTokAllowDuet],
+                    [t('allowStitch'), tiktokAllowStitch, setTikTokAllowStitch],
+                  ].map(([label, checked, setter]) => (
+                    <label key={label as string} className={`flex items-center gap-2 text-sm ${txtSub}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked as boolean}
+                        onChange={(e) => (setter as (value: boolean) => void)(e.target.checked)}
+                        className="rounded"
+                      />
+                      {label as string}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={tiktokCommercialContent}
+                    onChange={(e) => {
+                      setTikTokCommercialContent(e.target.checked);
+                      if (!e.target.checked) {
+                        setTikTokYourBrand(false);
+                        setTikTokBrandedContent(false);
+                      }
+                    }}
+                  />
+                  <span className={`text-sm font-medium ${txtSub}`}>{t('commercialContent')}</span>
+                </label>
+                {tiktokCommercialContent && (
+                  <div className={`mt-3 ml-6 space-y-2 text-sm ${txtSub}`}>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={tiktokYourBrand} onChange={(e) => setTikTokYourBrand(e.target.checked)} />
+                      {t('yourBrand')}
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={tiktokBrandedContent}
+                        disabled={tiktokPrivacy === 'SELF_ONLY'}
+                        onChange={(e) => setTikTokBrandedContent(e.target.checked)}
+                      />
+                      {t('brandedContent')}
+                    </label>
+                    <p className={`text-xs ${txtFaint}`}>
+                      {tiktokBrandedContent ? t('paidPartnershipLabel') : t('promotionalContentLabel')}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <label className={`flex items-start gap-2 text-xs ${txtMuted}`}>
+                <input
+                  type="checkbox"
+                  checked={tiktokConsent}
+                  onChange={(e) => setTikTokConsent(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>{t('tiktokConsent')}</span>
+              </label>
+            </>
+          )}
 
           {/* Feedback messages */}
           {error && <div className="p-3 rounded-lg bg-red-900/50 text-red-300 border border-red-700 text-sm">{error}</div>}
@@ -561,10 +767,18 @@ export default function InstagramPostStudio({
             >{t('copy')}</button>
             <button
               onClick={handlePublish}
-              disabled={isLoading || (images.length === 0 && !imageUrl) || !caption.trim()}
+              disabled={
+                isLoading
+                || (images.length === 0 && !imageUrl)
+                || !caption.trim()
+                || platform === 'tiktok'
+              }
               className={`flex-1 px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 ${btnSecDis} ${btnDisTxt} disabled:cursor-not-allowed text-white font-medium transition text-sm`}
-            >{isLoading ? t('publishing') : t('publish')}</button>
+            >{isLoading ? t('publishing') : platform === 'instagram' ? t('publishInstagram') : t('publishTikTok')}</button>
           </div>
+          {platform === 'tiktok' && (
+            <p className={`text-xs ${txtFaint}`}>{t('tiktokPublishPending')}</p>
+          )}
         </div>
       </div>
 
@@ -574,7 +788,8 @@ export default function InstagramPostStudio({
           <p className={`text-xs font-semibold ${txtMuted} uppercase tracking-wider`}>{t('preview')}</p>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {/* IG post card */}
+          {/* Platform post card */}
+          {platform === 'instagram' ? (
           <div className={d ? 'bg-black' : 'bg-white'}>
             <div className="flex items-center gap-3 px-4 py-3">
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 via-red-500 to-yellow-400 flex-shrink-0" />
@@ -655,6 +870,25 @@ export default function InstagramPostStudio({
               )}
             </div>
           </div>
+          ) : (
+            <div className="min-h-full bg-black text-white flex items-center justify-center p-6">
+              <div className="w-full max-w-[320px]">
+                <div className="relative aspect-[9/16] rounded-xl overflow-hidden bg-gray-900 border border-gray-800">
+                  {previewImage ? (
+                    <img src={previewImage} alt="TikTok post" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-5xl opacity-20">♪</div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black via-black/60 to-transparent">
+                    <p className="text-sm font-semibold">@{tiktokAccountName || t('previewYou')}</p>
+                    {tiktokTitle && <p className="text-sm mt-2 font-medium">{tiktokTitle}</p>}
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{previewCaption}</p>
+                    {previewTags.length > 0 && <p className="text-sm mt-1">{previewTags.join(' ')}</p>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

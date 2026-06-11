@@ -18,7 +18,7 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'get_daily_snapshot',         label: 'Daily Snapshot',      description: 'All health metrics for a single day',            group: 'Health'    },
   { name: 'get_garmin_status',          label: 'Garmin Status',       description: 'Check Garmin device connection',                 group: 'Health'    },
   { name: 'get_recent_activities',      label: 'Recent Activities',   description: 'Recent workouts from Garmin',                    group: 'Health'    },
-  { name: 'update_instagram_form',      label: 'Update Post Form',    description: 'Update the Instagram post draft form',           group: 'Instagram' },
+  { name: 'update_social_form',         label: 'Update Post Form',    description: 'Update the social post draft form',              group: 'Social' },
   { name: 'instagram_publish_post',     label: 'Publish Post',        description: 'Publish a post to Instagram',                    group: 'Instagram' },
   { name: 'instagram_get_profile',      label: 'Get Profile',         description: 'Fetch Instagram account profile info',           group: 'Instagram' },
   { name: 'instagram_get_recent_posts', label: 'Recent Posts',        description: 'Get recent posts from Instagram account',        group: 'Instagram' },
@@ -218,11 +218,20 @@ export const TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'update_instagram_form',
-      description: 'Update the Instagram post form fields directly. Call this tool EVERY TIME you generate, write, improve, or rewrite content for the user\'s post. IMPORTANT: when the user sends an image and asks to generate a post, call this tool ONCE with image_url + caption + tags all together in a single call — do not call it multiple times or write content only in chat.',
+      name: 'update_social_form',
+      description: 'Update the Social Studio form fields directly for Instagram or TikTok. Call this tool every time you generate or rewrite post content. When the user sends an image, call it once with platform, image_url, caption, tags, and TikTok title when applicable.',
       parameters: {
         type: 'object',
         properties: {
+          platform: {
+            type: 'string',
+            enum: ['instagram', 'tiktok'],
+            description: 'Target social platform.',
+          },
+          tiktok_title: {
+            type: 'string',
+            description: 'Short editable TikTok post title (omit for Instagram).',
+          },
           caption: {
             type: 'string',
             description: 'New caption text (omit to keep current)',

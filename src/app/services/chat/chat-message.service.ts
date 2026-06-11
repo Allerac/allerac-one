@@ -21,7 +21,7 @@ interface ChatMessageServiceConfig {
   onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
   onSkillActivated?: (skill: { id: string; name: string; display_name: string }) => void;
   onInstagramDraft?: (draft: { caption: string; tags: string; image_url?: string }) => void;
-  onStudioUpdate?: (fields: { caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string }) => void;
+  onStudioUpdate?: (fields: { platform?: 'instagram' | 'tiktok'; caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; tiktokTitle?: string }) => void;
 }
 
 export class ChatMessageService {
@@ -197,11 +197,13 @@ export class ChatMessageService {
           } else if (event.type === 'studio_update') {
             if (this.config.onStudioUpdate) {
               this.config.onStudioUpdate({
+                platform: event.platform,
                 caption: event.caption,
                 tags: event.tags,
                 price: event.price,
                 isProduct: event.isProduct,
                 imageUrl: event.imageUrl,
+                tiktokTitle: event.tiktokTitle,
               });
             }
           } else if (event.type === 'error') {

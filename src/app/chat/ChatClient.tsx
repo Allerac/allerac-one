@@ -32,7 +32,7 @@ import TelegramBotSettings from '../components/settings/TelegramBotSettings';
 import HealthDashboard from '../components/health/HealthDashboard';
 import InstagramDMPanel from '../components/social/InstagramDMPanel';
 import InstagramPostModal from '../components/instagram/InstagramPostModal';
-import InstagramPostStudio from '../components/instagram/InstagramPostStudio';
+import SocialPostStudio from '../components/social/SocialPostStudio';
 import { AlleracIcon } from '../components/ui/AlleracIcon';
 import OnboardingWizard from '../components/onboarding/OnboardingWizard';
 
@@ -75,7 +75,7 @@ export default function AdminChat({
 }) {
   const t = useTranslations('home');
   const tChat = useTranslations('chat');
-  const tStudio = useTranslations('instagramStudio');
+  const tStudio = useTranslations('socialStudio');
   const locale = useLocale();
   const router = useRouter();
 
@@ -207,7 +207,7 @@ export default function AdminChat({
   const [isInstagramPostOpen, setIsInstagramPostOpen] = useState(showInstagramPost ?? false);
   const [mobileTab, setMobileTab] = useState<'chat' | 'editor' | 'preview'>('editor');
   const [mobileHealthTab, setMobileHealthTab] = useState<'dashboard' | 'chat'>('dashboard');
-  const [studioExternalUpdate, setStudioExternalUpdate] = useState<{ caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; timestamp: number } | null>(null);
+  const [studioExternalUpdate, setStudioExternalUpdate] = useState<{ platform?: 'instagram' | 'tiktok'; caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; tiktokTitle?: string; timestamp: number } | null>(null);
   const postContextRef = useRef<string>('');
   const healthViewContextRef = useRef<string>('');
   const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
@@ -255,7 +255,7 @@ export default function AdminChat({
   const handleLogoutRef = useRef<() => void>(() => {});
   const instagramDraftRef = useRef<{ caption: string; tags: string } | null>(null);
 
-  // When instagram studio is open, exclude the old draft tool so the model uses update_instagram_form instead
+  // When Social Studio is open, use the form-update tool instead of the legacy Instagram draft tool.
   const activeTools = isInstagramPostOpen
     ? TOOLS.filter((t: any) => t.function?.name !== 'instagram_create_post_draft')
     : TOOLS;
@@ -1040,7 +1040,7 @@ const savedModel = localStorage.getItem('selected_model');
           {/* Instagram Post Studio — left column (desktop), fullscreen tab (mobile) */}
           {isInstagramPostOpen && userId && (
             <div className={`${mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'} flex-1 min-w-0 overflow-hidden border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-              <InstagramPostStudio
+              <SocialPostStudio
                 userId={userId}
                 conversationId={currentConversationId}
                 mobileView={mobileTab === 'preview' ? 'preview' : 'editor'}
@@ -1053,13 +1053,15 @@ const savedModel = localStorage.getItem('selected_model');
                 }}
                 onPostStateChange={(state) => {
                   const parts: string[] = [];
+                  parts.push(`Platform: ${state.platform}`);
                   if (state.caption) parts.push(`Caption: "${state.caption}"`);
                   if (state.tags) parts.push(`Hashtags: ${state.tags}`);
                   if (state.isProduct && state.price) parts.push(`Preço: €${state.price}`);
+                  if (state.platform === 'tiktok' && state.tiktokTitle) parts.push(`TikTok title: "${state.tiktokTitle}"`);
                   const stateStr = parts.length ? `\n${parts.join('\n')}` : ' (empty)';
                   const langMap: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English' };
                   const lang = langMap[locale] ?? 'English';
-                  postContextRef.current = `## Instagram Post Studio is open${stateStr}\n\nLANGUAGE: Generate all captions and hashtags in ${lang}.\n\nRULES:\n- Whenever the user asks you to generate, write, or improve the post content, call \`update_instagram_form\` immediately.\n- When the user sends an image and asks to generate a post, call \`update_instagram_form\` ONCE with image_url + caption + tags all filled in a single call. Never call it first with only the image and then again with the text.\n- Never write caption or hashtags only in the chat — always use the tool.`;
+                  postContextRef.current = `## Social Post Studio is open${stateStr}\n\nLANGUAGE: Generate all captions and hashtags in ${lang}.\n\nRULES:\n- Whenever the user asks you to generate, write, or improve post content, call \`update_social_form\` immediately.\n- Include the active platform in the tool call.\n- When the user sends an image and asks to generate a post, call \`update_social_form\` ONCE with image_url + caption + tags all filled in a single call.\n- For TikTok, also provide a short editable title.\n- Never write caption or hashtags only in the chat; always update the form.`;
                 }}
                 initialCaption={instagramPreFill?.caption}
                 initialTags={instagramPreFill?.tags}

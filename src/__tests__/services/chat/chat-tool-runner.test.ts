@@ -35,15 +35,19 @@ describe('executeChatTool', () => {
   });
 
   test('emits client-side form updates', async () => {
-    await expect(executeChatTool('update_instagram_form', {
+    await expect(executeChatTool('update_social_form', {
+      platform: 'tiktok',
       caption: 'New caption',
+      tiktok_title: 'New title',
     }, context)).resolves.toEqual({
       success: true,
       message: 'Form updated.',
     });
     expect(context.emit).toHaveBeenCalledWith({
       type: 'studio_update',
+      platform: 'tiktok',
       caption: 'New caption',
+      tiktokTitle: 'New title',
     });
   });
 

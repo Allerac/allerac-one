@@ -35,7 +35,7 @@ export default function ImageEditModal({
   isDarkMode,
   onApply,
 }: ImageEditModalProps) {
-  const t = useTranslations('instagramStudio');
+  const t = useTranslations('socialStudio');
   const [selectedOp, setSelectedOp] = useState<OperationType>('white-background');
   const [prompt, setPrompt] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);

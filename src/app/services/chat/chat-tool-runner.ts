@@ -40,14 +40,16 @@ export async function executeChatTool(
   const { user, githubToken, tavilyApiKey, message, locale, emit } = context;
   const userId = user.id;
 
-  if (toolName === 'update_instagram_form') {
-    const { caption, tags, price, is_product, image_url } = toolArgs;
+  if (toolName === 'update_social_form' || toolName === 'update_instagram_form') {
+    const { platform, caption, tags, price, is_product, image_url, tiktok_title } = toolArgs;
     const update: Record<string, any> = { type: 'studio_update' };
+    if (platform === 'instagram' || platform === 'tiktok') update.platform = platform;
     if (caption !== undefined) update.caption = caption;
     if (tags !== undefined) update.tags = tags;
     if (price !== undefined) update.price = price;
     if (is_product !== undefined) update.isProduct = is_product;
     if (image_url !== undefined) update.imageUrl = image_url;
+    if (tiktok_title !== undefined) update.tiktokTitle = tiktok_title;
     emit(update);
     return { success: true, message: 'Form updated.' };
   }
