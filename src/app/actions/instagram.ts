@@ -357,7 +357,7 @@ async function prepareImageForInstagram(imageBase64: string): Promise<string> {
 
   const buffer = meta.format === 'jpeg' ? rawBuffer : await image.jpeg({ quality: 92 }).toBuffer();
   const uploadService = getImageUploadService();
-  const uploaded = await uploadService.upload(buffer, 'instagram-post.jpg');
+  const uploaded = await uploadService.upload(buffer, 'instagram-post.jpg', 'instagram');
   return uploaded.publicUrl;
 }
 

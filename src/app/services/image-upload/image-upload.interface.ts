@@ -16,5 +16,5 @@ export interface ImageUploadService {
    * @param filename Original filename (optional)
    * @returns Public URL to the uploaded image
    */
-  upload(buffer: Buffer, filename?: string): Promise<UploadedImage>;
+  upload(buffer: Buffer, filename?: string, directory?: string): Promise<UploadedImage>;
 }

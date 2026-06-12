@@ -3,12 +3,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { generateCaption, generateTags, publishInstagramPost, publishInstagramCarousel, getInstagramRefSettings, incrementRefCounter } from '@/app/actions/instagram';
-import { getTikTokStatus } from '@/app/actions/tiktok';
+import {
+  getTikTokCreatorInfo,
+  getTikTokPublishStatus,
+  getTikTokStatus,
+  publishTikTokPhotos,
+} from '@/app/actions/tiktok';
+import type { TikTokCreatorInfo, TikTokPrivacyLevel } from '@/app/services/tiktok/tiktok-api.service';
 import ImageEditModal from '@/app/components/instagram/ImageEditModal';
 import { MODELS } from '@/app/services/llm/models';
 
 export type SocialPlatform = 'instagram' | 'tiktok';
-type TikTokPrivacy = '' | 'PUBLIC_TO_EVERYONE' | 'MUTUAL_FOLLOW_FRIENDS' | 'SELF_ONLY';
+type TikTokPrivacy = '' | TikTokPrivacyLevel;
 
 interface UploadedImage {
   base64: string;
@@ -87,8 +93,11 @@ export default function SocialPostStudio({
   const [tiktokYourBrand, setTikTokYourBrand] = useState(false);
   const [tiktokBrandedContent, setTikTokBrandedContent] = useState(false);
   const [tiktokConsent, setTikTokConsent] = useState(false);
+  const [tiktokAutoAddMusic, setTikTokAutoAddMusic] = useState(false);
   const [tiktokAccountName, setTikTokAccountName] = useState('');
   const [tiktokConnected, setTikTokConnected] = useState(false);
+  const [tiktokCreatorInfo, setTikTokCreatorInfo] = useState<TikTokCreatorInfo | null>(null);
+  const [tiktokCreatorLoading, setTikTokCreatorLoading] = useState(false);
   const [caption, setCaption] = useState(initialCaption ?? '');
   const [tags, setTags] = useState(initialTags ?? '');
   const [isProduct, setIsProduct] = useState(false);
@@ -135,22 +144,47 @@ export default function SocialPostStudio({
     });
   }, []);
 
+  useEffect(() => {
+    if (platform !== 'tiktok' || !tiktokConnected || tiktokCreatorInfo || tiktokCreatorLoading) return;
+    setTikTokCreatorLoading(true);
+    getTikTokCreatorInfo()
+      .then((result) => {
+        if (result.success) {
+          setTikTokCreatorInfo(result.creator);
+          setTikTokAccountName(result.creator.creatorNickname);
+          setTikTokPrivacy('');
+          setTikTokAllowComment(false);
+          setTikTokAllowDuet(false);
+          setTikTokAllowStitch(false);
+        } else {
+          setError(result.error);
+        }
+      })
+      .catch(() => setError(t('tiktokCreatorInfoFailed')))
+      .finally(() => setTikTokCreatorLoading(false));
+  }, [platform, tiktokConnected, tiktokCreatorInfo, tiktokCreatorLoading, t]);
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
     if (!files.length) return;
 
     setImages(current => {
-      const remaining = 10 - current.length;
+      const maxImages = platform === 'tiktok' ? 35 : 10;
+      const remaining = maxImages - current.length;
       if (files.length > remaining) {
-        setError(`Máximo 10 imagens por carrossel. ${files.length - remaining} ficheiro(s) ignorado(s).`);
+        setError(t('errTooManyImages', { max: maxImages, ignored: files.length - remaining }));
       } else {
         setError('');
       }
       const toProcess = files.slice(0, remaining);
       toProcess.forEach(file => {
         if (!file.type.startsWith('image/')) return;
-        if (file.size > 10 * 1024 * 1024) { setError(t('errFileTooLarge')); return; }
+        const maxBytes = (platform === 'tiktok' ? 20 : 10) * 1024 * 1024;
+        if (file.size > maxBytes) {
+          setError(t('errFileTooLargeForPlatform', { max: platform === 'tiktok' ? 20 : 10 }));
+          return;
+        }
         const reader = new FileReader();
         reader.onload = (ev) => {
           const result = ev.target?.result as string;
@@ -300,7 +334,86 @@ export default function SocialPostStudio({
 
   const handlePublish = async () => {
     if (platform === 'tiktok') {
-      setError(t('tiktokPublishPending'));
+      if (!tiktokCreatorInfo || !tiktokPrivacy) {
+        setError(t('tiktokCreatorInfoRequired'));
+        return;
+      }
+      if (!tiktokConsent) {
+        setError(t('tiktokConsentRequired'));
+        return;
+      }
+      if (tiktokCommercialContent && !tiktokYourBrand && !tiktokBrandedContent) {
+        setError(t('tiktokCommercialSelectionRequired'));
+        return;
+      }
+      if (tiktokBrandedContent && tiktokPrivacy === 'SELF_ONLY') {
+        setError(t('tiktokBrandedContentPrivate'));
+        return;
+      }
+      if (images.length === 0 && !imageUrl) {
+        setError(t('errImageRequired'));
+        return;
+      }
+      if (!tiktokTitle.trim()) {
+        setError(t('tiktokTitleRequired'));
+        return;
+      }
+
+      setIsLoading(true);
+      setError('');
+      setSuccess(t('tiktokUploading'));
+      try {
+        let imagesBase64 = images.map((image) => image.base64);
+        if (!imagesBase64.length && imageUrl) {
+          const response = await fetch(imageUrl);
+          if (!response.ok) throw new Error(t('tiktokImageFetchFailed'));
+          const blob = await response.blob();
+          imagesBase64 = [await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result).split(',')[1] || String(reader.result));
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          })];
+        }
+
+        const result = await publishTikTokPhotos({
+          imagesBase64,
+          title: tiktokTitle,
+          description: [caption.trim(), tags.trim()].filter(Boolean).join('\n\n'),
+          privacyLevel: tiktokPrivacy,
+          allowComment: tiktokAllowComment,
+          autoAddMusic: tiktokAutoAddMusic,
+          yourBrand: tiktokYourBrand,
+          brandedContent: tiktokBrandedContent,
+          photoCoverIndex: clampedPreviewIndex,
+        });
+        if (!result.success) throw new Error(result.error);
+
+        setSuccess(t('tiktokProcessing'));
+        for (let attempt = 0; attempt < 20; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          const statusResult = await getTikTokPublishStatus(result.publishId);
+          if (!statusResult.success) throw new Error(statusResult.error);
+          if (statusResult.status.status === 'FAILED') {
+            throw new Error(statusResult.status.failReason || 'tiktok_publish_failed');
+          }
+          if (statusResult.status.status === 'PUBLISH_COMPLETE') {
+            setSuccess(t('tiktokPublished'));
+            setImages([]); setImageUrl(null); setCaption(''); setTags(''); setTikTokTitle('');
+            setTikTokPrivacy(''); setTikTokConsent(false); setTikTokCommercialContent(false);
+            setTikTokYourBrand(false); setTikTokBrandedContent(false);
+            studioStateCache.delete(conversationId ?? 'new');
+            onSuccess?.(statusResult.status.postIds[0] || result.publishId);
+            return;
+          }
+        }
+        setSuccess(t('tiktokStillProcessing'));
+      } catch (err) {
+        setSuccess('');
+        setError(err instanceof Error ? err.message : t('tiktokPublishFailed'));
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
     if (images.length === 0 && !imageUrl) { setError(t('errImageRequired')); return; }
@@ -436,7 +549,9 @@ export default function SocialPostStudio({
                   ? t('tiktokPostingAs', { name: tiktokAccountName || 'TikTok' })
                   : t('tiktokNotConnected')}
               </p>
-              <p className={`text-xs mt-1 ${txtMuted}`}>{t('tiktokCreatorInfoNotice')}</p>
+              <p className={`text-xs mt-1 ${txtMuted}`}>
+                {tiktokCreatorLoading ? t('tiktokLoadingCreator') : t('tiktokCreatorInfoNotice')}
+              </p>
             </div>
           )}
 
@@ -507,7 +622,7 @@ export default function SocialPostStudio({
                       >×</button>
                     </div>
                   )}
-                  {images.length < 10 && images.length > 0 && (
+                  {images.length < (platform === 'tiktok' ? 35 : 10) && images.length > 0 && (
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className={`w-16 h-16 flex-shrink-0 rounded-lg border-2 border-dashed ${borderIn} hover:border-brand-500 flex items-center justify-center ${txtMuted} hover:text-brand-400 transition text-2xl font-light`}
@@ -518,7 +633,7 @@ export default function SocialPostStudio({
                 {/* Count + carousel badge */}
                 {images.length > 0 && (
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className={`text-xs ${txtFaint}`}>{images.length}/10</span>
+                    <span className={`text-xs ${txtFaint}`}>{images.length}/{platform === 'tiktok' ? 35 : 10}</span>
                     {images.length >= 2 && (
                       <span className={`text-xs px-1.5 py-0.5 rounded ${d ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>carrossel</span>
                     )}
@@ -554,7 +669,9 @@ export default function SocialPostStudio({
                 <div className={txtMuted}>
                   <div className="text-3xl mb-1">📸</div>
                   <p className="text-sm">{t('clickToSelect')}</p>
-                  <p className={`text-xs ${txtFaint} mt-1`}>Até 10 imagens · Max 10MB cada · JPG, PNG</p>
+                  <p className={`text-xs ${txtFaint} mt-1`}>
+                    {t('imageCountHint', { max: platform === 'tiktok' ? 35 : 10 })}
+                  </p>
                 </div>
               </button>
             )}
@@ -673,12 +790,25 @@ export default function SocialPostStudio({
                 <select
                   value={tiktokPrivacy}
                   onChange={(e) => setTikTokPrivacy(e.target.value as TikTokPrivacy)}
+                  disabled={!tiktokCreatorInfo}
                   className={`w-full px-3 py-2 rounded-lg ${bgInput} border ${borderIn} ${txt} text-sm focus:outline-none focus:border-brand-500`}
                 >
                   <option value="">{t('privacySelect')}</option>
-                  <option value="PUBLIC_TO_EVERYONE">{t('privacyEveryone')}</option>
-                  <option value="MUTUAL_FOLLOW_FRIENDS">{t('privacyFriends')}</option>
-                  <option value="SELF_ONLY">{t('privacyOnlyMe')}</option>
+                  {tiktokCreatorInfo?.privacyLevelOptions.map((option) => (
+                    <option
+                      key={option}
+                      value={option}
+                      disabled={option === 'SELF_ONLY' && tiktokBrandedContent}
+                    >
+                      {option === 'PUBLIC_TO_EVERYONE'
+                        ? t('privacyEveryone')
+                        : option === 'MUTUAL_FOLLOW_FRIENDS'
+                          ? t('privacyFriends')
+                          : option === 'FOLLOWER_OF_CREATOR'
+                            ? t('privacyFollowers')
+                            : t('privacyOnlyMe')}
+                    </option>
+                  ))}
                 </select>
                 <p className={`text-xs mt-1 ${txtFaint}`}>{t('privacyCreatorInfo')}</p>
               </div>
@@ -686,23 +816,30 @@ export default function SocialPostStudio({
               <div>
                 <label className={`block text-sm font-medium ${txtSub} mb-2`}>{t('interactions')}</label>
                 <div className="space-y-2">
-                  {[
-                    [t('allowComments'), tiktokAllowComment, setTikTokAllowComment],
-                    [t('allowDuet'), tiktokAllowDuet, setTikTokAllowDuet],
-                    [t('allowStitch'), tiktokAllowStitch, setTikTokAllowStitch],
-                  ].map(([label, checked, setter]) => (
-                    <label key={label as string} className={`flex items-center gap-2 text-sm ${txtSub}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked as boolean}
-                        onChange={(e) => (setter as (value: boolean) => void)(e.target.checked)}
-                        className="rounded"
-                      />
-                      {label as string}
-                    </label>
-                  ))}
+                  <label className={`flex items-center gap-2 text-sm ${tiktokCreatorInfo?.commentDisabled ? txtFaint : txtSub}`}>
+                    <input
+                      type="checkbox"
+                      checked={tiktokAllowComment}
+                      disabled={!tiktokCreatorInfo || tiktokCreatorInfo.commentDisabled}
+                      onChange={(e) => setTikTokAllowComment(e.target.checked)}
+                      className="rounded"
+                    />
+                    {t('allowComments')}
+                  </label>
+                  {tiktokCreatorInfo?.commentDisabled && (
+                    <p className={`text-xs ${txtFaint}`}>{t('commentsDisabledByCreator')}</p>
+                  )}
                 </div>
               </div>
+
+              <label className={`flex items-center gap-2 text-sm ${txtSub}`}>
+                <input
+                  type="checkbox"
+                  checked={tiktokAutoAddMusic}
+                  onChange={(e) => setTikTokAutoAddMusic(e.target.checked)}
+                />
+                {t('autoAddMusic')}
+              </label>
 
               <div>
                 <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -748,7 +885,31 @@ export default function SocialPostStudio({
                   onChange={(e) => setTikTokConsent(e.target.checked)}
                   className="mt-0.5"
                 />
-                <span>{t('tiktokConsent')}</span>
+                <span>
+                  {t('tiktokConsentPrefix')}{' '}
+                  <a
+                    href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    {t('musicUsageConfirmation')}
+                  </a>
+                  {(tiktokBrandedContent || tiktokYourBrand) && (
+                    <>
+                      {' '}{t('and')}{' '}
+                      <a
+                        href="https://www.tiktok.com/legal/page/global/bc-policy/en"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        {t('brandedContentPolicy')}
+                      </a>
+                    </>
+                  )}
+                  .
+                </span>
               </label>
             </>
           )}
@@ -770,15 +931,20 @@ export default function SocialPostStudio({
               disabled={
                 isLoading
                 || (images.length === 0 && !imageUrl)
-                || !caption.trim()
-                || platform === 'tiktok'
+                || (platform === 'instagram' && !caption.trim())
+                || (platform === 'tiktok' && (
+                  !tiktokConnected
+                  || !tiktokCreatorInfo
+                  || !tiktokTitle.trim()
+                  || !tiktokPrivacy
+                  || !tiktokConsent
+                  || (tiktokCommercialContent && !tiktokYourBrand && !tiktokBrandedContent)
+                ))
               }
               className={`flex-1 px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 ${btnSecDis} ${btnDisTxt} disabled:cursor-not-allowed text-white font-medium transition text-sm`}
             >{isLoading ? t('publishing') : platform === 'instagram' ? t('publishInstagram') : t('publishTikTok')}</button>
           </div>
-          {platform === 'tiktok' && (
-            <p className={`text-xs ${txtFaint}`}>{t('tiktokPublishPending')}</p>
-          )}
+          {platform === 'tiktok' && <p className={`text-xs ${txtFaint}`}>{t('tiktokProcessingNotice')}</p>}
         </div>
       </div>
 

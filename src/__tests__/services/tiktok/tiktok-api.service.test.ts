@@ -68,4 +68,76 @@ describe('TikTokApiService', () => {
       new TikTokApiService().exchangeCodeForToken('bad-code'),
     ).rejects.toThrow('TikTok token exchange failed (invalid_grant)');
   });
+
+  it('queries creator info used to render publishing controls', async () => {
+    jest.mocked(fetch).mockResolvedValueOnce(mockResponse({
+      data: {
+        creator_avatar_url: 'https://example.com/avatar.jpg',
+        creator_username: 'creator',
+        creator_nickname: 'Creator',
+        privacy_level_options: ['PUBLIC_TO_EVERYONE', 'SELF_ONLY'],
+        comment_disabled: false,
+        duet_disabled: true,
+        stitch_disabled: true,
+        max_video_post_duration_sec: 180,
+      },
+      error: { code: 'ok', message: '' },
+    }));
+
+    await expect(new TikTokApiService().getCreatorInfo('access')).resolves.toEqual({
+      creatorAvatarUrl: 'https://example.com/avatar.jpg',
+      creatorUsername: 'creator',
+      creatorNickname: 'Creator',
+      privacyLevelOptions: ['PUBLIC_TO_EVERYONE', 'SELF_ONLY'],
+      commentDisabled: false,
+      duetDisabled: true,
+      stitchDisabled: true,
+      maxVideoPostDurationSec: 180,
+    });
+  });
+
+  it('initializes a direct photo post with disclosure fields', async () => {
+    jest.mocked(fetch).mockResolvedValueOnce(mockResponse({
+      data: { publish_id: 'p_pub~123' },
+      error: { code: 'ok', message: '' },
+    }));
+
+    await expect(new TikTokApiService().publishPhoto('access', {
+      title: 'Title',
+      description: 'Description #tag',
+      privacyLevel: 'PUBLIC_TO_EVERYONE',
+      disableComment: false,
+      autoAddMusic: true,
+      brandContentToggle: true,
+      brandOrganicToggle: false,
+      photoImages: ['https://verified.example/photo.jpg'],
+      photoCoverIndex: 0,
+    })).resolves.toEqual({ publishId: 'p_pub~123' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://open.tiktokapis.com/v2/post/publish/content/init/',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"brand_content_toggle":true'),
+      }),
+    );
+  });
+
+  it('normalizes publish status responses', async () => {
+    jest.mocked(fetch).mockResolvedValueOnce(mockResponse({
+      data: {
+        status: 'PUBLISH_COMPLETE',
+        publicaly_available_post_id: [123],
+      },
+      error: { code: 'ok', message: '' },
+    }));
+
+    await expect(new TikTokApiService().getPublishStatus('access', 'p_pub~123')).resolves.toEqual({
+      status: 'PUBLISH_COMPLETE',
+      failReason: null,
+      postIds: ['123'],
+      uploadedBytes: null,
+      downloadedBytes: null,
+    });
+  });
 });

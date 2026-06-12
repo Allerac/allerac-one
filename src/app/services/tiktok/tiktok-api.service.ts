@@ -23,6 +23,43 @@ export interface TikTokApiError {
   log_id?: string;
 }
 
+export type TikTokPrivacyLevel =
+  | 'PUBLIC_TO_EVERYONE'
+  | 'MUTUAL_FOLLOW_FRIENDS'
+  | 'FOLLOWER_OF_CREATOR'
+  | 'SELF_ONLY';
+
+export interface TikTokCreatorInfo {
+  creatorAvatarUrl: string | null;
+  creatorUsername: string;
+  creatorNickname: string;
+  privacyLevelOptions: TikTokPrivacyLevel[];
+  commentDisabled: boolean;
+  duetDisabled: boolean;
+  stitchDisabled: boolean;
+  maxVideoPostDurationSec: number;
+}
+
+export interface TikTokPhotoPostInput {
+  title: string;
+  description: string;
+  privacyLevel: TikTokPrivacyLevel;
+  disableComment: boolean;
+  autoAddMusic: boolean;
+  brandContentToggle: boolean;
+  brandOrganicToggle: boolean;
+  photoImages: string[];
+  photoCoverIndex: number;
+}
+
+export interface TikTokPublishStatus {
+  status: 'PROCESSING_UPLOAD' | 'PROCESSING_DOWNLOAD' | 'SEND_TO_USER_INBOX' | 'PUBLISH_COMPLETE' | 'FAILED';
+  failReason: string | null;
+  postIds: string[];
+  uploadedBytes: number | null;
+  downloadedBytes: number | null;
+}
+
 function getConfig() {
   return {
     clientKey: process.env.TIKTOK_CLIENT_KEY?.trim() ?? '',
@@ -122,6 +159,106 @@ export class TikTokApiService {
       openId: user.open_id,
       displayName: user.display_name?.trim() || 'TikTok user',
       avatarUrl: user.avatar_url || null,
+    };
+  }
+
+  async getCreatorInfo(accessToken: string): Promise<TikTokCreatorInfo> {
+    const response = await fetch(`${TIKTOK_API_URL}/v2/post/publish/creator_info/query/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+    });
+    const body = await parseResponse<{
+      data?: {
+        creator_avatar_url?: string;
+        creator_username?: string;
+        creator_nickname?: string;
+        privacy_level_options?: TikTokPrivacyLevel[];
+        comment_disabled?: boolean;
+        duet_disabled?: boolean;
+        stitch_disabled?: boolean;
+        max_video_post_duration_sec?: number;
+      };
+    }>(response, 'creator info request');
+    const data = body.data;
+    if (!data?.creator_username || !Array.isArray(data.privacy_level_options)) {
+      throw new Error('TikTok creator info response was incomplete');
+    }
+    return {
+      creatorAvatarUrl: data.creator_avatar_url || null,
+      creatorUsername: data.creator_username,
+      creatorNickname: data.creator_nickname || data.creator_username,
+      privacyLevelOptions: data.privacy_level_options,
+      commentDisabled: Boolean(data.comment_disabled),
+      duetDisabled: Boolean(data.duet_disabled),
+      stitchDisabled: Boolean(data.stitch_disabled),
+      maxVideoPostDurationSec: data.max_video_post_duration_sec || 0,
+    };
+  }
+
+  async publishPhoto(accessToken: string, input: TikTokPhotoPostInput): Promise<{ publishId: string }> {
+    const response = await fetch(`${TIKTOK_API_URL}/v2/post/publish/content/init/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: JSON.stringify({
+        post_info: {
+          title: input.title,
+          description: input.description,
+          privacy_level: input.privacyLevel,
+          disable_comment: input.disableComment,
+          auto_add_music: input.autoAddMusic,
+          brand_content_toggle: input.brandContentToggle,
+          brand_organic_toggle: input.brandOrganicToggle,
+        },
+        source_info: {
+          source: 'PULL_FROM_URL',
+          photo_cover_index: input.photoCoverIndex,
+          photo_images: input.photoImages,
+        },
+        post_mode: 'DIRECT_POST',
+        media_type: 'PHOTO',
+      }),
+    });
+    const body = await parseResponse<{ data?: { publish_id?: string } }>(
+      response,
+      'photo publish request',
+    );
+    const publishId = body.data?.publish_id;
+    if (!publishId) throw new Error('TikTok photo publish response did not include publish_id');
+    return { publishId };
+  }
+
+  async getPublishStatus(accessToken: string, publishId: string): Promise<TikTokPublishStatus> {
+    const response = await fetch(`${TIKTOK_API_URL}/v2/post/publish/status/fetch/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: JSON.stringify({ publish_id: publishId }),
+    });
+    const body = await parseResponse<{
+      data?: {
+        status?: TikTokPublishStatus['status'];
+        fail_reason?: string;
+        publicaly_available_post_id?: Array<string | number>;
+        uploaded_bytes?: number;
+        downloaded_bytes?: number;
+      };
+    }>(response, 'publish status request');
+    const data = body.data;
+    if (!data?.status) throw new Error('TikTok publish status response was incomplete');
+    return {
+      status: data.status,
+      failReason: data.fail_reason || null,
+      postIds: (data.publicaly_available_post_id || []).map(String),
+      uploadedBytes: data.uploaded_bytes ?? null,
+      downloadedBytes: data.downloaded_bytes ?? null,
     };
   }
 

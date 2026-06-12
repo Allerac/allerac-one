@@ -3,6 +3,10 @@ import { requireCurrentUser } from '@/app/lib/auth-session';
 import { getTikTokStatus } from '@/app/actions/tiktok';
 import pool from '@/app/clients/db';
 
+jest.mock('@/app/services/image-upload', () => ({
+  getImageUploadService: jest.fn(),
+}));
+jest.mock('sharp', () => jest.fn());
 jest.mock('@/app/lib/auth-session', () => ({
   requireCurrentUser: jest.fn(),
 }));

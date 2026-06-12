@@ -23,6 +23,7 @@ const DOMAINS_ALL = [
   { id: 'email',   label: 'Email',   icon: '✉️', path: '/email',    desc: 'Email inbox & AI' },
   { id: 'notes',   label: 'Notes',   icon: '📝', path: '/notes',    desc: 'Personal knowledge base' },
   { id: 'jobs',    label: 'Jobs',    icon: '⏰', path: '/jobs',     desc: 'Scheduled tasks & automation' },
+  { id: 'space',   label: 'Space',   icon: '🛰️', path: '/space',   desc: '3D satellite orbit simulator' },
 ];
 
 export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[] }) {
