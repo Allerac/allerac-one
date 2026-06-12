@@ -276,11 +276,16 @@ export default function SatelliteSimulator({ satellites, timeSpeed, showPaths, s
     ));
 
     const onResize = () => {
-      renderer.setSize(mount.clientWidth, mount.clientHeight);
-      camera.aspect = mount.clientWidth / mount.clientHeight;
+      const w = mount.clientWidth, h = mount.clientHeight;
+      if (!w || !h) return;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
     };
-    window.addEventListener('resize', onResize);
+    // ResizeObserver catches container changes (panel open/close, isMobile transitions)
+    // in addition to window resize events
+    const ro = new ResizeObserver(onResize);
+    ro.observe(mount);
 
     const animate = () => {
       s.frame = requestAnimationFrame(animate);
@@ -305,7 +310,7 @@ export default function SatelliteSimulator({ satellites, timeSpeed, showPaths, s
 
     return () => {
       cancelAnimationFrame(s.frame);
-      window.removeEventListener('resize', onResize);
+      ro.disconnect();
       controls.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);

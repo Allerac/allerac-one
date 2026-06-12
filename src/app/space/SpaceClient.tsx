@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AlleracTaskbar from '@/app/components/layout/AlleracTaskbar';
 import type { SatelliteData, PreviewOrbit } from '@/app/components/space/SatelliteSimulator';
@@ -89,7 +89,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   const [timeSpeed, setTimeSpeed]   = useState(300);
   const [showPaths, setShowPaths]   = useState(true);
   const [showCoverage, setShowCoverage] = useState(true);
-  const [panelOpen, setPanelOpen]   = useState(true);
+  const [panelOpen, setPanelOpen]   = useState(false);
 
   // Add-satellite form state
   const [addName,     setAddName]     = useState('');
@@ -162,6 +162,14 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   const toggleSatCoverage = (id: string) =>
     setSatellites(prev => prev.map(s => s.id === id ? { ...s, showCoverage: !s.showCoverage } : s));
 
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   // ── styles ──────────────────────────────────────────────────────────────────
   const panelBg    = '#060c1a';
   const panelBdr   = '#1a3060';
@@ -169,12 +177,45 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   const textMuted  = '#506090';
   const fontMono   = '"Courier New", "Lucida Console", monospace';
   const taskbarH   = 52;
+  const PANEL_W    = 280; // desktop side panel width
+
+  // Desktop: canvas shrinks when panel open; mobile: canvas always full width
+  const canvasRight = isMobile ? 0 : (panelOpen ? PANEL_W : 0);
+  // Panel positioning differs by device
+  const panelStyle: React.CSSProperties = isMobile
+    ? {
+        position: 'absolute', left: 0, right: 0, bottom: taskbarH,
+        height: '62dvh',
+        background: panelBg,
+        borderTop: `1px solid ${panelBdr}`,
+        display: 'flex', flexDirection: 'column',
+        overflowY: 'auto',
+        zIndex: 20,
+        transform: panelOpen ? 'translateY(0)' : 'translateY(100%)',
+        transition: 'transform 0.25s ease',
+      }
+    : {
+        position: 'absolute', right: 0, top: 0, bottom: taskbarH,
+        width: PANEL_W,
+        background: panelBg,
+        borderLeft: `1px solid ${panelBdr}`,
+        display: 'flex', flexDirection: 'column',
+        overflowY: 'auto',
+        zIndex: 20,
+        transform: panelOpen ? 'translateX(0)' : `translateX(${PANEL_W}px)`,
+        transition: 'transform 0.2s ease',
+      };
 
   return (
     <div style={{ position: 'relative', height: '100dvh', background: '#000510', overflow: 'hidden', fontFamily: fontMono }}>
 
-      {/* 3D canvas */}
-      <div style={{ position: 'absolute', inset: `0 ${panelOpen ? 280 : 0}px ${taskbarH}px 0`, transition: 'right 0.2s ease' }}>
+      {/* 3D canvas — right margin shrinks on desktop when panel open */}
+      <div style={{
+        position: 'absolute',
+        top: 0, left: 0, bottom: taskbarH,
+        right: canvasRight,
+        transition: 'right 0.2s ease',
+      }}>
         <SatelliteSimulator
           satellites={satellites}
           timeSpeed={timeSpeed}
@@ -185,8 +226,8 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
         />
       </div>
 
-      {/* Panel toggle button */}
-      {!panelOpen && (
+      {/* Panel toggle — desktop: edge tab; mobile: floating button top-right */}
+      {!panelOpen && !isMobile && (
         <button
           onClick={() => setPanelOpen(true)}
           title="Open control panel"
@@ -200,18 +241,24 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
           CTRL ▶
         </button>
       )}
+      {/* Mobile: floating toggle button */}
+      {isMobile && (
+        <button
+          onClick={() => setPanelOpen(v => !v)}
+          style={{
+            position: 'absolute', top: 10, right: 12, zIndex: 25,
+            background: panelOpen ? '#1a3e7a' : 'rgba(6,12,26,0.85)',
+            border: `1px solid ${panelOpen ? '#4af' : panelBdr}`,
+            color: panelOpen ? '#4af' : textPrimary,
+            padding: '6px 10px', fontSize: 11, fontFamily: fontMono, letterSpacing: 1, cursor: 'pointer',
+          }}
+        >
+          {panelOpen ? '▼ CTRL' : '▲ CTRL'}
+        </button>
+      )}
 
-      {/* Control panel */}
-      {panelOpen && (
-        <div style={{
-          position: 'absolute', right: 0, top: 0, bottom: taskbarH,
-          width: 280,
-          background: panelBg,
-          borderLeft: `1px solid ${panelBdr}`,
-          display: 'flex', flexDirection: 'column',
-          overflowY: 'auto',
-          zIndex: 20,
-        }}>
+      {/* Control panel — always rendered, slides in/out via transform */}
+      <div style={panelStyle}>
 
           {/* Header */}
           <div style={{
@@ -497,19 +544,21 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             <div style={{ marginTop: 6, color: '#2a5080' }}>◎ = coverage circle</div>
           </div>
         </div>
-      )}
 
-      <AlleracTaskbar
-        domainKey="space"
-        domainName="Space"
-        domainIcon="🛰️"
-        userId={userId}
-        userName={userName}
-        userEmail={userEmail}
-        isAdmin={isAdmin}
-        allowedDomains={allowedDomains}
-        onLogout={handleLogout}
-      />
+      {/* Taskbar — absolutely pinned to bottom */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30 }}>
+        <AlleracTaskbar
+          domainKey="space"
+          domainName="Space"
+          domainIcon="🛰️"
+          userId={userId}
+          userName={userName}
+          userEmail={userEmail}
+          isAdmin={isAdmin}
+          allowedDomains={allowedDomains}
+          onLogout={handleLogout}
+        />
+      </div>
     </div>
   );
 }
