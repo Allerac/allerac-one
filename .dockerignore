@@ -36,6 +36,7 @@ workspace/
 tests/
 e2e/
 coverage/
+src/__tests__/
 
 # Misc large files not needed at runtime
 tsconfig.tsbuildinfo

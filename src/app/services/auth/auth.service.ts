@@ -307,6 +307,80 @@ export class AuthService {
    * Checks whether a user has access to a specific domain slug.
    * Admins always have access. Non-admins need an entry in user_domain_access.
    */
+  /**
+   * Find or create a user from Google OAuth data, then return a session.
+   * - Existing google_id → update name/email if changed, return session
+   * - No google_id but same email → link google_id to existing account
+   * - New user → create account (no password), grant default domain access
+   */
+  async loginWithGoogle(googleId: string, email: string, name: string | null): Promise<
+    { success: true; user: User; session: { token: string; expiresAt: Date } } |
+    { success: false; error: string }
+  > {
+    try {
+      // Try by google_id first
+      let row = (await pool.query(
+        'SELECT id, email, name, is_admin, created_at FROM users WHERE google_id = $1',
+        [googleId],
+      )).rows[0] ?? null;
+
+      if (row) {
+        // Update name/email in case they changed in Google account
+        await pool.query(
+          'UPDATE users SET email = $1, name = COALESCE($2, name) WHERE id = $3',
+          [email.toLowerCase(), name, row.id],
+        );
+      } else {
+        // Try to link to existing account with same email
+        const byEmail = await pool.query(
+          'SELECT id, email, name, is_admin, created_at FROM users WHERE email = $1',
+          [email.toLowerCase()],
+        );
+
+        if (byEmail.rows.length > 0) {
+          // Link Google ID to the existing password-based account
+          await pool.query('UPDATE users SET google_id = $1 WHERE id = $2', [googleId, byEmail.rows[0].id]);
+          row = byEmail.rows[0];
+        } else {
+          // Brand-new user via Google
+          const userCount = await pool.query('SELECT COUNT(*) FROM users');
+          const isFirstUser = parseInt(userCount.rows[0].count) === 0;
+
+          const created = await pool.query(
+            `INSERT INTO users (email, name, is_admin, google_id)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, email, name, is_admin, created_at`,
+            [email.toLowerCase(), name ?? null, isFirstUser, googleId],
+          );
+          row = created.rows[0];
+
+          if (!isFirstUser) {
+            await pool.query(
+              `INSERT INTO user_domain_access (user_id, domain_id)
+               SELECT $1, id FROM domains WHERE slug = 'chat' AND is_active = true
+               ON CONFLICT DO NOTHING`,
+              [row.id],
+            );
+          }
+        }
+      }
+
+      const user: User = {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        is_admin: row.is_admin,
+        created_at: row.created_at,
+      };
+
+      const session = await this.createSession(user.id);
+      return { success: true, user, session };
+    } catch (error) {
+      console.error('Google login error:', error);
+      return { success: false, error: 'Google login failed' };
+    }
+  }
+
   async canAccessDomain(userId: string, isAdmin: boolean, slug: string): Promise<boolean> {
     if (isAdmin) return true;
     try {
