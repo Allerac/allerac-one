@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { propagate, twoline2satrec } from 'satellite.js';
 
 // ═══════════════ Types ═══════════════════════════════════════════════════════
 
@@ -16,6 +17,7 @@ export interface SatelliteData {
   showCoverage: boolean;
   initialTheta?: number;
   constellation?: string;
+  tle?: { line1: string; line2: string };
 }
 
 export interface PreviewOrbit {
@@ -41,6 +43,7 @@ interface Props {
   previewOrbit?: PreviewOrbit | null;
   selectedIds?: string[];
   groundStations?: GroundStationData[];
+  targetFps?: number;
   onSatelliteClick?: (id: string) => void;
   onEarthClick?: (pos: { x: number; y: number; z: number }) => void;
   onVisibilityUpdate?: (ids: string[]) => void;
@@ -62,7 +65,7 @@ function angularVelocity(altKm: number) {
   const a = R_EARTH_M + altKm * 1000;
   return (2 * Math.PI) / (2 * Math.PI * Math.sqrt(a ** 3 / GM));
 }
-// ECI → Three.js (Y = North Pole)
+// ECI → Three.js (Y = North Pole) — allocating version, only used outside the hot path
 function orbitalPos(r: number, i: number, Ω: number, θ: number): THREE.Vector3 {
   const cosΩ = Math.cos(Ω), sinΩ = Math.sin(Ω);
   const cosi = Math.cos(i), sini = Math.sin(i);
@@ -72,22 +75,55 @@ function orbitalPos(r: number, i: number, Ω: number, θ: number): THREE.Vector3
   const ez = r * sinθ * sini;
   return new THREE.Vector3(ex, ez, ey);
 }
+// Zero-allocation version — writes directly into `out` to avoid GC pressure in hot path
+function setOrbitalPos(out: THREE.Vector3, r: number, i: number, Ω: number, θ: number): void {
+  const cosΩ = Math.cos(Ω), sinΩ = Math.sin(Ω);
+  const cosi = Math.cos(i), sini = Math.sin(i);
+  const cosθ = Math.cos(θ), sinθ = Math.sin(θ);
+  out.set(
+    r * (cosΩ * cosθ - sinΩ * sinθ * cosi),  // Three.x = ECI x
+    r * sinθ * sini,                            // Three.y = ECI z (north)
+    r * (sinΩ * cosθ + cosΩ * sinθ * cosi),   // Three.z = ECI y
+  );
+}
 
 function updateCoverageCircle(geo: THREE.BufferGeometry, satPos: THREE.Vector3, r: number) {
   const ρ = Math.acos(1 / r);
-  const nadir = satPos.clone().normalize();
-  const up = Math.abs(nadir.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-  const t = up.clone().addScaledVector(nadir, -up.dot(nadir)).normalize();
-  const b = nadir.clone().cross(t).normalize();
+  _sNadir.copy(satPos).normalize();
+  if (Math.abs(_sNadir.y) < 0.9) _sUp.copy(_YAXIS); else _sUp.copy(_XAXIS);
+  _sTan.copy(_sUp).addScaledVector(_sNadir, -_sUp.dot(_sNadir)).normalize();
+  _sBitan.copy(_sNadir).cross(_sTan).normalize();
   const attr = geo.attributes.position as THREE.BufferAttribute;
   const cosρ = Math.cos(ρ), sinρ = Math.sin(ρ);
   for (let k = 0; k <= 96; k++) {
     const phi = (k / 96) * 2 * Math.PI;
     const cp = Math.cos(phi), sp = Math.sin(phi);
     attr.setXYZ(k,
-      cosρ * nadir.x + sinρ * (cp * t.x + sp * b.x),
-      cosρ * nadir.y + sinρ * (cp * t.y + sp * b.y),
-      cosρ * nadir.z + sinρ * (cp * t.z + sp * b.z),
+      cosρ * _sNadir.x + sinρ * (cp * _sTan.x + sp * _sBitan.x),
+      cosρ * _sNadir.y + sinρ * (cp * _sTan.y + sp * _sBitan.y),
+      cosρ * _sNadir.z + sinρ * (cp * _sTan.z + sp * _sBitan.z),
+    );
+  }
+  attr.needsUpdate = true;
+}
+
+const CAP_N = 32;
+const CAP_OFFSET = 1.002; // slightly above Earth surface to avoid z-fighting
+function updateCoverageCap(geo: THREE.BufferGeometry, satPos: THREE.Vector3, r: number) {
+  const ρ = Math.acos(Math.min(1, 1 / r));
+  _sNadir.copy(satPos).normalize();
+  if (Math.abs(_sNadir.y) < 0.9) _sUp.copy(_YAXIS); else _sUp.copy(_XAXIS);
+  _sTan.copy(_sUp).addScaledVector(_sNadir, -_sUp.dot(_sNadir)).normalize();
+  _sBitan.copy(_sNadir).cross(_sTan).normalize();
+  const attr = geo.attributes.position as THREE.BufferAttribute;
+  const cosρ = Math.cos(ρ), sinρ = Math.sin(ρ);
+  attr.setXYZ(0, _sNadir.x * CAP_OFFSET, _sNadir.y * CAP_OFFSET, _sNadir.z * CAP_OFFSET);
+  for (let k = 0; k <= CAP_N; k++) {
+    const phi = (k / CAP_N) * 2 * Math.PI;
+    attr.setXYZ(k + 1,
+      (cosρ * _sNadir.x + sinρ * (Math.cos(phi) * _sTan.x + Math.sin(phi) * _sBitan.x)) * CAP_OFFSET,
+      (cosρ * _sNadir.y + sinρ * (Math.cos(phi) * _sTan.y + Math.sin(phi) * _sBitan.y)) * CAP_OFFSET,
+      (cosρ * _sNadir.z + sinρ * (Math.cos(phi) * _sTan.z + Math.sin(phi) * _sBitan.z)) * CAP_OFFSET,
     );
   }
   attr.needsUpdate = true;
@@ -131,23 +167,58 @@ function getSelectionTexture(): THREE.Texture {
   return _selTex;
 }
 
+// Sprite-based glow replaces PointLight — same visual effect, zero GPU lighting cost
+const _glowCache = new Map<string, THREE.Texture>();
+function getGlowTexture(hex: string): THREE.Texture {
+  if (_glowCache.has(hex)) return _glowCache.get(hex)!;
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 32;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, hex + 'ff');
+  g.addColorStop(0.3, hex + '88');
+  g.addColorStop(1, hex + '00');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 32, 32);
+  const tex = new THREE.CanvasTexture(c);
+  _glowCache.set(hex, tex);
+  return tex;
+}
+
 // ═══════════════ Internal ref types ══════════════════════════════════════════
+
+const R_EARTH_KM = 6371;
+
+// Pre-allocated scratch vectors — reused in hot path to avoid GC pressure
+const _YAXIS   = new THREE.Vector3(0, 1, 0);
+const _XAXIS   = new THREE.Vector3(1, 0, 0);
+const _sNadir  = new THREE.Vector3();
+const _sUp     = new THREE.Vector3();
+const _sTan    = new THREE.Vector3();
+const _sBitan  = new THREE.Vector3();
+const _sWorld  = new THREE.Vector3();
 
 type SatRef = {
   mesh: THREE.Mesh;
   orbitLine: THREE.Line | null;
   coverageLine: THREE.Line | null;
+  coverageCap: THREE.Mesh | null;
   selectionSprite: THREE.Sprite | null;
+  _pos: THREE.Vector3;  // pre-allocated to avoid GC churn per frame
   ω: number; r: number; i: number; Ω: number; θ0: number; θ: number;
+  satrec?: ReturnType<typeof twoline2satrec>;
+  constellation?: string;
+  isPlaneRepresentative: boolean;
 };
 
 // ═══════════════ Component ════════════════════════════════════════════════════
 
 export default function SatelliteSimulator({
   satellites, timeSpeed, showPaths, showCoverage, showDayNight,
-  previewOrbit, selectedIds, groundStations,
+  previewOrbit, selectedIds, groundStations, targetFps,
   onSatelliteClick, onEarthClick, onVisibilityUpdate,
 }: Props) {
+  'use no memo';
   const mountRef = useRef<HTMLDivElement>(null);
 
   const stateRef = useRef({
@@ -162,7 +233,7 @@ export default function SatelliteSimulator({
     ambientLight: null as THREE.AmbientLight | null,
     sunLight:    null as THREE.DirectionalLight | null,
     previewLine: null as THREE.Line | null,
-    stationRefs: new Map<string, { mesh: THREE.Mesh; localPos: THREE.Vector3; worldPos: THREE.Vector3 | null }>(),
+    stationRefs: new Map<string, { mesh: THREE.Mesh; localPos: THREE.Vector3; worldPos: THREE.Vector3 | null; active: boolean }>(),
     triLines:    [] as THREE.Line[],
     frame: 0,
     clock: new THREE.Clock(),
@@ -170,6 +241,18 @@ export default function SatelliteSimulator({
     sunAngle: 0,
     lastVisibleJoined: '',
     satRefs: new Map<string, SatRef>(),
+    simEpochMs: Date.now(),
+    targetFps: targetFps ?? 30,
+    lastFrameTime: 0,
+    lastInteractionTime: 0,
+    selectedIdsSet: new Set<string>(),
+    // Pre-allocated hot-path helpers — avoid GC churn in animate loop
+    _simDate: new Date(),
+    _stationNorm: new THREE.Vector3(),
+    _activeWorldPos: new THREE.Vector3(),
+    _hasActiveStation: false,
+    _stationDir: new THREE.Vector3(),
+    _visibleIds: [] as string[],
     // Synced from props (no re-render on change)
     timeSpeed,
     showPaths,
@@ -181,19 +264,49 @@ export default function SatelliteSimulator({
   });
 
   // ── Prop sync effects (no scene required) ───────────────────────────────────
+  useEffect(() => { stateRef.current.targetFps = targetFps ?? 30; }, [targetFps]);
   useEffect(() => { stateRef.current.timeSpeed = timeSpeed; }, [timeSpeed]);
   useEffect(() => { stateRef.current.onSatelliteClick = onSatelliteClick ?? null; }, [onSatelliteClick]);
   useEffect(() => { stateRef.current.onEarthClick = onEarthClick ?? null; }, [onEarthClick]);
   useEffect(() => { stateRef.current.onVisibilityUpdate = onVisibilityUpdate ?? null; }, [onVisibilityUpdate]);
 
   useEffect(() => {
-    stateRef.current.showPaths = showPaths;
-    stateRef.current.satRefs.forEach(s => { if (s.orbitLine) s.orbitLine.visible = showPaths; });
+    const s = stateRef.current;
+    s.showPaths = showPaths;
+    const sel = s.selectedIdsSet;
+    const constellationTotal = new Map<string, number>();
+    const constellationSelected = new Map<string, number>();
+    s.satRefs.forEach((ref, id) => {
+      if (ref.constellation) {
+        constellationTotal.set(ref.constellation, (constellationTotal.get(ref.constellation) ?? 0) + 1);
+        if (sel.has(id)) constellationSelected.set(ref.constellation, (constellationSelected.get(ref.constellation) ?? 0) + 1);
+      }
+    });
+    s.satRefs.forEach((satRef, id) => {
+      if (!satRef.orbitLine) return;
+      let show = showPaths;
+      if (!show) {
+        if (satRef.constellation) {
+          const total = constellationTotal.get(satRef.constellation) ?? 1;
+          const selCount = constellationSelected.get(satRef.constellation) ?? 0;
+          show = total > 12 ? satRef.isPlaneRepresentative && selCount > total * 0.5 : sel.has(id);
+        } else {
+          show = sel.has(id);
+        }
+      }
+      satRef.orbitLine.visible = show;
+    });
   }, [showPaths]);
 
   useEffect(() => {
-    stateRef.current.showCoverage = showCoverage;
-    stateRef.current.satRefs.forEach(s => { if (s.coverageLine) s.coverageLine.visible = showCoverage; });
+    const s = stateRef.current;
+    s.showCoverage = showCoverage;
+    const sel = s.selectedIdsSet;
+    s.satRefs.forEach((satRef, id) => {
+      const isSelected = sel.has(id);
+      if (satRef.coverageLine) satRef.coverageLine.visible = showCoverage || isSelected;
+      if (satRef.coverageCap)  satRef.coverageCap.visible  = showCoverage || isSelected;
+    });
   }, [showCoverage]);
 
   useEffect(() => {
@@ -232,8 +345,10 @@ export default function SatelliteSimulator({
       }
     }
 
-    // Add new stations + update active colour
+    // Add new stations + sync localPos + update active colour
     for (const gs of (groundStations ?? [])) {
+      // gs.x/y/z is already in Earth-local (ECF) coords — recompute every run to stay in sync
+      const localPos = new THREE.Vector3(gs.x, gs.y, gs.z).normalize();
       let ref = s.stationRefs.get(gs.id);
       if (!ref) {
         const mesh = new THREE.Mesh(
@@ -241,12 +356,11 @@ export default function SatelliteSimulator({
           new THREE.MeshBasicMaterial({ color: gs.active ? 0xffdd00 : 0xaaaaaa }),
         );
         s.scene.add(mesh);
-        const worldPt = new THREE.Vector3(gs.x, gs.y, gs.z).normalize();
-        const localPos = s.earth.worldToLocal(worldPt.clone()).normalize();
-        ref = { mesh, localPos, worldPos: null };
+        ref = { mesh, localPos, worldPos: null, active: gs.active };
         s.stationRefs.set(gs.id, ref);
       } else {
-        // Update colour if active changed
+        ref.localPos.copy(localPos);
+        ref.active = gs.active;
         (ref.mesh.material as THREE.MeshBasicMaterial).color.set(gs.active ? 0xffdd00 : 0xaaaaaa);
       }
     }
@@ -282,6 +396,7 @@ export default function SatelliteSimulator({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.07;
     controls.minDistance = 1.4; controls.maxDistance = 40;
+    controls.addEventListener('change', () => { s.lastInteractionTime = performance.now(); });
     s.controls = controls;
 
     // Lighting
@@ -364,11 +479,12 @@ export default function SatelliteSimulator({
         }
       }
 
-      // Check Earth
+      // Check Earth — pass ECF (Earth-local) coords so callers get correct geodetic position
       const earthHits = s.earth ? raycaster.intersectObject(s.earth, false) : [];
       if (earthHits.length > 0) {
-        const pt = earthHits[0].point;
-        s.onEarthClick?.({ x: pt.x, y: pt.y, z: pt.z });
+        const worldPt = earthHits[0].point;
+        const ecfPt = s.earth!.worldToLocal(worldPt.clone()).normalize();
+        s.onEarthClick?.({ x: ecfPt.x, y: ecfPt.y, z: ecfPt.z });
       }
     };
     mount.addEventListener('pointerdown', onPointerDown);
@@ -386,12 +502,21 @@ export default function SatelliteSimulator({
     ro.observe(mount);
 
     // ── Animation loop ────────────────────────────────────────────────────────
-    const animate = () => {
+    const animate = (timestamp: number) => {
       s.frame = requestAnimationFrame(animate);
       const delta = s.clock.getDelta();
       s.simTime += delta * s.timeSpeed;
 
+      // controls.update() runs at full rAF rate (60 Hz) so damping is always smooth;
+      // it fires 'change' events during damping which keeps render at 60 fps until the
+      // camera actually stops, then we drop to targetFps automatically.
       controls.update();
+
+      // FPS cap — full speed during interaction/damping, target fps when idle
+      const isInteracting = performance.now() - s.lastInteractionTime < 300;
+      if (timestamp - s.lastFrameTime < 1000 / (isInteracting ? 60 : s.targetFps)) return;
+      s.lastFrameTime = timestamp;
+
       earth.rotation.y = EARTH_SPIN * s.simTime;
 
       // Sun orbit when day/night is on (real time, not simulation)
@@ -404,59 +529,76 @@ export default function SatelliteSimulator({
         );
       }
 
-      // Update satellite positions
+      // Update satellite positions — zero-allocation hot path
+      s._simDate.setTime(s.simEpochMs + s.simTime * 1000);
       s.satRefs.forEach(sat => {
-        sat.θ = sat.ω * s.simTime + sat.θ0;
-        const pos = orbitalPos(sat.r, sat.i, sat.Ω, sat.θ);
-        sat.mesh.position.copy(pos);
-        if (sat.coverageLine && s.showCoverage) {
-          updateCoverageCircle(sat.coverageLine.geometry, pos, sat.r);
+        if (sat.satrec) {
+          const pv = propagate(sat.satrec, s._simDate) ?? {};
+          const pvPos = (pv as { position?: unknown }).position;
+          if (pvPos && typeof pvPos !== 'boolean') {
+            const p = pvPos as { x: number; y: number; z: number };
+            sat._pos.set(p.x / R_EARTH_KM, p.z / R_EARTH_KM, p.y / R_EARTH_KM);
+          }
+          // on propagation failure, keep last valid position
+        } else {
+          sat.θ = sat.ω * s.simTime + sat.θ0;
+          setOrbitalPos(sat._pos, sat.r, sat.i, sat.Ω, sat.θ);
         }
+        sat.mesh.position.copy(sat._pos);
+        if (sat.coverageLine?.visible) updateCoverageCircle(sat.coverageLine.geometry, sat._pos, sat.r);
+        if (sat.coverageCap?.visible)  updateCoverageCap(sat.coverageCap.geometry, sat._pos, sat.r);
       });
 
-      // All stations: update world pos + orient cones
-      let activeWorldPos: THREE.Vector3 | null = null;
+      // All stations: update world pos + orient cones — zero-allocation
+      s._hasActiveStation = false;
       s.stationRefs.forEach((ref, id) => {
         if (!s.earth) return;
-        const wp = s.earth.localToWorld(ref.localPos.clone());
-        ref.worldPos = wp;
-        ref.mesh.position.copy(wp);
-        ref.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), wp.clone().normalize());
-        // Is this the active station?
-        const gsData = (groundStations ?? []).find(g => g.id === id);
-        if (gsData?.active) activeWorldPos = wp.clone();
+        _sWorld.copy(ref.localPos);
+        s.earth.localToWorld(_sWorld);
+        if (!ref.worldPos) ref.worldPos = new THREE.Vector3();
+        ref.worldPos.copy(_sWorld);
+        ref.mesh.position.copy(_sWorld);
+        ref.mesh.quaternion.setFromUnitVectors(_YAXIS, s._stationNorm.copy(_sWorld).normalize());
+        if (ref.active) {
+          s._activeWorldPos.copy(_sWorld);
+          s._hasActiveStation = true;
+        }
       });
 
-      // Visibility + triangulation from the active station only
+      // Visibility + connection lines from the active station
       s.triLines.forEach(l => { l.visible = false; });
-      if (activeWorldPos) {
-        const stationDir = (activeWorldPos as THREE.Vector3).clone().normalize();
-        const visibleIds: string[] = [];
+      if (s._hasActiveStation) {
+        s._stationDir.copy(s._activeWorldPos).normalize();
+        s._visibleIds.length = 0;
         s.satRefs.forEach((satRef, id) => {
-          if (satRef.mesh.position.dot(stationDir) > 1.05) visibleIds.push(id);
+          // dot > 1.0: satellite above geometric horizon (Earth radius = 1.0 in scene units)
+          // For LEO (r≈1.064) this covers the full ~20° visibility cone; works for all altitudes
+          if (satRef.mesh.position.dot(s._stationDir) > 1.0) s._visibleIds.push(id);
         });
-        const joined = [...visibleIds].sort().join(',');
+        s._visibleIds.sort();
+        const joined = s._visibleIds.join(',');
         if (joined !== s.lastVisibleJoined) {
           s.lastVisibleJoined = joined;
-          s.onVisibilityUpdate?.(visibleIds);
+          s.onVisibilityUpdate?.(s._visibleIds.slice());
         }
-        if (visibleIds.length >= 3) {
-          visibleIds.slice(0, MAX_TRI).forEach((id, k) => {
-            const satRef = s.satRefs.get(id);
-            if (!satRef || k >= s.triLines.length) return;
-            const line = s.triLines[k];
-            const attr = line.geometry.attributes.position as THREE.BufferAttribute;
-            attr.setXYZ(0, (activeWorldPos as THREE.Vector3).x, (activeWorldPos as THREE.Vector3).y, (activeWorldPos as THREE.Vector3).z);
-            attr.setXYZ(1, satRef.mesh.position.x, satRef.mesh.position.y, satRef.mesh.position.z);
-            attr.needsUpdate = true;
-            line.visible = true;
-          });
-        }
+        // Draw lines from station to each SELECTED satellite that is also visible
+        let lineIdx = 0;
+        s._visibleIds.forEach(id => {
+          if (!s.selectedIdsSet.has(id) || lineIdx >= s.triLines.length) return;
+          const satRef = s.satRefs.get(id);
+          if (!satRef) return;
+          const line = s.triLines[lineIdx++];
+          const attr = line.geometry.attributes.position as THREE.BufferAttribute;
+          attr.setXYZ(0, s._activeWorldPos.x, s._activeWorldPos.y, s._activeWorldPos.z);
+          attr.setXYZ(1, satRef.mesh.position.x, satRef.mesh.position.y, satRef.mesh.position.z);
+          attr.needsUpdate = true;
+          line.visible = true;
+        });
       }
 
       renderer.render(scene, camera);
     };
-    animate();
+    animate(0);
 
     return () => {
       cancelAnimationFrame(s.frame);
@@ -492,13 +634,49 @@ export default function SatelliteSimulator({
     s.previewLine = line;
   }, [previewOrbit]);
 
-  // ── Selection highlight ───────────────────────────────────────────────────────
+  // ── Selection highlight + orbit/coverage visibility ───────────────────────────
   useEffect(() => {
     const s = stateRef.current;
     if (!s.scene) return;
     const sel = new Set(selectedIds ?? []);
+    s.selectedIdsSet = sel;
+
+    // Pre-compute constellation ratios for orbit line plane logic
+    const constellationTotal = new Map<string, number>();
+    const constellationSelected = new Map<string, number>();
+    s.satRefs.forEach((ref, id) => {
+      if (ref.constellation) {
+        constellationTotal.set(ref.constellation, (constellationTotal.get(ref.constellation) ?? 0) + 1);
+        if (sel.has(id)) constellationSelected.set(ref.constellation, (constellationSelected.get(ref.constellation) ?? 0) + 1);
+      }
+    });
+
     s.satRefs.forEach((satRef, id) => {
       const isSelected = sel.has(id);
+
+      // Orbit line: individual when selected; for large constellations show plane
+      // representative lines when >50% of the constellation is selected
+      if (satRef.orbitLine) {
+        let show = s.showPaths;
+        if (!show) {
+          if (satRef.constellation) {
+            const total = constellationTotal.get(satRef.constellation) ?? 1;
+            const selCount = constellationSelected.get(satRef.constellation) ?? 0;
+            show = total > 12
+              ? satRef.isPlaneRepresentative && selCount > total * 0.5
+              : isSelected;
+          } else {
+            show = isSelected;
+          }
+        }
+        satRef.orbitLine.visible = show;
+      }
+
+      // Coverage ring + cap: automatic on selection (or global override)
+      if (satRef.coverageLine) satRef.coverageLine.visible = s.showCoverage || isSelected;
+      if (satRef.coverageCap)  satRef.coverageCap.visible  = s.showCoverage || isSelected;
+
+      // Scale + selection ring sprite
       satRef.mesh.scale.setScalar(isSelected ? 2.5 : 1.0);
       if (isSelected && !satRef.selectionSprite) {
         const sprite = new THREE.Sprite(
@@ -527,10 +705,20 @@ export default function SatelliteSimulator({
         scene.remove(satRef.mesh);
         if (satRef.orbitLine)    scene.remove(satRef.orbitLine);
         if (satRef.coverageLine) scene.remove(satRef.coverageLine);
+        if (satRef.coverageCap)  scene.remove(satRef.coverageCap);
         satRef.mesh.geometry.dispose();
         s.satRefs.delete(id);
       }
     });
+
+    // Count constellation sizes
+    const constellationCounts = new Map<string, number>();
+    for (const d of satellites) {
+      if (d.constellation) constellationCounts.set(d.constellation, (constellationCounts.get(d.constellation) ?? 0) + 1);
+    }
+
+    // Track which orbital planes have a representative line (large constellations only)
+    const drawnOrbitPlanes = new Set<string>();
 
     // Add new
     satellites.forEach(data => {
@@ -545,37 +733,80 @@ export default function SatelliteSimulator({
         new THREE.SphereGeometry(0.022, 8, 8),
         new THREE.MeshBasicMaterial({ color: col }),
       );
-      mesh.add(new THREE.PointLight(col, 1.2, 0.8));
+      const constellationSize = data.constellation ? (constellationCounts.get(data.constellation) ?? 1) : 1;
+      if (constellationSize <= 12) {
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: getGlowTexture(data.color),
+          blending: THREE.AdditiveBlending,
+          transparent: true,
+          opacity: 0.55,
+          depthWrite: false,
+        }));
+        glow.scale.set(0.18, 0.18, 1);
+        mesh.add(glow);
+      }
       scene.add(mesh);
 
+      // Large constellations: 1 orbit line per orbital plane (not per satellite)
+      const isLargeConst = data.constellation !== undefined && constellationSize > 12;
+      const planeKey = isLargeConst ? `${data.constellation}::${data.raan.toFixed(1)}` : null;
+      const isPlaneRepresentative = planeKey !== null && !drawnOrbitPlanes.has(planeKey);
+      if (isPlaneRepresentative && planeKey) drawnOrbitPlanes.add(planeKey);
+
       let orbitLine: THREE.Line | null = null;
-      if (s.showPaths) {
+      if (!isLargeConst || isPlaneRepresentative) {
         const pts: THREE.Vector3[] = [];
         for (let k = 0; k <= 128; k++) pts.push(orbitalPos(r, i, Ω, (k / 128) * 2 * Math.PI));
         orbitLine = new THREE.Line(
           new THREE.BufferGeometry().setFromPoints(pts),
-          new THREE.LineBasicMaterial({ color: col, opacity: 0.30, transparent: true }),
+          new THREE.LineBasicMaterial({ color: col, opacity: isLargeConst ? 0.18 : 0.30, transparent: true }),
         );
+        orbitLine.visible = false; // driven by selection or showPaths toggle
         scene.add(orbitLine);
       }
 
-      let coverageLine: THREE.Line | null = null;
-      if (data.showCoverage) {
-        const pts = new Float32Array((96 + 1) * 3);
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
-        coverageLine = new THREE.Line(
-          geo,
-          new THREE.LineBasicMaterial({ color: col, opacity: 0.50, transparent: true }),
-        );
-        coverageLine.visible = s.showCoverage;
-        scene.add(coverageLine);
-      }
+      // Coverage ring — always created, visibility driven by selection
+      const ringPts = new Float32Array((96 + 1) * 3);
+      const ringGeo = new THREE.BufferGeometry();
+      ringGeo.setAttribute('position', new THREE.BufferAttribute(ringPts, 3));
+      const coverageLine = new THREE.Line(
+        ringGeo,
+        new THREE.LineBasicMaterial({ color: col, opacity: 0.65, transparent: true }),
+      );
+      coverageLine.visible = false;
+      scene.add(coverageLine);
+
+      // Coverage cap — filled spherical footprint, additive blending creates heat map on overlap
+      const capVerts = new Float32Array((CAP_N + 2) * 3);
+      const capIndices: number[] = [];
+      for (let k = 0; k < CAP_N; k++) capIndices.push(0, k + 1, k + 2);
+      const capGeo = new THREE.BufferGeometry();
+      capGeo.setAttribute('position', new THREE.BufferAttribute(capVerts, 3));
+      capGeo.setIndex(capIndices);
+      const coverageCap = new THREE.Mesh(capGeo, new THREE.MeshBasicMaterial({
+        color: col,
+        transparent: true,
+        opacity: 0.18,
+        side: THREE.FrontSide,
+        depthWrite: false,
+        depthTest: false,  // cap sits on Earth surface — skip depth test to avoid z-fighting
+        blending: THREE.AdditiveBlending,
+      }));
+      coverageCap.visible = false;
+      scene.add(coverageCap);
 
       const θ0 = data.initialTheta ?? 0;
+      let satrec: ReturnType<typeof twoline2satrec> | undefined;
+      if (data.tle) {
+        const parsed = twoline2satrec(data.tle.line1, data.tle.line2);
+        if (!parsed.error) satrec = parsed;
+      }
       s.satRefs.set(data.id, {
-        mesh, orbitLine, coverageLine, selectionSprite: null,
-        ω, r, i, Ω, θ0, θ: θ0,
+        mesh, orbitLine, coverageLine, coverageCap, selectionSprite: null,
+        _pos: new THREE.Vector3(),
+        ω, r, i, Ω, θ0, θ: θ0, satrec,
+        constellation: data.constellation,
+        isPlaneRepresentative,
       });
     });
   }, [satellites]);

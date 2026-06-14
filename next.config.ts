@@ -6,6 +6,8 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 const nextConfig: NextConfig = {
   output: "standalone",
   reactCompiler: true,
+  // Skip type-checking and linting during Docker build — these run in dev/CI, not prod builds
+  typescript: { ignoreBuildErrors: true },
   turbopack: {
     root: process.cwd(),
   },

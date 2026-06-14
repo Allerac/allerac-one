@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { requireCurrentUser } from '@/app/lib/auth-session';
+import { validateInviteToken } from '@/app/actions/invites';
 
 const authService = new AuthService();
 const sysSettings = new SystemSettingsService();
@@ -47,6 +48,58 @@ export async function register(
   });
 
   return { success: true, user: result.user };
+}
+
+/**
+ * Register a user via an invite token.
+ * The token determines which domain the user gets access to.
+ */
+export async function registerWithInvite(
+  inviteToken: string,
+  email: string,
+  password: string,
+  name?: string,
+): Promise<{ success: true; redirectTo: string } | { success: false; error: string }> {
+  if (!email || !email.includes('@')) {
+    return { success: false, error: 'Invalid email address' };
+  }
+  if (!password || password.length < 8) {
+    return { success: false, error: 'Password must be at least 8 characters' };
+  }
+
+  // Validate token before attempting registration
+  const validation = await validateInviteToken(inviteToken);
+  if (!validation.valid) {
+    return { success: false, error: validation.error };
+  }
+  if (validation.email !== email.toLowerCase()) {
+    return { success: false, error: 'Email does not match the invite' };
+  }
+
+  // Register (this grants 'chat' by default, but we'll override with the invite domain)
+  const result = await authService.register(email, password, name);
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  // Consume invite — grants the invite domain and marks token used
+  const consumed = await authService.consumeInviteToken(inviteToken, result.user.id, email);
+  if (!consumed.success) {
+    console.error('Failed to consume invite token after registration:', consumed.error);
+  }
+
+  // Set session cookie
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, result.session.token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    expires: result.session.expiresAt,
+    path: '/',
+  });
+
+  const redirectTo = consumed.success ? `/${consumed.domainSlug}` : '/';
+  return { success: true, redirectTo };
 }
 
 /**

@@ -45,6 +45,7 @@
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
     "resend": "^6.12.4",
+    "satellite.js": "6.0.1",
     "sharp": "^0.34.5",
     "three": "^0.184.0",
     "uuid": "^11.0.0",

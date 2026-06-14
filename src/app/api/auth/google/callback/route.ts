@@ -61,6 +61,13 @@ export async function GET(req: NextRequest) {
     path: '/',
   });
 
+  // Consume invite token if one was set before the OAuth redirect
+  const pendingInvite = cookieStore.get('pending_invite')?.value;
+  cookieStore.delete('pending_invite');
+  if (pendingInvite) {
+    await authService.consumeInviteToken(pendingInvite, result.user.id, profile.email).catch(() => {});
+  }
+
   // Redirect based on role
   const { AuthService: AS } = await import('@/app/services/auth/auth.service');
   const as = new AS();

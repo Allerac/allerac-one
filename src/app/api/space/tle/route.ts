@@ -10,7 +10,7 @@ function celestrakUrl(group: string) {
 
 function parseTLE(header: string, line1: string, line2: string): {
   name: string; altitude: number; inclination: number;
-  raan: number; initialTheta: number;
+  raan: number; initialTheta: number; line1: string; line2: string;
 } | null {
   try {
     if (!line2 || line2[0] !== '2') return null;
@@ -23,7 +23,7 @@ function parseTLE(header: string, line1: string, line2: string): {
     const altitude     = Math.max(0, (a - R_EARTH_M) / 1000); // km
     const initialTheta = (meanAnomaly * Math.PI) / 180;
     if (!isFinite(altitude) || !isFinite(inclination)) return null;
-    return { name: header.trim(), altitude, inclination, raan, initialTheta };
+    return { name: header.trim(), altitude, inclination, raan, initialTheta, line1, line2 };
   } catch {
     return null;
   }

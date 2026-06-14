@@ -4,6 +4,8 @@ import { useTheme } from '@/app/context/ThemeContext';
 import { useState, useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import * as adminActions from '@/app/actions/admin';
+import * as inviteActions from '@/app/actions/invites';
+import type { InviteRecord } from '@/app/actions/invites';
 import type {
   AdminUser,
   AdminDomain,
@@ -95,6 +97,14 @@ export default function AdminClient({
   const [formSuccess, setFormSuccess] = useState('');
   const [isPending, startTransition] = useTransition();
 
+  // Invite state
+  const [invites, setInvites] = useState<InviteRecord[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteDomain, setInviteDomain] = useState('');
+  const [invitePending, setInvitePending] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [inviteRevokingToken, setInviteRevokingToken] = useState<string | null>(null);
+
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
@@ -139,6 +149,36 @@ export default function AdminClient({
   const btnDanger = `px-3 py-1 rounded text-xs font-medium transition-colors ${
     d ? 'bg-red-900/40 text-red-400 hover:bg-red-900/60' : 'bg-red-50 text-red-600 hover:bg-red-100'
   }`;
+
+  const refreshInvites = async () => {
+    const list = await inviteActions.listInvites().catch(() => [] as InviteRecord[]);
+    setInvites(list);
+  };
+
+  useEffect(() => { refreshInvites(); }, []);
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteMsg(null);
+    setInvitePending(true);
+    const result = await inviteActions.createInvite(inviteEmail, inviteDomain);
+    setInvitePending(false);
+    if (result.success) {
+      setInviteMsg({ ok: true, text: 'Invite sent!' });
+      setInviteEmail('');
+      setInviteDomain('');
+      refreshInvites();
+    } else {
+      setInviteMsg({ ok: false, text: result.error });
+    }
+  };
+
+  const handleRevokeInvite = async (token: string) => {
+    setInviteRevokingToken(token);
+    await inviteActions.revokeInvite(token);
+    setInviteRevokingToken(null);
+    refreshInvites();
+  };
 
   const refreshUsers = () => {
     startTransition(async () => {
@@ -1259,6 +1299,111 @@ export default function AdminClient({
           </div>
         </section>
         }
+
+        {/* ── Invites (Users tab) ── */}
+        {activeTab === 'users' && <section>
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Invite a User</h2>
+          <div className={`border rounded-lg p-4 sm:p-6 ${cardBg} mb-4`}>
+            <form onSubmit={handleSendInvite} className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_auto] items-end">
+              <div>
+                <label className={labelCls}>Email</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  required
+                  disabled={invitePending}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Domain</label>
+                <select
+                  value={inviteDomain}
+                  onChange={e => setInviteDomain(e.target.value)}
+                  required
+                  disabled={invitePending}
+                  className={`${inputCls} max-w-full`}
+                >
+                  <option value="">Select domain…</option>
+                  {domains.map(d => (
+                    <option key={d.id} value={d.slug}>{d.display_name}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="submit"
+                disabled={invitePending || !inviteEmail || !inviteDomain}
+                className={`${btnPrimary} w-full sm:w-auto`}
+              >
+                {invitePending ? 'Sending…' : 'Send invite'}
+              </button>
+            </form>
+            {inviteMsg && (
+              <p className={`text-sm mt-3 ${inviteMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                {inviteMsg.text}
+              </p>
+            )}
+          </div>
+
+          {invites.length > 0 && (
+            <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
+                    <th className="px-4 py-3 text-left font-medium">Email</th>
+                    <th className="px-4 py-3 text-left font-medium">Domain</th>
+                    <th className="px-4 py-3 text-left font-medium">Status</th>
+                    <th className="px-4 py-3 text-left font-medium">Expires</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {invites.map((inv, i) => {
+                    const expired = new Date(inv.expires_at) < new Date();
+                    const status = inv.used_at ? 'used' : expired ? 'expired' : 'pending';
+                    return (
+                      <tr key={inv.token} className={`border-b last:border-0 ${d ? 'border-gray-700' : 'border-gray-100'} ${i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'}`}>
+                        <td className="px-4 py-3 font-mono text-xs break-all">{inv.email}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                            {inv.domain_slug}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                            status === 'used'
+                              ? d ? 'bg-green-900/40 text-green-400' : 'bg-green-50 text-green-700'
+                              : status === 'expired'
+                              ? d ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                              : d ? 'bg-yellow-900/40 text-yellow-400' : 'bg-yellow-50 text-yellow-700'
+                          }`}>
+                            {status}
+                          </span>
+                        </td>
+                        <td className={`px-4 py-3 text-xs ${textMuted}`}>
+                          {new Date(inv.expires_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {status === 'pending' && (
+                            <button
+                              onClick={() => handleRevokeInvite(inv.token)}
+                              disabled={inviteRevokingToken === inv.token}
+                              className={btnDanger}
+                            >
+                              {inviteRevokingToken === inv.token ? '…' : 'Revoke'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>}
 
         {/* ── Create user (Users tab) ── */}
         {activeTab === 'users' && <section>

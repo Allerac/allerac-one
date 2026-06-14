@@ -5,9 +5,20 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import AlleracTaskbar from '@/app/components/layout/AlleracTaskbar';
 import type { SatelliteData, PreviewOrbit, GroundStationData } from '@/app/components/space/SatelliteSimulator';
+import type { PassEvent, ConjunctionEvent, SatrecEntry } from '@/app/components/space/spaceCompute';
+import { useConversations } from '@/app/hooks/useConversations';
+import { useDomainChat } from '@/app/hooks/useDomainChat';
+import ChatMessages from '@/app/components/chat/ChatMessages';
+import ChatInput from '@/app/components/chat/ChatInput';
+import { MODELS } from '@/app/services/llm/models';
 
 const SatelliteSimulator = dynamic(
   () => import('@/app/components/space/SatelliteSimulator'),
+  { ssr: false, loading: () => <div style={{ width: '100%', height: '100%', background: '#000510' }} /> },
+);
+
+const SolarSystemSimulator = dynamic(
+  () => import('@/app/components/space/SolarSystemSimulator'),
   { ssr: false, loading: () => <div style={{ width: '100%', height: '100%', background: '#000510' }} /> },
 );
 
@@ -65,7 +76,7 @@ const DEFAULT_SATELLITES: SatelliteData[] = [
   { id: 'iss',      name: 'ISS',          altitude: 408,   inclination: 51.6, raan: 0,   color: '#e8f4ff', showCoverage: false },
   { id: 'hubble',   name: 'Hubble',       altitude: 547,   inclination: 28.5, raan: 60,  color: '#ffd966', showCoverage: false },
   { id: 'starlink', name: 'Starlink-L1',  altitude: 550,   inclination: 53.0, raan: 120, color: '#66b2ff', showCoverage: false },
-  { id: 'gps-s',   name: 'GPS (single)', altitude: 20200, inclination: 55.0, raan: 200, color: '#66ffaa', showCoverage: true  },
+  { id: 'gps-s',   name: 'GPS (single)', altitude: 20200, inclination: 55.0, raan: 200, color: '#66ffaa', showCoverage: false },
   { id: 'meteosat', name: 'Meteosat-12', altitude: 35786, inclination: 0.1,  raan: 0,   color: '#ff8844', showCoverage: false },
 ];
 
@@ -108,23 +119,35 @@ const SPEED_PRESETS = [
   { label: '1 day/s',   sub: '86,400×',  value: 86400  },
 ];
 
+const SOLAR_SPEED_PRESETS = [
+  { label: '1 day/s',   sub: '86,400×',   value: 86400              },
+  { label: '30 days/s', sub: '2.6M×',     value: 86400 * 30         },
+  { label: '1 year/s',  sub: '31.5M×',    value: 86400 * 365        },
+];
+
 let idCounter = 100;
 
 type TLEStatus = 'idle' | 'loading' | 'ok' | 'error';
 
 export default function SpaceClient({ userId, userName, userEmail, isAdmin, allowedDomains }: Props) {
+  'use no memo';
   const router  = useRouter();
   const [satellites, setSatellites]     = useState<SatelliteData[]>(DEFAULT_SATELLITES);
-  const [timeSpeed, setTimeSpeed]       = useState(3600);
-  const [showPaths, setShowPaths]       = useState(true);
-  const [showCoverage, setShowCoverage] = useState(true);
+  const [timeSpeed, setTimeSpeed]       = useState(60);
+  const [showPaths, setShowPaths]       = useState(false);
+  const [showCoverage, setShowCoverage] = useState(false);
   const [showDayNight, setShowDayNight] = useState(false);
   const [panelOpen, setPanelOpen]       = useState(false);
+  const [chatOpen,  setChatOpen]        = useState(true);
+  const [mobileTab, setMobileTab]       = useState<'globe' | 'ctrl' | 'chat'>('globe');
+  const [viewMode,  setViewMode]        = useState<'earth' | 'solar'>('earth');
 
   // Ground stations (multiple)
   const [groundStationMode, setGroundStationMode] = useState(false);
-  type GS = { id: string; pos: { x: number; y: number; z: number }; coords: string; locationName: string | null; loading: boolean };
+  type GS = { id: string; pos: { x: number; y: number; z: number }; latRad: number; lonRad: number; coords: string; locationName: string | null; loading: boolean };
   const [groundStations, setGroundStations] = useState<GS[]>([]);
+  const [citySearch, setCitySearch]         = useState('');
+  const [citySearching, setCitySearching]   = useState(false);
   const [activeStationId, setActiveStationId] = useState<string | null>(null);
   const [visibleIds, setVisibleIds]          = useState<string[]>([]);
   let gsIdCounter = useRef(0);
@@ -144,6 +167,53 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   // TLE real data
   const [tleStatus, setTleStatus] = useState<TLEStatus>('idle');
 
+  // SGP4 passes + conjunctions
+  const [passes, setPasses]               = useState<PassEvent[]>([]);
+  const [passesStatus, setPassesStatus]   = useState<'idle' | 'computing' | 'ok' | 'no-data'>('idle');
+  const [conjunctions, setConjunctions]   = useState<ConjunctionEvent[]>([]);
+  const [conjStatus, setConjStatus]       = useState<'idle' | 'computing' | 'ok' | 'no-data'>('idle');
+
+  // Chat
+  const {
+    conversations: chatConvs, currentConvId, setCurrentConvId,
+    messages, setMessages, selectConversation, newConversation,
+    deleteConversation, pinConversation, renameConversation, reload,
+  } = useConversations(userId, 'space');
+
+  const handleConvCreated = useCallback((id: string) => {
+    setCurrentConvId(id); reload();
+  }, [setCurrentConvId, reload]);
+
+  const getSpaceContext = useCallback(() => {
+    const satLines = satellites.map(s =>
+      `- ${s.name}: alt=${Math.round(s.altitude)}km, incl=${s.inclination.toFixed(1)}°${selectedIds.includes(s.id) ? ' [SELECTED]' : ''}${visibleIds.includes(s.id) ? ' [VISIBLE from GS]' : ''}`
+    ).join('\n');
+    const gsLines = groundStations.map(gs =>
+      `- ${gs.locationName ?? gs.coords}${gs.id === activeStationId ? ' [ACTIVE]' : ''}`
+    ).join('\n');
+    return [
+      `Current space simulation state:`,
+      `Time warp: ${timeSpeed}x (${timeSpeed < 3600 ? timeSpeed + 's/s' : Math.round(timeSpeed / 3600) + 'h/s'})`,
+      satLines ? `Satellites:\n${satLines}` : 'No satellites.',
+      gsLines  ? `Ground stations:\n${gsLines}` : 'No ground stations.',
+      passes.length   ? `Last pass computation: ${passes.length} passes found.` : '',
+      conjunctions.length ? `Conjunctions detected: ${conjunctions.length}` : '',
+    ].filter(Boolean).join('\n');
+  }, [satellites, selectedIds, visibleIds, groundStations, activeStationId, timeSpeed, passes, conjunctions]);
+
+  const {
+    input, setInput, sending, selectedModel, setSelectedModel,
+    convId, isAgentMode, toggleAgentMode, githubToken,
+    messagesEndRef, lastToolCall, setLastToolCall,
+    send, handleKeyPress, handleSaveToMemory,
+    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+  } = useDomainChat({
+    userId, domain: 'space', currentConvId,
+    messages, setMessages,
+    onConversationCreated: handleConvCreated,
+    getPostContext: getSpaceContext,
+  });
+
   // Reverse geocoding — queued at 1 req/s to respect Nominatim rate limit
   const geoQueue  = useRef<Array<{ id: string; pos: { x: number; y: number; z: number } }>>([]);
   const geoActive = useRef(false);
@@ -155,7 +225,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
       const item = geoQueue.current.shift()!;
       const { id, pos } = item;
       const lat = Math.asin(pos.y) * 180 / Math.PI;
-      const lon = Math.atan2(pos.x, pos.z) * 180 / Math.PI;
+      const lon = -Math.atan2(pos.z, pos.x) * 180 / Math.PI;
       try {
         const data = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&format=json&zoom=10`,
@@ -181,6 +251,35 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
     runGeoQueue();
   }, [runGeoQueue]);
 
+  const addStationByCity = useCallback(async (query: string) => {
+    if (!query.trim()) return;
+    setCitySearching(true);
+    try {
+      const data = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } },
+      ).then(r => r.json());
+      if (!data?.[0]) return;
+      const latDeg = parseFloat(data[0].lat);
+      const lonDeg = parseFloat(data[0].lon);
+      const latRad = latDeg * Math.PI / 180;
+      const lonRad = lonDeg * Math.PI / 180;
+      const cosLat = Math.cos(latRad);
+      const pos = { x: cosLat * Math.cos(-lonRad), y: Math.sin(latRad), z: cosLat * Math.sin(-lonRad) };
+      const coords = `${latDeg >= 0 ? Math.round(latDeg) + '°N' : Math.abs(Math.round(latDeg)) + '°S'} ${lonDeg >= 0 ? Math.round(lonDeg) + '°E' : Math.abs(Math.round(lonDeg)) + '°W'}`;
+      const a = data[0];
+      const locationName = a.display_name?.split(',').slice(0, 2).join(',').trim() ?? query;
+      const id = `gs-${++gsIdCounter.current}`;
+      setGroundStations(prev => [...prev, { id, pos, latRad, lonRad, coords, locationName, loading: false }]);
+      setActiveStationId(id);
+      setCitySearch('');
+    } catch {
+      // silent fail
+    } finally {
+      setCitySearching(false);
+    }
+  }, []);
+
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640);
@@ -205,11 +304,14 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
 
   const handleEarthClick = useCallback((pos: { x: number; y: number; z: number }) => {
     if (!groundStationMode) return;
-    const id  = `gs-${++gsIdCounter.current}`;
-    const lat = Math.asin(pos.y) * 180 / Math.PI;
-    const lon = Math.atan2(pos.x, pos.z) * 180 / Math.PI;
-    const coords = `${lat >= 0 ? Math.round(lat) + '°N' : Math.abs(Math.round(lat)) + '°S'} ${lon >= 0 ? Math.round(lon) + '°E' : Math.abs(Math.round(lon)) + '°W'}`;
-    const newStation: GS = { id, pos, coords, locationName: null, loading: true };
+    const id     = `gs-${++gsIdCounter.current}`;
+    // pos is ECF (Earth-local, normalized) from SatelliteSimulator
+    const latRad = Math.asin(pos.y);
+    const lonRad = -Math.atan2(pos.z, pos.x);
+    const latDeg = latRad * 180 / Math.PI;
+    const lonDeg = lonRad * 180 / Math.PI;
+    const coords = `${latDeg >= 0 ? Math.round(latDeg) + '°N' : Math.abs(Math.round(latDeg)) + '°S'} ${lonDeg >= 0 ? Math.round(lonDeg) + '°E' : Math.abs(Math.round(lonDeg)) + '°W'}`;
+    const newStation: GS = { id, pos, latRad, lonRad, coords, locationName: null, loading: true };
     setGroundStations(prev => [...prev, newStation]);
     setActiveStationId(id);
     geocodeStation(id, pos);
@@ -286,7 +388,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
     try {
       const res = await fetch('/api/space/tle?group=visual');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: Array<{ name: string; altitude: number; inclination: number; raan: number; initialTheta: number }> = await res.json();
+      const data: Array<{ name: string; altitude: number; inclination: number; raan: number; initialTheta: number; line1: string; line2: string }> = await res.json();
       const tleSats: SatelliteData[] = data.slice(0, 20).map((d, i) => ({
         id:            `tle-${i}`,
         name:          d.name,
@@ -297,14 +399,78 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
         showCoverage:  false,
         initialTheta:  d.initialTheta,
         constellation: 'Real TLE',
+        tle:           d.line1 && d.line2 ? { line1: d.line1, line2: d.line2 } : undefined,
       }));
       setSatellites(prev => [...prev.filter(s => s.constellation !== 'Real TLE'), ...tleSats]);
       setTleStatus('ok');
+      // Reset SGP4-dependent computations when TLE data changes
+      setPasses([]); setPassesStatus('idle');
+      setConjunctions([]); setConjStatus('idle');
     } catch {
       setTleStatus('error');
       setTimeout(() => setTleStatus('idle'), 3000);
     }
   };
+
+  const handleComputePasses = async () => {
+    const activeStation = groundStations.find(gs => gs.id === activeStationId);
+    const tleSats = satellites.filter(s => s.tle);
+    if (!activeStation || tleSats.length === 0) {
+      setPassesStatus('no-data');
+      setTimeout(() => setPassesStatus('idle'), 2500);
+      return;
+    }
+    setPassesStatus('computing');
+    const { computePasses: compute, twoline2satrec } = await import('satellite.js').then(async (satLib) => {
+      const { computePasses: cp } = await import('@/app/components/space/spaceCompute');
+      return { computePasses: cp, twoline2satrec: satLib.twoline2satrec };
+    });
+    const entries: SatrecEntry[] = tleSats.flatMap(s => {
+      if (!s.tle) return [];
+      const satrec = twoline2satrec(s.tle.line1, s.tle.line2);
+      if ((satrec as { error?: number }).error) return [];
+      return [{ id: s.id, name: s.name, satrec }];
+    });
+    const result = compute(
+      entries,
+      { latitude: activeStation.latRad, longitude: activeStation.lonRad, height: 0 },
+      Date.now(),
+    );
+    setPasses(result);
+    setPassesStatus('ok');
+  };
+
+  const handleComputeConjunctions = async () => {
+    const tleSats = satellites.filter(s => s.tle);
+    if (tleSats.length < 2) {
+      setConjStatus('no-data');
+      setTimeout(() => setConjStatus('idle'), 2500);
+      return;
+    }
+    setConjStatus('computing');
+    const { computeConjunctions: compute, twoline2satrec } = await import('satellite.js').then(async (satLib) => {
+      const { computeConjunctions: cc } = await import('@/app/components/space/spaceCompute');
+      return { computeConjunctions: cc, twoline2satrec: satLib.twoline2satrec };
+    });
+    const entries: SatrecEntry[] = tleSats.flatMap(s => {
+      if (!s.tle) return [];
+      const satrec = twoline2satrec(s.tle.line1, s.tle.line2);
+      if ((satrec as { error?: number }).error) return [];
+      return [{ id: s.id, name: s.name, satrec }];
+    });
+    const result = compute(entries, Date.now());
+    setConjunctions(result);
+    setConjStatus('ok');
+  };
+
+  // ── Time helpers ─────────────────────────────────────────────────────────────
+  function fmtTime(d: Date): string {
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  function fmtDuration(a: Date, b: Date): string {
+    const s = Math.round((b.getTime() - a.getTime()) / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${s % 60 ? String(s % 60).padStart(2, '0') + 's' : ''}`;
+  }
 
   // ── Styles ────────────────────────────────────────────────────────────────────
   const panelBg     = '#060c1a';
@@ -314,18 +480,20 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   const fontMono    = '"Courier New", "Lucida Console", monospace';
   const taskbarH    = 52;
   const PANEL_W     = 290;
+  const CHAT_W      = 320;
 
-  const canvasRight  = isMobile ? 0 : (panelOpen ? PANEL_W : 0);
+  const effectiveChatW = isMobile ? 0 : (chatOpen ? CHAT_W : 0);
+  const canvasRight    = isMobile ? 0 : (effectiveChatW + (panelOpen ? PANEL_W : 0));
   const panelStyle: React.CSSProperties = isMobile
     ? {
         position: 'absolute', left: 0, right: 0, bottom: taskbarH,
         height: '62dvh', background: panelBg, borderTop: `1px solid ${panelBdr}`,
         display: 'flex', flexDirection: 'column', overflowY: 'auto', zIndex: 20,
-        transform: panelOpen ? 'translateY(0)' : 'translateY(100%)',
+        transform: mobileTab === 'ctrl' ? 'translateY(0)' : 'translateY(100%)',
         transition: 'transform 0.25s ease',
       }
     : {
-        position: 'absolute', right: 0, top: 0, bottom: taskbarH,
+        position: 'absolute', right: effectiveChatW, top: 0, bottom: taskbarH,
         width: PANEL_W, background: panelBg, borderLeft: `1px solid ${panelBdr}`,
         display: 'flex', flexDirection: 'column', overflowY: 'auto', zIndex: 20,
         transform: panelOpen ? 'translateX(0)' : `translateX(${PANEL_W}px)`,
@@ -342,24 +510,48 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
 
       {/* 3D canvas */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, bottom: taskbarH, right: canvasRight,
+        position: 'absolute', top: isMobile ? 36 : 0, left: 0, bottom: taskbarH, right: canvasRight,
         transition: 'right 0.2s ease',
         cursor: groundStationMode ? 'crosshair' : 'default',
+        display: isMobile && mobileTab !== 'globe' ? 'none' : undefined,
       }}>
-        <SatelliteSimulator
-          satellites={satellites}
-          timeSpeed={timeSpeed}
-          showPaths={showPaths}
-          showCoverage={showCoverage}
-          showDayNight={showDayNight}
-          previewOrbit={previewOrbit}
-          selectedIds={selectedIds}
-          groundStations={simulatorStations}
-          onSatelliteClick={handleSatelliteClick}
-          onEarthClick={handleEarthClick}
-          onVisibilityUpdate={handleVisibilityUpdate}
-        />
+        {viewMode === 'earth' ? (
+          <SatelliteSimulator
+            satellites={satellites}
+            timeSpeed={timeSpeed}
+            showPaths={showPaths}
+            showCoverage={showCoverage}
+            showDayNight={showDayNight}
+            previewOrbit={previewOrbit}
+            selectedIds={selectedIds}
+            groundStations={simulatorStations}
+            onSatelliteClick={handleSatelliteClick}
+            onEarthClick={handleEarthClick}
+            onVisibilityUpdate={handleVisibilityUpdate}
+          />
+        ) : (
+          <SolarSystemSimulator timeSpeed={timeSpeed} />
+        )}
       </div>
+
+      {/* View mode toggle */}
+      {!isMobile && (
+        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 22, display: 'flex', gap: 2 }}>
+          {(['earth', 'solar'] as const).map(mode => (
+            <button key={mode} onClick={() => {
+              setViewMode(mode);
+              setTimeSpeed(mode === 'solar' ? 86400 * 30 : 60);
+            }} style={{
+              padding: '5px 10px', fontSize: 9, fontFamily: fontMono, letterSpacing: 1,
+              background: viewMode === mode ? '#0d1e30' : 'rgba(6,12,26,0.85)',
+              border: `1px solid ${viewMode === mode ? '#4af' : panelBdr}`,
+              color: viewMode === mode ? '#4af' : textMuted, cursor: 'pointer',
+            }}>
+              {mode === 'earth' ? '◎ EARTH ORBIT' : '☀ SOLAR SYSTEM'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Ground station mode indicator */}
       {groundStationMode && (
@@ -391,34 +583,50 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
         </div>
       )}
 
-      {/* Panel toggle */}
+      {/* Panel toggle (desktop) */}
       {!panelOpen && !isMobile && (
         <button
           onClick={() => setPanelOpen(true)}
           title="Open control panel"
           style={{
-            position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
+            position: 'absolute', right: effectiveChatW, top: '50%', transform: 'translateY(-50%)',
             background: panelBg, border: `1px solid ${panelBdr}`, color: textPrimary,
             padding: '8px 4px', cursor: 'pointer', fontSize: 12, letterSpacing: 1,
-            writingMode: 'vertical-rl', zIndex: 20,
+            writingMode: 'vertical-rl', zIndex: 21,
           }}
         >
           CTRL ▶
         </button>
       )}
       {isMobile && (
-        <button
-          onClick={() => setPanelOpen(v => !v)}
-          style={{
-            position: 'absolute', top: 10, right: 12, zIndex: 25,
-            background: panelOpen ? '#1a3e7a' : 'rgba(6,12,26,0.85)',
-            border: `1px solid ${panelOpen ? '#4af' : panelBdr}`,
-            color: panelOpen ? '#4af' : textPrimary,
-            padding: '6px 10px', fontSize: 11, fontFamily: fontMono, letterSpacing: 1, cursor: 'pointer',
-          }}
-        >
-          {panelOpen ? '▼ CTRL' : '▲ CTRL'}
-        </button>
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 25,
+          display: 'flex', borderBottom: `1px solid ${panelBdr}`, background: panelBg,
+        }}>
+          {(['globe', 'ctrl', 'chat'] as const).map(tab => (
+            <button key={tab} onClick={() => setMobileTab(tab)} style={{
+              flex: 1, padding: '9px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 1.5,
+              background: mobileTab === tab ? '#0d1a30' : 'transparent',
+              border: 'none', borderBottom: `2px solid ${mobileTab === tab ? '#4af' : 'transparent'}`,
+              color: mobileTab === tab ? '#4af' : textMuted, cursor: 'pointer',
+            }}>
+              {tab === 'globe' ? (viewMode === 'solar' ? '☀ SOLAR' : '◎ GLOBE') : tab === 'ctrl' ? '⊞ CTRL' : '◈ CHAT'}
+            </button>
+          ))}
+          <button onClick={() => {
+            const next = viewMode === 'earth' ? 'solar' : 'earth';
+            setViewMode(next);
+            setTimeSpeed(next === 'solar' ? 86400 * 30 : 60);
+            setMobileTab('globe');
+          }} style={{
+            padding: '9px 10px', fontSize: 9, fontFamily: fontMono,
+            background: viewMode === 'solar' ? '#0d1a30' : 'transparent',
+            border: 'none', borderBottom: `2px solid ${viewMode === 'solar' ? '#fa0' : 'transparent'}`,
+            color: viewMode === 'solar' ? '#fa0' : textMuted, cursor: 'pointer',
+          }}>
+            {viewMode === 'solar' ? '☀' : '☀'}
+          </button>
+        </div>
       )}
 
       {/* Control panel */}
@@ -434,7 +642,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
         <div style={{ padding: '10px 14px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0 }}>
           <div style={{ color: textMuted, fontSize: 9, letterSpacing: 1.5, marginBottom: 6 }}>TIME WARP</div>
           <div style={{ display: 'flex', gap: 4 }}>
-            {SPEED_PRESETS.map(p => {
+            {(viewMode === 'solar' ? SOLAR_SPEED_PRESETS : SPEED_PRESETS).map(p => {
               const active = timeSpeed === p.value;
               return (
                 <button key={p.value} onClick={() => setTimeSpeed(p.value)} style={{
@@ -487,6 +695,37 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
           >
             {groundStationMode ? '◉ CLICK GLOBE TO PLACE — ESC cancels' : '◎ + ADD STATION ON GLOBE'}
           </button>
+
+          {/* City search */}
+          <form
+            onSubmit={e => { e.preventDefault(); addStationByCity(citySearch); }}
+            style={{ display: 'flex', gap: 4, marginBottom: 6 }}
+          >
+            <input
+              value={citySearch}
+              onChange={e => setCitySearch(e.target.value)}
+              placeholder="City name…"
+              disabled={citySearching}
+              style={{
+                flex: 1, padding: '5px 7px', fontSize: 9, fontFamily: fontMono,
+                background: '#060c18', border: `1px solid ${panelBdr}`,
+                color: textPrimary, outline: 'none',
+                opacity: citySearching ? 0.5 : 1,
+              }}
+            />
+            <button
+              type="submit"
+              disabled={citySearching || !citySearch.trim()}
+              style={{
+                padding: '5px 8px', fontSize: 9, fontFamily: fontMono,
+                background: '#080e1c', border: `1px solid ${panelBdr}`,
+                color: citySearching ? textMuted : textPrimary,
+                cursor: citySearching || !citySearch.trim() ? 'default' : 'pointer',
+              }}
+            >
+              {citySearching ? '…' : '→'}
+            </button>
+          </form>
 
           {/* Station list */}
           {groundStations.length > 0 && (
@@ -574,11 +813,12 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 } else standalones.push(sat);
               }
 
-              const SatRow = ({ sat }: { sat: typeof satellites[0] }) => {
+              const satRow = (sat: typeof satellites[0]) => {
                 const isSel = selectedIds.includes(sat.id);
                 const isVis = visibleIds.includes(sat.id);
                 return (
                   <div
+                    key={sat.id}
                     onClick={() => toggleSelect(sat.id)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5, padding: '4px 6px', cursor: 'pointer',
@@ -594,7 +834,6 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                       </div>
                       <div style={{ color: textMuted, fontSize: 9 }}>{sat.altitude.toLocaleString()}km · {satType(sat.altitude)}</div>
                     </div>
-                    <button onClick={e => { e.stopPropagation(); toggleSatCoverage(sat.id); }} title="Coverage" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: sat.showCoverage ? sat.color : textMuted, padding: 0 }}>◎</button>
                     <button onClick={e => { e.stopPropagation(); handleRemove(sat.id); }} title="Remove" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#604060', padding: 0 }}>✕</button>
                   </div>
                 );
@@ -602,13 +841,12 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
 
               return (
                 <>
-                  {standalones.map(sat => <SatRow key={sat.id} sat={sat} />)}
+                  {standalones.map(satRow)}
                   {Array.from(groups.entries()).map(([groupName, groupSats]) => {
                     const isExpanded = expandedConstellations.has(groupName);
                     const groupIds = groupSats.map(s => s.id);
                     const allSel  = groupIds.every(id => selectedIds.includes(id));
                     const someSel = groupIds.some(id => selectedIds.includes(id));
-                    const allCov  = groupSats.every(s => s.showCoverage);
                     const visCount = groupIds.filter(id => visibleIds.includes(id)).length;
                     return (
                       <div key={groupName}>
@@ -626,12 +864,11 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                             </div>
                             <div style={{ color: textMuted, fontSize: 9 }}>{groupSats.length} sats · {satType(groupSats[0].altitude)}</div>
                           </div>
-                          <button onClick={() => toggleGroupCoverage(groupIds)} title="Coverage all" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: allCov ? groupSats[0].color : textMuted, padding: 0 }}>◎</button>
                           <button onClick={() => removeGroup(groupIds)} title="Remove all" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#604060', padding: 0 }}>✕</button>
                         </div>
                         {isExpanded && (
                           <div style={{ paddingLeft: 10, display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
-                            {groupSats.map(sat => <SatRow key={sat.id} sat={sat} />)}
+                            {groupSats.map(satRow)}
                           </div>
                         )}
                       </div>
@@ -679,6 +916,99 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
              '↓ FETCH REAL TLE (Celestrak)'}
           </button>
           <div style={{ color: '#2a4060', fontSize: 8, marginTop: 4 }}>Fetches visual satellites from Celestrak API</div>
+        </div>
+
+        {/* SGP4 Passes */}
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0 }}>
+          <div style={{ color: textMuted, fontSize: 9, letterSpacing: 1.5, marginBottom: 6 }}>
+            PASSES (SGP4 — next 24h)
+          </div>
+          <button
+            onClick={handleComputePasses}
+            disabled={passesStatus === 'computing'}
+            style={{
+              width: '100%', padding: '6px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
+              background: passesStatus === 'ok' ? '#0a1a0a' : passesStatus === 'no-data' ? '#1a0a0a' : '#0a1020',
+              border: `1px solid ${passesStatus === 'ok' ? '#2a6a2a' : passesStatus === 'no-data' ? '#6a2a2a' : '#2a4060'}`,
+              color: passesStatus === 'ok' ? '#44ff44' : passesStatus === 'no-data' ? '#ff4444' : '#4488cc',
+              cursor: passesStatus === 'computing' ? 'default' : 'pointer', marginBottom: 6,
+            }}
+          >
+            {passesStatus === 'computing' ? '◌ COMPUTING...' :
+             passesStatus === 'no-data'   ? '✕ SELECT STATION + LOAD TLE' :
+             passesStatus === 'ok'        ? `✓ ${passes.length} PASSES FOUND` :
+             '⟳ COMPUTE PASSES'}
+          </button>
+          {passesStatus === 'ok' && passes.length === 0 && (
+            <div style={{ color: textMuted, fontSize: 9 }}>No passes in next 24h</div>
+          )}
+          {passesStatus === 'ok' && passes.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 200, overflowY: 'auto' }}>
+              {passes.slice(0, 12).map((p, i) => {
+                const elevColor = p.maxElev > 60 ? '#44ffcc' : p.maxElev > 20 ? '#ffaa44' : textMuted;
+                return (
+                  <div key={i} style={{ padding: '5px 7px', background: '#060e06', border: '1px solid #1a3020', fontSize: 9 }}>
+                    <div style={{ color: '#88ccff', fontWeight: 700, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.satName}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: textMuted }}>
+                      <span>AOS {fmtTime(p.aos)}</span>
+                      <span style={{ color: elevColor }}>↑{p.maxElev.toFixed(1)}°</span>
+                    </div>
+                    <div style={{ color: '#2a4060' }}>LOS {fmtTime(p.los)} · {fmtDuration(p.aos, p.los)}</div>
+                  </div>
+                );
+              })}
+              {passes.length > 12 && <div style={{ color: '#2a4060', fontSize: 8 }}>+{passes.length - 12} more</div>}
+            </div>
+          )}
+          {passesStatus !== 'ok' && (
+            <div style={{ color: '#2a4060', fontSize: 8 }}>Requires TLE data + active ground station</div>
+          )}
+        </div>
+
+        {/* Conjunction detection */}
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0 }}>
+          <div style={{ color: textMuted, fontSize: 9, letterSpacing: 1.5, marginBottom: 6 }}>
+            CONJUNCTION ALERTS (24h, &lt;10km)
+          </div>
+          <button
+            onClick={handleComputeConjunctions}
+            disabled={conjStatus === 'computing'}
+            style={{
+              width: '100%', padding: '6px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
+              background: conjStatus === 'ok' ? (conjunctions.length > 0 ? '#1a0808' : '#0a1a0a') : conjStatus === 'no-data' ? '#1a0a0a' : '#0a1020',
+              border: `1px solid ${conjStatus === 'ok' ? (conjunctions.length > 0 ? '#aa2222' : '#2a6a2a') : conjStatus === 'no-data' ? '#6a2a2a' : '#2a4060'}`,
+              color: conjStatus === 'ok' ? (conjunctions.length > 0 ? '#ff6644' : '#44ff44') : conjStatus === 'no-data' ? '#ff4444' : '#4488cc',
+              cursor: conjStatus === 'computing' ? 'default' : 'pointer', marginBottom: 6,
+            }}
+          >
+            {conjStatus === 'computing' ? '◌ SCANNING ORBITS...' :
+             conjStatus === 'no-data'   ? '✕ NEED ≥2 TLE SATELLITES' :
+             conjStatus === 'ok'        ? (conjunctions.length > 0 ? `⚠ ${conjunctions.length} CONJUNCTION(S)` : '✓ NO CONJUNCTIONS') :
+             '⟳ CHECK CONJUNCTIONS'}
+          </button>
+          {conjStatus === 'ok' && conjunctions.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 180, overflowY: 'auto' }}>
+              {conjunctions.slice(0, 8).map((c, i) => {
+                const risk = c.minDist < 1 ? '#ff2222' : c.minDist < 5 ? '#ff8844' : '#ffcc44';
+                return (
+                  <div key={i} style={{ padding: '5px 7px', background: '#0e0606', border: `1px solid ${c.minDist < 1 ? '#6a1a1a' : '#4a2a1a'}`, fontSize: 9 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <span style={{ color: risk, fontWeight: 700 }}>⚠ {c.minDist.toFixed(2)} km</span>
+                      <span style={{ color: '#2a4060' }}>{fmtTime(c.time)}</span>
+                    </div>
+                    <div style={{ color: textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.satNameA}</div>
+                    <div style={{ color: textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>× {c.satNameB}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {conjStatus === 'ok' && conjunctions.length === 0 && (
+            <div style={{ color: '#44aa44', fontSize: 9 }}>All clear — no close approaches detected</div>
+          )}
+          {conjStatus !== 'ok' && conjStatus !== 'no-data' && (
+            <div style={{ color: '#2a4060', fontSize: 8 }}>Requires TLE data (≥2 satellites)</div>
+          )}
         </div>
 
         {/* Add satellite */}
@@ -765,6 +1095,168 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
           <div style={{ color: '#2a5080' }}>Click satellite = select</div>
         </div>
       </div>
+
+      {/* Chat column */}
+      {!isMobile && (
+        <>
+          {/* Collapsed tab */}
+          {!chatOpen && (
+            <button
+              onClick={() => setChatOpen(true)}
+              title="Open chat"
+              style={{
+                position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
+                background: panelBg, border: `1px solid ${panelBdr}`, color: textPrimary,
+                padding: '8px 4px', cursor: 'pointer', fontSize: 12, letterSpacing: 1,
+                writingMode: 'vertical-rl', zIndex: 21,
+              }}
+            >
+              ◀ CHAT
+            </button>
+          )}
+          {chatOpen && (
+        <div style={{
+          position: 'absolute', right: 0, top: 0, bottom: taskbarH, width: CHAT_W, zIndex: 20,
+          background: panelBg, borderLeft: `1px solid ${panelBdr}`,
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ padding: '10px 14px 8px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ color: textMuted, fontSize: 9, letterSpacing: 1.5 }}>SPACE ASSISTANT</div>
+            <button
+              onClick={() => setChatOpen(false)}
+              title="Collapse chat"
+              style={{ background: 'none', border: 'none', color: textMuted, cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
+            >
+              ▶
+            </button>
+          </div>
+          {messages.length === 0 && !sending ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 20px', gap: 8 }}>
+              <div style={{ color: textMuted, fontSize: 9, letterSpacing: 1, textAlign: 'center', lineHeight: 1.8, marginBottom: 8 }}>
+                {'ASK ABOUT ORBITAL MECHANICS,\nCOVERAGE, PASSES OR\nWHAT YOU SEE ON THE GLOBE'}
+              </div>
+              {[
+                'Why do LEO satellites move so fast?',
+                'How does coverage change with altitude?',
+                'What causes satellite conjunctions?',
+              ].map(q => (
+                <button key={q} onClick={() => setInput(q)}
+                  style={{
+                    width: '100%', padding: '8px 10px', fontSize: 9, fontFamily: fontMono,
+                    background: '#080e1c', border: `1px solid ${panelBdr}`,
+                    color: textMuted, cursor: 'pointer', textAlign: 'left', letterSpacing: 0.5,
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+              <div style={{ width: '100%', marginTop: 8 }}>
+                <ChatInput
+                  inputMessage={input} setInputMessage={setInput}
+                  handleKeyPress={handleKeyPress} handleSendMessage={send}
+                  isSending={sending} githubToken={githubToken} isDarkMode
+                  setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel} MODELS={MODELS}
+                  githubConfigured ollamaConnected googleConfigured
+                  isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
+                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <ChatMessages
+                  messages={messages as unknown as import('@/app/types').Message[]}
+                  isSending={sending} selectedModel={selectedModel} MODELS={MODELS}
+                  isDarkMode currentConversationId={convId} userId={userId}
+                  githubToken={githubToken} messagesEndRef={messagesEndRef} domainSlug="space"
+                />
+              </div>
+              <div style={{ flexShrink: 0, padding: '10px 12px', borderTop: `1px solid ${panelBdr}` }}>
+                <ChatInput
+                  inputMessage={input} setInputMessage={setInput}
+                  handleKeyPress={handleKeyPress} handleSendMessage={send}
+                  isSending={sending} githubToken={githubToken} isDarkMode
+                  setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel} MODELS={MODELS}
+                  githubConfigured ollamaConnected googleConfigured
+                  isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
+                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                />
+              </div>
+            </>
+          )}
+        </div>
+          )}
+        </>
+      )}
+
+      {/* Mobile chat panel */}
+      {isMobile && mobileTab === 'chat' && (
+        <div style={{
+          position: 'absolute', top: 36, left: 0, right: 0, bottom: taskbarH, zIndex: 20,
+          background: panelBg, display: 'flex', flexDirection: 'column',
+        }}>
+          {messages.length === 0 && !sending ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 20px', gap: 8 }}>
+              <div style={{ color: textMuted, fontSize: 10, letterSpacing: 1, textAlign: 'center', lineHeight: 1.8, marginBottom: 8 }}>
+                {'PERGUNTE SOBRE MECÂNICA ORBITAL,\nCOBERTURA, PASSES OU\nO QUE VOCÊ VÊ NO GLOBO'}
+              </div>
+              {[
+                'Por que satélites LEO se movem tão rápido?',
+                'Como a altitude afeta a cobertura?',
+                'O que causa conjunções de satélites?',
+              ].map(q => (
+                <button key={q} onClick={() => setInput(q)}
+                  style={{
+                    width: '100%', padding: '10px 12px', fontSize: 11, fontFamily: fontMono,
+                    background: '#080e1c', border: `1px solid ${panelBdr}`,
+                    color: textMuted, cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+              <div style={{ width: '100%', marginTop: 8 }}>
+                <ChatInput
+                  inputMessage={input} setInputMessage={setInput}
+                  handleKeyPress={handleKeyPress} handleSendMessage={send}
+                  isSending={sending} githubToken={githubToken} isDarkMode
+                  setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel} MODELS={MODELS}
+                  githubConfigured ollamaConnected googleConfigured
+                  isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
+                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <ChatMessages
+                  messages={messages as unknown as import('@/app/types').Message[]}
+                  isSending={sending} selectedModel={selectedModel} MODELS={MODELS}
+                  isDarkMode currentConversationId={convId} userId={userId}
+                  githubToken={githubToken} messagesEndRef={messagesEndRef} domainSlug="space"
+                />
+              </div>
+              <div style={{ flexShrink: 0, padding: '10px 12px', borderTop: `1px solid ${panelBdr}` }}>
+                <ChatInput
+                  inputMessage={input} setInputMessage={setInput}
+                  handleKeyPress={handleKeyPress} handleSendMessage={send}
+                  isSending={sending} githubToken={githubToken} isDarkMode
+                  setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel} MODELS={MODELS}
+                  githubConfigured ollamaConnected googleConfigured
+                  isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
+                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Taskbar */}
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30 }}>

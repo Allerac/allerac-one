@@ -381,6 +381,46 @@ export class AuthService {
     }
   }
 
+  /**
+   * Validates an invite token against the given email, grants domain access to userId,
+   * and marks the token as used. Call this after the user is authenticated.
+   */
+  async consumeInviteToken(token: string, userId: string, email: string): Promise<
+    { success: true; domainSlug: string } | { success: false; error: string }
+  > {
+    try {
+      const res = await pool.query(
+        `SELECT email, domain_slug, used_at, expires_at
+         FROM invite_tokens WHERE token = $1`,
+        [token],
+      );
+      if (res.rows.length === 0) return { success: false, error: 'Invalid invite token' };
+      const row = res.rows[0];
+      if (row.used_at) return { success: false, error: 'Invite already used' };
+      if (new Date(row.expires_at) < new Date()) return { success: false, error: 'Invite expired' };
+      if (row.email !== email.toLowerCase()) return { success: false, error: 'Email mismatch' };
+
+      // Grant domain access
+      await pool.query(
+        `INSERT INTO user_domain_access (user_id, domain_id)
+         SELECT $1, d.id FROM domains d WHERE d.slug = $2 AND d.is_active = true
+         ON CONFLICT DO NOTHING`,
+        [userId, row.domain_slug],
+      );
+
+      // Mark as used
+      await pool.query(
+        'UPDATE invite_tokens SET used_at = NOW() WHERE token = $1',
+        [token],
+      );
+
+      return { success: true, domainSlug: row.domain_slug };
+    } catch (error) {
+      console.error('consumeInviteToken error:', error);
+      return { success: false, error: 'Failed to consume invite token' };
+    }
+  }
+
   async canAccessDomain(userId: string, isAdmin: boolean, slug: string): Promise<boolean> {
     if (isAdmin) return true;
     try {
