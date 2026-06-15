@@ -154,19 +154,6 @@ function createStarField(): THREE.Points {
   return new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.25, sizeAttenuation: true }));
 }
 
-let _selTex: THREE.Texture | null = null;
-function getSelectionTexture(): THREE.Texture {
-  if (_selTex) return _selTex;
-  const c = document.createElement('canvas');
-  c.width = 64; c.height = 64;
-  const ctx = c.getContext('2d')!;
-  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5;
-  ctx.shadowColor = '#88ddff'; ctx.shadowBlur = 8;
-  ctx.beginPath(); ctx.arc(32, 32, 27, 0, Math.PI * 2); ctx.stroke();
-  _selTex = new THREE.CanvasTexture(c);
-  return _selTex;
-}
-
 // Sprite-based glow replaces PointLight — same visual effect, zero GPU lighting cost
 const _glowCache = new Map<string, THREE.Texture>();
 function getGlowTexture(hex: string): THREE.Texture {
@@ -203,7 +190,7 @@ type SatRef = {
   orbitLine: THREE.Line | null;
   coverageLine: THREE.Line | null;
   coverageCap: THREE.Mesh | null;
-  selectionSprite: THREE.Sprite | null;
+  glowSprite: THREE.Sprite | null;
   _pos: THREE.Vector3;  // pre-allocated to avoid GC churn per frame
   ω: number; r: number; i: number; Ω: number; θ0: number; θ: number;
   satrec?: ReturnType<typeof twoline2satrec>;
@@ -676,18 +663,12 @@ export default function SatelliteSimulator({
       if (satRef.coverageLine) satRef.coverageLine.visible = s.showCoverage || isSelected;
       if (satRef.coverageCap)  satRef.coverageCap.visible  = s.showCoverage || isSelected;
 
-      // Scale + selection ring sprite
-      satRef.mesh.scale.setScalar(isSelected ? 2.5 : 1.0);
-      if (isSelected && !satRef.selectionSprite) {
-        const sprite = new THREE.Sprite(
-          new THREE.SpriteMaterial({ map: getSelectionTexture(), transparent: true, opacity: 0.9, depthTest: false }),
-        );
-        sprite.scale.set(0.15, 0.15, 1);
-        satRef.mesh.add(sprite);
-        satRef.selectionSprite = sprite;
-      } else if (!isSelected && satRef.selectionSprite) {
-        satRef.mesh.remove(satRef.selectionSprite);
-        satRef.selectionSprite = null;
+      // Scale + glow intensity on selection — no circle ring
+      satRef.mesh.scale.setScalar(isSelected ? 2.0 : 1.0);
+      if (satRef.glowSprite) {
+        const mat = satRef.glowSprite.material as THREE.SpriteMaterial;
+        mat.opacity = isSelected ? 1.0 : 0.55;
+        satRef.glowSprite.scale.setScalar(isSelected ? 0.28 : 0.18);
       }
     });
   }, [selectedIds]);
@@ -734,16 +715,17 @@ export default function SatelliteSimulator({
         new THREE.MeshBasicMaterial({ color: col }),
       );
       const constellationSize = data.constellation ? (constellationCounts.get(data.constellation) ?? 1) : 1;
+      let glowSprite: THREE.Sprite | null = null;
       if (constellationSize <= 12) {
-        const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({
           map: getGlowTexture(data.color),
           blending: THREE.AdditiveBlending,
           transparent: true,
           opacity: 0.55,
           depthWrite: false,
         }));
-        glow.scale.set(0.18, 0.18, 1);
-        mesh.add(glow);
+        glowSprite.scale.set(0.18, 0.18, 1);
+        mesh.add(glowSprite);
       }
       scene.add(mesh);
 
@@ -802,7 +784,7 @@ export default function SatelliteSimulator({
         if (!parsed.error) satrec = parsed;
       }
       s.satRefs.set(data.id, {
-        mesh, orbitLine, coverageLine, coverageCap, selectionSprite: null,
+        mesh, orbitLine, coverageLine, coverageCap, glowSprite,
         _pos: new THREE.Vector3(),
         ω, r, i, Ω, θ0, θ: θ0, satrec,
         constellation: data.constellation,

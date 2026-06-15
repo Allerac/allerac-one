@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from '@/app/context/ThemeContext';
 import AlleracTaskbar from '@/app/components/layout/AlleracTaskbar';
 import type { SatelliteData, PreviewOrbit, GroundStationData } from '@/app/components/space/SatelliteSimulator';
 import type { PassEvent, ConjunctionEvent, SatrecEntry } from '@/app/components/space/spaceCompute';
@@ -131,6 +132,8 @@ type TLEStatus = 'idle' | 'loading' | 'ok' | 'error';
 
 export default function SpaceClient({ userId, userName, userEmail, isAdmin, allowedDomains }: Props) {
   'use no memo';
+  const { isDark } = useTheme();
+  const d = isDark;
   const router  = useRouter();
   const [satellites, setSatellites]     = useState<SatelliteData[]>(DEFAULT_SATELLITES);
   const [timeSpeed, setTimeSpeed]       = useState(60);
@@ -473,11 +476,26 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   }
 
   // ── Styles ────────────────────────────────────────────────────────────────────
-  const panelBg     = '#060c1a';
-  const panelBdr    = '#1a3060';
-  const textPrimary = '#c8d8f0';
-  const textMuted   = '#506090';
-  const fontMono    = '"Courier New", "Lucida Console", monospace';
+  // Panels (Space Control + Space Assistant) follow the app theme
+  const panelBg      = d ? '#060c1a' : '#f0f4f8';
+  const panelBdr     = d ? '#1a3060' : '#b8cce0';
+  const textPrimary  = d ? '#c8d8f0' : '#1a2a3a';
+  const textMuted    = d ? '#506090' : '#5878a0';
+  const btnBg        = d ? '#080e1c' : '#ffffff';
+  const btnBgAlt     = d ? '#0a1630' : '#e8f0f8';
+  const btnActive    = d ? '#1a3e7a' : '#d0e8f8';
+  const btnActiveBdr = d ? '#4af'    : '#2266aa';
+  const btnActiveClr = d ? '#4af'    : '#1a4a8a';
+  const itemBg       = d ? '#060c0a' : '#f8fbff';
+  const itemActiveBg = d ? '#0d1e10' : '#e0f0e8';
+  const itemActiveBdr= d ? '#2a6a30' : '#4a9a60';
+  const inputBg      = d ? '#04080f' : '#ffffff';
+  const fontMono     = '"Courier New", "Lucida Console", monospace';
+  // Canvas overlays always stay dark (they float over the 3D space background)
+  const overlayBg    = 'rgba(6,12,26,0.85)';
+  const overlayBdr   = '#1a3060';
+  const overlayText  = '#c8d8f0';
+  const overlayMuted = '#506090';
   const taskbarH    = 52;
   const PANEL_W     = 290;
   const CHAT_W      = 320;
@@ -534,7 +552,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
         )}
       </div>
 
-      {/* View mode toggle */}
+      {/* View mode toggle — always dark (over 3D canvas) */}
       {!isMobile && (
         <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 22, display: 'flex', gap: 2 }}>
           {(['earth', 'solar'] as const).map(mode => (
@@ -543,9 +561,9 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               setTimeSpeed(mode === 'solar' ? 86400 * 30 : 60);
             }} style={{
               padding: '5px 10px', fontSize: 9, fontFamily: fontMono, letterSpacing: 1,
-              background: viewMode === mode ? '#0d1e30' : 'rgba(6,12,26,0.85)',
-              border: `1px solid ${viewMode === mode ? '#4af' : panelBdr}`,
-              color: viewMode === mode ? '#4af' : textMuted, cursor: 'pointer',
+              background: viewMode === mode ? '#0d1e30' : overlayBg,
+              border: `1px solid ${viewMode === mode ? '#4af' : overlayBdr}`,
+              color: viewMode === mode ? '#4af' : overlayMuted, cursor: 'pointer',
             }}>
               {mode === 'earth' ? '◎ EARTH ORBIT' : '☀ SOLAR SYSTEM'}
             </button>
@@ -553,7 +571,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
         </div>
       )}
 
-      {/* Ground station mode indicator */}
+      {/* Ground station mode indicator — always dark */}
       {groundStationMode && (
         <div style={{
           position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
@@ -565,25 +583,25 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
         </div>
       )}
 
-      {/* Active station mini overlay (bottom-left, only when panel closed) */}
+      {/* Active station mini overlay — always dark */}
       {activeStation && !panelOpen && (
         <div style={{
           position: 'absolute', bottom: taskbarH + 8, left: 8, zIndex: 20,
-          background: 'rgba(6,12,26,0.85)', border: '1px solid #2a5a30',
+          background: overlayBg, border: '1px solid #2a5a30',
           padding: '7px 12px', fontSize: 10, fontFamily: fontMono,
         }}>
           <div style={{ color: '#ffdd00', letterSpacing: 1, marginBottom: 3 }}>
             ◈ {activeStation.loading ? 'locating...' : (activeStation.locationName ?? activeStation.coords)}
           </div>
-          {activeStation.locationName && <div style={{ color: textMuted, marginBottom: 3 }}>{activeStation.coords}</div>}
-          {groundStations.length > 1 && <div style={{ color: textMuted, marginBottom: 3 }}>{groundStations.length} stations total</div>}
+          {activeStation.locationName && <div style={{ color: overlayMuted, marginBottom: 3 }}>{activeStation.coords}</div>}
+          {groundStations.length > 1 && <div style={{ color: overlayMuted, marginBottom: 3 }}>{groundStations.length} stations total</div>}
           <div style={{ color: visibleIds.length >= 3 ? '#44ffcc' : visibleIds.length > 0 ? '#ffaa44' : '#ff4444' }}>
             {visibleIds.length} visible{visibleIds.length >= 3 && ' — TRIANGULATED ✓'}
           </div>
         </div>
       )}
 
-      {/* Panel toggle (desktop) */}
+      {/* Panel toggle (desktop) — uses panel theme since it's part of the panel edge */}
       {!panelOpen && !isMobile && (
         <button
           onClick={() => setPanelOpen(true)}
@@ -606,7 +624,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
           {(['globe', 'ctrl', 'chat'] as const).map(tab => (
             <button key={tab} onClick={() => setMobileTab(tab)} style={{
               flex: 1, padding: '9px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 1.5,
-              background: mobileTab === tab ? '#0d1a30' : 'transparent',
+              background: mobileTab === tab ? btnBgAlt : 'transparent',
               border: 'none', borderBottom: `2px solid ${mobileTab === tab ? '#4af' : 'transparent'}`,
               color: mobileTab === tab ? '#4af' : textMuted, cursor: 'pointer',
             }}>
@@ -620,7 +638,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             setMobileTab('globe');
           }} style={{
             padding: '9px 10px', fontSize: 9, fontFamily: fontMono,
-            background: viewMode === 'solar' ? '#0d1a30' : 'transparent',
+            background: viewMode === 'solar' ? btnBgAlt : 'transparent',
             border: 'none', borderBottom: `2px solid ${viewMode === 'solar' ? '#fa0' : 'transparent'}`,
             color: viewMode === 'solar' ? '#fa0' : textMuted, cursor: 'pointer',
           }}>
@@ -633,7 +651,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
       <div style={panelStyle}>
 
         {/* Header */}
-        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${panelBdr}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ height: 42, padding: '0 14px', borderBottom: `1px solid ${panelBdr}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <span style={{ color: '#4af', fontSize: 11, fontWeight: 700, letterSpacing: 2 }}>◈ SPACE CONTROL</span>
           <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', color: textMuted, cursor: 'pointer', fontSize: 14 }}>◀</button>
         </div>
@@ -647,12 +665,12 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               return (
                 <button key={p.value} onClick={() => setTimeSpeed(p.value)} style={{
                   flex: 1, padding: '6px 2px', fontFamily: fontMono, cursor: 'pointer',
-                  background: active ? '#1a3e7a' : '#0a1630',
-                  border: `1px solid ${active ? '#4af' : panelBdr}`,
+                  background: active ? btnActive : btnBgAlt,
+                  border: `1px solid ${active ? btnActiveBdr : panelBdr}`,
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: active ? '#4af' : textPrimary, whiteSpace: 'nowrap' }}>{p.label}</span>
-                  <span style={{ fontSize: 8, color: active ? '#2a7acc' : textMuted }}>{p.sub}</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: active ? btnActiveClr : textPrimary, whiteSpace: 'nowrap' }}>{p.label}</span>
+                  <span style={{ fontSize: 8, color: active ? btnActiveClr : textMuted }}>{p.sub}</span>
                 </button>
               );
             })}
@@ -669,9 +687,9 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             ].map(({ label, value, toggle }) => (
               <button key={label} onClick={toggle} style={{
                 flex: '1 1 auto', padding: '5px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
-                background: value ? '#0d2a4a' : '#080e1c',
-                border: `1px solid ${value ? '#2a7acc' : panelBdr}`,
-                color: value ? '#6ac' : textMuted, cursor: 'pointer',
+                background: value ? btnActive : btnBg,
+                border: `1px solid ${value ? btnActiveBdr : panelBdr}`,
+                color: value ? btnActiveClr : textMuted, cursor: 'pointer',
               }}>
                 {value ? '◉' : '○'} {label}
               </button>
@@ -688,7 +706,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             onClick={() => setGroundStationMode(v => !v)}
             style={{
               width: '100%', padding: '6px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
-              background: groundStationMode ? 'rgba(255,200,0,0.12)' : '#080e1c',
+              background: groundStationMode ? 'rgba(255,200,0,0.12)' : btnBg,
               border: `1px solid ${groundStationMode ? '#ffcc00' : panelBdr}`,
               color: groundStationMode ? '#ffcc00' : textMuted, cursor: 'pointer', marginBottom: 6,
             }}
@@ -708,7 +726,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               disabled={citySearching}
               style={{
                 flex: 1, padding: '5px 7px', fontSize: 9, fontFamily: fontMono,
-                background: '#060c18', border: `1px solid ${panelBdr}`,
+                background: inputBg, border: `1px solid ${panelBdr}`,
                 color: textPrimary, outline: 'none',
                 opacity: citySearching ? 0.5 : 1,
               }}
@@ -718,7 +736,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               disabled={citySearching || !citySearch.trim()}
               style={{
                 padding: '5px 8px', fontSize: 9, fontFamily: fontMono,
-                background: '#080e1c', border: `1px solid ${panelBdr}`,
+                background: btnBg, border: `1px solid ${panelBdr}`,
                 color: citySearching ? textMuted : textPrimary,
                 cursor: citySearching || !citySearch.trim() ? 'default' : 'pointer',
               }}
@@ -738,17 +756,17 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                     onClick={() => setActiveStationId(gs.id)}
                     style={{
                       padding: '6px 8px', cursor: 'pointer', fontSize: 9,
-                      background: isActive ? '#0d1e10' : '#060c0a',
-                      border: `1px solid ${isActive ? '#2a6a30' : '#1a3020'}`,
+                      background: isActive ? itemActiveBg : itemBg,
+                      border: `1px solid ${isActive ? itemActiveBdr : panelBdr}`,
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ color: isActive ? '#ffdd00' : '#666', fontSize: 10 }}>◈</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: isActive ? '#fff' : textMuted, fontWeight: isActive ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ color: isActive ? textPrimary : textMuted, fontWeight: isActive ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {gs.loading ? 'locating...' : (gs.locationName ?? gs.coords)}
                         </div>
-                        {gs.locationName && <div style={{ color: '#2a5040' }}>{gs.coords}</div>}
+                        {gs.locationName && <div style={{ color: textMuted }}>{gs.coords}</div>}
                       </div>
                       <button
                         onClick={e => {
@@ -822,8 +840,8 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                     onClick={() => toggleSelect(sat.id)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5, padding: '4px 6px', cursor: 'pointer',
-                      background: isSel ? '#0d2240' : '#080e1c',
-                      border: `1px solid ${isSel ? '#2a6acc' : panelBdr}`,
+                      background: isSel ? btnActive : btnBg,
+                      border: `1px solid ${isSel ? btnActiveBdr : panelBdr}`,
                     }}
                   >
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: sat.color, flexShrink: 0, boxShadow: `0 0 4px ${sat.color}` }} />
@@ -852,8 +870,8 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                       <div key={groupName}>
                         <div style={{
                           display: 'flex', alignItems: 'center', gap: 5, padding: '5px 6px', cursor: 'pointer',
-                          background: allSel ? '#0d2240' : someSel ? '#0a1a30' : '#0c1020',
-                          border: `1px solid ${allSel ? '#2a6acc' : someSel ? '#1a4a8a' : '#1a3060'}`,
+                          background: allSel ? btnActive : someSel ? btnBgAlt : btnBg,
+                          border: `1px solid ${allSel ? btnActiveBdr : someSel ? panelBdr : panelBdr}`,
                         }}>
                           <button onClick={() => toggleExpandConstellation(groupName)} style={{ background: 'none', border: 'none', color: textMuted, cursor: 'pointer', fontSize: 10, padding: 0, flexShrink: 0 }}>{isExpanded ? '▾' : '▸'}</button>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', background: groupSats[0].color, flexShrink: 0, boxShadow: `0 0 4px ${groupSats[0].color}` }} />
@@ -887,7 +905,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             {PRESETS.map(preset => (
               <button key={preset.label} onClick={() => handleLoadPreset(preset)} style={{
                 width: '100%', padding: '7px 10px', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
-                background: '#06100a', border: `1px solid #1a4a28`, color: preset.color, cursor: 'pointer',
+                background: itemBg, border: `1px solid ${panelBdr}`, color: preset.color, cursor: 'pointer',
                 textAlign: 'left',
               }}>
                 ◈ {preset.label}
@@ -904,8 +922,8 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             disabled={tleStatus === 'loading'}
             style={{
               width: '100%', padding: '7px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
-              background: tleStatus === 'ok' ? '#0a200a' : tleStatus === 'error' ? '#200a0a' : '#0a1020',
-              border: `1px solid ${tleStatus === 'ok' ? '#2a6a2a' : tleStatus === 'error' ? '#6a2a2a' : '#2a4060'}`,
+              background: tleStatus === 'ok' ? itemActiveBg : tleStatus === 'error' ? (d ? '#200a0a' : '#fde8e8') : btnBg,
+              border: `1px solid ${tleStatus === 'ok' ? itemActiveBdr : tleStatus === 'error' ? (d ? '#6a2a2a' : '#e05050') : panelBdr}`,
               color: tleStatus === 'ok' ? '#44ff44' : tleStatus === 'error' ? '#ff4444' : '#4488cc',
               cursor: tleStatus === 'loading' ? 'default' : 'pointer',
             }}
@@ -928,8 +946,8 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             disabled={passesStatus === 'computing'}
             style={{
               width: '100%', padding: '6px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
-              background: passesStatus === 'ok' ? '#0a1a0a' : passesStatus === 'no-data' ? '#1a0a0a' : '#0a1020',
-              border: `1px solid ${passesStatus === 'ok' ? '#2a6a2a' : passesStatus === 'no-data' ? '#6a2a2a' : '#2a4060'}`,
+              background: passesStatus === 'ok' ? itemActiveBg : passesStatus === 'no-data' ? (d ? '#1a0a0a' : '#fde8e8') : btnBg,
+              border: `1px solid ${passesStatus === 'ok' ? itemActiveBdr : passesStatus === 'no-data' ? (d ? '#6a2a2a' : '#e05050') : panelBdr}`,
               color: passesStatus === 'ok' ? '#44ff44' : passesStatus === 'no-data' ? '#ff4444' : '#4488cc',
               cursor: passesStatus === 'computing' ? 'default' : 'pointer', marginBottom: 6,
             }}
@@ -947,7 +965,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               {passes.slice(0, 12).map((p, i) => {
                 const elevColor = p.maxElev > 60 ? '#44ffcc' : p.maxElev > 20 ? '#ffaa44' : textMuted;
                 return (
-                  <div key={i} style={{ padding: '5px 7px', background: '#060e06', border: '1px solid #1a3020', fontSize: 9 }}>
+                  <div key={i} style={{ padding: '5px 7px', background: itemBg, border: `1px solid ${panelBdr}`, fontSize: 9 }}>
                     <div style={{ color: '#88ccff', fontWeight: 700, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.satName}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: textMuted }}>
                       <span>AOS {fmtTime(p.aos)}</span>
@@ -975,8 +993,8 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             disabled={conjStatus === 'computing'}
             style={{
               width: '100%', padding: '6px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
-              background: conjStatus === 'ok' ? (conjunctions.length > 0 ? '#1a0808' : '#0a1a0a') : conjStatus === 'no-data' ? '#1a0a0a' : '#0a1020',
-              border: `1px solid ${conjStatus === 'ok' ? (conjunctions.length > 0 ? '#aa2222' : '#2a6a2a') : conjStatus === 'no-data' ? '#6a2a2a' : '#2a4060'}`,
+              background: conjStatus === 'ok' ? (conjunctions.length > 0 ? (d ? '#1a0808' : '#fde8e8') : itemActiveBg) : conjStatus === 'no-data' ? (d ? '#1a0a0a' : '#fde8e8') : btnBg,
+              border: `1px solid ${conjStatus === 'ok' ? (conjunctions.length > 0 ? (d ? '#aa2222' : '#e05050') : itemActiveBdr) : conjStatus === 'no-data' ? (d ? '#6a2a2a' : '#e05050') : panelBdr}`,
               color: conjStatus === 'ok' ? (conjunctions.length > 0 ? '#ff6644' : '#44ff44') : conjStatus === 'no-data' ? '#ff4444' : '#4488cc',
               cursor: conjStatus === 'computing' ? 'default' : 'pointer', marginBottom: 6,
             }}
@@ -991,7 +1009,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               {conjunctions.slice(0, 8).map((c, i) => {
                 const risk = c.minDist < 1 ? '#ff2222' : c.minDist < 5 ? '#ff8844' : '#ffcc44';
                 return (
-                  <div key={i} style={{ padding: '5px 7px', background: '#0e0606', border: `1px solid ${c.minDist < 1 ? '#6a1a1a' : '#4a2a1a'}`, fontSize: 9 }}>
+                  <div key={i} style={{ padding: '5px 7px', background: itemBg, border: `1px solid ${panelBdr}`, fontSize: 9 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                       <span style={{ color: risk, fontWeight: 700 }}>⚠ {c.minDist.toFixed(2)} km</span>
                       <span style={{ color: '#2a4060' }}>{fmtTime(c.time)}</span>
@@ -1016,7 +1034,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
           {!showForm ? (
             <button onClick={() => setShowForm(true)} style={{
               width: '100%', padding: '7px 0', fontSize: 10, fontFamily: fontMono, letterSpacing: 1,
-              background: '#0a1a30', border: `1px dashed ${panelBdr}`, color: '#4a8', cursor: 'pointer',
+              background: btnBgAlt, border: `1px dashed ${panelBdr}`, color: '#4a8', cursor: 'pointer',
             }}>
               + ADD SATELLITE
             </button>
@@ -1026,7 +1044,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               <input
                 value={addName} onChange={e => setAddName(e.target.value)}
                 placeholder="Name"
-                style={{ padding: '5px 8px', fontSize: 11, fontFamily: fontMono, background: '#04080f', border: `1px solid ${panelBdr}`, color: textPrimary, outline: 'none' }}
+                style={{ padding: '5px 8px', fontSize: 11, fontFamily: fontMono, background: inputBg, border: `1px solid ${panelBdr}`, color: textPrimary, outline: 'none' }}
               />
               <div>
                 <div style={{ color: textMuted, fontSize: 9, marginBottom: 3 }}>ALTITUDE (km)</div>
@@ -1034,16 +1052,16 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   {[{ l: 'LEO', v: 400 }, { l: 'MEO', v: 20200 }, { l: 'GEO', v: 35786 }].map(p => (
                     <button key={p.l} onClick={() => setAddAlt(p.v)} style={{
                       flex: 1, padding: '3px 0', fontSize: 9, fontFamily: fontMono,
-                      background: addAlt === p.v ? '#1a3e7a' : '#0a1630',
-                      border: `1px solid ${addAlt === p.v ? '#4af' : panelBdr}`,
-                      color: addAlt === p.v ? '#4af' : textMuted, cursor: 'pointer',
+                      background: addAlt === p.v ? btnActive : btnBgAlt,
+                      border: `1px solid ${addAlt === p.v ? btnActiveBdr : panelBdr}`,
+                      color: addAlt === p.v ? btnActiveClr : textMuted, cursor: 'pointer',
                     }}>{p.l}</button>
                   ))}
                 </div>
                 <input
                   type="number" value={addAlt} onChange={e => setAddAlt(Number(e.target.value))}
                   min={200} max={42000}
-                  style={{ width: '100%', padding: '4px 8px', fontSize: 11, fontFamily: fontMono, background: '#04080f', border: `1px solid ${panelBdr}`, color: textPrimary, outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '4px 8px', fontSize: 11, fontFamily: fontMono, background: inputBg, border: `1px solid ${panelBdr}`, color: textPrimary, outline: 'none', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
@@ -1072,11 +1090,11 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={handleAdd} style={{
                   flex: 1, padding: '6px 0', fontSize: 10, fontFamily: fontMono, letterSpacing: 1,
-                  background: '#0a2a18', border: '1px solid #2a6a3a', color: '#4a8', cursor: 'pointer',
+                  background: itemActiveBg, border: `1px solid ${itemActiveBdr}`, color: '#4a8', cursor: 'pointer',
                 }}>LAUNCH ▶</button>
                 <button onClick={() => setShowForm(false)} style={{
                   padding: '6px 10px', fontSize: 10, fontFamily: fontMono,
-                  background: '#0a0a18', border: `1px solid ${panelBdr}`, color: textMuted, cursor: 'pointer',
+                  background: btnBg, border: `1px solid ${panelBdr}`, color: textMuted, cursor: 'pointer',
                 }}>✕</button>
               </div>
             </div>
@@ -1120,7 +1138,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
           background: panelBg, borderLeft: `1px solid ${panelBdr}`,
           display: 'flex', flexDirection: 'column',
         }}>
-          <div style={{ padding: '10px 14px 8px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ height: 42, padding: '0 14px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ color: textMuted, fontSize: 9, letterSpacing: 1.5 }}>SPACE ASSISTANT</div>
             <button
               onClick={() => setChatOpen(false)}
@@ -1143,7 +1161,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 <button key={q} onClick={() => setInput(q)}
                   style={{
                     width: '100%', padding: '8px 10px', fontSize: 9, fontFamily: fontMono,
-                    background: '#080e1c', border: `1px solid ${panelBdr}`,
+                    background: btnBg, border: `1px solid ${panelBdr}`,
                     color: textMuted, cursor: 'pointer', textAlign: 'left', letterSpacing: 0.5,
                   }}
                 >
@@ -1154,7 +1172,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 <ChatInput
                   inputMessage={input} setInputMessage={setInput}
                   handleKeyPress={handleKeyPress} handleSendMessage={send}
-                  isSending={sending} githubToken={githubToken} isDarkMode
+                  isSending={sending} githubToken={githubToken} isDarkMode={d}
                   setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
                   githubConfigured ollamaConnected googleConfigured
@@ -1169,7 +1187,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 <ChatMessages
                   messages={messages as unknown as import('@/app/types').Message[]}
                   isSending={sending} selectedModel={selectedModel} MODELS={MODELS}
-                  isDarkMode currentConversationId={convId} userId={userId}
+                  isDarkMode={d} currentConversationId={convId} userId={userId}
                   githubToken={githubToken} messagesEndRef={messagesEndRef} domainSlug="space"
                 />
               </div>
@@ -1177,7 +1195,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 <ChatInput
                   inputMessage={input} setInputMessage={setInput}
                   handleKeyPress={handleKeyPress} handleSendMessage={send}
-                  isSending={sending} githubToken={githubToken} isDarkMode
+                  isSending={sending} githubToken={githubToken} isDarkMode={d}
                   setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
                   githubConfigured ollamaConnected googleConfigured
@@ -1211,7 +1229,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 <button key={q} onClick={() => setInput(q)}
                   style={{
                     width: '100%', padding: '10px 12px', fontSize: 11, fontFamily: fontMono,
-                    background: '#080e1c', border: `1px solid ${panelBdr}`,
+                    background: btnBg, border: `1px solid ${panelBdr}`,
                     color: textMuted, cursor: 'pointer', textAlign: 'left',
                   }}
                 >
@@ -1222,7 +1240,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 <ChatInput
                   inputMessage={input} setInputMessage={setInput}
                   handleKeyPress={handleKeyPress} handleSendMessage={send}
-                  isSending={sending} githubToken={githubToken} isDarkMode
+                  isSending={sending} githubToken={githubToken} isDarkMode={d}
                   setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
                   githubConfigured ollamaConnected googleConfigured
@@ -1237,7 +1255,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 <ChatMessages
                   messages={messages as unknown as import('@/app/types').Message[]}
                   isSending={sending} selectedModel={selectedModel} MODELS={MODELS}
-                  isDarkMode currentConversationId={convId} userId={userId}
+                  isDarkMode={d} currentConversationId={convId} userId={userId}
                   githubToken={githubToken} messagesEndRef={messagesEndRef} domainSlug="space"
                 />
               </div>
@@ -1245,7 +1263,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 <ChatInput
                   inputMessage={input} setInputMessage={setInput}
                   handleKeyPress={handleKeyPress} handleSendMessage={send}
-                  isSending={sending} githubToken={githubToken} isDarkMode
+                  isSending={sending} githubToken={githubToken} isDarkMode={d}
                   setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
                   githubConfigured ollamaConnected googleConfigured
