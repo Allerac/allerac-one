@@ -34,6 +34,12 @@ export interface GroundStationData {
   active: boolean; // which one drives triangulation / visibility
 }
 
+export interface SatLink {
+  fromId: string;
+  toId: string;
+  color?: string;
+}
+
 interface Props {
   satellites: SatelliteData[];
   timeSpeed: number;
@@ -44,9 +50,11 @@ interface Props {
   selectedIds?: string[];
   groundStations?: GroundStationData[];
   targetFps?: number;
+  satLinks?: SatLink[];
   onSatelliteClick?: (id: string) => void;
   onEarthClick?: (pos: { x: number; y: number; z: number }) => void;
   onVisibilityUpdate?: (ids: string[]) => void;
+  onSatLinkUpdate?: (statuses: Record<string, boolean>) => void;
 }
 
 // ═══════════════ Constants ════════════════════════════════════════════════════
@@ -184,6 +192,21 @@ const _sUp     = new THREE.Vector3();
 const _sTan    = new THREE.Vector3();
 const _sBitan  = new THREE.Vector3();
 const _sWorld  = new THREE.Vector3();
+const _linkD   = new THREE.Vector3();
+
+// Returns true if line segment p1→p2 is blocked by Earth (unit sphere)
+function isBlockedByEarth(p1: THREE.Vector3, p2: THREE.Vector3): boolean {
+  _linkD.subVectors(p2, p1);
+  const a   = _linkD.dot(_linkD);
+  const b   = 2 * p1.dot(_linkD);
+  const c   = p1.dot(p1) - 1.0;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return false;
+  const sq = Math.sqrt(disc);
+  const t1 = (-b - sq) / (2 * a);
+  const t2 = (-b + sq) / (2 * a);
+  return (t1 > 0.001 && t1 < 0.999) || (t2 > 0.001 && t2 < 0.999);
+}
 
 type SatRef = {
   mesh: THREE.Mesh;
@@ -203,7 +226,7 @@ type SatRef = {
 export default function SatelliteSimulator({
   satellites, timeSpeed, showPaths, showCoverage, showDayNight,
   previewOrbit, selectedIds, groundStations, targetFps,
-  onSatelliteClick, onEarthClick, onVisibilityUpdate,
+  satLinks, onSatelliteClick, onEarthClick, onVisibilityUpdate, onSatLinkUpdate,
 }: Props) {
   'use no memo';
   const mountRef = useRef<HTMLDivElement>(null);
@@ -222,6 +245,7 @@ export default function SatelliteSimulator({
     previewLine: null as THREE.Line | null,
     stationRefs: new Map<string, { mesh: THREE.Mesh; localPos: THREE.Vector3; worldPos: THREE.Vector3 | null; active: boolean }>(),
     triLines:    [] as THREE.Line[],
+    satLinkLines: new Map<string, { line: THREE.Line; mat: THREE.LineBasicMaterial; activeColor: number; active: boolean }>(),
     frame: 0,
     clock: new THREE.Clock(),
     simTime: 0,
@@ -245,9 +269,10 @@ export default function SatelliteSimulator({
     showPaths,
     showCoverage,
     showDayNight,
-    onSatelliteClick: null as ((id: string) => void) | null,
-    onEarthClick:     null as ((pos: { x: number; y: number; z: number }) => void) | null,
+    onSatelliteClick:  null as ((id: string) => void) | null,
+    onEarthClick:      null as ((pos: { x: number; y: number; z: number }) => void) | null,
     onVisibilityUpdate: null as ((ids: string[]) => void) | null,
+    onSatLinkUpdate:   null as ((statuses: Record<string, boolean>) => void) | null,
   });
 
   // ── Prop sync effects (no scene required) ───────────────────────────────────
@@ -256,6 +281,36 @@ export default function SatelliteSimulator({
   useEffect(() => { stateRef.current.onSatelliteClick = onSatelliteClick ?? null; }, [onSatelliteClick]);
   useEffect(() => { stateRef.current.onEarthClick = onEarthClick ?? null; }, [onEarthClick]);
   useEffect(() => { stateRef.current.onVisibilityUpdate = onVisibilityUpdate ?? null; }, [onVisibilityUpdate]);
+  useEffect(() => { stateRef.current.onSatLinkUpdate = onSatLinkUpdate ?? null; }, [onSatLinkUpdate]);
+
+  // ── Sat-to-sat link lines (S2S relay visualization) ─────────────────────────
+  useEffect(() => {
+    const s = stateRef.current;
+    if (!s.scene) return;
+    // Remove old
+    s.satLinkLines.forEach(({ line }) => s.scene!.remove(line));
+    s.satLinkLines.clear();
+    // Create new
+    for (const lk of (satLinks ?? [])) {
+      const key = `${lk.fromId}::${lk.toId}`;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const mat = new THREE.LineBasicMaterial({
+        color: lk.color ?? '#44aaff',
+        transparent: true, opacity: 0.85,
+        depthTest: false, blending: THREE.AdditiveBlending,
+      });
+      const line = new THREE.Line(geo, mat);
+      line.visible = false;
+      line.frustumCulled = false;
+      s.scene.add(line);
+      s.satLinkLines.set(key, { line, mat, activeColor: mat.color.getHex(), active: false });
+    }
+    return () => {
+      s.satLinkLines.forEach(({ line }) => s.scene?.remove(line));
+      s.satLinkLines.clear();
+    };
+  }, [satLinks]);
 
   useEffect(() => {
     const s = stateRef.current;
@@ -581,6 +636,35 @@ export default function SatelliteSimulator({
           attr.needsUpdate = true;
           line.visible = true;
         });
+      }
+
+      // S2S relay link lines + Zone of Exclusion detection
+      if (s.satLinkLines.size > 0) {
+        let statusChanged = false;
+        s.satLinkLines.forEach((entry, key) => {
+          const [fromId, toId] = key.split('::');
+          const from = s.satRefs.get(fromId);
+          const to   = s.satRefs.get(toId);
+          if (!from || !to) { entry.line.visible = false; return; }
+          const p1 = from.mesh.position;
+          const p2 = to.mesh.position;
+          const blocked  = isBlockedByEarth(p1, p2);
+          const nowActive = !blocked;
+          if (nowActive !== entry.active) { entry.active = nowActive; statusChanged = true; }
+          // Active: bright beam; Blocked (ZoE): dim red ghost to show where signal would go
+          const attr = entry.line.geometry.attributes.position as THREE.BufferAttribute;
+          attr.setXYZ(0, p1.x, p1.y, p1.z);
+          attr.setXYZ(1, p2.x, p2.y, p2.z);
+          attr.needsUpdate = true;
+          entry.line.visible = true;
+          entry.mat.opacity  = nowActive ? 0.85 : 0.18;
+          entry.mat.color.setHex(nowActive ? entry.activeColor : 0xff2222);
+        });
+        if (statusChanged) {
+          const statuses: Record<string, boolean> = {};
+          s.satLinkLines.forEach((e, k) => { statuses[k] = e.active; });
+          s.onSatLinkUpdate?.(statuses);
+        }
       }
 
       renderer.render(scene, camera);

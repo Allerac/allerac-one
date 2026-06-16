@@ -5,7 +5,7 @@ const R_EARTH_M = 6.371e6;
 
 // Celestrak GP catalog — TLE format by group name
 function celestrakUrl(group: string) {
-  return `https://celestrak.org/SOCRATES/query.php?GROUP=${encodeURIComponent(group)}&FORMAT=TLE`;
+  return `https://celestrak.org/NORAD/elements/gp.php?GROUP=${encodeURIComponent(group)}&FORMAT=TLE`;
 }
 
 function parseTLE(header: string, line1: string, line2: string): {

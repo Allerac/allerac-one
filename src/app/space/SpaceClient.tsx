@@ -1,11 +1,11 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '@/app/context/ThemeContext';
 import AlleracTaskbar from '@/app/components/layout/AlleracTaskbar';
-import type { SatelliteData, PreviewOrbit, GroundStationData } from '@/app/components/space/SatelliteSimulator';
+import type { SatelliteData, PreviewOrbit, GroundStationData, SatLink } from '@/app/components/space/SatelliteSimulator';
 import type { PassEvent, ConjunctionEvent, SatrecEntry } from '@/app/components/space/spaceCompute';
 import { useConversations } from '@/app/hooks/useConversations';
 import { useDomainChat } from '@/app/hooks/useDomainChat';
@@ -130,6 +130,31 @@ let idCounter = 100;
 
 type TLEStatus = 'idle' | 'loading' | 'ok' | 'error';
 
+// ── TDRS Relay Scenario ───────────────────────────────────────────────────────
+const _toRad = (d: number) => d * Math.PI / 180;
+
+const TDRS_SCENARIO_SATS: SatelliteData[] = [
+  { id: 'sc-hubble', name: 'Hubble Space Telescope', altitude: 547,   inclination: 28.5, raan: 10, initialTheta: 0,             color: '#88ccff', showCoverage: false },
+  { id: 'sc-tdrs-e', name: 'TDRS-East (41°W)',       altitude: 35786, inclination: 3,    raan: 0,  initialTheta: _toRad(-41),  color: '#ffcc44', showCoverage: false },
+  { id: 'sc-tdrs-w', name: 'TDRS-West (174°W)',      altitude: 35786, inclination: 3,    raan: 0,  initialTheta: _toRad(-174), color: '#ffcc44', showCoverage: false },
+];
+
+const TDRS_LINKS = [
+  { fromId: 'sc-hubble', toId: 'sc-tdrs-e', color: '#44aaff' },
+  { fromId: 'sc-hubble', toId: 'sc-tdrs-w', color: '#44aaff' },
+];
+
+// White Sands Complex, NM — NASA TDRS ground terminal
+const WHITE_SANDS_GS = (() => {
+  const lat = _toRad(32.54), lon = _toRad(-106.61), cosLat = Math.cos(lat);
+  return {
+    id: 'gs-white-sands',
+    pos: { x: cosLat * Math.cos(-lon), y: Math.sin(lat), z: cosLat * Math.sin(-lon) },
+    latRad: lat, lonRad: lon,
+    coords: '33°N 107°W', locationName: 'White Sands, NM', loading: false,
+  };
+})();
+
 export default function SpaceClient({ userId, userName, userEmail, isAdmin, allowedDomains }: Props) {
   'use no memo';
   const { isDark } = useTheme();
@@ -144,6 +169,8 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   const [chatOpen,  setChatOpen]        = useState(true);
   const [mobileTab, setMobileTab]       = useState<'globe' | 'ctrl' | 'chat'>('globe');
   const [viewMode,  setViewMode]        = useState<'earth' | 'solar'>('earth');
+  const [tdrsMode,  setTdrsMode]        = useState(false);
+  const [satLinkStatuses, setSatLinkStatuses] = useState<Record<string, boolean>>({});
 
   // Ground stations (multiple)
   const [groundStationMode, setGroundStationMode] = useState(false);
@@ -153,7 +180,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   const [citySearching, setCitySearching]   = useState(false);
   const [activeStationId, setActiveStationId] = useState<string | null>(null);
   const [visibleIds, setVisibleIds]          = useState<string[]>([]);
-  let gsIdCounter = useRef(0);
+  const gsIdCounter = useRef(0);
 
   // Add-satellite form
   const [addName,     setAddName]     = useState('');
@@ -201,8 +228,11 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
       gsLines  ? `Ground stations:\n${gsLines}` : 'No ground stations.',
       passes.length   ? `Last pass computation: ${passes.length} passes found.` : '',
       conjunctions.length ? `Conjunctions detected: ${conjunctions.length}` : '',
+      tdrsMode ? `TDRS relay scenario active. Link statuses:\n${
+        Object.entries(satLinkStatuses).map(([k, v]) => `  ${k}: ${v ? 'OPEN' : 'BLOCKED (Zone of Exclusion)'}`).join('\n') || '  (computing...)'
+      }` : '',
     ].filter(Boolean).join('\n');
-  }, [satellites, selectedIds, visibleIds, groundStations, activeStationId, timeSpeed, passes, conjunctions]);
+  }, [satellites, selectedIds, visibleIds, groundStations, activeStationId, timeSpeed, passes, conjunctions, tdrsMode, satLinkStatuses]);
 
   const {
     input, setInput, sending, selectedModel, setSelectedModel,
@@ -349,6 +379,38 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   const previewOrbit: PreviewOrbit | null = showForm
     ? { altitude: addAlt, inclination: addIncl, raan: addRaan }
     : null;
+
+  // ── TDRS Scenario callbacks ───────────────────────────────────────────────────
+  const activateTdrsScenario = useCallback(() => {
+    setSatellites(prev => {
+      const existingIds = new Set(prev.map(s => s.id));
+      const toAdd = TDRS_SCENARIO_SATS.filter(s => !existingIds.has(s.id));
+      return [...prev, ...toAdd];
+    });
+    setGroundStations(prev => {
+      if (prev.some(gs => gs.id === WHITE_SANDS_GS.id)) return prev;
+      return [...prev, WHITE_SANDS_GS];
+    });
+    setTdrsMode(true);
+  }, []);
+
+  const deactivateTdrsScenario = useCallback(() => {
+    const ids = new Set(TDRS_SCENARIO_SATS.map(s => s.id));
+    setSatellites(prev => prev.filter(s => !ids.has(s.id)));
+    setGroundStations(prev => prev.filter(gs => gs.id !== WHITE_SANDS_GS.id));
+    setSelectedIds(prev => prev.filter(id => !ids.has(id)));
+    setSatLinkStatuses({});
+    setTdrsMode(false);
+  }, []);
+
+  const handleSatLinkUpdate = useCallback((statuses: Record<string, boolean>) => {
+    setSatLinkStatuses(statuses);
+  }, []);
+
+  const satLinks: SatLink[] = useMemo(
+    () => tdrsMode ? TDRS_LINKS : [],
+    [tdrsMode],
+  );
 
   const handleLogout = useCallback(async () => {
     const { logout } = await import('@/app/actions/auth');
@@ -546,6 +608,8 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             onSatelliteClick={handleSatelliteClick}
             onEarthClick={handleEarthClick}
             onVisibilityUpdate={handleVisibilityUpdate}
+            satLinks={satLinks}
+            onSatLinkUpdate={handleSatLinkUpdate}
           />
         ) : (
           <SolarSystemSimulator timeSpeed={timeSpeed} />
@@ -1026,6 +1090,53 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
           )}
           {conjStatus !== 'ok' && conjStatus !== 'no-data' && (
             <div style={{ color: '#2a4060', fontSize: 8 }}>Requires TLE data (≥2 satellites)</div>
+          )}
+        </div>
+
+        {/* TDRS Relay Scenario */}
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 9, color: textMuted, letterSpacing: 1.5, marginBottom: 6, fontFamily: fontMono }}>
+            RELAY SCENARIO — HUBBLE/TDRS
+          </div>
+          <button onClick={tdrsMode ? deactivateTdrsScenario : activateTdrsScenario} style={{
+            width: '100%', padding: '7px 0', fontSize: 10, fontFamily: fontMono, letterSpacing: 1,
+            background: tdrsMode ? (d ? 'rgba(255,180,0,0.12)' : 'rgba(255,150,0,0.08)') : btnBg,
+            border: `1px solid ${tdrsMode ? '#ffaa44' : panelBdr}`,
+            color: tdrsMode ? '#ffaa44' : textMuted, cursor: 'pointer', marginBottom: tdrsMode ? 8 : 0,
+          }}>
+            {tdrsMode ? '⊟ DEACTIVATE SCENARIO' : '⊞ LOAD HUBBLE + TDRS SCENARIO'}
+          </button>
+          {tdrsMode && (
+            <div style={{ fontSize: 9, fontFamily: fontMono }}>
+              <div style={{ color: textMuted, marginBottom: 4 }}>S2S LINK STATUS</div>
+              {TDRS_LINKS.map(link => {
+                const key = `${link.fromId}::${link.toId}`;
+                const active = satLinkStatuses[key];
+                const toName = TDRS_SCENARIO_SATS.find(s => s.id === link.toId)?.name ?? link.toId;
+                return (
+                  <div key={key} style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 0', borderBottom: `1px solid ${panelBdr}`,
+                  }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: active === undefined ? '#444' : active ? '#44ff88' : '#ff3333',
+                      boxShadow: active ? '0 0 6px #44ff88' : undefined,
+                    }} />
+                    <span style={{ color: textPrimary, flex: 1 }}>
+                      Hubble → {toName.replace('TDRS-East (41°W)', 'TDRS-East').replace('TDRS-West (174°W)', 'TDRS-West')}
+                    </span>
+                    <span style={{ color: active === undefined ? '#666' : active ? '#44ff88' : '#ff3333' }}>
+                      {active === undefined ? 'INIT' : active ? 'OPEN' : 'ZoE'}
+                    </span>
+                  </div>
+                );
+              })}
+              <div style={{ color: '#666', fontSize: 8, marginTop: 6, lineHeight: 1.5 }}>
+                ZoE = Zone of Exclusion (Earth blocking)<br />
+                White Sands ground station added
+              </div>
+            </div>
           )}
         </div>
 
