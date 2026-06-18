@@ -10,6 +10,7 @@ import { getMyCreditBalance } from '@/app/actions/credits';
 import type { CreditBalance } from '@/app/services/credits/credit.service';
 import DomainSkillsModal from '@/app/components/hub/DomainSkillsModal';
 import ConfigModal from './ConfigModal';
+import { MODELS } from '@/app/services/llm/models';
 
 const LANGUAGES = [
   { code: 'en', label: 'English'   },
@@ -54,6 +55,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
   const [configModalOpen, setConfigModalOpen]   = useState(false);
   const [windowsOpen, setWindowsOpen]           = useState(false);
   const [isMobile, setIsMobile]                 = useState(false);
+  const [currentModelId, setCurrentModelId]     = useState<string>('gemini-2.5-flash');
 
   const startRef   = useRef<HTMLDivElement>(null);
   const userRef    = useRef<HTMLDivElement>(null);
@@ -64,6 +66,16 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
+  }, []);
+
+  useEffect(() => {
+    const read = () => {
+      const saved = localStorage.getItem('selected_model');
+      if (saved) setCurrentModelId(saved);
+    };
+    read();
+    window.addEventListener('storage', read);
+    return () => window.removeEventListener('storage', read);
   }, []);
 
   // ── Clock ─────────────────────────────────────────────────────────────────
@@ -140,6 +152,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
   };
 
   const initials = (userName || userEmail).slice(0, 2).toUpperCase();
+  const currentModel = MODELS.find(m => m.id === currentModelId);
 
   // ── Button style helpers ──────────────────────────────────────────────────
   const taskBtn = (active: boolean): React.CSSProperties => ({
@@ -342,6 +355,18 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
 
           <div style={{ width: 1, height: 16, background: '#808080', borderRight: '1px solid #fff' }} />
 
+          {/* Current model indicator */}
+          {currentModel && (
+            <span
+              title={currentModel.name}
+              style={{ fontSize: 12, lineHeight: 1, cursor: 'default', userSelect: 'none', flexShrink: 0 }}
+            >
+              {currentModel.icon}
+            </span>
+          )}
+
+          <div style={{ width: 1, height: 16, background: '#808080', borderRight: '1px solid #fff' }} />
+
           {/* User avatar */}
           <div ref={userRef} style={{ position: 'relative' }}>
             <button
@@ -372,6 +397,12 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
                     </div>
                   )}
                   <div style={{ fontSize: 10, color: '#555', fontFamily: 'Arial, sans-serif' }}>{userEmail}</div>
+                  {currentModel && (
+                    <div style={{ fontSize: 10, color: '#4338ca', fontFamily: 'Arial, sans-serif', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span>{currentModel.icon}</span>
+                      <span>{currentModel.shortName ?? currentModel.name}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ padding: '8px 12px', borderBottom: '1px solid #808080' }}>

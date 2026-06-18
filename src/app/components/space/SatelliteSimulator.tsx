@@ -46,6 +46,7 @@ interface Props {
   showPaths: boolean;
   showCoverage: boolean;
   showDayNight: boolean;
+  showMoon?: boolean;
   previewOrbit?: PreviewOrbit | null;
   selectedIds?: string[];
   groundStations?: GroundStationData[];
@@ -60,9 +61,18 @@ interface Props {
 // ═══════════════ Constants ════════════════════════════════════════════════════
 
 const GM         = 3.986004418e14;
-const R_EARTH_M  = 6.371e6;
+const R_EARTH_M  = 6.3781370e6; // equatorial radius — matches GEO altitude (35,786km) and Earth's sidereal period
 const EARTH_SPIN = (2 * Math.PI) / 86164;
 const MAX_TRI    = 6; // max triangulation lines
+
+// Moon — reuses the same Earth-centered Kepler model (valid since Earth's gravity
+// dominates the Moon's orbit). Mean distance/radius give a ~27.4-day period, close
+// to the real sidereal month (27.32d); Sun perturbation and eccentricity are ignored.
+const MOON_DIST_KM   = 384400;
+const MOON_RADIUS_KM = 1737.4;
+const MOON_INCL_DEG  = 23.4; // approx., relative to Earth's equatorial plane
+const MOON_ALT_KM    = MOON_DIST_KM - R_EARTH_M / 1000;
+const MOON_RADIUS_SCENE = MOON_RADIUS_KM / (R_EARTH_M / 1000);
 
 // ═══════════════ Pure helpers ═════════════════════════════════════════════════
 
@@ -146,6 +156,12 @@ function loadEarthTextures(): { day: THREE.Texture; night: THREE.Texture } {
   return { day, night };
 }
 
+function loadMoonTexture(): THREE.Texture {
+  const tex = new THREE.TextureLoader().load('/textures/moon.jpg');
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function createStarField(): THREE.Points {
   const n = 3500;
   const pos = new Float32Array(n * 3);
@@ -193,6 +209,12 @@ const _sTan    = new THREE.Vector3();
 const _sBitan  = new THREE.Vector3();
 const _sWorld  = new THREE.Vector3();
 const _linkD   = new THREE.Vector3();
+const _moonPos = new THREE.Vector3();
+const DEFAULT_CAM_POS = new THREE.Vector3(0, 2.5, 7);
+const DEFAULT_TARGET  = new THREE.Vector3(0, 0, 0);
+const MOON_R     = sceneRadius(MOON_ALT_KM);
+const MOON_I_RAD = MOON_INCL_DEG * Math.PI / 180;
+const MOON_OMEGA = angularVelocity(MOON_ALT_KM);
 
 // Returns true if line segment p1→p2 is blocked by Earth (unit sphere)
 function isBlockedByEarth(p1: THREE.Vector3, p2: THREE.Vector3): boolean {
@@ -224,7 +246,7 @@ type SatRef = {
 // ═══════════════ Component ════════════════════════════════════════════════════
 
 export default function SatelliteSimulator({
-  satellites, timeSpeed, showPaths, showCoverage, showDayNight,
+  satellites, timeSpeed, showPaths, showCoverage, showDayNight, showMoon,
   previewOrbit, selectedIds, groundStations, targetFps,
   satLinks, onSatelliteClick, onEarthClick, onVisibilityUpdate, onSatLinkUpdate,
 }: Props) {
@@ -238,6 +260,12 @@ export default function SatelliteSimulator({
     controls:    null as OrbitControls | null,
     earth:       null as THREE.Mesh | null,
     earthMat:    null as THREE.MeshPhongMaterial | null,
+    moon:        null as THREE.Mesh | null,
+    moonMat:     null as THREE.MeshPhongMaterial | null,
+    moonHalo:    null as THREE.Mesh | null,
+    moonOrbitLine: null as THREE.Line | null,
+    moonGlowUntil: 0,
+    viewFlyTo:   null as { fromTarget: THREE.Vector3; toTarget: THREE.Vector3; fromCam: THREE.Vector3; toCam: THREE.Vector3; start: number; duration: number } | null,
     dayTexture:  null as THREE.Texture | null,
     nightTexture: null as THREE.Texture | null,
     ambientLight: null as THREE.AmbientLight | null,
@@ -269,6 +297,8 @@ export default function SatelliteSimulator({
     showPaths,
     showCoverage,
     showDayNight,
+    showMoon: showMoon ?? false,
+    moonθ: 0,
     onSatelliteClick:  null as ((id: string) => void) | null,
     onEarthClick:      null as ((pos: { x: number; y: number; z: number }) => void) | null,
     onVisibilityUpdate: null as ((ids: string[]) => void) | null,
@@ -282,8 +312,15 @@ export default function SatelliteSimulator({
   useEffect(() => { stateRef.current.onEarthClick = onEarthClick ?? null; }, [onEarthClick]);
   useEffect(() => { stateRef.current.onVisibilityUpdate = onVisibilityUpdate ?? null; }, [onVisibilityUpdate]);
   useEffect(() => { stateRef.current.onSatLinkUpdate = onSatLinkUpdate ?? null; }, [onSatLinkUpdate]);
+  useEffect(() => {
+    const s = stateRef.current;
+    s.showMoon = showMoon ?? false;
+    if (s.moon) s.moon.visible = s.showMoon;
+    if (s.moonOrbitLine) s.moonOrbitLine.visible = s.showMoon;
+    if (!s.showMoon && s.moonHalo) s.moonHalo.visible = false;
+  }, [showMoon]);
 
-  // ── Sat-to-sat link lines (S2S relay visualization) ─────────────────────────
+  // ── Relay link lines: sat-to-sat or sat-to-ground (visibility/ZoE viz) ──────
   useEffect(() => {
     const s = stateRef.current;
     if (!s.scene) return;
@@ -432,12 +469,12 @@ export default function SatelliteSimulator({
     s.scene = scene;
 
     const camera = new THREE.PerspectiveCamera(45, mount.clientWidth / mount.clientHeight, 0.01, 500);
-    camera.position.set(0, 2.5, 7);
+    camera.position.copy(DEFAULT_CAM_POS);
     s.camera = camera;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.07;
-    controls.minDistance = 1.4; controls.maxDistance = 40;
+    controls.minDistance = 1.4; controls.maxDistance = 80; // 80 ≈ past the Moon's orbit (~60.3)
     controls.addEventListener('change', () => { s.lastInteractionTime = performance.now(); });
     s.controls = controls;
 
@@ -477,6 +514,39 @@ export default function SatelliteSimulator({
       new THREE.SphereGeometry(1.065, 48, 48),
       new THREE.MeshPhongMaterial({ color: 0x2244cc, transparent: true, opacity: 0.035, side: THREE.BackSide }),
     ));
+
+    // Moon — hidden until showMoon is toggled on
+    const moonMat = new THREE.MeshPhongMaterial({
+      map: loadMoonTexture(), shininess: 4, emissive: 0x222222,
+    });
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(MOON_RADIUS_SCENE, 32, 32), moonMat);
+    moon.visible = false;
+    scene.add(moon);
+    s.moon = moon;
+    s.moonMat = moonMat;
+
+    // Soft glow halo — baseline visibility boost + brighter pulse on click
+    const moonHalo = new THREE.Mesh(
+      new THREE.SphereGeometry(MOON_RADIUS_SCENE * 2.4, 24, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffee, transparent: true, opacity: 0.12,
+        side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false,
+      }),
+    );
+    moonHalo.visible = false;
+    scene.add(moonHalo);
+    s.moonHalo = moonHalo;
+
+    const moonOrbitPts = Array.from({ length: 129 }, (_, k) =>
+      orbitalPos(sceneRadius(MOON_ALT_KM), MOON_INCL_DEG * Math.PI / 180, 0, (k / 128) * 2 * Math.PI),
+    );
+    const moonOrbitLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(moonOrbitPts),
+      new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.3 }),
+    );
+    moonOrbitLine.visible = false;
+    scene.add(moonOrbitLine);
+    s.moonOrbitLine = moonOrbitLine;
 
     // Pre-allocate triangulation lines
     for (let k = 0; k < MAX_TRI; k++) {
@@ -521,6 +591,25 @@ export default function SatelliteSimulator({
         }
       }
 
+      // Check Moon — generous pick radius since it's a small, distant target
+      if (s.showMoon && s.moon?.visible) {
+        const dist = raycaster.ray.distanceToPoint(s.moon.position);
+        if (dist < MOON_RADIUS_SCENE * 4) {
+          s.moonGlowUntil = performance.now() + 3500;
+          const fromTarget = s.controls!.target.clone();
+          const toTarget = s.moon.position.clone();
+          const delta = toTarget.clone().sub(fromTarget);
+          s.viewFlyTo = {
+            fromTarget, toTarget,
+            fromCam: s.camera!.position.clone(),
+            toCam: s.camera!.position.clone().add(delta),
+            start: performance.now(),
+            duration: 700,
+          };
+          return;
+        }
+      }
+
       // Check Earth — pass ECF (Earth-local) coords so callers get correct geodetic position
       const earthHits = s.earth ? raycaster.intersectObject(s.earth, false) : [];
       if (earthHits.length > 0) {
@@ -531,6 +620,27 @@ export default function SatelliteSimulator({
     };
     mount.addEventListener('pointerdown', onPointerDown);
     mount.addEventListener('pointerup', onPointerUp);
+
+    // Double-click Earth — reset camera back to the default centered view
+    const onDoubleClick = (e: MouseEvent) => {
+      const rect = mount.getBoundingClientRect();
+      const mouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(mouse, s.camera!);
+      const earthHits = s.earth ? raycaster.intersectObject(s.earth, false) : [];
+      if (earthHits.length === 0 || !s.controls || !s.camera) return;
+      s.viewFlyTo = {
+        fromTarget: s.controls.target.clone(),
+        toTarget: DEFAULT_TARGET.clone(),
+        fromCam: s.camera.position.clone(),
+        toCam: DEFAULT_CAM_POS.clone(),
+        start: performance.now(),
+        duration: 700,
+      };
+    };
+    mount.addEventListener('dblclick', onDoubleClick);
 
     // ── ResizeObserver ────────────────────────────────────────────────────────
     const onResize = () => {
@@ -561,6 +671,34 @@ export default function SatelliteSimulator({
 
       earth.rotation.y = EARTH_SPIN * s.simTime;
 
+      if (s.showMoon && s.moon) {
+        s.moonθ = -MOON_OMEGA * s.simTime;
+        setOrbitalPos(_moonPos, MOON_R, MOON_I_RAD, 0, s.moonθ);
+        s.moon.position.copy(_moonPos);
+        if (s.moonHalo) s.moonHalo.position.copy(_moonPos);
+
+        // Bright pulse + halo boost for a few seconds after clicking the Moon
+        const glowRemain = Math.max(0, s.moonGlowUntil - timestamp) / 3500;
+        if (s.moonMat) s.moonMat.emissive.setScalar(0.13 + glowRemain * 0.55);
+        if (s.moonHalo) {
+          (s.moonHalo.material as THREE.MeshBasicMaterial).opacity = 0.12 + glowRemain * 0.55;
+          s.moonHalo.visible = true;
+        }
+
+      } else if (s.moonHalo) {
+        s.moonHalo.visible = false;
+      }
+
+      // Smooth camera transition (Moon focus or double-click Earth reset)
+      if (s.viewFlyTo && s.controls && s.camera) {
+        s.lastInteractionTime = timestamp;
+        const t = Math.min(1, (timestamp - s.viewFlyTo.start) / s.viewFlyTo.duration);
+        const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        s.controls.target.copy(s.viewFlyTo.fromTarget).lerp(s.viewFlyTo.toTarget, eased);
+        s.camera.position.copy(s.viewFlyTo.fromCam).lerp(s.viewFlyTo.toCam, eased);
+        if (t >= 1) s.viewFlyTo = null;
+      }
+
       // Sun orbit when day/night is on (real time, not simulation)
       if (s.showDayNight) {
         s.sunAngle += delta * 0.08; // full orbit every ~79s real time
@@ -583,7 +721,10 @@ export default function SatelliteSimulator({
           }
           // on propagation failure, keep last valid position
         } else {
-          sat.θ = sat.ω * s.simTime + sat.θ0;
+          // Negative sign: prograde orbital motion must match Earth's rotation.y
+          // direction (THREE rotates +x toward -z for positive angles) so that
+          // GEO satellites stay fixed over their longitude instead of drifting.
+          sat.θ = -sat.ω * s.simTime + sat.θ0;
           setOrbitalPos(sat._pos, sat.r, sat.i, sat.Ω, sat.θ);
         }
         sat.mesh.position.copy(sat._pos);
@@ -638,16 +779,14 @@ export default function SatelliteSimulator({
         });
       }
 
-      // S2S relay link lines + Zone of Exclusion detection
+      // Relay link lines (sat-to-sat or sat-to-ground) + Zone of Exclusion detection
       if (s.satLinkLines.size > 0) {
         let statusChanged = false;
         s.satLinkLines.forEach((entry, key) => {
           const [fromId, toId] = key.split('::');
-          const from = s.satRefs.get(fromId);
-          const to   = s.satRefs.get(toId);
-          if (!from || !to) { entry.line.visible = false; return; }
-          const p1 = from.mesh.position;
-          const p2 = to.mesh.position;
+          const p1 = s.satRefs.get(fromId)?.mesh.position ?? s.stationRefs.get(fromId)?.worldPos;
+          const p2 = s.satRefs.get(toId)?.mesh.position ?? s.stationRefs.get(toId)?.worldPos;
+          if (!p1 || !p2) { entry.line.visible = false; return; }
           const blocked  = isBlockedByEarth(p1, p2);
           const nowActive = !blocked;
           if (nowActive !== entry.active) { entry.active = nowActive; statusChanged = true; }
@@ -675,6 +814,7 @@ export default function SatelliteSimulator({
       cancelAnimationFrame(s.frame);
       mount.removeEventListener('pointerdown', onPointerDown);
       mount.removeEventListener('pointerup', onPointerUp);
+      mount.removeEventListener('dblclick', onDoubleClick);
       ro.disconnect();
       controls.dispose();
       renderer.dispose();

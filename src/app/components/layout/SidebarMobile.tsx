@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import { Conversation } from '../../types';
@@ -8,6 +8,7 @@ import SidebarContent from './SidebarContent';
 import { AlleracLogo } from '../ui/AlleracLogo';
 import { updateLanguage } from '@/app/actions/user';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
+import { MODELS } from '@/app/services/llm/models';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -68,6 +69,19 @@ export default function SidebarMobile({
   const btn = `w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${d ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-500 hover:bg-gray-100'}`;
   const initials = (userName || userEmail || '?').slice(0, 2).toUpperCase();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [currentModelId, setCurrentModelId] = useState('gemini-2.5-flash');
+
+  useEffect(() => {
+    const read = () => {
+      const saved = localStorage.getItem('selected_model');
+      if (saved) setCurrentModelId(saved);
+    };
+    read();
+    window.addEventListener('storage', read);
+    return () => window.removeEventListener('storage', read);
+  }, []);
+
+  const currentModel = MODELS.find(m => m.id === currentModelId);
 
   const handleLangChange = (code: string) => {
     startLangTransition(async () => {
@@ -206,7 +220,12 @@ export default function SidebarMobile({
             <span className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
               {initials}
             </span>
-            <span className={`flex-1 text-sm text-left truncate ${d ? 'text-gray-300' : 'text-gray-700'}`}>{userName || userEmail}</span>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm text-left truncate ${d ? 'text-gray-300' : 'text-gray-700'}`}>{userName || userEmail}</p>
+              {currentModel && (
+                <p className={`text-xs truncate ${d ? 'text-gray-500' : 'text-gray-400'}`}>{currentModel.shortName}</p>
+              )}
+            </div>
             <svg className={`w-4 h-4 transition-transform ${userMenuOpen ? 'rotate-180' : ''} ${d ? 'text-gray-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
             </svg>

@@ -24,6 +24,7 @@ const DOMAINS_ALL = [
   { id: 'notes',   label: 'Notes',   icon: '📝', path: '/notes',    desc: 'Personal knowledge base' },
   { id: 'jobs',    label: 'Jobs',    icon: '⏰', path: '/jobs',     desc: 'Scheduled tasks & automation' },
   { id: 'space',   label: 'Space',   icon: '🛰️', path: '/space',   desc: '3D satellite orbit simulator' },
+  { id: 'learn',   label: 'Learn',   icon: '🧠', path: '/learn',   desc: 'Interactive model learning lab' },
 ];
 
 export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[] }) {

@@ -21,6 +21,7 @@ export const ALLERAC_DOMAINS: AlleracDomain[] = [
   { key: 'write',     name: 'Content',   icon: '✍️', path: '/write' },
   { key: 'workspace', name: 'Workspace', icon: '🖥️', path: '/workspace' },
   { key: 'space',     name: 'Space',     icon: '🛰️', path: '/space' },
+  { key: 'learn',     name: 'Learn',     icon: '🧠', path: '/learn' },
   { key: 'admin',     name: 'Admin',     icon: '⚙️', path: '/admin' },
 ];
 

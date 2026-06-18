@@ -8,6 +8,7 @@ import SidebarContent from './SidebarContent';
 import { AlleracLogo } from '../ui/AlleracLogo';
 import { updateLanguage } from '@/app/actions/user';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
+import { MODELS } from '@/app/services/llm/models';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -66,7 +67,20 @@ export default function SidebarDesktop({
   const locale = useLocale();
   const [langPending, startLangTransition] = useTransition();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [currentModelId, setCurrentModelId] = useState('gemini-2.5-flash');
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const read = () => {
+      const saved = localStorage.getItem('selected_model');
+      if (saved) setCurrentModelId(saved);
+    };
+    read();
+    window.addEventListener('storage', read);
+    return () => window.removeEventListener('storage', read);
+  }, []);
+
+  const currentModel = MODELS.find(m => m.id === currentModelId);
 
   const handleLangChange = (code: string) => {
     startLangTransition(async () => {
@@ -176,9 +190,12 @@ export default function SidebarDesktop({
                 {initials}
               </span>
               {!isSidebarCollapsed && (
-                <span className={`flex-1 text-left text-sm truncate ${d ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {userName || userEmail}
-                </span>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm truncate ${d ? 'text-gray-300' : 'text-gray-700'}`}>{userName || userEmail}</p>
+                  {currentModel && (
+                    <p className={`text-xs truncate ${d ? 'text-gray-500' : 'text-gray-400'}`}>{currentModel.shortName}</p>
+                  )}
+                </div>
               )}
             </button>
 
@@ -188,6 +205,9 @@ export default function SidebarDesktop({
                 <div className={`px-4 py-3 border-b ${d ? 'border-gray-700' : 'border-gray-100'}`}>
                   <p className={`text-sm font-semibold truncate ${d ? 'text-gray-100' : 'text-gray-900'}`}>{userName}</p>
                   <p className={`text-xs truncate ${d ? 'text-gray-400' : 'text-gray-500'}`}>{userEmail}</p>
+                  {currentModel && (
+                    <p className={`text-xs mt-0.5 ${d ? 'text-indigo-400' : 'text-indigo-600'}`}>{currentModel.shortName}</p>
+                  )}
                 </div>
 
                 <UserCreditBalance

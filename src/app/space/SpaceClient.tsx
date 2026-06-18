@@ -49,6 +49,17 @@ function satType(altKm: number): string {
   return 'GEO';
 }
 
+const _toRadDeg = (d: number) => d * Math.PI / 180;
+
+// Real EUMETSAT fleet — geostationary imagers + polar-orbiting MetOp/Jason
+const EUMETSAT_SATS: SatelliteData[] = [
+  { id: 'eumetsat-mtg-i1',    name: 'MTG-I1 (0°)',          altitude: 35786, inclination: 0.1,  raan: 0,  initialTheta: 0,               color: '#ff8844', showCoverage: false, constellation: 'EUMETSAT' },
+  { id: 'eumetsat-meteosat9', name: 'Meteosat-9 (IODC 45.5°E)', altitude: 35786, inclination: 0.1, raan: 0, initialTheta: _toRadDeg(45.5), color: '#ffaa66', showCoverage: false, constellation: 'EUMETSAT' },
+  { id: 'eumetsat-metop-b',   name: 'MetOp-B',              altitude: 817,   inclination: 98.7, raan: 0,  initialTheta: 0,               color: '#66ddff', showCoverage: false, constellation: 'EUMETSAT' },
+  { id: 'eumetsat-metop-c',   name: 'MetOp-C',              altitude: 817,   inclination: 98.7, raan: 90, initialTheta: _toRadDeg(180),   color: '#66ddff', showCoverage: false, constellation: 'EUMETSAT' },
+  { id: 'eumetsat-jason3',    name: 'Jason-3',              altitude: 1336,  inclination: 66.0, raan: 45, initialTheta: _toRadDeg(90),    color: '#cc88ff', showCoverage: false, constellation: 'EUMETSAT' },
+];
+
 // Walker constellation generator: T/P/F pattern
 function generateWalkerConstellation(
   name: string, color: string,
@@ -106,6 +117,12 @@ const PRESETS = [
     generate: () => generateWalkerConstellation('OneWeb', '#ff88cc', 1200, 87.9, 54, 6, 1),
     idPrefix: 'oneweb',
   },
+  {
+    label: 'EUMETSAT FLEET',
+    color: '#ff8844',
+    generate: () => EUMETSAT_SATS,
+    idPrefix: 'eumetsat',
+  },
 ];
 
 const PRESET_COLORS = [
@@ -155,6 +172,33 @@ const WHITE_SANDS_GS = (() => {
   };
 })();
 
+// EUMETSAT Space Operations Centre — Darmstadt, Germany
+const DARMSTADT_GS = (() => {
+  const lat = _toRad(49.87), lon = _toRad(8.62), cosLat = Math.cos(lat);
+  return {
+    id: 'gs-darmstadt',
+    pos: { x: cosLat * Math.cos(-lon), y: Math.sin(lat), z: cosLat * Math.sin(-lon) },
+    latRad: lat, lonRad: lon,
+    coords: '50°N 9°E', locationName: 'Darmstadt, Germany', loading: false,
+  };
+})();
+
+// Each EUMETSAT satellite downlinks to its Darmstadt control center (no crosslinks in reality)
+const EUMETSAT_LINKS = EUMETSAT_SATS.map(sat => ({
+  fromId: sat.id, toId: DARMSTADT_GS.id, color: sat.color,
+}));
+
+// ── GC-40 Birthday Satellite ─────────────────────────────────────────────────
+// Altitude = birth year (1986), inclination = age (40°) — a personal orbit.
+const GC40_BIRTH_YEAR = 1986;
+const GC40_SAT: SatelliteData = {
+  id: 'gc-40', name: 'GC-40', altitude: GC40_BIRTH_YEAR - 1000, inclination: 40, raan: 40,
+  initialTheta: _toRad(40), color: '#ffd700', showCoverage: false,
+};
+function isBirthday(date: Date): boolean {
+  return date.getMonth() === 5 && date.getDate() === 17; // June 17
+}
+
 export default function SpaceClient({ userId, userName, userEmail, isAdmin, allowedDomains }: Props) {
   'use no memo';
   const { isDark } = useTheme();
@@ -165,12 +209,16 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   const [showPaths, setShowPaths]       = useState(false);
   const [showCoverage, setShowCoverage] = useState(false);
   const [showDayNight, setShowDayNight] = useState(false);
+  const [showMoon, setShowMoon]         = useState(false);
   const [panelOpen, setPanelOpen]       = useState(false);
   const [chatOpen,  setChatOpen]        = useState(true);
   const [mobileTab, setMobileTab]       = useState<'globe' | 'ctrl' | 'chat'>('globe');
   const [viewMode,  setViewMode]        = useState<'earth' | 'solar'>('earth');
   const [tdrsMode,  setTdrsMode]        = useState(false);
+  const [eumetsatLinkMode, setEumetsatLinkMode] = useState(false);
   const [satLinkStatuses, setSatLinkStatuses] = useState<Record<string, boolean>>({});
+  const [birthdayMode, setBirthdayMode] = useState(false);
+  const [showBirthdayBanner, setShowBirthdayBanner] = useState(false);
 
   // Ground stations (multiple)
   const [groundStationMode, setGroundStationMode] = useState(false);
@@ -404,12 +452,61 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
   }, []);
 
   const handleSatLinkUpdate = useCallback((statuses: Record<string, boolean>) => {
-    setSatLinkStatuses(statuses);
+    setSatLinkStatuses(prev => ({ ...prev, ...statuses }));
   }, []);
 
+  // ── EUMETSAT downlink callbacks ───────────────────────────────────────────────
+  const activateEumetsatLinks = useCallback(() => {
+    setSatellites(prev => {
+      const existingIds = new Set(prev.map(s => s.id));
+      const toAdd = EUMETSAT_SATS.filter(s => !existingIds.has(s.id));
+      return [...prev, ...toAdd];
+    });
+    setGroundStations(prev => {
+      if (prev.some(gs => gs.id === DARMSTADT_GS.id)) return prev;
+      return [...prev, DARMSTADT_GS];
+    });
+    setEumetsatLinkMode(true);
+  }, []);
+
+  const deactivateEumetsatLinks = useCallback(() => {
+    setGroundStations(prev => prev.filter(gs => gs.id !== DARMSTADT_GS.id));
+    setSatLinkStatuses(prev => {
+      const next = { ...prev };
+      EUMETSAT_LINKS.forEach(lk => { delete next[`${lk.fromId}::${lk.toId}`]; });
+      return next;
+    });
+    setEumetsatLinkMode(false);
+  }, []);
+
+  // ── GC-40 Birthday Satellite callbacks ────────────────────────────────────────
+  const activateBirthday = useCallback(() => {
+    setSatellites(prev => prev.some(s => s.id === GC40_SAT.id) ? prev : [...prev, GC40_SAT]);
+    setBirthdayMode(true);
+  }, []);
+
+  const deactivateBirthday = useCallback(() => {
+    setSatellites(prev => prev.filter(s => s.id !== GC40_SAT.id));
+    setSelectedIds(prev => prev.filter(id => id !== GC40_SAT.id));
+    setBirthdayMode(false);
+  }, []);
+
+  // Auto-celebrate on June 17th
+  useEffect(() => {
+    if (isBirthday(new Date())) {
+      activateBirthday();
+      setShowBirthdayBanner(true);
+      const t = setTimeout(() => setShowBirthdayBanner(false), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [activateBirthday]);
+
   const satLinks: SatLink[] = useMemo(
-    () => tdrsMode ? TDRS_LINKS : [],
-    [tdrsMode],
+    () => [
+      ...(tdrsMode ? TDRS_LINKS : []),
+      ...(eumetsatLinkMode ? EUMETSAT_LINKS : []),
+    ],
+    [tdrsMode, eumetsatLinkMode],
   );
 
   const handleLogout = useCallback(async () => {
@@ -602,6 +699,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
             showPaths={showPaths}
             showCoverage={showCoverage}
             showDayNight={showDayNight}
+            showMoon={showMoon}
             previewOrbit={previewOrbit}
             selectedIds={selectedIds}
             groundStations={simulatorStations}
@@ -632,6 +730,24 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               {mode === 'earth' ? '◎ EARTH ORBIT' : '☀ SOLAR SYSTEM'}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Birthday celebration banner */}
+      {showBirthdayBanner && (
+        <div style={{
+          position: 'absolute', top: '14%', left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(20,14,0,0.85)', border: '1px solid #ffd700',
+          boxShadow: '0 0 24px rgba(255,215,0,0.4)',
+          color: '#ffd700', padding: '14px 28px', fontSize: 13, letterSpacing: 2, zIndex: 30,
+          fontFamily: fontMono, textAlign: 'center', pointerEvents: 'none',
+          animation: 'gc40fade 8s ease forwards',
+        }}>
+          🎂 HAPPY 40TH, GIANCLAUDIO 🎂
+          <div style={{ fontSize: 9, color: '#ffeaa0', letterSpacing: 1.5, marginTop: 6 }}>
+            GC-40 satellite deployed — orbit: born {GC40_BIRTH_YEAR}, inclination 40°
+          </div>
+          <style>{`@keyframes gc40fade { 0%{opacity:0} 10%{opacity:1} 85%{opacity:1} 100%{opacity:0} }`}</style>
         </div>
       )}
 
@@ -748,6 +864,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
               { label: 'PATHS',    value: showPaths,    toggle: () => setShowPaths(v => !v) },
               { label: 'COVERAGE', value: showCoverage, toggle: () => setShowCoverage(v => !v) },
               { label: 'DAY/NIGHT', value: showDayNight, toggle: () => setShowDayNight(v => !v) },
+              { label: '🌙 MOON', value: showMoon, toggle: () => setShowMoon(v => !v) },
             ].map(({ label, value, toggle }) => (
               <button key={label} onClick={toggle} style={{
                 flex: '1 1 auto', padding: '5px 0', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.8,
@@ -916,6 +1033,22 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                       </div>
                       <div style={{ color: textMuted, fontSize: 9 }}>{sat.altitude.toLocaleString()}km · {satType(sat.altitude)}</div>
                     </div>
+                    {sat.id === 'meteosat' && (
+                      <a
+                        href="https://www.aemet.es/es/eltiempo/observacion/satelite/infra"
+                        target="_blank" rel="noopener noreferrer"
+                        title="Ver imágenes en vivo (AEMET / EUMETSAT)"
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0,
+                          padding: '3px 6px', fontSize: 9, fontFamily: fontMono, letterSpacing: 0.5,
+                          background: 'rgba(255,136,68,0.12)', border: '1px solid #ff8844',
+                          color: '#ff8844', textDecoration: 'none', borderRadius: 3,
+                        }}
+                      >
+                        📡 LIVE
+                      </a>
+                    )}
                     <button onClick={e => { e.stopPropagation(); handleRemove(sat.id); }} title="Remove" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#604060', padding: 0 }}>✕</button>
                   </div>
                 );
@@ -1136,6 +1269,75 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                 ZoE = Zone of Exclusion (Earth blocking)<br />
                 White Sands ground station added
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* EUMETSAT Ground Links */}
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 9, color: textMuted, letterSpacing: 1.5, marginBottom: 6, fontFamily: fontMono }}>
+            EUMETSAT DOWNLINK STATUS
+          </div>
+          <button onClick={eumetsatLinkMode ? deactivateEumetsatLinks : activateEumetsatLinks} style={{
+            width: '100%', padding: '7px 0', fontSize: 10, fontFamily: fontMono, letterSpacing: 1,
+            background: eumetsatLinkMode ? (d ? 'rgba(255,136,68,0.12)' : 'rgba(255,136,68,0.08)') : btnBg,
+            border: `1px solid ${eumetsatLinkMode ? '#ff8844' : panelBdr}`,
+            color: eumetsatLinkMode ? '#ff8844' : textMuted, cursor: 'pointer', marginBottom: eumetsatLinkMode ? 8 : 0,
+          }}>
+            {eumetsatLinkMode ? '⊟ HIDE DOWNLINK STATUS' : '⊞ SHOW EUMETSAT ↓ DARMSTADT'}
+          </button>
+          {eumetsatLinkMode && (
+            <div style={{ fontSize: 9, fontFamily: fontMono }}>
+              <div style={{ color: textMuted, marginBottom: 4 }}>SAT → DARMSTADT (DOWNLINK)</div>
+              {EUMETSAT_LINKS.map(link => {
+                const key = `${link.fromId}::${link.toId}`;
+                const active = satLinkStatuses[key];
+                const fromName = EUMETSAT_SATS.find(s => s.id === link.fromId)?.name ?? link.fromId;
+                return (
+                  <div key={key} style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 0', borderBottom: `1px solid ${panelBdr}`,
+                  }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: active === undefined ? '#444' : active ? '#44ff88' : '#ff3333',
+                      boxShadow: active ? '0 0 6px #44ff88' : undefined,
+                    }} />
+                    <span style={{ color: textPrimary, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {fromName}
+                    </span>
+                    <span style={{ color: active === undefined ? '#666' : active ? '#44ff88' : '#ff3333' }}>
+                      {active === undefined ? 'INIT' : active ? 'OPEN' : 'ZoE'}
+                    </span>
+                  </div>
+                );
+              })}
+              <div style={{ color: '#666', fontSize: 8, marginTop: 6, lineHeight: 1.5 }}>
+                ZoE = Zone of Exclusion (Earth blocking the downlink)<br />
+                EUMETSAT has no real sat-to-sat crosslinks — each satellite<br />
+                downlinks directly to its control center.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* GC-40 Birthday Satellite */}
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${panelBdr}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 9, color: textMuted, letterSpacing: 1.5, marginBottom: 6, fontFamily: fontMono }}>
+            🎂 BIRTHDAY ORBIT
+          </div>
+          <button onClick={birthdayMode ? deactivateBirthday : activateBirthday} style={{
+            width: '100%', padding: '7px 0', fontSize: 10, fontFamily: fontMono, letterSpacing: 1,
+            background: birthdayMode ? (d ? 'rgba(255,215,0,0.12)' : 'rgba(255,200,0,0.08)') : btnBg,
+            border: `1px solid ${birthdayMode ? '#ffd700' : panelBdr}`,
+            color: birthdayMode ? '#ffd700' : textMuted, cursor: 'pointer', marginBottom: birthdayMode ? 6 : 0,
+          }}>
+            {birthdayMode ? '⊟ REMOVE GC-40' : '⊞ LOAD GC-40 SATELLITE'}
+          </button>
+          {birthdayMode && (
+            <div style={{ color: '#666', fontSize: 8, lineHeight: 1.5, fontFamily: fontMono }}>
+              Altitude {GC40_SAT.altitude}km ≈ born {GC40_BIRTH_YEAR}<br />
+              Inclination {GC40_SAT.inclination}° = 40 years today
             </div>
           )}
         </div>

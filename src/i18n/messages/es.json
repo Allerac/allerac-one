@@ -620,5 +620,30 @@
     "execHistory": "Últimas ejecuciones",
     "timezone": "Zona horaria:",
     "editorHint": "Selecciona un job o crea uno"
+  },
+  "learn": {
+    "trainingView": "Visualizacion del entrenamiento",
+    "title": "Como aprende un modelo",
+    "epoch": "Epoca",
+    "chartLabel": "Grafico de alquiler por area",
+    "legendReal": "alquiler real",
+    "legendPredicted": "prediccion del modelo",
+    "legendError": "error que se convierte en aprendizaje",
+    "controls": "Controles del entrenamiento",
+    "training": "Entrenamiento",
+    "weight": "Peso",
+    "oneEpoch": "1 epoca",
+    "manyEpochs": "25 epocas",
+    "reset": "Reset",
+    "learningRate": "Tasa de aprendizaje",
+    "testApartment": "Prueba un apartamento",
+    "area": "Area en m2",
+    "predictedRent": "Alquiler previsto",
+    "whatIsHappening": "Que esta pasando",
+    "step1": "El modelo dibuja una linea azul usando peso y bias.",
+    "step2": "Cada punto negro compara el alquiler real con la prediccion azul.",
+    "step3": "Las lineas rojas miden el error.",
+    "step4": "En cada epoca, el gradiente ajusta peso y bias para reducir la loss.",
+    "lossHistory": "Historial de loss"
   }
 }

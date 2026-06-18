@@ -44,6 +44,7 @@ export default function ConfigModal({ isOpen, onClose, userId, userName, userEma
           if (settings.anthropic_api_key) setAnthropicApiKey(settings.anthropic_api_key);
           if (settings.location)          setLocationInput(settings.location);
           if (settings.timezone)          setTimezoneInput(settings.timezone);
+          if (settings.selected_model)    setSelectedModel(settings.selected_model);
         } else {
           setGithubToken(savedToken);
           setTavilyApiKey(savedTavilyKey);
