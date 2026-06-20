@@ -46,7 +46,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, handleKeyPress, handleSaveToMemory,
+    send, stop, handleKeyPress, handleSaveToMemory,
     memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
   } = useDomainChat({
     userId, domain: 'jobs', defaultSkillName,
@@ -140,7 +140,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />
                     </div>
                   </div>
@@ -164,7 +164,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />
                     </div>
                   </>

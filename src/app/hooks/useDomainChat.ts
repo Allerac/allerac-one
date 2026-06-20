@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { MODELS } from '@/app/services/llm/models';
 import type { ChatMessage } from '@/app/hooks/useConversations';
 import * as memoryActions from '@/app/actions/memory';
@@ -28,12 +29,14 @@ export function useDomainChat({
   domain,
   defaultSkillName,
   currentConvId,
+  messages,
   setMessages,
   onConversationCreated,
   getPostContext,
   onToolCall,
   onStreamEvent,
 }: UseDomainChatOptions) {
+  const t = useTranslations('chat');
   const [input, setInput]             = useState('');
   const [sending, setSending]         = useState(false);
   const [selectedModel, setModelState] = useState('gemini-2.5-flash');
@@ -42,6 +45,9 @@ export function useDomainChat({
   const [githubToken, setGithubToken] = useState('');
   const messagesEndRef                = useRef<HTMLDivElement>(null);
   const convIdRef                     = useRef<string | null>(null);
+  const sendingRef                    = useRef(false);
+  const queueRef                      = useRef<string[]>([]);
+  const abortRef                      = useRef<AbortController | null>(null);
 
   const [lastToolCall, setLastToolCall] = useState<ToolCallEvent | null>(null);
   const [memoryOpen, setMemoryOpen]     = useState(false);
@@ -53,6 +59,11 @@ export function useDomainChat({
     setConvId(currentConvId);
     convIdRef.current = currentConvId;
   }, [currentConvId]);
+
+  // Auto-scroll to bottom when messages update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Keep convIdRef in sync with convId state
   useEffect(() => {
@@ -76,11 +87,11 @@ export function useDomainChat({
     setAgentMode(v => !v);
   }, []);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || sending) return;
-    setInput('');
+  const executeMessage = useCallback(async (text: string) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
     setSending(true);
+    sendingRef.current = true;
     const requestStart = Date.now();
 
     setMessages(prev => [
@@ -94,6 +105,7 @@ export function useDomainChat({
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           message: text,
           conversationId: convIdRef.current,
@@ -158,15 +170,47 @@ export function useDomainChat({
         }
       }
     } catch (err: any) {
-      setMessages(prev => {
-        const m = [...prev];
-        m[m.length - 1] = { ...m[m.length - 1], content: `Error: ${err.message}` };
-        return m;
-      });
+      if (err.name === 'AbortError') {
+        setMessages(prev => {
+          const m = [...prev];
+          const last = m[m.length - 1];
+          if (last?.role === 'assistant') m[m.length - 1] = { ...last, content: last.content || t('stoppedByUser') };
+          return m;
+        });
+      } else {
+        setMessages(prev => {
+          const m = [...prev];
+          m[m.length - 1] = { ...m[m.length - 1], content: `Error: ${err.message}` };
+          return m;
+        });
+      }
     } finally {
-      setSending(false);
+      abortRef.current = null;
+      sendingRef.current = false;
+      const next = queueRef.current.shift();
+      if (next) {
+        executeMessage(next);
+      } else {
+        setSending(false);
+      }
     }
-  }, [input, sending, selectedModel, defaultSkillName, domain, getPostContext, onToolCall, onStreamEvent, onConversationCreated, setMessages]);
+  }, [selectedModel, defaultSkillName, domain, getPostContext, onToolCall, onStreamEvent, onConversationCreated, setMessages, t]);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    queueRef.current = [];
+  }, []);
+
+  const send = useCallback(() => {
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    if (sendingRef.current) {
+      queueRef.current.push(text);
+      return;
+    }
+    executeMessage(text);
+  }, [input, executeMessage]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
@@ -204,6 +248,7 @@ export function useDomainChat({
     lastToolCall,
     setLastToolCall,
     send,
+    stop,
     handleKeyPress,
     handleSaveToMemory,
     memoryOpen,

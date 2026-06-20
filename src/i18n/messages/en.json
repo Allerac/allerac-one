@@ -103,7 +103,8 @@
     "ollamaNotConnected": "Ollama is not running. Start Ollama to use this model.",
     "modelNotAvailable": "Model not available. Pull it in Ollama first.",
     "googleNotConfigured": "Google API key not configured. Add it in Settings.",
-    "githubNotConfigured": "GitHub token not configured. Add it in Settings."
+    "githubNotConfigured": "GitHub token not configured. Add it in Settings.",
+    "stoppedByUser": "Generation stopped by user."
   },
   "home": {
     "greeting": "Hello, {name}!",

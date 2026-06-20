@@ -65,6 +65,12 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
   const [githubToken, setGithubToken] = useState('');
   const messagesEndRef                = useRef<HTMLDivElement>(null);
   useEffect(() => { setConvId(currentConvId); }, [currentConvId]);
+
+  // Auto-scroll to bottom when messages update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   useEffect(() => {
     const saved = localStorage.getItem('selected_model');
     if (saved) setModel(saved);

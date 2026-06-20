@@ -254,6 +254,9 @@ export default function AdminChat({
   const documentFileInputRef = useRef<HTMLInputElement>(null);
   const handleLogoutRef = useRef<() => void>(() => {});
   const instagramDraftRef = useRef<{ caption: string; tags: string } | null>(null);
+  const isSendingRef = useRef(false);
+  const chatQueueRef = useRef<string[]>([]);
+  const chatAbortRef = useRef<AbortController | null>(null);
 
   // When Social Studio is open, use the form-update tool instead of the legacy Instagram draft tool.
   const activeTools = isInstagramPostOpen
@@ -683,83 +686,100 @@ const savedModel = localStorage.getItem('selected_model');
     }
   };
 
-  const handleSendMessage = async () => {
-    if (isSending) return;
+  const executeChatMessage = async (message: string, images: Array<{ file: File; preview: string }>) => {
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
     setIsSending(true);
-
+    isSendingRef.current = true;
     try {
-      let message = inputMessage;
-      if (documentAttachments.length > 0) {
-        const docBlocks = documentAttachments.map(d =>
-          `<attachment name="${d.name}">\n${d.content}\n</attachment>`
-        ).join('\n\n');
-        message = (message.trim() ? message + '\n\n' : '') + docBlocks;
+      const extraContext = [postContextRef.current, healthViewContextRef.current].filter(Boolean).join('\n\n') || undefined;
+      await chatMessageService.sendMessage(message, images, activeSkill, extraContext, controller.signal, tChat('stoppedByUser'));
+    } finally {
+      chatAbortRef.current = null;
+      isSendingRef.current = false;
+      const next = chatQueueRef.current.shift();
+      if (next) {
+        await executeChatMessage(next, []);
+      } else {
+        setIsSending(false);
       }
+    }
+  };
 
-      // Save copy of sent images before clearing
-      if (imageAttachments.length > 0) {
-        setLastSentImages([...imageAttachments]);
-      }
+  const stopChat = () => {
+    chatAbortRef.current?.abort();
+    chatQueueRef.current = [];
+  };
 
-      if (isAgentMode) {
-        // Agent mode: add user message, unlock input immediately, start agent run
+  const handleSendMessage = async () => {
+    // Build message content from current input state
+    let message = inputMessage;
+    if (documentAttachments.length > 0) {
+      const docBlocks = documentAttachments.map(d =>
+        `<attachment name="${d.name}">\n${d.content}\n</attachment>`
+      ).join('\n\n');
+      message = (message.trim() ? message + '\n\n' : '') + docBlocks;
+    }
+
+    if (!message.trim() && imageAttachments.length === 0) return;
+
+    // Save copy of sent images before clearing
+    const sentImages = [...imageAttachments];
+    if (sentImages.length > 0) setLastSentImages(sentImages);
+
+    // Clear input immediately so user can type the next message
+    setInputMessage('');
+    sentImages.forEach(img => URL.revokeObjectURL(img.preview));
+    setImageAttachments([]);
+    setDocumentAttachments([]);
+
+    if (isAgentMode) {
+      // Agent mode: add user message, unlock input immediately, start agent run
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: message, timestamp: new Date() } as Message,
+      ]);
+
+      setIsSending(true);
+      try {
+        const response = await fetch('/api/agents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            conversationId: currentConversationId,
+            model: selectedModel,
+            provider: MODELS.find(m => m.id === selectedModel)?.provider || 'github',
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          throw new Error(errorText || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
         setMessages(prev => [
           ...prev,
-          { role: 'user', content: message, timestamp: new Date() } as Message,
+          {
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+            actions: [{ type: 'agent_run', agentRunId: data.runId }],
+          } as Message,
         ]);
-
-        setInputMessage('');
-        imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
-        setImageAttachments([]);
-        setDocumentAttachments([]);
-
-        // UNLOCK INPUT IMMEDIATELY
-        setIsSending(false);
-
-        // Start agent run via API, then begin polling
-        try {
-          const response = await fetch('/api/agents', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message,
-              conversationId: currentConversationId,
-              model: selectedModel,
-              provider: MODELS.find(m => m.id === selectedModel)?.provider || 'github',
-            }),
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text().catch(() => '');
-            throw new Error(errorText || `HTTP ${response.status}`);
-          }
-
-          const data = await response.json();
-          setMessages(prev => [
-            ...prev,
-            {
-              role: 'assistant',
-              content: '',
-              timestamp: new Date(),
-              actions: [{ type: 'agent_run', agentRunId: data.runId }],
-            } as Message,
-          ]);
-        } catch (error: any) {
-          console.error('[handleSendMessage] Agent run creation failed:', error);
-        }
-      } else {
-        // Normal chat mode: use existing flow
-        const extraContext = [postContextRef.current, healthViewContextRef.current].filter(Boolean).join('\n\n') || undefined;
-        await chatMessageService.sendMessage(message, imageAttachments, activeSkill, extraContext);
-        setInputMessage('');
-        imageAttachments.forEach(img => URL.revokeObjectURL(img.preview));
-        setImageAttachments([]);
-        setDocumentAttachments([]);
-      }
-    } finally {
-      if (!isAgentMode) {
+      } catch (error: any) {
+        console.error('[handleSendMessage] Agent run creation failed:', error);
+      } finally {
         setIsSending(false);
       }
+    } else {
+      // Normal chat: queue if already sending (only text can be queued)
+      if (isSendingRef.current && sentImages.length === 0) {
+        chatQueueRef.current.push(message);
+        return;
+      }
+      await executeChatMessage(message, sentImages);
     }
   };
 
@@ -1118,6 +1138,7 @@ const savedModel = localStorage.getItem('selected_model');
                   handleKeyPress={handleKeyPress}
                   handleSendMessage={handleSendMessage}
                   isSending={isSending}
+                  onStop={stopChat}
                   githubToken={githubToken}
                   isDarkMode={isDarkMode}
                   setIsDocumentModalOpen={() => { setMyAlleracTab('memory'); setMyAlleracMemoryTab('documents'); setIsMyAlleracOpen(true); }}
@@ -1179,6 +1200,7 @@ const savedModel = localStorage.getItem('selected_model');
                     handleKeyPress={handleKeyPress}
                     handleSendMessage={handleSendMessage}
                     isSending={isSending}
+                    onStop={stopChat}
                     githubToken={githubToken}
                     isDarkMode={isDarkMode}
                     setIsDocumentModalOpen={() => { setMyAlleracTab('memory'); setMyAlleracMemoryTab('documents'); setIsMyAlleracOpen(true); }}

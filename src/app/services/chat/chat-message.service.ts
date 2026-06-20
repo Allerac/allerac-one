@@ -31,7 +31,7 @@ export class ChatMessageService {
     this.config = config;
   }
 
-  async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>, activeSkill?: any | null, postContext?: string) {
+  async sendMessage(inputMessage: string, imageAttachments?: Array<{ file: File; preview: string }>, activeSkill?: any | null, postContext?: string, signal?: AbortSignal, stoppedByUserMessage?: string) {
     if (!inputMessage.trim() && (!imageAttachments || imageAttachments.length === 0)) return;
     if (!this.config.userId) return;
 
@@ -84,6 +84,7 @@ export class ChatMessageService {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal,
         body: JSON.stringify({
           message: messageContent,
           conversationId: this.config.currentConversationId,
@@ -212,6 +213,17 @@ export class ChatMessageService {
         }
       }
     } catch (error: any) {
+      if (error.name === 'AbortError') {
+        if (stoppedByUserMessage) {
+          this.config.setMessages(prev => {
+            const msgs = [...prev];
+            const last = msgs[msgs.length - 1];
+            if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: last.content || stoppedByUserMessage };
+            return msgs;
+          });
+        }
+        return;
+      }
       console.error('❌ Error sending message:', error);
       const raw = error.message || '';
       const isRateLimit = raw.includes('Rate Limit') || raw.includes('rate limit') || raw.includes('429');

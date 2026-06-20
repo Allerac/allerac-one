@@ -103,7 +103,8 @@
     "ollamaNotConnected": "Ollama no está en ejecución. Inicia Ollama para usar este modelo.",
     "modelNotAvailable": "Modelo no disponible. Descárgalo en Ollama primero.",
     "googleNotConfigured": "Clave de API de Google no configurada. Añádela en Configuración.",
-    "githubNotConfigured": "Token de GitHub no configurado. Añádelo en Configuración."
+    "githubNotConfigured": "Token de GitHub no configurado. Añádelo en Configuración.",
+    "stoppedByUser": "Generación cancelada por el usuario."
   },
   "home": {
     "greeting": "¡Hola, {name}!",

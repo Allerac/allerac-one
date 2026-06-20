@@ -211,7 +211,7 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, handleKeyPress, handleSaveToMemory,
+    send, stop, handleKeyPress, handleSaveToMemory,
     memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
   } = useDomainChat({
     userId, domain: 'tickets', defaultSkillName,
@@ -767,7 +767,7 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
                 MODELS={MODELS}
                 githubConfigured={true} googleConfigured={true} ollamaConnected={true}
                 isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
               />
             </div>
           </div>
@@ -796,7 +796,7 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
                 MODELS={MODELS}
                 githubConfigured={true} googleConfigured={true} ollamaConnected={true}
                 isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
               />
             </div>
           </>

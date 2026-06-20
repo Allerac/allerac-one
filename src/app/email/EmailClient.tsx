@@ -48,7 +48,7 @@ export default function EmailClient({ userId, userName, userEmail, isAdmin, defa
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, handleKeyPress, handleSaveToMemory,
+    send, stop, handleKeyPress, handleSaveToMemory,
     memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
   } = useDomainChat({
     userId, domain: 'email', defaultSkillName,
@@ -134,7 +134,7 @@ export default function EmailClient({ userId, userName, userEmail, isAdmin, defa
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} />
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop} />
                     </div>
                   </div>
                 ) : (
@@ -153,7 +153,7 @@ export default function EmailClient({ userId, userName, userEmail, isAdmin, defa
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} />
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop} />
                     </div>
                   </>
                 )}

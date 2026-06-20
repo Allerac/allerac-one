@@ -286,7 +286,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, handleKeyPress, handleSaveToMemory,
+    send, stop, handleKeyPress, handleSaveToMemory,
     memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
   } = useDomainChat({
     userId, domain: 'space', currentConvId,
@@ -1490,7 +1490,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
                   githubConfigured ollamaConnected googleConfigured
                   isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                 />
               </div>
             </div>
@@ -1513,7 +1513,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
                   githubConfigured ollamaConnected googleConfigured
                   isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                 />
               </div>
             </>
@@ -1558,7 +1558,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
                   githubConfigured ollamaConnected googleConfigured
                   isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                 />
               </div>
             </div>
@@ -1581,7 +1581,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
                   githubConfigured ollamaConnected googleConfigured
                   isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                  onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                 />
               </div>
             </>

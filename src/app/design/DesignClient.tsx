@@ -48,7 +48,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, handleKeyPress, handleSaveToMemory,
+    send, stop, handleKeyPress, handleSaveToMemory,
     memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
   } = useDomainChat({
     userId, domain: 'design', defaultSkillName,
@@ -179,7 +179,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
                         ollamaConnected={true}
                         isAgentMode={isAgentMode}
                         onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />
                     </div>
                   </div>
@@ -217,7 +217,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
                         ollamaConnected={true}
                         isAgentMode={isAgentMode}
                         onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />
                     </div>
                   </>

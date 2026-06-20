@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { MODELS } from '@/app/services/llm/models';
 import type { Message } from '@/app/types';
 import type { ChatMessage } from '@/app/hooks/useConversations';
@@ -33,6 +34,7 @@ export default function DomainChatPanel({
 }: Props) {
   const { setLastToolCall, postContext, isDark } = useDomainContext();
   const d = isDark;
+  const t = useTranslations('chat');
 
   const [input, setInput]         = useState('');
   const [sending, setSending]     = useState(false);
@@ -41,6 +43,9 @@ export default function DomainChatPanel({
   const [isAgentMode, setIsAgentMode] = useState(false);
   const messagesEndRef            = useRef<HTMLDivElement>(null);
   const [githubToken, setGithubToken] = useState('');
+  const sendingRef                = useRef(false);
+  const queueRef                  = useRef<string[]>([]);
+  const abortRef                  = useRef<AbortController | null>(null);
 
   const [memoryModalOpen, setMemoryModalOpen]   = useState(false);
   const [memoryLoading, setMemoryLoading]       = useState(false);
@@ -55,11 +60,16 @@ export default function DomainChatPanel({
 
   useEffect(() => { setConvId(currentConvId); }, [currentConvId]);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || sending) return;
-    setInput('');
+  // Auto-scroll to bottom when messages update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const executeMessage = useCallback(async (text: string) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
     setSending(true);
+    sendingRef.current = true;
     const requestStart = Date.now();
 
     setMessages(prev => [
@@ -72,6 +82,7 @@ export default function DomainChatPanel({
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           message: text,
           conversationId: convId,
@@ -132,15 +143,47 @@ export default function DomainChatPanel({
         }
       }
     } catch (err: any) {
-      setMessages(prev => {
-        const msgs = [...prev];
-        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: `Error: ${err.message}` };
-        return msgs;
-      });
+      if (err.name === 'AbortError') {
+        setMessages(prev => {
+          const msgs = [...prev];
+          const last = msgs[msgs.length - 1];
+          if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: last.content || t('stoppedByUser') };
+          return msgs;
+        });
+      } else {
+        setMessages(prev => {
+          const msgs = [...prev];
+          msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: `Error: ${err.message}` };
+          return msgs;
+        });
+      }
     } finally {
-      setSending(false);
+      abortRef.current = null;
+      sendingRef.current = false;
+      const next = queueRef.current.shift();
+      if (next) {
+        executeMessage(next);
+      } else {
+        setSending(false);
+      }
     }
-  }, [input, sending, convId, selectedModel, domainSlug, defaultSkillName, postContext, setLastToolCall, onConversationCreated, setMessages]);
+  }, [convId, selectedModel, domainSlug, defaultSkillName, postContext, setLastToolCall, onConversationCreated, setMessages, t]);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    queueRef.current = [];
+  }, []);
+
+  const send = useCallback(() => {
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    if (sendingRef.current) {
+      queueRef.current.push(text);
+      return;
+    }
+    executeMessage(text);
+  }, [input, executeMessage]);
 
   const handleSaveToMemory = useCallback(async () => {
     if (!convId || !userId) return;
@@ -255,6 +298,7 @@ export default function DomainChatPanel({
               onToggleAgentMode={() => setIsAgentMode(v => !v)}
               onSaveMemory={handleSaveToMemory}
               hasConversation={!!convId}
+              onStop={stop}
             />
           </div>
         </div>

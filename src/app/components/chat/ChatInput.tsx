@@ -42,6 +42,8 @@ interface ChatInputProps {
   // Memory props
   onSaveMemory?: () => void;
   hasConversation?: boolean;
+  // Stop generation
+  onStop?: () => void;
 }
 
 export default function ChatInput({
@@ -73,6 +75,7 @@ export default function ChatInput({
   onToggleAgentMode,
   onSaveMemory,
   hasConversation = false,
+  onStop,
 }: ChatInputProps) {
   const t = useTranslations('chat');
   const attachDropdownRef = useRef<HTMLDivElement>(null);
@@ -226,7 +229,6 @@ export default function ChatInput({
         placeholder={t('typeMessage')}
         className={`w-full px-4 pt-3 pb-2 focus:outline-none resize-none disabled:opacity-50 bg-transparent overflow-y-auto ${isDarkMode ? 'text-gray-100 placeholder-gray-400' : 'text-black placeholder-gray-400'}`}
         rows={1}
-        disabled={isSending}
         style={{ minHeight: '48px', maxHeight: '200px', lineHeight: '28px' }}
       />
 
@@ -342,28 +344,39 @@ export default function ChatInput({
 
         </div>
         
-        {/* Right side: Send button */}
+        {/* Right side: Send/Stop button */}
         <div className="flex items-center gap-1">
-          {/* Send button */}
-          <button
-            onClick={handleSendMessage}
-            disabled={isSending || (!inputMessage.trim() && imageAttachments.length === 0 && documentAttachments.length === 0) || documentAttachments.some(d => d.content === '') || !isProviderReady}
-            className={`w-11 h-11 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
-              (inputMessage.trim() || imageAttachments.length > 0 || documentAttachments.length > 0) && !isSending
-                ? 'bg-brand-900 hover:bg-brand-950 text-white'
-                : isDarkMode
-                ? 'bg-gray-600 text-gray-400'
-                : 'bg-gray-300 text-gray-500'
-            }`}
-          >
-            {isSending ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14m-7-7l7 7-7 7" />
-              </svg>
+          <div className="relative w-11 h-11 flex items-center justify-center">
+            {/* Circular spinner ring — shown while generating */}
+            {isSending && (
+              <div
+                className="absolute inset-0 rounded-full border-2 animate-spin pointer-events-none"
+                style={{ borderColor: 'transparent', borderTopColor: isDarkMode ? '#818cf8' : '#6366f1' }}
+              />
             )}
-          </button>
+            <button
+              onClick={isSending && onStop ? onStop : handleSendMessage}
+              disabled={!isSending && ((!inputMessage.trim() && imageAttachments.length === 0 && documentAttachments.length === 0) || documentAttachments.some(d => d.content === '') || !isProviderReady)}
+              title={isSending ? 'Stop generation' : undefined}
+              className={`w-9 h-9 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
+                isSending
+                  ? isDarkMode ? 'bg-transparent hover:bg-gray-700/50 text-gray-400' : 'bg-transparent hover:bg-gray-200/50 text-gray-500'
+                  : (inputMessage.trim() || imageAttachments.length > 0 || documentAttachments.length > 0)
+                  ? 'bg-brand-900 hover:bg-brand-950 text-white'
+                  : isDarkMode ? 'bg-gray-600 text-gray-400' : 'bg-gray-300 text-gray-500'
+              }`}
+            >
+              {isSending ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="5" y="5" width="14" height="14" rx="2" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14m-7-7l7 7-7 7" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

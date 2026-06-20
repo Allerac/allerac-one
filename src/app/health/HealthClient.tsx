@@ -61,7 +61,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, handleKeyPress, handleSaveToMemory,
+    send, stop, handleKeyPress, handleSaveToMemory,
     memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
   } = useDomainChat({
     userId, domain: 'health', defaultSkillName,
@@ -173,7 +173,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />
                     </div>
                   </div>
@@ -197,7 +197,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
+                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />
                     </div>
                   </>
