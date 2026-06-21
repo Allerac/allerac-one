@@ -62,7 +62,6 @@ export async function PATCH(
     return Response.json({ error: message }, { status: 500 });
   }
 }
-
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -71,10 +70,10 @@ export async function DELETE(
     const user = await requireCurrentUser();
 
     const { id } = await params;
-    const ticket = await ticketService.update(id, user.id, { status: 'cancelled' });
+    const deleted = await ticketService.delete(id, user.id);
 
-    if (!ticket) return Response.json({ error: 'Not found' }, { status: 404 });
-    return Response.json({ cancelled: true });
+    if (!deleted) return Response.json({ error: 'Not found' }, { status: 404 });
+    return Response.json({ deleted: true });
   } catch (error: unknown) {
     const authError = authenticationErrorResponse(error);
     if (authError) return authError;
@@ -82,4 +81,6 @@ export async function DELETE(
     console.error('[TicketRoute] DELETE error:', error);
     return Response.json({ error: message }, { status: 500 });
   }
+}
+
 }
