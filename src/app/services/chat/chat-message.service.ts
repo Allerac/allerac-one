@@ -207,6 +207,16 @@ export class ChatMessageService {
                 tiktokTitle: event.tiktokTitle,
               });
             }
+          } else if (event.type === 'ticket_created') {
+            // Dispatch a window event to notify ticket list to refresh
+            window.dispatchEvent(new CustomEvent('ticketCreated', {
+              detail: {
+                ticket_id: event.ticket_id,
+                title: event.title,
+                type: event.type,
+                status: event.status,
+              },
+            }));
           } else if (event.type === 'error') {
             throw new Error(event.message || 'Server error');
           }
