@@ -557,7 +557,24 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
     } finally {
       setActionLoading(false);
     }
+
+  async function deleteTicket(id: string) {
+    if (!confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        setTickets(prev => prev.filter(tk => tk.id !== id));
+        setSelected(null);
+      }
+    } finally {
+      setActionLoading(false);
+    }
   }
+
 
   const visible = tickets.filter(FILTERS.find(f => f.id === filter)!.match);
   const counts = Object.fromEntries(FILTERS.map(f => [f.id, tickets.filter(f.match).length]));
