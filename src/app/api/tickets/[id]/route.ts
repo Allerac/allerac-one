@@ -3,8 +3,9 @@
  *
  * GET    /api/tickets/:id  — ticket detail + events
  * PATCH  /api/tickets/:id  — update status, assignment, resolution
- * DELETE /api/tickets/:id  — cancel ticket
+ * DELETE /api/tickets/:id  — delete ticket permanently
  */
+
 
 import { NextRequest } from 'next/server';
 import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
