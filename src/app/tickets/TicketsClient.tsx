@@ -197,11 +197,7 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
     if (saved) setIsDark(saved === 'dark');
   }, []);
 
-  useEffect(() => {
-    const open = () => setIsMyAlleracOpen(true);
-    window.addEventListener('openMyAlleracModal', open);
-    return () => window.removeEventListener('openMyAlleracModal', open);
-  }, []);
+  useEffect(() => {\n    const open = () => setIsMyAlleracOpen(true);\n    window.addEventListener('openMyAlleracModal', open);\n    return () => window.removeEventListener('openMyAlleracModal', open);\n  }, []);\n\n  // Listen for ticket creation events from chat and refresh the list\n  useEffect(() => {\n    const handleTicketCreated = () => {\n      console.log('[TicketsClient] Ticket created via chat, refreshing list...');\n      fetchTickets();\n    };\n    window.addEventListener('ticketCreated', handleTicketCreated);\n    return () => window.removeEventListener('ticketCreated', handleTicketCreated);\n  }, [fetchTickets]);
 
   const handleConvCreated = useCallback((id: string) => {
     setCurrentConvId(id); reload();
