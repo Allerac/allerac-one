@@ -34,4 +34,9 @@ export async function getTicketWithEvents(id: string) {
   if (!ticket) throw new Error('Ticket not found');
   const events = await ticketService.getEvents(id, user.id);
   return { ticket, events };
+
+
+export async function deleteTicket(id: string) {
+  const user = await requireCurrentUser();
+  return ticketService.delete(id, user.id);
 }
