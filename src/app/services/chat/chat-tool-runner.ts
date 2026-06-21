@@ -198,7 +198,20 @@ export async function executeChatTool(
   if (TICKET_TOOL_NAMES.includes(toolName)) {
     const handlers = buildTicketsTools(userId);
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
-    return handler(toolArgs);
+    const result = await handler(toolArgs);
+    
+    // Emit refresh event when a ticket is created
+    if (toolName === 'create_ticket' && result.success) {
+      emit({
+        type: 'ticket_created',
+        ticket_id: result.ticket_id,
+        title: result.title,
+        type: result.type,
+        status: result.status,
+      });
+    }
+    
+    return result;
   }
 
   return { error: `Tool ${toolName} not available` };
