@@ -195,11 +195,5 @@ export async function executeChatTool(
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
     return handler(toolArgs);
   }
-  if (TICKET_TOOL_NAMES.includes(toolName)) {
-    const handlers = buildTicketsTools(userId);
-    const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
-    return handler(toolArgs);
-  }
-
-  return { error: `Tool ${toolName} not available` };
+  if (TICKET_TOOL_NAMES.includes(toolName)) {\n    const handlers = buildTicketsTools(userId);\n    const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;\n    const result = await handler(toolArgs);\n    \n    // Emit event when a ticket is created to trigger UI refresh\n    if (toolName === 'create_ticket' && result.success) {\n      emit({\n        type: 'ticket_created',\n        ticket_id: result.ticket_id,\n        title: result.title,\n        type: result.type,\n      });\n    }\n    \n    return result;\n  }\n\n  return { error: `Tool ${toolName} not available` };
 }
