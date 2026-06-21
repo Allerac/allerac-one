@@ -1,6 +1,10 @@
 import { LLMService } from '../llm/llm.service';
 import { SearchWebTool } from '../../tools/search-web.tool';
 import { ShellTool } from '../../tools/shell.tool';
+import { buildGithubTools } from '../../tools/github.tool';
+import { GITHUB_TOOL_NAMES } from '../../tools/github.tool.definitions';
+import { buildLogsTool } from '../../tools/logs.tool';
+import { LOGS_TOOL_NAMES } from '../../tools/logs.tool.definitions';
 import { TOOLS } from '../../tools/tools';
 import { WorkerSpec } from './orchestrator.service';
 import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
@@ -33,7 +37,8 @@ export class WorkerService {
     spec: WorkerSpec,
     config: WorkerExecutionConfig,
     onToken?: (token: string) => void,
-    onToolCall?: (tool: string, args: any) => void
+    onToolCall?: (tool: string, args: any) => void,
+    onToolResult?: (tool: string, success: boolean, detail: string) => void
   ): Promise<WorkerResult> {
     const { userId, githubToken, geminiToken, anthropicToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage } =
       config;
@@ -65,7 +70,7 @@ export class WorkerService {
 
       let fullResponse = '';
       let totalTokens = 0;
-      const MAX_TOOL_CALL_ITERATIONS = 5;
+      const MAX_TOOL_CALL_ITERATIONS = 30;
       const toolCallHistory: string[] = [];
       const toolResults: string[] = [];
 
@@ -73,7 +78,7 @@ export class WorkerService {
         model: selectedModel,
         messages,
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 4000,
         tools: availableTools,
         tool_choice: 'auto',
       });
@@ -140,12 +145,26 @@ export class WorkerService {
                 const scopedCommand = normalizeWorkspaceReferences(userId, String(toolArgs.command || ''));
                 toolResult = await shellTool.execute(scopedCommand, safeCwd, toolArgs.timeout);
               }
+            } else if (GITHUB_TOOL_NAMES.includes(toolName)) {
+              if (!githubToken) {
+                toolResult = { error: 'GitHub token not configured.' };
+              } else {
+                const githubHandlers = buildGithubTools(githubToken);
+                const handler = githubHandlers[toolName as keyof typeof githubHandlers] as (args: any) => Promise<any>;
+                toolResult = await handler(toolArgs);
+              }
+            } else if (LOGS_TOOL_NAMES.includes(toolName)) {
+              const logsHandlers = buildLogsTool();
+              const handler = logsHandlers[toolName as keyof typeof logsHandlers] as (args: any) => Promise<any>;
+              toolResult = await handler(toolArgs);
             } else {
               toolResult = { error: `Tool ${toolName} not available in worker context` };
             }
 
             const resultText = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult, null, 2);
             toolResults.push(`## ${toolName} result:\n${resultText}`);
+            const shortResult = resultText.slice(0, 400).replace(/\n/g, ' ');
+            onToolResult?.(toolName, true, shortResult);
 
             messages.push({
               role: 'tool',
@@ -153,6 +172,8 @@ export class WorkerService {
               content: JSON.stringify(toolResult),
             });
           } catch (error: any) {
+            console.error(`[Worker] Tool ${toolName} failed:`, error.message);
+            onToolResult?.(toolName, false, error.message);
             messages.push({
               role: 'tool',
               tool_call_id: toolCallId,
@@ -170,7 +191,7 @@ export class WorkerService {
           model: selectedModel,
           messages,
           temperature: 0.7,
-          max_tokens: 2000,
+          max_tokens: 4000,
           tools: availableTools,
           tool_choice: 'auto',
         });

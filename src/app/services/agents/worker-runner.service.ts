@@ -189,7 +189,7 @@ export class WorkerRunnerService {
       const orchestrator = this.orchestratorInjected
         ? this.orchestrator
         : new OrchestratorService({
-            githubToken: settings.github_token || undefined,
+            githubToken: settings.github_repo_token || undefined,
             geminiToken: settings.google_api_key || undefined,
             anthropicToken: settings.anthropic_api_key || undefined,
           });
@@ -292,7 +292,7 @@ export class WorkerRunnerService {
 
     const config: WorkerExecutionConfig = {
       userId: run.user_id,
-      githubToken: settings.github_token || '',
+      githubToken: settings.github_repo_token || '',
       geminiToken: settings.google_api_key || undefined,
       anthropicToken: settings.anthropic_api_key || '',
       tavilyApiKey: settings.tavily_api_key || undefined,
@@ -309,14 +309,16 @@ export class WorkerRunnerService {
         this.worker.executeWorker(
           spec,
           config,
-          (token) => {
-            this.repository.appendWorkerProgress(workerId, `output:${token}`).catch(() => {});
-          },
+          undefined,
           (tool, args) => {
             const query = args.query ? `: "${args.query}"` : '';
             const command = args.command ? `: "${args.command.substring(0, 80)}"` : '';
             console.log(`[WorkerRunner] ${tag} Skill tool call: ${tool}${query || command}`);
             this.repository.appendWorkerProgress(workerId, `tool:${tool}${query || command}`).catch(() => {});
+          },
+          (tool, success, detail) => {
+            const prefix = success ? 'ok' : 'err';
+            this.repository.appendWorkerProgress(workerId, `${prefix}:${tool}:${detail.slice(0, 300)}`).catch(() => {});
           }
         ),
         WORKER_TIMEOUT_MS,
@@ -363,7 +365,7 @@ export class WorkerRunnerService {
       try {
         const config: WorkerExecutionConfig = {
           userId,
-          githubToken: settings.github_token || '',
+          githubToken: settings.github_repo_token || '',
           geminiToken: settings.google_api_key || undefined,
           anthropicToken: settings.anthropic_api_key || '',
           tavilyApiKey: settings.tavily_api_key || undefined,
@@ -377,15 +379,17 @@ export class WorkerRunnerService {
           this.worker.executeWorker(
             spec,
             config,
-            (token) => {
-              this.repository.appendWorkerProgress(spec.id, `output:${token}`).catch(() => {});
-            },
+            undefined,
             (tool, args) => {
               const query = args.query ? `: "${args.query}"` : '';
               const command = args.command ? `: "${args.command.substring(0, 80)}"` : '';
               const detail = query || command || '';
               console.log(`[WorkerRunner] ${tag} Worker ${spec.name} tool call: ${tool}${detail}`);
               this.repository.appendWorkerProgress(spec.id, `tool:${tool}${detail}`).catch(() => {});
+            },
+            (tool, success, detail) => {
+              const prefix = success ? 'ok' : 'err';
+              this.repository.appendWorkerProgress(spec.id, `${prefix}:${tool}:${detail.slice(0, 300)}`).catch(() => {});
             }
           ),
           WORKER_TIMEOUT_MS,

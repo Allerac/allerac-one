@@ -7,6 +7,7 @@ export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'cancelled';
 
 export interface Ticket {
   id: string;
+  number: number;
   userId: string;
   title: string;
   description: string | null;
@@ -74,6 +75,7 @@ export interface UpdateTicketInput {
 function rowToTicket(row: Record<string, unknown>): Ticket {
   return {
     id: row.id as string,
+    number: row.number as number,
     userId: row.user_id as string,
     title: row.title as string,
     description: row.description as string | null,

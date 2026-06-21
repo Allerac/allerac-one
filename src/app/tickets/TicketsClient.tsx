@@ -130,11 +130,66 @@ function timeAgo(dateStr: string) {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
   const mo = Math.floor(d / 30);
-  if (mo < 12) return `${mo}mo ago`;
   const y = Math.floor(d / 365);
-  return `${y}y ago`;
+  if (y >= 1) return `${y}y ago`;
+  if (mo >= 1) return `${mo}mo ago`;
+  return `${d}d ago`;
+}
+
+interface ToolStep {
+  tool: string;
+  args: string;
+  status: 'pending' | 'ok' | 'error';
+  detail: string;
+}
+
+function parsePRFromLog(log: string): { url: string; pr_number: number; title?: string } | null {
+  const lines = log.split('\n');
+  for (const line of lines) {
+    if (line.startsWith('ok:github_create_pr:')) {
+      const rest = line.slice('ok:github_create_pr:'.length);
+      try {
+        const data = JSON.parse(rest);
+        if (data.url && data.pr_number) return data;
+      } catch {}
+      // Fallback: regex when JSON is truncated
+      const urlMatch = rest.match(/"url"\s*:\s*"([^"]+)"/);
+      const numMatch = rest.match(/"pr_number"\s*:\s*(\d+)/);
+      const titleMatch = rest.match(/"title"\s*:\s*"([^"]+)"/);
+      if (urlMatch && numMatch) {
+        return { url: urlMatch[1], pr_number: parseInt(numMatch[1]), title: titleMatch?.[1] };
+      }
+    }
+  }
+  return null;
+}
+
+function parseSteps(log: string): ToolStep[] {
+  const entries = log.split('\n').filter(l =>
+    l.startsWith('tool:') || l.startsWith('ok:') || l.startsWith('err:')
+  );
+  const steps: ToolStep[] = [];
+  for (const entry of entries) {
+    if (entry.startsWith('tool:')) {
+      const rest = entry.slice(5);
+      const ci = rest.indexOf(':');
+      steps.push({ tool: ci >= 0 ? rest.slice(0, ci) : rest, args: ci >= 0 ? rest.slice(ci + 1) : '', status: 'pending', detail: '' });
+    } else if (entry.startsWith('ok:') || entry.startsWith('err:')) {
+      const isErr = entry.startsWith('err:');
+      const rest = entry.slice(isErr ? 4 : 3);
+      const ci = rest.indexOf(':');
+      const tool = ci >= 0 ? rest.slice(0, ci) : rest;
+      const detail = ci >= 0 ? rest.slice(ci + 1) : '';
+      for (let i = steps.length - 1; i >= 0; i--) {
+        if (steps[i].tool === tool && steps[i].status === 'pending') {
+          steps[i] = { ...steps[i], status: isErr ? 'error' : 'ok', detail };
+          break;
+        }
+      }
+    }
+  }
+  return steps;
 }
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -181,7 +236,9 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
   const [actionLoading, setActionLoading] = useState(false);
   const [isDark, setIsDark] = useState(true);
   const [agentRuns, setAgentRuns] = useState<Map<string, AgentRunStatus>>(new Map());
+  const [prStatuses, setPrStatuses] = useState<Map<number, { status: 'open'|'merged'|'closed'; title?: string }>> (new Map());
   const pollTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const prPollTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const [isSidebarOpen, setIsSidebarOpen]         = useState(false);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileTab, setMobileTab]                 = useState<'tickets' | 'chat'>('tickets');
@@ -266,6 +323,10 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
           progressLog: workerLog,
         };
         setAgentRuns(prev => new Map(prev).set(ticketId, run));
+        if (workerLog) {
+          const pr = parsePRFromLog(workerLog);
+          if (pr && !prPollTimers.current.has(pr.pr_number)) pollPrStatus(pr.pr_number);
+        }
         if (!DONE.has(run.status)) {
           pollTimers.current.set(ticketId, setTimeout(poll, 3000));
         }
@@ -298,15 +359,31 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
 
   function buildAgentPrompt(ticket: Ticket): string {
     const desc = ticket.description ? `\n\nDetails: ${ticket.description}` : '';
+    const num = ticket.number;
+    const branchPrefix = ticket.type === 'bug' ? 'fix' : ticket.type === 'improvement' ? 'feat' : 'chore';
+    const prInstructions = `
+
+Ticket: #${num}
+Repository: Allerac/allerac-one (GitHub)
+You have tools to read and modify the codebase directly:
+- github_list_files / github_read_file — explore and read source files (use ref: "<branch>" when re-reading after edits)
+- github_create_branch — create a branch named "${branchPrefix}/${num}-short-description"
+- github_replace_lines — replace lines in a file by line number range (PREFERRED for editing)
+- github_edit_file — find/replace in a file (use only for short unique patterns)
+- github_commit_file — create a new file (not for edits — use github_replace_lines instead)
+- github_create_pr — open a pull request when all changes are committed
+
+Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files → open PR. Report the PR URL when done.`;
+
     switch (ticket.type) {
       case 'bug':
-        return `Investigate and diagnose this bug: "${ticket.title}"${desc}\n\nAnalyze the issue, identify the root cause, and propose a fix. Report your findings clearly.`;
+        return `Investigate and fix this bug [Ticket #${num}]: "${ticket.title}"${desc}\n\nDiagnose the root cause by reading the relevant code, implement the fix, and open a pull request.${prInstructions}`;
       case 'task':
-        return `Complete this task: "${ticket.title}"${desc}\n\nBreak it down into concrete steps and execute them. Document your progress.`;
+        return `Complete this task [Ticket #${num}]: "${ticket.title}"${desc}\n\nBreak it down into concrete steps, implement the changes in the codebase, and open a pull request.${prInstructions}`;
       case 'improvement':
-        return `Implement this improvement: "${ticket.title}"${desc}\n\nPlan the implementation, identify the affected components, and document the changes needed.`;
+        return `Implement this improvement [Ticket #${num}]: "${ticket.title}"${desc}\n\nExplore the relevant code, implement the enhancement, and open a pull request.${prInstructions}`;
       case 'question':
-        return `Answer this question thoroughly: "${ticket.title}"${desc}\n\nProvide a comprehensive and accurate answer.`;
+        return `Answer this question thoroughly [Ticket #${num}]: "${ticket.title}"${desc}\n\nSearch the codebase if needed using github_list_files and github_read_file. Provide a comprehensive and accurate answer.`;
     }
   }
 
@@ -316,14 +393,15 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
       const skillName = TICKET_TYPE_SKILL[ticket.type];
 
       // 1. Dispatch agent run with skill matched to ticket type
+      const provider = MODELS.find(m => m.id === selectedModel)?.provider || 'ollama';
       const agentRes = await fetch('/api/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: buildAgentPrompt(ticket),
           conversationId: null,
-          model: 'qwen2.5:3b',
-          provider: 'ollama',
+          model: selectedModel,
+          provider,
           skillName,
         }),
       });
@@ -351,6 +429,76 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
     } finally {
       setActionLoading(false);
     }
+  }
+
+  async function rerunTicket(ticket: Ticket) {
+    setActionLoading(true);
+    try {
+      const skillName = TICKET_TYPE_SKILL[ticket.type];
+      const provider = MODELS.find(m => m.id === selectedModel)?.provider || 'ollama';
+      const prevRun = agentRuns.get(ticket.id);
+      const prevBranch = prevRun?.progressLog
+        ? (prevRun.progressLog.match(/ok:github_create_branch:\{"branch":"([^"]+)"/) || [])[1]
+        : null;
+      const continuation = prevBranch
+        ? `\n\nCONTINUATION NOTE: A previous run already created branch "${prevBranch}" and made some commits. Check that branch first, see what was done, and continue from where it left off — open the PR if all changes are ready, or apply missing changes first.`
+        : '';
+
+      const agentRes = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: buildAgentPrompt(ticket) + continuation,
+          conversationId: null,
+          model: selectedModel,
+          provider,
+          skillName,
+        }),
+      });
+      const { runId } = await agentRes.json();
+
+      const patchRes = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'in_progress',
+          assignedToType: 'agent',
+          contextPatch: { agentRunId: runId },
+        }),
+      });
+      const data = await patchRes.json();
+      setTickets(prev => prev.map(tk => tk.id === ticket.id ? data.ticket : tk));
+      setSelected(data.ticket);
+
+      if (runId) {
+        setAgentRuns(prev => new Map(prev).set(ticket.id, { runId, status: 'pending', result: null, error: null, progressLog: null }));
+        pollAgentRun(ticket.id, runId);
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function pollPrStatus(prNumber: number) {
+    const existing = prPollTimers.current.get(prNumber);
+    if (existing) clearTimeout(existing);
+
+    const check = async () => {
+      try {
+        const res = await fetch(`/api/github/pr/${prNumber}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setPrStatuses(prev => new Map(prev).set(prNumber, { status: data.status, title: data.title }));
+        if (data.status === 'open') {
+          const t = setTimeout(check, 30000);
+          prPollTimers.current.set(prNumber, t);
+        } else {
+          prPollTimers.current.delete(prNumber);
+        }
+      } catch {}
+    };
+
+    check();
   }
 
   const fetchTickets = useCallback(async () => {
@@ -523,8 +671,8 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
         </div>
       </div>
 
-      {/* ── list — hidden on mobile when ticket selected ─────────────────── */}
-      <div className={selected ? 'hidden lg:flex' : 'flex'} style={{ flex: 1, flexDirection: 'column', minWidth: 0, fontFamily: 'monospace', fontSize: 13 }}>
+      {/* ── list — hidden when ticket selected ──────────────────────────── */}
+      <div className={selected ? 'hidden' : 'flex'} style={{ flex: 1, flexDirection: 'column', minWidth: 0, fontFamily: 'monospace', fontSize: 13 }}>
 
         {/* Mobile: filter pills */}
         <div className="lg:hidden" style={{ padding: '8px 12px', borderBottom: `1px solid ${t.border}`, display: 'flex', gap: 6, overflowX: 'auto' }}>
@@ -577,6 +725,7 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, color: t.textGhost, flexShrink: 0, marginRight: 6 }}>#{tk.number}</span>
                   <span style={{ fontWeight: 600, color: t.text, flex: 1, marginRight: 8, lineHeight: 1.4 }}>{tk.title}</span>
                   <span style={{ background: sb.bg, color: sb.fg, borderRadius: 4, padding: '2px 7px', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0 }}>{sb.label}</span>
                 </div>
@@ -591,9 +740,9 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
           </div>
       </div>
 
-      {/* ── detail — full-width on mobile when selected ──────────────────── */}
+      {/* ── detail — full width when selected ───────────────────────────── */}
       {selected && (
-        <div className={selected ? 'flex flex-1 lg:flex-none lg:w-[360px]' : 'hidden'} style={{ borderLeft: `1px solid ${t.border}`, flexDirection: 'column', overflowY: 'auto', background: t.bg, fontFamily: 'monospace', fontSize: 13 }}>
+        <div className="flex flex-1" style={{ borderLeft: `1px solid ${t.border}`, flexDirection: 'column', overflowY: 'auto', background: t.bg, fontFamily: 'monospace', fontSize: 13 }}>
           <div style={{ padding: '14px 16px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
@@ -612,7 +761,9 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
           </div>
 
           <div style={{ padding: 16, flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, lineHeight: 1.5, color: t.text }}>{selected.title}</div>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, lineHeight: 1.5, color: t.text }}>
+              <span style={{ color: t.textGhost, fontWeight: 400, fontSize: 12, marginRight: 8 }}>#{selected.number}</span>{selected.title}
+            </div>
 
             {selected.description && (
               <div style={{ color: t.textMuted, fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>{selected.description}</div>
@@ -641,41 +792,103 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
                 pending: t.textMuted, planning: '#f1fa8c', running: '#8be9fd',
                 aggregating: '#ffb86c', completed: '#27c93f', failed: '#ff5555', cancelled: t.textMuted,
               };
-              const logLines = run.progressLog
-                ? run.progressLog.split('\n').filter(l => l.startsWith('tool:') || l.startsWith('output:'))
-                : [];
+              const steps = run.progressLog ? parseSteps(run.progressLog) : [];
+              const hasNewFormat = run.progressLog ? (run.progressLog.includes('ok:') || run.progressLog.includes('err:')) : false;
+              const finalText = run.result && !run.result.startsWith('## ') ? run.result : null;
+              const pr = run.progressLog ? parsePRFromLog(run.progressLog) : null;
               return (
-                <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <>
+                {pr && (() => {
+                  const prStatus = prStatuses.get(pr.pr_number);
+                  const statusLabel = prStatus?.status === 'merged' ? 'MERGED' : prStatus?.status === 'closed' ? 'CLOSED' : 'OPEN';
+                  const statusColor = prStatus?.status === 'merged' ? '#bd93f9' : prStatus?.status === 'closed' ? '#ff5555' : '#27c93f';
+                  const bgColor = prStatus?.status === 'merged' ? '#2a1a3a' : prStatus?.status === 'closed' ? '#3a1a1a' : '#1a3a1a';
+                  const borderColor = statusColor;
+                  return (
+                    <a
+                      href={pr.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
+                        background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 8,
+                        padding: '10px 14px', textDecoration: 'none', color: statusColor,
+                      }}
+                    >
+                      <span style={{ fontSize: 16 }}>⤴</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.5 }}>
+                            Pull Request #{pr.pr_number}
+                          </span>
+                          <span style={{ fontSize: 10, fontWeight: 700, background: statusColor, color: '#000', borderRadius: 3, padding: '1px 5px', letterSpacing: 0.5 }}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: statusColor, opacity: 0.8, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {prStatus?.title || pr.title || 'Ver no GitHub →'}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 10, opacity: 0.6 }}>→</span>
+                    </a>
+                  );
+                })()}
+                <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontSize: 11, color: t.textFaint, textTransform: 'uppercase', letterSpacing: 1 }}>Agent Run</span>
                     <span style={{ fontSize: 11, color: statusColors[run.status] ?? t.textMuted, fontWeight: 600 }}>
                       {!isDone && '⟳ '}{run.status.toUpperCase()}
                     </span>
                   </div>
-                  {logLines.length > 0 && (
-                    <div style={{ fontSize: 10, fontFamily: 'monospace', color: t.textFaint, background: t.bg, borderRadius: 4, padding: '6px 8px', maxHeight: 120, overflowY: 'auto', marginBottom: 8, lineHeight: 1.6 }}>
-                      {logLines.map((l, i) => (
-                        <div key={i} style={{ color: l.startsWith('tool:') ? '#ffb86c' : t.textMuted }}>
-                          {l.startsWith('tool:') ? '⚙ ' : ''}{l.replace(/^(tool:|output:)/, '')}
-                        </div>
-                      ))}
+
+                  {/* Step-by-step timeline */}
+                  {steps.length > 0 && (
+                    <div style={{ background: t.bg, borderRadius: 6, padding: '8px 10px', maxHeight: 280, overflowY: 'auto', marginBottom: 10, fontFamily: 'monospace' }}>
+                      {steps.map((step, i) => {
+                        const icon = step.status === 'ok' ? '✓'
+                          : step.status === 'error' ? '✗'
+                          : (isDone && !hasNewFormat) ? '·' : '⟳';
+                        const iconColor = step.status === 'ok' ? '#27c93f'
+                          : step.status === 'error' ? '#ff5555'
+                          : (isDone && !hasNewFormat) ? t.textGhost : '#f1fa8c';
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '3px 0', borderBottom: i < steps.length - 1 ? `1px solid ${t.border}` : 'none' }}>
+                            <span style={{ fontSize: 11, flexShrink: 0, width: 12, color: iconColor }}>{icon}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ fontSize: 11, color: '#ffb86c' }}>{step.tool}</span>
+                              {step.args && (
+                                <span style={{ fontSize: 10, color: t.textFaint, marginLeft: 6 }}>{step.args.slice(0, 60)}</span>
+                              )}
+                              {step.status === 'ok' && step.detail && (
+                                <span style={{ fontSize: 10, color: t.textGhost, marginLeft: 6 }}>{step.detail.slice(0, 80)}</span>
+                              )}
+                              {step.status === 'error' && step.detail && (
+                                <div style={{ fontSize: 10, color: '#ff5555', marginTop: 2, wordBreak: 'break-all', lineHeight: 1.4 }}>
+                                  {step.detail.slice(0, 300)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
-                  {run.result && (
-                    <div style={{ fontSize: 11, color: t.textMuted, lineHeight: 1.6, maxHeight: 240, overflowY: 'auto', marginBottom: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {run.result}
+
+                  {/* Final text result */}
+                  {finalText && (
+                    <div style={{ fontSize: 11, color: t.textMuted, lineHeight: 1.6, maxHeight: 200, overflowY: 'auto', marginBottom: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: t.bg, borderRadius: 6, padding: '8px 10px' }}>
+                      {finalText}
                     </div>
                   )}
+
                   {run.error && (
                     <div style={{ fontSize: 11, color: '#ff5555', marginBottom: 8 }}>{run.error}</div>
                   )}
-                  <a
-                    href="/logs"
-                    style={{ fontSize: 11, color: t.selectedBorder, textDecoration: 'none' }}
-                  >
-                    View full run in Logs →
+                  <a href="/logs" style={{ fontSize: 11, color: t.selectedBorder, textDecoration: 'none' }}>
+                    Ver logs completos →
                   </a>
                 </div>
+                </>
               );
             })()}
 
@@ -707,6 +920,19 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
             )}
             {selected.status === 'in_progress' && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                {(() => {
+                  const run = agentRuns.get(selected.id);
+                  const isDone = run && ['completed', 'failed', 'cancelled'].includes(run.status);
+                  return isDone ? (
+                    <button
+                      disabled={actionLoading}
+                      onClick={() => rerunTicket(selected)}
+                      style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: 'none', background: '#3a2a5a', color: '#bd93f9', cursor: 'pointer', fontSize: 12 }}
+                    >
+                      ↺ Re-executar
+                    </button>
+                  ) : null;
+                })()}
                 <button
                   disabled={actionLoading}
                   onClick={() => updateStatus(selected.id, 'resolved')}

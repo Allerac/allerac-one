@@ -99,6 +99,7 @@ export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
 
 export interface Ticket {
   id: string;
+  number: number;
   userId: string;
   title: string;
   description: string | null;

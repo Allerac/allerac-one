@@ -1053,6 +1053,24 @@ export default function AdminClient({
               </div>
             </div>
 
+            {/* Agents */}
+            <div className={`border-t pt-5 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Agents</p>
+              <div className="space-y-5">
+                <ApiKeyField
+                  label="GitHub Repo Token"
+                  description="(tickets agent — create branches & PRs)"
+                  placeholder="ghp_..."
+                  provider="github"
+                  hasStoredValue={!!sysSettings.github_repo_token}
+                  value={sysSettings.github_repo_token ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, github_repo_token: v }))}
+                  isDarkMode={isDarkMode}
+                  helpText="Personal Access Token with 'repo' scope. Used by ticket agents to create branches and pull requests."
+                />
+              </div>
+            </div>
+
             {/* Services */}
             <div className={`border-t pt-5 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
               <p className={`text-xs font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Services</p>

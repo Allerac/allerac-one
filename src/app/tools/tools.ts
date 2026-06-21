@@ -3,9 +3,13 @@ import { NOTES_TOOL_DEFINITIONS } from './notes.tool.definitions';
 import { EMAIL_TOOL_DEFINITIONS } from './email.tool.definitions';
 import { JOBS_TOOL_DEFINITIONS } from './jobs.tool.definitions';
 import { TICKETS_TOOL_DEFINITIONS } from './tickets.tool.definitions';
+import { GITHUB_TOOL_DEFINITIONS } from './github.tool.definitions';
+import { LOGS_TOOL_DEFINITIONS } from './logs.tool.definitions';
 
 export { JOBS_TOOL_DEFINITIONS };
 export { TICKETS_TOOL_DEFINITIONS };
+export { GITHUB_TOOL_DEFINITIONS };
+export { LOGS_TOOL_DEFINITIONS };
 
 // Static registry of all available tools for admin UI
 export const TOOL_REGISTRY: Array<{ name: string; label: string; description: string; group: string }> = [
@@ -41,6 +45,14 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'create_ticket',            label: 'Create Ticket',       description: 'Create a new ticket',                            group: 'Tickets'   },
   { name: 'update_ticket_status',     label: 'Update Ticket Status',description: 'Change the status of a ticket',                  group: 'Tickets'   },
   { name: 'get_ticket',               label: 'Get Ticket',          description: 'Get full details of a specific ticket',          group: 'Tickets'   },
+  { name: 'github_read_file',         label: 'GitHub: Read File',   description: 'Read a file from the Allerac One repository',    group: 'GitHub'    },
+  { name: 'github_list_files',        label: 'GitHub: List Files',  description: 'List files/dirs in the Allerac One repository',  group: 'GitHub'    },
+  { name: 'github_create_branch',     label: 'GitHub: Create Branch', description: 'Create a branch in the Allerac One repository', group: 'GitHub'  },
+  { name: 'github_commit_file',       label: 'GitHub: Commit File', description: 'Create or update a file in a branch',            group: 'GitHub'    },
+  { name: 'github_replace_lines',     label: 'GitHub: Replace Lines', description: 'Replace a line range in a file on a branch',          group: 'GitHub' },
+  { name: 'github_edit_file',         label: 'GitHub: Edit File',   description: 'Edit a file via find/replace (no full content needed)', group: 'GitHub' },
+  { name: 'github_create_pr',         label: 'GitHub: Create PR',   description: 'Open a pull request in the Allerac One repo',    group: 'GitHub'    },
+  { name: 'read_logs',                label: 'Read Logs',           description: 'Read live Allerac system logs from memory buffer', group: 'Dev'      },
 ];
 
 // Health tools are conditionally included based on HEALTH_WORKER_SECRET being set.
@@ -370,4 +382,6 @@ export const TOOLS = [
       },
     },
   },
+  ...GITHUB_TOOL_DEFINITIONS,
+  ...LOGS_TOOL_DEFINITIONS,
 ];

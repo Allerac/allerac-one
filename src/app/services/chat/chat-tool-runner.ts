@@ -4,6 +4,8 @@ import type { User } from '@/app/services/auth/auth.service';
 import { HealthTool } from '@/app/tools/health.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import { buildEmailTools } from '@/app/tools/email.tool';
+import { buildGithubTools } from '@/app/tools/github.tool';
+import { buildLogsTool } from '@/app/tools/logs.tool';
 import { buildJobsTools } from '@/app/tools/jobs.tool';
 import { buildNotesTools } from '@/app/tools/notes.tool';
 import { ReadUrlTool } from '@/app/tools/read-url.tool';
@@ -18,7 +20,9 @@ import {
 } from '@/app/lib/workspace-paths';
 import {
   EMAIL_TOOL_NAMES,
+  GITHUB_TOOL_NAMES,
   JOB_TOOL_NAMES,
+  LOGS_TOOL_NAMES,
   NOTE_TOOL_NAMES,
   TICKET_TOOL_NAMES,
 } from './chat-tool-registry';
@@ -195,5 +199,28 @@ export async function executeChatTool(
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
     return handler(toolArgs);
   }
-  if (TICKET_TOOL_NAMES.includes(toolName)) {\n    const handlers = buildTicketsTools(userId);\n    const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;\n    const result = await handler(toolArgs);\n    \n    // Emit event when a ticket is created to trigger UI refresh\n    if (toolName === 'create_ticket' && result.success) {\n      emit({\n        type: 'ticket_created',\n        ticket_id: result.ticket_id,\n        title: result.title,\n        type: result.type,\n      });\n    }\n    \n    return result;\n  }\n\n  return { error: `Tool ${toolName} not available` };
+  if (TICKET_TOOL_NAMES.includes(toolName)) {
+    const handlers = buildTicketsTools(userId);
+    const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
+    const result = await handler(toolArgs);
+    if (toolName === 'create_ticket' && result?.success) {
+      emit({ type: 'ticket_created', ticket_id: result.ticket_id, title: result.title, type: result.type });
+    }
+    return result;
+  }
+
+  if (GITHUB_TOOL_NAMES.includes(toolName)) {
+    if (!githubToken) return { error: 'GitHub token not configured.' };
+    const handlers = buildGithubTools(githubToken);
+    const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
+    return handler(toolArgs);
+  }
+
+  if (LOGS_TOOL_NAMES.includes(toolName)) {
+    const handlers = buildLogsTool();
+    const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
+    return handler(toolArgs);
+  }
+
+  return { error: `Tool ${toolName} not available` };
 }

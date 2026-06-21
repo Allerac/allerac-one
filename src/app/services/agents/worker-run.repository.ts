@@ -1,4 +1,7 @@
 import pool from '@/app/clients/db';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+
+const systemSettingsService = new SystemSettingsService();
 
 export interface AgentRunRecord {
   id: string;
@@ -35,6 +38,7 @@ export interface AgentWorkerRecord {
 
 export interface UserSettings {
   github_token: string | null;
+  github_repo_token: string | null;
   tavily_api_key: string | null;
   google_api_key: string | null;
   anthropic_api_key: string | null;
@@ -204,13 +208,26 @@ export class WorkerRunRepository {
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | null> {
-    const result = await pool.query<UserSettings>(
-      `SELECT github_token, tavily_api_key, google_api_key, anthropic_api_key,
-              system_message
-       FROM user_settings WHERE user_id = $1`,
-      [userId]
-    );
-    return result.rows[0] || null;
+    const [userResult, sys] = await Promise.all([
+      pool.query(
+        `SELECT github_token, tavily_api_key, google_api_key, anthropic_api_key, system_message
+         FROM user_settings WHERE user_id = $1`,
+        [userId]
+      ),
+      systemSettingsService.loadAll(),
+    ]);
+
+    const user = userResult.rows[0];
+    if (!user) return null;
+
+    return {
+      github_token:      user.github_token      || sys.github_token      || null,
+      github_repo_token: sys.github_repo_token  || null,
+      tavily_api_key:    user.tavily_api_key    || sys.tavily_api_key    || null,
+      google_api_key:    user.google_api_key    || sys.google_api_key    || null,
+      anthropic_api_key: user.anthropic_api_key || sys.anthropic_api_key || null,
+      system_message:    user.system_message,
+    };
   }
 
   async getUserRuns(userId: string, limit: number = 30): Promise<Array<AgentRunRecord & { workers: AgentWorkerRecord[] }>> {
