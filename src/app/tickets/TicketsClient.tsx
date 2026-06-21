@@ -212,6 +212,14 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
     setCurrentConvId(id); reload();
   }, [setCurrentConvId, reload]);
 
+  // Handle tool calls from chat - refresh tickets when a new ticket is created
+  const handleToolCall = useCallback((toolName: string, args: any) => {
+    if (toolName === 'create_ticket') {
+      // Refresh the ticket list after a ticket is created via chat
+      fetchTickets();
+    }
+  }, []);
+
   const {
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
@@ -222,7 +230,9 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
     userId, domain: 'tickets', defaultSkillName,
     currentConvId, messages, setMessages,
     onConversationCreated: handleConvCreated,
+    onToolCall: handleToolCall,
   });
+
 
   const clearChat      = useCallback(() => { newConversation(); }, [newConversation]);
   const loadConversation = useCallback(async (id: string) => { await selectConversation(id); }, [selectConversation]);
