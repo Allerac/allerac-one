@@ -116,7 +116,7 @@ export class GithubTool {
       // File doesn't exist yet — create it
     }
 
-    const coAuthor = '\n\nCo-authored-by: Allerac One <allerac-one@users.noreply.github.com>';
+    const coAuthor = '\n\nCo-authored-by: Allerac One <295971038+AlleracOne@users.noreply.github.com>';
     const fullMessage = message.includes('Co-authored-by:') ? message : message + coAuthor;
     const body: Record<string, unknown> = {
       message: fullMessage,
@@ -166,7 +166,7 @@ export class GithubTool {
 
     const actualReplace = stripLineNums(replace).replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '');
     const newContent = file.content.split(pattern).join(actualReplace);
-    const commitMsg = (message || `chore: edit ${path}`) + '\n\nCo-authored-by: Allerac One <allerac-one@users.noreply.github.com>';
+    const commitMsg = (message || `chore: edit ${path}`) + '\n\nCo-authored-by: Allerac One <295971038+AlleracOne@users.noreply.github.com>';
     const result = await this.commitFileWithSha(path, newContent, commitMsg, branch, file.sha);
     return { ...result, replaced: count };
   }
@@ -188,7 +188,7 @@ export class GithubTool {
     const unescaped = newContent.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
     const newLines = unescaped.split('\n');
     const updated = [...lines.slice(0, startLine - 1), ...newLines, ...lines.slice(endLine)];
-    const commitMsg = (message || `chore: edit ${path} L${startLine}-${endLine}`) + '\n\nCo-authored-by: Allerac One <allerac-one@users.noreply.github.com>';
+    const commitMsg = (message || `chore: edit ${path} L${startLine}-${endLine}`) + '\n\nCo-authored-by: Allerac One <295971038+AlleracOne@users.noreply.github.com>';
     const result = await this.commitFileWithSha(path, updated.join('\n'), commitMsg, branch, file.sha);
     return { ...result, replaced_lines: endLine - startLine + 1 };
   }
