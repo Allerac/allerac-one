@@ -28,16 +28,13 @@ export async function updateTicket(id: string, input: UpdateTicketInput) {
   return ticketService.update(id, user.id, input);
 }
 
+
 export async function getTicketWithEvents(id: string) {
   const user = await requireCurrentUser();
   const ticket = await ticketService.getById(id, user.id);
   if (!ticket) throw new Error('Ticket not found');
   const events = await ticketService.getEvents(id, user.id);
   return { ticket, events };
-
-export async function deleteTicket(id: string) {
-  const user = await requireCurrentUser();
-  return ticketService.delete(id, user.id);
 }
 
 export async function deleteTicket(id: string) {
