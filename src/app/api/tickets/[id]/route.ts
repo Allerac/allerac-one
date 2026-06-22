@@ -82,5 +82,3 @@ export async function DELETE(
     return Response.json({ error: message }, { status: 500 });
   }
 }
-
-}

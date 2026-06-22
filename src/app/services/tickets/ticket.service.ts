@@ -244,6 +244,7 @@ export class TicketService {
     }
 
     return updated;
+  }
 
   async delete(id: string, userId: string): Promise<boolean> {
     const ticket = await this.getById(id, userId);

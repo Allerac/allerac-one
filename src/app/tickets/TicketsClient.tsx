@@ -981,14 +981,6 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
               </div>
             )}
 
-                  disabled={actionLoading}
-                  onClick={() => updateStatus(selected.id, 'cancelled')}
-                  style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: `1px solid ${t.borderLight}`, background: 'transparent', color: t.textMuted, cursor: 'pointer', fontSize: 12 }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
             {(selected.status === 'resolved' || selected.status === 'cancelled') && (
               <button
                 disabled={actionLoading}
