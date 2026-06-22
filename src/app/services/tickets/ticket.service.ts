@@ -244,19 +244,6 @@ export class TicketService {
     }
 
     return updated;
-
-  async delete(id: string, userId: string): Promise<boolean> {
-    const ticket = await this.getById(id, userId);
-    if (!ticket) return false;
-
-    // Record deletion event before deleting
-    await this._recordEvent(id, {
-      eventType: 'deleted',
-      actorType: 'user',
-      previousValue: { status: ticket.status },
-      newValue: { status: 'deleted' },
-    });
-
   async delete(id: string, userId: string): Promise<boolean> {
     const ticket = await this.getById(id, userId);
     if (!ticket) return false;
@@ -284,21 +271,6 @@ export class TicketService {
     return result.rowCount === 1;
   }
 
-
-    // Delete ticket events first (foreign key constraint)
-    await pool.query(
-      'DELETE FROM ticket_events WHERE ticket_id = $1',
-      [id]
-    );
-
-    // Delete the ticket
-    const result = await pool.query(
-      'DELETE FROM tickets WHERE id = $1 AND user_id = $2',
-      [id, userId]
-    );
-
-    return result.rowCount === 1;
-  }
 
 
 
