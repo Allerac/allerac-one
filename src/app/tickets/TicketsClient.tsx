@@ -949,26 +949,10 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
                       ↺ Re-executar
                     </button>
                   ) : null;
-            {(selected.status === 'resolved' || selected.status === 'cancelled') && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                <button
-                  disabled={actionLoading}
-                  onClick={() => updateStatus(selected.id, 'open')}
-                  style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: `1px solid ${t.borderLight}`, background: 'transparent', color: t.textMuted, cursor: 'pointer', fontSize: 12 }}
-                >
-                  ↺ Reopen
-                </button>
-                <button
-                  disabled={actionLoading}
-                  onClick={() => deleteTicket(selected.id)}
-                  style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: `1px solid #ff5555`, background: 'transparent', color: '#ff5555', cursor: 'pointer', fontSize: 12 }}
-                >
-                  🗑 Delete
-                </button>
+                })()}
               </div>
             )}
 
-            {/* Delete button for all statuses */}
             {selected.status !== 'resolved' && selected.status !== 'cancelled' && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                 <button
