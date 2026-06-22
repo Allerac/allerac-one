@@ -557,6 +557,7 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
     } finally {
       setActionLoading(false);
     }
+  }
 
   async function deleteTicket(id: string) {
     if (!confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) return;

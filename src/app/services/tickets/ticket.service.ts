@@ -273,24 +273,6 @@ export class TicketService {
     return result.rowCount === 1;
   }
 
-
-    // Delete ticket events first (foreign key constraint)
-    await pool.query(
-      'DELETE FROM ticket_events WHERE ticket_id = $1',
-      [id]
-    );
-
-    // Delete the ticket
-    const result = await pool.query(
-      'DELETE FROM tickets WHERE id = $1 AND user_id = $2',
-      [id, userId]
-    );
-
-    return result.rowCount === 1;
-  }
-
-
-
   async getEvents(ticketId: string, userId: string): Promise<TicketEvent[]> {
     const result = await pool.query(
       `SELECT te.*
