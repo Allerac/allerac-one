@@ -373,7 +373,7 @@ src/
 |----------|----------|-------------|
 | `GOOGLE_CLIENT_ID` | For Google login | OAuth 2.0 client ID from Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | For Google login | OAuth 2.0 client secret |
-| `APP_URL` | Yes | Full base URL including protocol, e.g. `https://app.allerac.ai` — used to build the OAuth redirect URI and password reset links |
+| `APP_URL` | Yes | Full base URL including protocol, e.g. `https://app.<domain>` — used to build the OAuth redirect URI and password reset links |
 | `RESEND_API_KEY` | For password reset | API key for sending reset emails via Resend |
 
 ### Google Cloud Console setup

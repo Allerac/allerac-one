@@ -130,7 +130,7 @@ The allerac-one instance runs on a cloud VM. A separate `garmin-auth-worker` run
 │  Cloud VM            │        │  Mini-PC (home IP)           │
 │  allerac-one         │        │  garmin-auth-worker :8787    │
 │  health-worker ──────┼──────► │  ↕ Cloudflare Tunnel         │
-│                      │ HTTPS  │  garmin-worker.allerac.ai    │
+│                      │ HTTPS  │  auth-worker.<domain>        │
 └──────────────────────┘        └──────────────────────────────┘
                                           │
                                           ▼
@@ -148,12 +148,12 @@ GARMIN_WORKER_SECRET=<strong-random-secret>
 
 **Config (VM `.env`):**
 ```env
-AUTH_WORKER_URL=https://garmin-worker.allerac.ai
+AUTH_WORKER_URL=https://auth-worker.<domain>
 AUTH_WORKER_SECRET=<same value as GARMIN_WORKER_SECRET>
 ```
 
 **Cloudflare Tunnel:** Add a public hostname in the dashboard:  
-`garmin-worker.allerac.ai` → `http://localhost:8787`
+`auth-worker.<domain>` → `http://localhost:8787`
 
 **Start on mini-PC:**
 ```bash

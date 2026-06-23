@@ -306,6 +306,19 @@ All data mutations use Next.js Server Actions in `src/app/actions/`:
 | `metrics.ts` | API and token usage metrics |
 | `rag.ts` | Manual RAG search |
 
+## Control API Direction
+
+The current app combines UI, API routes, server actions, services, and background
+runtime inside the `app` container. This keeps deployment simple, but it also couples
+core product workflows to the web application.
+
+The planned next architecture milestone is the Allerac Control API v1: a stable
+versioned API that becomes the control plane for UI, Telegram, CLI, external
+automation, and future headless deployments.
+
+See [Allerac Control API v1](control-api-v1.md). Architecture decisions are tracked
+in [Architecture Decision Records](decisions/README.md).
+
 ## UI Components
 
 Organized by feature in `src/app/components/`:

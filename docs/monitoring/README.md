@@ -66,5 +66,5 @@ console.log/warn/error  ──►  installConsoleInterceptor()   (instrumentatio
 
 ## See Also
 
-- [Logging Standard](./logging-standard.md) — canonical context tags and conventions
+- [Logging Standard](../logging/logging-standard.md) — canonical context tags and conventions
 - [Metrics Reference](./metrics.md) — database tables, aggregation queries, cost model

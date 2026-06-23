@@ -158,7 +158,7 @@ docker compose up -d
 
 ## Cloud Services Line (`docker-compose.yml`)
 
-Target: allerac.cloud managed deployment
+Target: managed cloud deployment
 
 ### Prerequisites
 
@@ -264,7 +264,7 @@ docker compose up -d
 | # | Check | Expected |
 |---|-------|----------|
 | 1 | `docker logs allerac-tunnel` | `Connection ... registered` — no auth errors |
-| 2 | App accessible at configured public hostname (e.g. app.allerac.cloud) | Login page loads |
+| 2 | App accessible at configured public hostname (e.g. `app.<domain>`) | Login page loads |
 | 3 | Portainer accessible at configured public hostname | Login page loads |
 | 4 | Missing `TUNNEL_TOKEN` | Compose fails before starting (T-C1 covers this) |
 

@@ -19,6 +19,7 @@
 
 # production
 /build
+/site
 
 # misc
 .DS_Store
@@ -53,3 +54,5 @@ infra/terraform/**/.terraform.lock.hcl
 
 # private business and commercial planning
 /docs/business-model/
+/docs/private/
+/docs/self-development/
