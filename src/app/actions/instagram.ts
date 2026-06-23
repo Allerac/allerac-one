@@ -18,6 +18,24 @@ const systemSettingsService = new SystemSettingsService();
 
 const LOCALE_NAMES: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English', fr: 'French', de: 'German', it: 'Italian', ca: 'Catalan' };
 
+function inferImageMediaType(base64Data: string): string {
+  const normalized = base64Data.replace(/\s/g, '');
+  if (normalized.startsWith('iVBORw0KGgo')) return 'image/png';
+  if (normalized.startsWith('/9j/')) return 'image/jpeg';
+  if (normalized.startsWith('R0lGOD')) return 'image/gif';
+
+  try {
+    const header = Buffer.from(normalized.slice(0, 32), 'base64');
+    if (header.subarray(0, 4).toString('ascii') === 'RIFF' && header.subarray(8, 12).toString('ascii') === 'WEBP') {
+      return 'image/webp';
+    }
+  } catch {
+    return 'image/jpeg';
+  }
+
+  return 'image/jpeg';
+}
+
 type LLMProviderType = 'github' | 'gemini' | 'anthropic' | 'ollama';
 
 async function getSessionUserId(): Promise<string> {
@@ -260,8 +278,8 @@ export async function generateCaption(
       // Already a data URI
       imageUrl = imageInput;
     } else {
-      // Plain base64, add data URI prefix
-      imageUrl = `data:image/jpeg;base64,${imageInput}`;
+      // Plain base64, add a data URI prefix matching the image signature
+      imageUrl = `data:${inferImageMediaType(imageInput)};base64,${imageInput}`;
     }
 
     const response = await llmService.chatCompletion({

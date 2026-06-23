@@ -54,12 +54,31 @@ type LLMProvider = 'github' | 'ollama' | 'gemini' | 'anthropic';
 //   - role:'assistant' + tool_calls → content:[{type:'tool_use',...}]
 //   - Consecutive tool_result blocks are grouped into one user message
 //   - content image_url parts → Anthropic image blocks
+function inferImageMediaType(base64Data: string): string | null {
+  const normalized = base64Data.replace(/\s/g, '');
+  if (normalized.startsWith('iVBORw0KGgo')) return 'image/png';
+  if (normalized.startsWith('/9j/')) return 'image/jpeg';
+  if (normalized.startsWith('R0lGOD')) return 'image/gif';
+
+  try {
+    const header = Buffer.from(normalized.slice(0, 32), 'base64');
+    if (header.subarray(0, 4).toString('ascii') === 'RIFF' && header.subarray(8, 12).toString('ascii') === 'WEBP') {
+      return 'image/webp';
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 function convertImageUrlToAnthropicSource(url: string): any {
   const dataUriMatch = url.match(/^data:([^;,]+);base64,(.+)$/);
   if (dataUriMatch) {
+    const inferredMediaType = inferImageMediaType(dataUriMatch[2]);
     return {
       type: 'base64',
-      media_type: dataUriMatch[1],
+      media_type: inferredMediaType || dataUriMatch[1],
       data: dataUriMatch[2],
     };
   }

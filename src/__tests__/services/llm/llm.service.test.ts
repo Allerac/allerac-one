@@ -82,4 +82,30 @@ describe('LLMService Anthropic content conversion', () => {
       }],
     }));
   });
+
+  it('corrects mismatched data URI media type from base64 image signature', async () => {
+    const service = new LLMService('anthropic', 'https://api.anthropic.com', {
+      anthropicToken: 'sk-ant-test',
+    });
+
+    const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB';
+    await service.chatCompletion({
+      model: 'claude-haiku-4-5-20251001',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${pngBase64}` } },
+        ],
+      }],
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: pngBase64 } },
+        ],
+      }],
+    }));
+  });
 });
