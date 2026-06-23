@@ -1,7 +1,9 @@
 import pool from '@/app/clients/db';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+import { UserSettingsService } from '@/app/services/user/user-settings.service';
 
 const systemSettingsService = new SystemSettingsService();
+const userSettingsService = new UserSettingsService();
 
 export interface AgentRunRecord {
   id: string;
@@ -208,16 +210,11 @@ export class WorkerRunRepository {
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | null> {
-    const [userResult, sys] = await Promise.all([
-      pool.query(
-        `SELECT github_token, tavily_api_key, google_api_key, anthropic_api_key, system_message
-         FROM user_settings WHERE user_id = $1`,
-        [userId]
-      ),
+    const [user, sys] = await Promise.all([
+      userSettingsService.loadUserSettings(userId),
       systemSettingsService.loadAll(),
     ]);
 
-    const user = userResult.rows[0];
     if (!user) return null;
 
     return {

@@ -1,6 +1,8 @@
 import '../../../__tests__/__mocks__/db';
 import pool from '@/app/clients/db';
 import { WorkerRunRepository } from '@/app/services/agents/worker-run.repository';
+import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 
 const mockQuery = pool.query as jest.Mock;
 
@@ -8,6 +10,7 @@ describe('WorkerRunRepository', () => {
   let repo: WorkerRunRepository;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     mockQuery.mockReset();
     repo = new WorkerRunRepository();
   });
@@ -218,18 +221,50 @@ describe('WorkerRunRepository', () => {
 
   describe('getUserSettings()', () => {
     it('should return user settings', async () => {
-      mockQuery.mockResolvedValueOnce({
-        rows: [{ github_token: 'gh_123', tavily_api_key: 'tv_456' }],
+      jest.spyOn(UserSettingsService.prototype, 'loadUserSettings').mockResolvedValue({
+        github_token: 'gh_123',
+        tavily_api_key: 'tv_456',
+        telegram_bot_token: null,
+        system_message: null,
+        google_api_key: null,
+        google_key_preference: 'allerac',
+        anthropic_api_key: 'sk-ant-user',
+        location: null,
+        timezone: null,
+        onboarding_completed: true,
+        selected_model: null,
+        language: 'en',
+      });
+      jest.spyOn(SystemSettingsService.prototype, 'loadAll').mockResolvedValue({
+        github_token: null,
+        github_repo_token: 'gh_repo',
+        tavily_api_key: null,
+        anthropic_api_key: null,
+        google_api_key: null,
+        resend_api_key: null,
+        resend_from_email: null,
       });
 
       const result = await repo.getUserSettings('user_1');
 
       expect(result).not.toBeNull();
       expect(result!.github_token).toBe('gh_123');
+      expect(result!.github_repo_token).toBe('gh_repo');
+      expect(result!.anthropic_api_key).toBe('sk-ant-user');
+      expect(UserSettingsService.prototype.loadUserSettings).toHaveBeenCalledWith('user_1');
     });
 
     it('should return null for user without settings', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      jest.spyOn(UserSettingsService.prototype, 'loadUserSettings').mockResolvedValue(null);
+      jest.spyOn(SystemSettingsService.prototype, 'loadAll').mockResolvedValue({
+        github_token: null,
+        github_repo_token: null,
+        tavily_api_key: null,
+        anthropic_api_key: null,
+        google_api_key: null,
+        resend_api_key: null,
+        resend_from_email: null,
+      });
 
       const result = await repo.getUserSettings('nonexistent');
 
