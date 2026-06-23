@@ -53,6 +53,42 @@ type LLMProvider = 'github' | 'ollama' | 'gemini' | 'anthropic';
 //   - role:'tool' → role:'user' with content:[{type:'tool_result',...}]
 //   - role:'assistant' + tool_calls → content:[{type:'tool_use',...}]
 //   - Consecutive tool_result blocks are grouped into one user message
+//   - content image_url parts → Anthropic image blocks
+function convertImageUrlToAnthropicSource(url: string): any {
+  const dataUriMatch = url.match(/^data:([^;,]+);base64,(.+)$/);
+  if (dataUriMatch) {
+    return {
+      type: 'base64',
+      media_type: dataUriMatch[1],
+      data: dataUriMatch[2],
+    };
+  }
+
+  return {
+    type: 'url',
+    url,
+  };
+}
+
+function convertContentToAnthropicContent(content: string | MessageContentPart[]): string | any[] {
+  if (typeof content === 'string') return content;
+
+  return content.flatMap(part => {
+    if (part.type === 'text') {
+      return part.text ? [{ type: 'text', text: part.text }] : [];
+    }
+
+    if (part.type === 'image_url' && part.image_url?.url) {
+      return [{
+        type: 'image',
+        source: convertImageUrlToAnthropicSource(part.image_url.url),
+      }];
+    }
+
+    return [];
+  });
+}
+
 function convertToAnthropicMessages(
   messages: LLMRequest['messages']
 ): Anthropic.MessageParam[] {
@@ -101,7 +137,7 @@ function convertToAnthropicMessages(
 
     result.push({
       role: msg.role as 'user' | 'assistant',
-      content: typeof msg.content === 'string' ? msg.content : (msg.content as any),
+      content: convertContentToAnthropicContent(msg.content) as any,
     });
   }
 
@@ -864,7 +900,7 @@ export class LLMService {
     try {
       // Log API call metrics
       await metricsService.logApiCall({
-        api_name: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : 'ollama',
+        api_name: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : data.provider === 'anthropic' ? 'anthropic' : 'ollama',
         endpoint: '/chat/completions',
         method: 'POST',
         response_time_ms: data.responseTime,
