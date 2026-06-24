@@ -17,11 +17,11 @@ interface RouteContext {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: RouteContext,
 ): Promise<Response> {
   try {
-    const user = await requireApiDomainUser('tickets:read', 'tickets');
+    const user = await requireApiDomainUser('tickets:read', 'tickets', request);
     const { id } = await params;
 
     const ticket = await ticketService.getById(id, user.id);
@@ -44,7 +44,7 @@ export async function PATCH(
   { params }: RouteContext,
 ): Promise<Response> {
   try {
-    const user = await requireApiDomainUser('tickets:write', 'tickets');
+    const user = await requireApiDomainUser('tickets:write', 'tickets', request);
     const { id } = await params;
     const parsed = updateTicketSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -63,11 +63,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: RouteContext,
 ): Promise<Response> {
   try {
-    const user = await requireApiDomainUser('tickets:write', 'tickets');
+    const user = await requireApiDomainUser('tickets:write', 'tickets', request);
     const { id } = await params;
 
     const deleted = await ticketService.delete(id, user.id);
@@ -80,4 +80,3 @@ export async function DELETE(
     return apiInternalError('DELETE /api/v1/tickets/:id failed', error);
   }
 }
-

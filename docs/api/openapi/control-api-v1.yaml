@@ -4,14 +4,16 @@ info:
   version: 1.0.0-in-progress
   description: >
     Emerging Control API v1 contract for Allerac One. The current implementation
-    uses browser session authentication. Scoped API keys are planned.
+    supports browser session authentication and bearer API keys.
 servers:
   - url: http://localhost:8080
     description: Local Docker deployment
 security:
   - sessionCookie: []
+  - bearerApiKey: []
 tags:
   - name: System
+  - name: API Keys
   - name: Tickets
 paths:
   /api/v1/me:
@@ -42,6 +44,59 @@ paths:
                 $ref: "#/components/schemas/DomainListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/api-keys:
+    get:
+      tags: [API Keys]
+      summary: List API keys
+      operationId: listApiKeys
+      responses:
+        "200":
+          description: API keys owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [API Keys]
+      summary: Create API key
+      operationId: createApiKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "201":
+          description: Created API key. The secret is returned only once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateApiKeyResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/api-keys/{id}:
+    delete:
+      tags: [API Keys]
+      summary: Revoke API key
+      operationId: revokeApiKey
+      parameters:
+        - $ref: "#/components/parameters/ApiKeyId"
+      responses:
+        "200":
+          description: API key revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeApiKeyResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/tickets:
     get:
       tags: [Tickets]
@@ -184,8 +239,14 @@ components:
     bearerApiKey:
       type: http
       scheme: bearer
-      description: Planned scoped API key authentication.
+      description: Control API key using the `alr_live_` token format.
   parameters:
+    ApiKeyId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     TicketId:
       name: id
       in: path
@@ -276,7 +337,84 @@ components:
           type: boolean
         authMode:
           type: string
-          enum: [session]
+          enum: [session, api_key]
+    ApiKeyListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [apiKeys]
+          properties:
+            apiKeys:
+              type: array
+              items:
+                $ref: "#/components/schemas/ApiKey"
+    CreateApiKeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        scopes:
+          type: array
+          items:
+            type: string
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+    CreateApiKeyResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [apiKey, secret]
+          properties:
+            apiKey:
+              $ref: "#/components/schemas/ApiKey"
+            secret:
+              type: string
+              description: Full API key secret. Returned only once.
+    RevokeApiKeyResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [revoked]
+          properties:
+            revoked:
+              type: boolean
+              const: true
+    ApiKey:
+      type: object
+      required: [id, name, prefix, scopes, lastUsedAt, revokedAt, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        prefix:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        lastUsedAt:
+          type: [string, "null"]
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
     DomainListResponse:
       type: object
       required: [data]

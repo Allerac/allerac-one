@@ -12,7 +12,7 @@ Required auth:
 | Mode | Requirement |
 |---|---|
 | Session | Valid `session_token` cookie |
-| API key | Planned |
+| API key | Valid `Authorization: Bearer alr_live_...` header |
 
 Example:
 
@@ -36,6 +36,12 @@ Response:
     }
   }
 }
+```
+
+With an API key, `authMode` is:
+
+```json
+"api_key"
 ```
 
 ## `GET /api/v1/domains`
@@ -77,4 +83,3 @@ Response:
   }
 }
 ```
-

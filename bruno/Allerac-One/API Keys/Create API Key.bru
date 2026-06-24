@@ -1,0 +1,32 @@
+meta {
+  name: Create API Key
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/api-keys
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Cookie: session_token={{sessionToken}}
+}
+
+body:json {
+  {
+    "name": "Bruno smoke"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.secret) {
+    bru.setEnvVar("apiKey", body.data.secret);
+  }
+  if (body?.data?.apiKey?.id) {
+    bru.setEnvVar("apiKeyId", body.data.apiKey.id);
+  }
+}

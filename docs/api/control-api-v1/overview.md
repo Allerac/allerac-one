@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress. The implemented v1 surface currently supports browser session
-authentication. Scoped API keys are planned and documented in the Control API roadmap.
+In progress. The implemented v1 surface supports browser session authentication
+and Control API bearer keys.
 
 ## Base URL
 
@@ -21,7 +21,7 @@ All v1 endpoints are under:
 
 ## Authentication
 
-### Current Mode: Browser Session
+### Browser Session
 
 Use the same `session_token` cookie used by the Allerac web UI:
 
@@ -29,18 +29,17 @@ Use the same `session_token` cookie used by the Allerac web UI:
 Cookie: session_token=<value>
 ```
 
-This is the mode used by the Bruno collection today.
+This is useful for UI-backed testing and for creating API keys.
 
-### Planned Mode: API Keys
+### API Keys
 
-API keys will use bearer tokens and explicit scopes:
+API keys use bearer tokens:
 
 ```http
-Authorization: Bearer allerac_live_<key>
+Authorization: Bearer alr_live_<key>
 ```
 
-The current route code already names required scopes, but the API key storage and
-verification layer is still planned.
+The full key is returned once on creation. Allerac stores only a token hash.
 
 ## Response Envelopes
 
@@ -79,6 +78,7 @@ Common error codes:
 | Resource | Endpoints |
 |---|---|
 | [System](system.md) | `GET /me`, `GET /domains` |
+| [API Keys](api-keys.md) | list, create, revoke |
 | [Tickets](tickets.md) | list, create, get, update, delete, events |
 
 ## Bruno Collection
@@ -127,4 +127,3 @@ request or response shape.
 - Update `docs/api/openapi/control-api-v1.yaml` in the same PR.
 - Update the Bruno collection when a route can be smoke-tested manually.
 - Keep architecture decisions in ADRs, not in the API reference.
-

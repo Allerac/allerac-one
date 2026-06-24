@@ -8,11 +8,11 @@ interface RouteContext {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: RouteContext,
 ): Promise<Response> {
   try {
-    const user = await requireApiDomainUser('tickets:read', 'tickets');
+    const user = await requireApiDomainUser('tickets:read', 'tickets', request);
     const { id } = await params;
 
     const ticket = await ticketService.getById(id, user.id);
