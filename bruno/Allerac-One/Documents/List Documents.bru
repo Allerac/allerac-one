@@ -1,0 +1,15 @@
+meta {
+  name: List Documents
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/documents?limit=20
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

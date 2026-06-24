@@ -1,0 +1,33 @@
+meta {
+  name: Create Job
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/jobs
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "name": "Bruno smoke test job",
+    "cronExpr": "0 8 * * *",
+    "prompt": "Summarize my open tickets for today.",
+    "channels": ["telegram"],
+    "enabled": false
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.job?.id) {
+    bru.setEnvVar("jobId", body.data.job.id);
+  }
+}

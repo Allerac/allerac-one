@@ -1,0 +1,15 @@
+meta {
+  name: List Job Executions
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/jobs/{{jobId}}/executions
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

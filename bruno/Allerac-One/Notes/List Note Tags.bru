@@ -1,0 +1,15 @@
+meta {
+  name: List Note Tags
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/notes/tags
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
