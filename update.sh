@@ -12,6 +12,7 @@
 #   DEPLOY_BRANCH=development ./update.sh
 
 set -eo pipefail
+trap 'echo "Update failed at line $LINENO: $BASH_COMMAND"' ERR
 
 # ============================================
 # Colors
