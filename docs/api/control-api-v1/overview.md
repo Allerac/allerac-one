@@ -80,6 +80,7 @@ Common error codes:
 | [System](system.md) | `GET /me`, `GET /domains` |
 | [API Keys](api-keys.md) | list, create, revoke |
 | [Conversations](conversations.md) | list, create, messages |
+| [Memories](memories.md) | list, create from conversation, delete |
 | [Tickets](tickets.md) | list, create, get, update, delete, events |
 | [Agent Runs](agent-runs.md) | list, create, get, cancel |
 
@@ -100,6 +101,7 @@ Use the `Local` environment:
 | `ticketId` | Set automatically by `Tickets / Create Ticket` |
 | `agentRunId` | Set automatically by `Agent Runs / Create Agent Run` |
 | `conversationId` | Set automatically by `Conversations / Create Conversation` |
+| `memoryId` | Set automatically by `Memories / Create Conversation Memory` |
 
 Recommended smoke order:
 
@@ -119,6 +121,13 @@ Recommended smoke order:
 14. `Conversations / List Conversations`
 15. `Conversations / Create Conversation`
 16. `Conversations / List Messages`
+17. `Memories / Create Conversation Memory`
+18. `Memories / List Memories`
+19. `Memories / Delete Memory`
+
+Memory creation requires `conversationId` to point to an owned conversation with
+enough messages to summarize. A newly created empty conversation should return
+`not_enough_content`.
 
 ## OpenAPI
 
