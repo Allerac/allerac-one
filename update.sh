@@ -302,6 +302,17 @@ for KNOWN in allerac-health-worker; do
         docker rm -f "$KNOWN" > /dev/null 2>&1 || true
     fi
 done
+
+# Docker Compose can leave prefixed containers behind when an interrupted deploy
+# is killed while services are being recreated. These names can conflict with the
+# next restart even though they are no longer part of the active project.
+ORPHAN_PATTERNS='^[[:alnum:]]+_allerac-(app|telegram|notifier|health-worker)$'
+docker ps -a --format '{{.Names}}' 2>/dev/null \
+    | grep -E "$ORPHAN_PATTERNS" \
+    | while read -r c; do
+        echo "  Removing prefixed orphan container: $c"
+        docker rm -f "$c" > /dev/null 2>&1 || true
+    done
 echo -e "${GREEN}✓ Cleanup done${NC}"
 echo ""
 
