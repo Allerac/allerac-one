@@ -14,6 +14,7 @@ security:
 tags:
   - name: System
   - name: API Keys
+  - name: Conversations
   - name: Tickets
   - name: Agent Runs
 paths:
@@ -96,6 +97,74 @@ paths:
                 $ref: "#/components/schemas/RevokeApiKeyResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/conversations:
+    get:
+      tags: [Conversations]
+      summary: List conversations
+      operationId: listConversations
+      parameters:
+        - name: domainSlug
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Conversations owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Conversations]
+      summary: Create conversation
+      operationId: createConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/conversations/{id}/messages:
+    get:
+      tags: [Conversations]
+      summary: List conversation messages
+      operationId: listConversationMessages
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Messages in an owned conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationMessagesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/tickets:
@@ -333,6 +402,12 @@ components:
       required: true
       schema:
         type: string
+    ConversationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     TicketId:
       name: id
       in: path
@@ -543,6 +618,86 @@ components:
           type: string
         displayName:
           type: [string, "null"]
+    ConversationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [conversations]
+          properties:
+            conversations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Conversation"
+    ConversationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [conversation]
+          properties:
+            conversation:
+              $ref: "#/components/schemas/Conversation"
+    ConversationMessagesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [messages]
+          properties:
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/ConversationMessage"
+    CreateConversationRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        domainSlug:
+          type: string
+    Conversation:
+      type: object
+      required: [id, title, domainSlug, pinned, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        domainSlug:
+          type: [string, "null"]
+        pinned:
+          type: boolean
+        createdAt:
+          type: [string, "null"]
+          format: date-time
+        updatedAt:
+          type: [string, "null"]
+          format: date-time
+    ConversationMessage:
+      type: object
+      required: [id, conversationId, role, content, agentRunId, createdAt]
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+        content:
+          type: string
+        agentRunId:
+          type: [string, "null"]
+        createdAt:
+          type: [string, "null"]
+          format: date-time
     TicketListResponse:
       type: object
       required: [data]

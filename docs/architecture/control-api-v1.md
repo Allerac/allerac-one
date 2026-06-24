@@ -112,6 +112,9 @@ GET    /api/v1/domains
 GET    /api/v1/api-keys
 POST   /api/v1/api-keys
 DELETE /api/v1/api-keys/:id
+GET    /api/v1/conversations
+POST   /api/v1/conversations
+GET    /api/v1/conversations/:id/messages
 GET    /api/v1/tickets
 POST   /api/v1/tickets
 GET    /api/v1/tickets/:id

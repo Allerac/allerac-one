@@ -507,6 +507,38 @@ Avoid leaking internal field naming. Convert database/service casing into API ca
 }
 ```
 
+## Phase 3.5: Conversations API Slice
+
+Purpose: expose conversation metadata and message history without committing to the
+assistant message execution contract yet.
+
+Current status: list/create conversations and list messages are implemented for
+browser sessions and API keys. Sending a user message to the assistant remains
+deferred until the chat execution contract is designed.
+
+### Endpoints
+
+```text
+GET  /api/v1/conversations
+POST /api/v1/conversations
+GET  /api/v1/conversations/:id/messages
+```
+
+### Tasks
+
+- [x] Add request/response schemas.
+- [x] Use existing `ChatService`.
+- [x] Enforce `chat:read` and `chat:write` scopes.
+- [x] Add contract tests for ownership and missing scope.
+- [ ] Design `POST /api/v1/conversations/:id/messages` execution semantics.
+
+### Exit Criteria
+
+- [x] A non-browser client can list owned conversations.
+- [x] A non-browser client can create a conversation.
+- [x] A non-browser client can read message history for an owned conversation.
+- [x] Unowned conversations return `not_found`.
+
 ## Phase 4: Agent Runs API Slice
 
 Purpose: expose background execution as a stable resource.
@@ -621,7 +653,7 @@ Exit criteria:
 
 ## Deferred Work
 
-- Chat API.
+- Assistant message send API.
 - Tool execution API.
 - Streaming responses.
 - OpenAPI generation.
