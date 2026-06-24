@@ -77,6 +77,7 @@ Use a versioned namespace for contracts intended to outlive the current UI:
 
 ```text
 GET    /api/v1/domains
+GET    /api/v1/me
 GET    /api/v1/conversations
 POST   /api/v1/conversations
 GET    /api/v1/conversations/:id/messages
@@ -105,10 +106,12 @@ The first implemented slice is intentionally small and session-authenticated:
 
 ```text
 GET    /api/v1/me
+GET    /api/v1/domains
 GET    /api/v1/tickets
 POST   /api/v1/tickets
 GET    /api/v1/tickets/:id
 PATCH  /api/v1/tickets/:id
+GET    /api/v1/tickets/:id/events
 DELETE /api/v1/tickets/:id
 ```
 

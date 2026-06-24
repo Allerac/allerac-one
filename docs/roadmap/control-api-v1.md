@@ -2,7 +2,8 @@
 
 ## Status
 
-Planned. No `/api/v1` production contract exists yet.
+In progress. The first browser-session-authenticated `/api/v1` contract exists for
+`me` and `tickets`. Scoped API keys remain the next foundation milestone.
 
 ## How To Use This Document
 
@@ -24,6 +25,7 @@ This file is the implementation trail.
 
 - [Architecture: Control API v1](../architecture/control-api-v1.md)
 - [ADR 0001: Adopt Control API v1](../architecture/decisions/0001-adopt-control-api-v1.md)
+- [ADR 0002: Keep Control API in the app container initially](../architecture/decisions/0002-keep-control-api-in-app-container-initially.md)
 - [Agent Background Execution Architecture](../agents/architecture.md)
 - [Tickets Architecture](../tickets/architecture.md)
 
@@ -36,12 +38,12 @@ the web UI, while preserving the current app and deployment model.
 
 ## Current System Snapshot
 
-As of 2026-06-23:
+As of 2026-06-24:
 
 - `app` is still the main Next.js container and owns UI, API routes, server actions,
   service calls, auth/session resolution, and background runner startup.
 - Existing browser-facing APIs live under `/api/*`.
-- No `/api/v1/*` route exists yet.
+- Initial `/api/v1/*` routes exist for `me` and `tickets`.
 - Browser auth uses a `session_token` HTTP-only cookie and `requireCurrentUser()`.
 - Domain access is stored in `domains` and `user_domain_access`; admins bypass
   per-domain grants.
@@ -61,6 +63,8 @@ Use these files as the first reading path.
 | Page/domain access | `src/app/lib/domain-access.ts` | Redirect-oriented helper for pages, not suitable as-is for API key routes |
 | Auth service | `src/app/services/auth/auth.service.ts` | Session validation and domain access checks |
 | Domains route | `src/app/api/domains/route.ts` | Current browser/session-only domain discovery |
+| Control API helpers | `src/app/api/v1/_lib/*` | Session auth adapter, response envelopes, DTO mapping |
+| Control API tickets | `src/app/api/v1/tickets/*` | Current session-authenticated `/api/v1` tickets slice |
 | Tickets routes | `src/app/api/tickets/route.ts`, `src/app/api/tickets/[id]/route.ts` | Existing UI API surface |
 | Tickets service | `src/app/services/tickets/ticket.service.ts` | Core ticket business logic; should be reused |
 | Agent route | `src/app/api/agents/route.ts` | Existing UI/API surface for pending agent runs |
@@ -392,11 +396,11 @@ Do not return encrypted settings, raw API keys, provider tokens, or session toke
 
 ### Tasks
 
-- [ ] Add `/api/v1/me`.
-- [ ] Add `/api/v1/domains`.
-- [ ] Scope `/api/v1/domains` with `domains:read`.
-- [ ] Return only domains accessible to the authenticated user.
-- [ ] Add tests for user ownership and admin visibility.
+- [x] Add `/api/v1/me`.
+- [x] Add `/api/v1/domains`.
+- [ ] Scope `/api/v1/domains` with `domains:read` through API keys.
+- [x] Return only domains accessible to the authenticated user.
+- [x] Add tests for user visibility and admin visibility.
 
 ### Exit Criteria
 
@@ -418,6 +422,7 @@ GET    /api/v1/tickets
 POST   /api/v1/tickets
 GET    /api/v1/tickets/:id
 PATCH  /api/v1/tickets/:id
+GET    /api/v1/tickets/:id/events
 DELETE /api/v1/tickets/:id
 ```
 
@@ -428,11 +433,13 @@ DELETE /api/v1/tickets/:id
 - [x] Map service errors to stable API errors.
 - [ ] Enforce `tickets:read` and `tickets:write` scopes through API keys.
 - [x] Preserve existing `/api/tickets` routes for the UI.
+- [x] Add dedicated `GET /api/v1/tickets/:id/events`.
 - [x] Add session-authenticated contract tests for:
   - list own tickets;
   - create ticket;
   - update status;
   - read events;
+  - read events through dedicated events endpoint;
   - unauthenticated access.
 - [ ] Add API-key contract tests for:
   - missing/wrong scope;
@@ -461,8 +468,9 @@ Request order:
 2. `Tickets / List Tickets`
 3. `Tickets / Create Ticket`
 4. `Tickets / Get Ticket`
-5. `Tickets / Resolve Ticket`
-6. `Tickets / Delete Ticket`
+5. `Tickets / List Ticket Events`
+6. `Tickets / Resolve Ticket`
+7. `Tickets / Delete Ticket`
 
 ### Exit Criteria
 

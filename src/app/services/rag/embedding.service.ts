@@ -66,7 +66,7 @@ export class EmbeddingService {
         tokenCount,
       };
     } catch (error) {
-      console.error('Error generating embedding:', error);
+      console.error('Error generating embedding:', error instanceof Error ? error.message : error);
       throw error;
     }
   }
@@ -117,7 +117,7 @@ export class EmbeddingService {
         tokenCount: data.usage.total_tokens / validTexts.length, // Approximate tokens per text
       }));
     } catch (error) {
-      console.error('Error generating embeddings batch:', error);
+      console.error('Error generating embeddings batch:', error instanceof Error ? error.message : error);
       throw error;
     }
   }

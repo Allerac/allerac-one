@@ -1,11 +1,11 @@
 meta {
-  name: Delete Ticket
+  name: List Domains
   type: http
-  seq: 6
+  seq: 2
 }
 
-delete {
-  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}
+get {
+  url: {{baseUrl}}/api/v1/domains
   body: none
   auth: none
 }
@@ -13,3 +13,4 @@ delete {
 headers {
   Cookie: session_token={{sessionToken}}
 }
+

@@ -7,7 +7,7 @@ This document covers security considerations for exposing your private AI agent 
 1. [Security Principles](#security-principles)
 2. [Local Network Security](#local-network-security)
 3. [Internet Exposure Options](#internet-exposure-options)
-4. [Authentication & Authorization](#authentication--authorization)
+4. [Authentication & Authorization](#authentication-authorization)
 5. [Multi-Agent Security (Phase 3)](#multi-agent-security-phase-3)
 6. [Security Checklist](#security-checklist)
 

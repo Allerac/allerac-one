@@ -271,11 +271,12 @@ export async function handleChatMessage(
   ];
   const messageLower = message.toLowerCase();
   const isRealtimeQuery = tavilyApiKey && REALTIME_KEYWORDS.some(kw => messageLower.includes(kw));
+  // Gemini rejects tool_choice:'auto' — omit it and let the model decide by default
   const initialToolChoice = forceTool
     ? { type: 'function', function: { name: forceTool } }
     : isRealtimeQuery
       ? { type: 'function', function: { name: 'search_web' } }
-      : 'auto';
+      : modelProvider !== 'gemini' ? 'auto' : undefined;
 
   let data = await llmService.chatCompletion({
     messages: conversationMessages,
@@ -283,7 +284,7 @@ export async function handleChatMessage(
     temperature: 0.7,
     max_tokens: 2000,
     tools: activeTools,
-    tool_choice: initialToolChoice,
+    ...(initialToolChoice !== undefined && { tool_choice: initialToolChoice }),
   });
 
   let assistantMessage = data.choices[0].message;
@@ -382,7 +383,7 @@ export async function handleChatMessage(
       temperature: 0.7,
       max_tokens: 2000,
       tools: activeTools,
-      tool_choice: 'auto',
+      ...(modelProvider !== 'gemini' && { tool_choice: 'auto' }),
     });
     assistantMessage = data.choices[0].message;
   }

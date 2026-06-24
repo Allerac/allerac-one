@@ -2,11 +2,15 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Date
 
 2026-06-23
+
+## Accepted Date
+
+2026-06-24
 
 ## Context
 
@@ -43,12 +47,18 @@ The Control API will:
   incrementally;
 - become the preferred integration surface for future clients and headless operation.
 
-The first API slice should be deliberately small:
+The first API slice is deliberately small:
 
-1. scoped API key authentication;
-2. `GET /api/v1/domains`;
-3. `GET/POST/PATCH /api/v1/tickets`;
-4. contract tests for API scopes and user ownership.
+1. browser session authentication for `/api/v1`;
+2. `GET /api/v1/me`;
+3. `GET/POST/PATCH/DELETE /api/v1/tickets`;
+4. `GET /api/v1/tickets/:id/events`;
+5. contract tests for validation, ownership boundaries, and stable response envelopes;
+6. Bruno smoke coverage and API reference documentation.
+
+Scoped API key authentication remains accepted as part of the Control API direction,
+but it will land as a follow-up foundation slice rather than blocking the first
+browser-session-backed endpoints.
 
 See [Allerac Control API v1](../control-api-v1.md) for the phased plan.
 
@@ -100,4 +110,3 @@ Control API should first stabilize contracts inside the existing app container.
 Let workers, CLI, or automation talk directly to Postgres or internal service modules.
 
 Rejected because it bypasses auth, validation, audit, and ownership boundaries.
-

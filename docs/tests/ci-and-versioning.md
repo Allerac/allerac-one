@@ -8,8 +8,8 @@ The initial GitHub Actions workflow is `.github/workflows/ci.yml`.
 
 It runs on:
 
-- pull requests targeting `main`;
-- pushes to `main`;
+- pull requests targeting `development` or `main`;
+- pushes to `development` or `main`;
 - manual dispatch.
 
 Required checks:
@@ -81,18 +81,26 @@ Rules:
 
 Recommended release sequence:
 
-1. Merge feature PRs into `main`.
-2. Confirm CI is green on `main`.
-3. Update `package.json` version.
-4. Add release notes.
-5. Create a Git tag:
+1. Merge feature PRs into `development`.
+2. Create a GitHub pre-release from `development`.
+3. Wait for the pre-release workflow to pass:
+   - CI baseline;
+   - Playwright release smoke.
+4. Promote the same commit to `main`.
+5. Create a final GitHub release from `main`.
+6. Deploy production from `main`.
+
+Stable release tags use:
 
    ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
+   v0.2.0
    ```
 
-6. Build/publish Docker images from the tag in a future release workflow.
+Release candidate tags use:
+
+```bash
+v0.2.0-rc.1
+```
 
 For release candidates, create a GitHub pre-release. The pre-release workflow runs:
 
@@ -101,6 +109,15 @@ For release candidates, create a GitHub pre-release. The pre-release workflow ru
 
 This gives browser-level confidence before promoting a candidate into a stable
 release, without making every PR wait on browser automation.
+
+## v0.0.1 Baseline
+
+`v0.0.1` was the first release to exercise the full baseline:
+
+- `v0.0.1-rc.1` was created from `development`;
+- the pre-release workflow passed CI baseline and Playwright release smoke;
+- the same commit was released as `v0.0.1` from `main`;
+- Azure production deploy was validated with `/api/v1/me`.
 
 ## Future Release Automation
 
@@ -130,4 +147,6 @@ Do not publish production images from arbitrary branches.
 | API key auth in smoke tests | Planned | Replace session cookie dependency |
 | TypeScript CI gate | Blocked | Fix existing `npx tsc --noEmit` failures first |
 | Pre-release Playwright smoke | Done | `.github/workflows/prerelease.yml` |
-| Release workflow | Planned | Add once version/tag policy is accepted |
+| Release docs | Done | `docs/releases/README.md` |
+| Release-triggered Azure deploy | Prepared | `/hooks/deploy-release`; requires GitHub release webhook |
+| Release workflow | Planned | Add once Docker image publishing is required |

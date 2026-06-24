@@ -1,11 +1,11 @@
 meta {
-  name: Delete Ticket
+  name: List Ticket Events
   type: http
-  seq: 6
+  seq: 4
 }
 
-delete {
-  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}
+get {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}/events
   body: none
   auth: none
 }
