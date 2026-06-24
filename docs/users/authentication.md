@@ -7,7 +7,7 @@ This document describes the complete authentication implementation in Allerac On
 1. [Overview](#overview)
 2. [Data Model](#data-model)
 3. [Session Management](#session-management)
-4. [Email + Password Authentication](#email--password-authentication)
+4. [Email + Password Authentication](#email-password-authentication)
 5. [Google OAuth](#google-oauth)
 6. [Account Linking](#account-linking)
 7. [Invite Token System](#invite-token-system)

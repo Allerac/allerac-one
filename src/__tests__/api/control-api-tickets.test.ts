@@ -9,6 +9,7 @@ import {
   GET as getTicket,
   PATCH as updateTicket,
 } from '@/app/api/v1/tickets/[id]/route';
+import { GET as getTicketEvents } from '@/app/api/v1/tickets/[id]/events/route';
 
 jest.mock('@/app/lib/auth-session', () => {
   class MockUnauthorizedError extends Error {}
@@ -212,6 +213,63 @@ describe('Control API v1 tickets', () => {
     });
   });
 
+  it('lists ticket events through the dedicated events endpoint', async () => {
+    mockTicketService.getById.mockResolvedValueOnce(ticket as never);
+    mockTicketService.getEvents.mockResolvedValueOnce([
+      {
+        id: 'event-id',
+        ticketId: ticket.id,
+        createdAt: new Date('2026-06-24T00:00:00.000Z'),
+        eventType: 'created',
+        actorType: 'user',
+        actorRunId: null,
+        previousValue: null,
+        newValue: { title: ticket.title },
+        notes: null,
+      },
+    ] as never);
+
+    const response = await getTicketEvents(
+      new Request('http://localhost/api/v1/tickets/ticket-id/events'),
+      routeParams(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockTicketService.getById).toHaveBeenCalledWith(ticket.id, user.id);
+    expect(mockTicketService.getEvents).toHaveBeenCalledWith(ticket.id, user.id);
+    expect(await response.json()).toMatchObject({
+      data: {
+        events: [
+          {
+            id: 'event-id',
+            ticketId: ticket.id,
+            type: 'created',
+            actor: { type: 'user', runId: null },
+            newValue: { title: ticket.title },
+          },
+        ],
+      },
+    });
+  });
+
+  it('returns not_found for events of a missing ticket', async () => {
+    mockTicketService.getById.mockResolvedValueOnce(null);
+
+    const response = await getTicketEvents(
+      new Request('http://localhost/api/v1/tickets/missing/events'),
+      routeParams('missing'),
+    );
+
+    expect(response.status).toBe(404);
+    expect(mockTicketService.getEvents).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({
+      error: {
+        code: 'not_found',
+        message: 'Ticket not found',
+      },
+    });
+  });
+
   it('updates ticket status with the current user boundary', async () => {
     mockTicketService.update.mockResolvedValueOnce({ ...ticket, status: 'resolved' } as never);
 
@@ -247,4 +305,3 @@ describe('Control API v1 tickets', () => {
     });
   });
 });
-

@@ -9,11 +9,13 @@
 #   TELEGRAM_DEPLOY_BOT_TOKEN  - Bot token for deploy notifications (from @BotFather)
 #   TELEGRAM_DEPLOY_CHAT_ID    - Your personal chat ID (run /start with the bot, then check getUpdates)
 #   DEPLOY_VM_NAME             - Human-readable VM name shown in notifications
+#   DEPLOY_BRANCH              - Branch to deploy (defaults to main)
 
 PROJECT_DIR="/project"
 LOG_FILE="/tmp/deploy-$(date +%Y%m%d-%H%M%S).log"
 START_TIME=$(date +%s)
 VM_NAME="${DEPLOY_VM_NAME:-$(hostname)}"
+BRANCH="${DEPLOY_BRANCH:-main}"
 
 # ── Git setup ─────────────────────────────────────────────────────────────────
 
@@ -36,11 +38,22 @@ OLD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 echo "=== Deploy started at $(date) on ${VM_NAME} ===" | tee "$LOG_FILE"
 echo "    Triggered by push — current commit: ${OLD_COMMIT}" | tee -a "$LOG_FILE"
+echo "    Deploy branch: ${BRANCH}" | tee -a "$LOG_FILE"
 echo "" | tee -a "$LOG_FILE"
+
+# Ensure the working tree is on the branch handled by this webhook before update.sh
+# pulls. This avoids merging sandbox branches into whatever branch happened to be
+# checked out on the host.
+git fetch origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  git checkout "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+else
+  git checkout -b "$BRANCH" "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+fi
 
 # ── Run update.sh ─────────────────────────────────────────────────────────────
 
-bash "$PROJECT_DIR/update.sh" 2>&1 | tee -a "$LOG_FILE"
+DEPLOY_BRANCH="$BRANCH" bash "$PROJECT_DIR/update.sh" 2>&1 | tee -a "$LOG_FILE"
 UPDATE_EXIT=${PIPESTATUS[0]}
 
 END_TIME=$(date +%s)

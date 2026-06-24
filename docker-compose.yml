@@ -20,6 +20,7 @@
 #   TUNNEL_TOKEN                     - Cloudflare Tunnel token (for remote access)
 #   GRAFANA_PASSWORD                 - Grafana admin password (defaults to 'admin')
 #   WEBHOOK_SECRET                   - Webhook secret (for auto-deploy)
+#   DEPLOY_BRANCH                    - Branch accepted by deploy webhook (default: main)
 #   GITHUB_TOKEN                     - GitHub Models API token
 #   TAVILY_API_KEY                   - Web search API key
 #   OLLAMA_MODELS                    - Comma-separated models to download
@@ -219,7 +220,7 @@ services:
   # ============================================
 
   docs:
-    image: squidfunk/mkdocs-material:latest
+    image: squidfunk/mkdocs-material:9.6.14
     container_name: allerac-docs
     restart: unless-stopped
     working_dir: /docs
@@ -560,6 +561,7 @@ services:
       - TELEGRAM_DEPLOY_CHAT_ID=${TELEGRAM_DEPLOY_CHAT_ID:-}
       - GITHUB_DEPLOY_TOKEN=${GITHUB_DEPLOY_TOKEN:-}
       - DEPLOY_VM_NAME=${DEPLOY_VM_NAME:-allerac-vm}
+      - DEPLOY_BRANCH=${DEPLOY_BRANCH:-main}
     deploy:
       resources:
         limits:

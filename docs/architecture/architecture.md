@@ -2,39 +2,60 @@
 
 ## Overview
 
-Allerac One is a private-first AI agent that runs entirely on your own hardware. It provides a chat interface with conversation memory, document understanding (RAG), and web search - all while keeping data local.
+Allerac One is a private-first AI agent platform that runs on your own
+infrastructure. It provides a web UI, a growing Control API, conversation memory,
+document understanding (RAG), tickets, background agents, and optional external
+integrations while keeping product data under user control.
 
 ```
-+--------------------------------------------------+
-|                   Browser UI                      |
-|          (Next.js React, Tailwind CSS)            |
-+--------------------------------------------------+
-                        |
-+--------------------------------------------------+
-|               Next.js App Router                  |
-|           (Server Actions + API Routes)           |
-+--------------------------------------------------+
-          |              |              |
-+---------+----+ +-------+------+ +----+---------+
-|   LLM Service| | Memory Service| | RAG Service  |
-|  (multi-provider) | (summaries) | | (embeddings) |
-+---------+----+ +-------+------+ +----+---------+
-     |    |              |              |
-     |    |       +------+------+       |
-     v    v       v             v       v
-+--------+ +----------+ +-----------------+
-| Ollama | | GitHub   | | PostgreSQL      |
-| (local)| | Models   | | + pgvector      |
-+--------+ | (cloud)  | +-----------------+
-           +----------+
++--------------------------------------------------------------+
+| Clients                                                      |
+| Browser UI · Bruno · future CLI · Telegram · automations      |
++----------------------------+---------------------------------+
+                             |
+                             v
++--------------------------------------------------------------+
+| Next.js App Container                                         |
+|                                                              |
+|  +----------------------+      +---------------------------+  |
+|  | Web UI + Server      |      | Control API v1            |  |
+|  | Actions              |      | /api/v1/*                 |  |
+|  | current UI workflows |      | stable external contract  |  |
+|  +----------+-----------+      +-------------+-------------+  |
+|             |                                |                |
+|             +---------------+----------------+                |
+|                             v                                 |
+|  +--------------------------------------------------------+   |
+|  | Service Layer                                          |   |
+|  | chat · tickets · agents · memory · RAG · tools · auth   |   |
+|  +-------------------------+------------------------------+   |
++----------------------------|---------------------------------+
+                             |
+      +----------------------+----------------------+
+      |                      |                      |
+      v                      v                      v
++------------+       +---------------+       +----------------+
+| PostgreSQL |       | Ollama        |       | Worker Services |
+| + pgvector |       | local LLM     |       | executor, health|
++------------+       +---------------+       +----------------+
+      |
+      v
++--------------------------+
+| Optional provider APIs    |
+| model APIs · Tavily · etc. |
++--------------------------+
 ```
+
+The Control API is not a separate container yet. It is currently implemented inside
+the Next.js app container so contracts can stabilize before process or container
+boundaries are split.
 
 ## Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | Frontend | React 19 + Tailwind CSS 4 | UI with streaming chat |
-| Framework | Next.js 16 (App Router) | SSR, API routes, server actions |
+| Framework | Next.js 16 (App Router) | SSR, API routes, Control API, server actions |
 | Database | PostgreSQL 16 + pgvector | Data storage + vector similarity search |
 | Local LLM | Ollama | Run LLMs locally (llama3.2, qwen2.5, deepseek-r1) |
 | Cloud LLM | GitHub Models API | GPT-4o, Mistral Large via Azure inference |
@@ -43,6 +64,47 @@ Allerac One is a private-first AI agent that runs entirely on your own hardware.
 | i18n | next-intl | Multi-language support |
 | Container | Docker + Docker Compose | Deployment and orchestration |
 | Monitoring | Prometheus + Grafana | Optional metrics (profile: monitoring) |
+
+## Control Plane Flow
+
+The platform direction is to make `/api/v1` the control plane for durable product
+workflows. The web UI can continue to use server actions while stable resources are
+introduced behind the Control API.
+
+```
+Browser UI / Bruno / future CLI
+        |
+        v
+/api/v1 route
+        |
+        +---> authenticate session now, scoped API keys later
+        +---> validate request with schemas
+        +---> enforce domain and ownership boundaries
+        |
+        v
+Service layer
+        |
+        +---> TicketsService, WorkerRunRepository, domain services, etc.
+        |
+        v
+PostgreSQL + runtime services
+        |
+        v
+Stable JSON response envelope
+```
+
+Implemented Control API resources:
+
+| Resource | Endpoints | Backing service |
+|---|---|---|
+| Current user | `GET /api/v1/me` | session auth |
+| Domains | `GET /api/v1/domains` | `DomainService` |
+| Tickets | `GET/POST /api/v1/tickets` | `TicketService` |
+| Ticket detail | `GET/PATCH/DELETE /api/v1/tickets/:id` | `TicketService` |
+| Ticket events | `GET /api/v1/tickets/:id/events` | `TicketService.getEvents()` |
+
+See [Control API v1](control-api-v1.md) for architecture and
+[Control API v1 Reference](../api/control-api-v1/overview.md) for endpoint contracts.
 
 ## Data Flow
 
@@ -289,7 +351,10 @@ node-exporter                    [profile: monitoring]
 
 ## Server Actions
 
-All data mutations use Next.js Server Actions in `src/app/actions/`:
+Many current UI workflows still use Next.js Server Actions in `src/app/actions/`.
+These are not removed by the Control API. The migration strategy is gradual: keep
+existing UI behavior working while stable `/api/v1` contracts are added around
+services that need non-browser clients or headless operation.
 
 | Action File | Purpose |
 |-------------|---------|
@@ -308,16 +373,20 @@ All data mutations use Next.js Server Actions in `src/app/actions/`:
 
 ## Control API Direction
 
-The current app combines UI, API routes, server actions, services, and background
-runtime inside the `app` container. This keeps deployment simple, but it also couples
-core product workflows to the web application.
+ADR 0001 accepts the Allerac Control API v1 as the platform control plane. ADR 0002
+keeps the Control API inside the existing app container initially. The first slice is
+in progress using browser session auth first and adding scoped API keys next.
 
-The planned next architecture milestone is the Allerac Control API v1: a stable
-versioned API that becomes the control plane for UI, Telegram, CLI, external
-automation, and future headless deployments.
+The intended evolution is:
 
-See [Allerac Control API v1](control-api-v1.md). Architecture decisions are tracked
-in [Architecture Decision Records](decisions/README.md).
+1. Stabilize `/api/v1` contracts inside the current app.
+2. Add API key authentication and scopes.
+3. Expose agent runs, domains, and chat through stable resources.
+4. Migrate UI surfaces to the same contracts where practical.
+5. Split worker/API processes only after contracts are stable.
+
+See [Allerac Control API v1](control-api-v1.md), [Control API v1 Reference](../api/control-api-v1/overview.md),
+and [Architecture Decision Records](decisions/README.md).
 
 ## UI Components
 

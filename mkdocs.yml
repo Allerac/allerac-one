@@ -57,12 +57,21 @@ nav:
   - Roadmap:
       - Overview: roadmap/README.md
       - Control API v1: roadmap/control-api-v1.md
+  - API Reference:
+      - Overview: api/README.md
+      - Control API v1:
+          - Overview: api/control-api-v1/overview.md
+          - System: api/control-api-v1/system.md
+          - Tickets: api/control-api-v1/tickets.md
+      - OpenAPI:
+          - Control API v1: api/openapi/control-api-v1.yaml
   - Architecture:
       - Overview: architecture/architecture.md
       - Control API v1: architecture/control-api-v1.md
       - Decisions:
           - Index: architecture/decisions/README.md
           - ADR 0001 - Control API v1: architecture/decisions/0001-adopt-control-api-v1.md
+          - ADR 0002 - Control API Container Boundary: architecture/decisions/0002-keep-control-api-in-app-container-initially.md
       - LLM Calls Map: architecture/llm-calls-map.md
       - LLM Model Selection: architecture/llm-model-selection.md
   - Domains:
@@ -95,6 +104,9 @@ nav:
       - Architecture: agents/architecture.md
       - Implementation: agents/agents-implementation.md
   - Operations:
+      - Deployments:
+          - Overview: deploy/README.md
+          - Sandbox Home: deploy/sandbox-home.md
       - Containers: containers/containers.md
       - Infrastructure: infrastructure/infrastructure.md
       - Local Setup: local-setup/local-setup.md
