@@ -62,6 +62,15 @@ describe("database deployment hardening", () => {
     expect(updater).toContain(".State.Health.Status");
   });
 
+  test("webhook-triggered updates do not restart the webhook container", () => {
+    const deploy = read("infra/webhook/deploy.sh");
+    const updater = read("update.sh");
+
+    expect(deploy).toContain("SKIP_WEBHOOK_RESTART=true");
+    expect(updater).toContain('compose_profiles_without webhook');
+    expect(updater).toContain("Skipping webhook profile during self-triggered deploy");
+  });
+
   test("restore validates input and preserves a recovery backup", () => {
     const cli = read("allerac.sh");
 
