@@ -1,0 +1,31 @@
+meta {
+  name: Create Agent Run
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/agent-runs
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "message": "Control API smoke test: summarize the current Allerac API rollout status.",
+    "provider": "ollama",
+    "model": "qwen2.5:3b"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.agentRun?.id) {
+    bru.setEnvVar("agentRunId", body.data.agentRun.id);
+  }
+}

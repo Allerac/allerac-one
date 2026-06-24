@@ -80,6 +80,7 @@ Common error codes:
 | [System](system.md) | `GET /me`, `GET /domains` |
 | [API Keys](api-keys.md) | list, create, revoke |
 | [Tickets](tickets.md) | list, create, get, update, delete, events |
+| [Agent Runs](agent-runs.md) | list, create, get, cancel |
 
 ## Bruno Collection
 
@@ -96,6 +97,7 @@ Use the `Local` environment:
 | `baseUrl` | `http://localhost:8080` |
 | `sessionToken` | Browser `session_token` cookie value |
 | `ticketId` | Set automatically by `Tickets / Create Ticket` |
+| `agentRunId` | Set automatically by `Agent Runs / Create Agent Run` |
 
 Recommended smoke order:
 
@@ -108,6 +110,10 @@ Recommended smoke order:
 7. `Tickets / Resolve Ticket`
 8. `Tickets / List Ticket Events`
 9. `Tickets / Delete Ticket`
+10. `Agent Runs / List Agent Runs`
+11. `Agent Runs / Create Agent Run`
+12. `Agent Runs / Get Agent Run`
+13. `Agent Runs / Cancel Agent Run`
 
 ## OpenAPI
 

@@ -1,0 +1,15 @@
+meta {
+  name: Cancel Agent Run
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/agent-runs/{{agentRunId}}/cancel
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

@@ -23,6 +23,13 @@ export interface CreatedControlApiKey {
   secret: string;
 }
 
+export class ApiKeyMissingScopeError extends Error {
+  constructor(public readonly requiredScope: string) {
+    super(`API key is missing required scope: ${requiredScope}`);
+    this.name = 'ApiKeyMissingScopeError';
+  }
+}
+
 function mapRow(row: Record<string, any>): ControlApiKey {
   return {
     id: row.id,
@@ -128,7 +135,7 @@ export class ApiKeyService {
     const row = result.rows[0];
     const scopes = (row.scopes ?? []) as string[];
     if (requiredScope && scopes.length > 0 && !scopes.includes(requiredScope)) {
-      return null;
+      throw new ApiKeyMissingScopeError(requiredScope);
     }
 
     await pool.query(

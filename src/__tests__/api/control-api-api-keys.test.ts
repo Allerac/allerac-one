@@ -1,7 +1,7 @@
 /** @jest-environment node */
 
 import { requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
-import { apiKeyService } from '@/app/services/api-keys/api-key.service';
+import { ApiKeyMissingScopeError, apiKeyService } from '@/app/services/api-keys/api-key.service';
 import { GET as getMe } from '@/app/api/v1/me/route';
 import { DELETE as revokeApiKey } from '@/app/api/v1/api-keys/[id]/route';
 import { GET as listApiKeys, POST as createApiKey } from '@/app/api/v1/api-keys/route';
@@ -18,6 +18,12 @@ jest.mock('@/app/lib/auth-session', () => {
 });
 
 jest.mock('@/app/services/api-keys/api-key.service', () => ({
+  ApiKeyMissingScopeError: class MockApiKeyMissingScopeError extends Error {
+    constructor(public readonly requiredScope: string) {
+      super(`API key is missing required scope: ${requiredScope}`);
+      this.name = 'ApiKeyMissingScopeError';
+    }
+  },
   apiKeyService: {
     create: jest.fn(),
     list: jest.fn(),
@@ -162,6 +168,27 @@ describe('Control API v1 API keys', () => {
       error: {
         code: 'unauthorized',
         message: 'Unauthorized',
+      },
+    });
+  });
+
+  it('returns 403 when a valid API key is missing the required scope', async () => {
+    mockApiKeyService.validateBearerToken.mockRejectedValueOnce(
+      new ApiKeyMissingScopeError('profile:read'),
+    );
+
+    const response = await getMe(new Request('http://localhost/api/v1/me', {
+      headers: { Authorization: 'Bearer alr_live_limited_secret' },
+    }));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: {
+        code: 'missing_scope',
+        message: 'API key does not have the required scope.',
+        details: {
+          requiredScope: 'profile:read',
+        },
       },
     });
   });
