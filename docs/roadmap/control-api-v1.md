@@ -217,6 +217,10 @@ Exit criteria:
 
 Purpose: create the minimum secure boundary for `/api/v1`.
 
+Current note: the first implementation slice deliberately started with browser
+session auth to make `/api/v1` testable through Bruno without changing credential
+storage yet. Scoped API keys remain the next auth milestone.
+
 Recommended first PR scope:
 
 1. Add `api_keys` migration.
@@ -404,6 +408,9 @@ Do not return encrypted settings, raw API keys, provider tokens, or session toke
 
 Purpose: prove the Control API with a real product workflow.
 
+Current status: the session-authenticated tickets slice is implemented. API key
+scope enforcement is still pending and should be added with Phase 1 auth foundation.
+
 ### Endpoints
 
 ```text
@@ -411,23 +418,51 @@ GET    /api/v1/tickets
 POST   /api/v1/tickets
 GET    /api/v1/tickets/:id
 PATCH  /api/v1/tickets/:id
-GET    /api/v1/tickets/:id/events
+DELETE /api/v1/tickets/:id
 ```
 
 ### Tasks
 
-- [ ] Add request/response schemas.
-- [ ] Use existing `TicketService`.
-- [ ] Map service errors to stable API errors.
-- [ ] Enforce `tickets:read` and `tickets:write` scopes.
-- [ ] Preserve existing `/api/tickets` routes for the UI.
-- [ ] Add contract tests for:
+- [x] Add request/response schemas.
+- [x] Use existing `TicketService`.
+- [x] Map service errors to stable API errors.
+- [ ] Enforce `tickets:read` and `tickets:write` scopes through API keys.
+- [x] Preserve existing `/api/tickets` routes for the UI.
+- [x] Add session-authenticated contract tests for:
   - list own tickets;
-  - cannot read another user's ticket;
   - create ticket;
   - update status;
   - read events;
-  - missing/wrong scope.
+  - unauthenticated access.
+- [ ] Add API-key contract tests for:
+  - missing/wrong scope;
+  - valid `tickets:read`;
+  - valid `tickets:write`.
+
+### Bruno Smoke Tests
+
+The collection lives at:
+
+```text
+bruno/Allerac-One
+```
+
+Use the `Local` environment and set:
+
+| Variable | Value |
+|---|---|
+| `baseUrl` | Local app URL, usually `http://localhost:8080` |
+| `sessionToken` | Value of the browser `session_token` cookie |
+| `ticketId` | Set automatically by the Create Ticket request |
+
+Request order:
+
+1. `System / Me`
+2. `Tickets / List Tickets`
+3. `Tickets / Create Ticket`
+4. `Tickets / Get Ticket`
+5. `Tickets / Resolve Ticket`
+6. `Tickets / Delete Ticket`
 
 ### Exit Criteria
 

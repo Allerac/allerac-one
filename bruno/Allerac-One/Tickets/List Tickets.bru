@@ -1,0 +1,16 @@
+meta {
+  name: List Tickets
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tickets?limit=20
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: session_token={{sessionToken}}
+}
+

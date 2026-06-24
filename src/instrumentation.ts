@@ -10,12 +10,14 @@ export async function register() {
     const { syncSystemSkills } = await import('./app/services/skills/system-skills-loader');
     await syncSystemSkills();
 
-    // Start background agent worker runner
-    const { getWorkerRunner } = await import('./app/services/agents/worker-runner.service');
-    getWorkerRunner().start();
+    if (process.env.DISABLE_BACKGROUND_WORKERS !== 'true') {
+      // Start background agent worker runner
+      const { getWorkerRunner } = await import('./app/services/agents/worker-runner.service');
+      getWorkerRunner().start();
 
-    // Poll job_executions and emit to log buffer so scheduler activity appears in /logs
-    startSchedulerLogger();
+      // Poll job_executions and emit to log buffer so scheduler activity appears in /logs
+      startSchedulerLogger();
+    }
   }
 }
 

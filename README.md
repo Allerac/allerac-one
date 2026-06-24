@@ -7,206 +7,216 @@
 
 # Allerac One
 
-**Your private AI assistant. Runs on your hardware. Your data never leaves.**
+**Private-first AI agent platform for local, cloud, and future headless deployments.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/Docker-required-blue.svg)](https://docs.docker.com/engine/install/)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-orange.svg)](https://ollama.ai)
+[![Docs](https://img.shields.io/badge/Docs-MkDocs%20Material-526CFE.svg)](docs/)
 
-[**Buy pre-configured hardware →**](https://allerac.ai) &nbsp;·&nbsp; [Cloud version](https://allerac.ai/cloud) &nbsp;·&nbsp; [Docs](docs/) &nbsp;·&nbsp; [Discord](https://discord.gg/allerac)
+[Website](https://allerac.ai) &nbsp;·&nbsp; [Documentation](docs/) &nbsp;·&nbsp; [Roadmap](docs/roadmap/README.md) &nbsp;·&nbsp; [Control API](docs/architecture/control-api-v1.md)
 
 </div>
 
 ---
 
-## What is it?
+## What Is Allerac One?
 
-Allerac One is a self-hosted AI agent that runs entirely on your own machine — a mini PC, a home server, or any Linux/macOS box with 16 GB+ RAM.
+Allerac One is a self-hosted AI agent system designed to run on your own
+infrastructure. It combines a Next.js web app, PostgreSQL with pgvector, local
+LLM inference through Ollama, background agents, domain-specific tools, and
+automation services into one Docker-based platform.
 
-You get a full chat interface, conversation memory, RAG over your own documents, web search, Telegram access, and local AI inference via Ollama — all in one Docker stack, running on your hardware.
+The current product is UI-first, but the platform is moving toward a stable
+**Control API v1** so the web UI, Telegram, CLI, automations, and future
+headless deployments can all use the same backend contract.
 
-**Zero subscriptions. Zero telemetry. Zero vendor lock-in.**
+## Current Capabilities
 
----
+- Chat interface with persistent conversation context.
+- RAG over local documents and notes.
+- Domain surfaces for chat, code, design, email, finance, health, notes,
+  recipes, search, social, tickets, and writing.
+- Local Ollama inference with optional external model providers.
+- Background agent runs and scheduled work.
+- Telegram and notification services.
+- Health data worker and monitoring stack.
+- Tickets domain with the first Control API v1 endpoints.
+- MkDocs Material documentation container.
+- Bruno collection for API testing.
+- GitHub CI and pre-release smoke gates.
 
-## Install in one command
+## Architecture At A Glance
+
+```text
+Browser / Bruno / future clients
+        |
+        v
+Next.js app + API routes  (localhost:8080)
+        |
+        +--> PostgreSQL 16 + pgvector
+        +--> Ollama
+        +--> Executor service
+        +--> Health worker
+        +--> Optional Telegram, notifier, monitoring, tunnel, webhook services
+
+Docs site: localhost:8000
+```
+
+See the [Architecture Overview](docs/architecture/architecture.md) and
+[Containers](docs/containers/containers.md) docs for the full system map.
+
+## Quick Start
+
+The recommended path is Docker Compose:
 
 ```bash
-curl -sSL https://get.allerac.com/install | bash
-```
-
-The script detects your OS, installs Docker if needed, asks your hardware tier, downloads the right AI model, and starts everything. Your assistant will be ready at **`http://localhost:8080`**.
-
-> **Manual install:** `git clone https://github.com/allerac/allerac-one && cd allerac-one && ./install.sh`
-
----
-
-## Why run your own AI?
-
-| | ChatGPT / Copilot | Allerac One |
-|---|:---:|:---:|
-| Monthly cost | $20/month | **~€3/month** (electricity) |
-| Your data | Sent to OpenAI | **Stays on your machine** |
-| Works offline | No | **Yes** |
-| Custom models | No | **Any Ollama model** |
-| Your documents | Uploaded to cloud | **Stored locally** |
-| GDPR / LGPD | Requires DPA | **Compliant by design** |
-
-> A pre-configured N100 mini PC (~€150) pays for itself in 7 months vs. a ChatGPT subscription.
-
----
-
-## What you get
-
-- **Persistent memory** — the AI remembers context across conversations
-- **RAG** — upload PDFs, docs, or notes and chat with your own knowledge base
-- **Web search** — real-time answers via Tavily (optional)
-- **Skills** — reusable prompt templates for recurring tasks (writing, code review, analysis)
-- **Multi-model** — switch between local Ollama models, GPT-4o, Gemini, and more
-- **Telegram bot** — chat with your AI from your phone
-- **Health dashboard** — connects to Garmin for fitness and wellness context
-- **Shell agent** — optional local shell execution for automation tasks
-- **Scheduled jobs** — run prompts on a schedule
-- **Backup & restore** — one-click database backup with download
-
----
-
-## Hardware guide
-
-| Tier | Recommended hardware | Model | Speed | Use case |
-|------|----------------------|-------|-------|----------|
-| **Lite** | Intel N100 · 16 GB | `qwen2.5:3b` | ~8 tok/s | Personal, always-on |
-| **Home** | Intel i5 / Ryzen 5 · 32 GB | `qwen2.5:7b` | ~12 tok/s | Daily driver, family |
-| **Pro** | Intel i7 / Ryzen 7 · 64 GB | `qwen2.5:14b` | ~15 tok/s | Power users, teams |
-| **Pro + GPU** | i7 + NVIDIA RTX · 64 GB | `qwen2.5:32b` | ~40 tok/s | Maximum performance |
-
-> **Don't want to configure it yourself?**
-> [Buy an Allerac device — pre-installed, plug and play →](https://allerac.ai)
-
----
-
-## Advanced install options
-
-```bash
-# Scripted / CI — no prompts
-HARDWARE_TIER=lite ./install.sh
-
-# With Telegram bot
-HARDWARE_TIER=home ENABLE_NOTIFICATIONS=true ./install.sh
-
-# With NVIDIA GPU acceleration (auto-detected by default)
-HARDWARE_TIER=pro ENABLE_GPU=true ./install.sh
-
-# Custom models
-HARDWARE_TIER=custom OLLAMA_MODELS=qwen2.5:14b,deepseek-r1:8b ./install.sh
-```
-
----
-
-## Add features after install
-
-```bash
-# Telegram bot + notifications
-docker compose --profile notifications up -d
-
-# Grafana + Prometheus monitoring
-docker compose --profile monitoring up -d
-```
-
----
-
-## Update
-
-```bash
-./update.sh
-```
-
-Pulls the latest code, rebuilds the app container, restarts. Your data is never touched.
-
----
-
-## How it works
-
-```
-Your browser
-     ↓
-Next.js app  (port 8080)
-     ↓
-PostgreSQL 16 + pgvector  ←  conversations, documents, embeddings
-     ↓
-Ollama  ←  local LLM inference (100% on your hardware)
-```
-
-All services run in Docker. One `docker compose up` to start, `docker compose down` to stop.
-
-**Stack:** Next.js 16 · React 19 · TypeScript · PostgreSQL 16 + pgvector · Tailwind CSS 4 · Ollama
-
----
-
-## Cloud alternative
-
-Prefer managed hosting? [Allerac Cloud](https://allerac.ai/cloud) gives you the same experience on our infrastructure — starting at €9/month, no setup required.
-
----
-
-## Self-host on a server
-
-Running on a VPS or home server behind a domain? Use the cloud install:
-
-```bash
-./install-cloud.sh
-```
-
-Includes Cloudflare Tunnel support for secure public access without opening ports.
-
----
-
-## Security & privacy
-
-- All data (conversations, documents, memories) stays in your local PostgreSQL
-- API keys are encrypted at rest (AES-256)
-- Ollama inference runs locally — prompts never leave your machine
-- Optional: restrict shell agent access to a specific directory via `HOST_WORKSPACE`
-- No analytics, no crash reporting, no call home
-
-See [docs/security.md](docs/security.md) for the full security model.
-
----
-
-## Documentation
-
-- [Architecture](docs/architecture.md) — system design, data flow, technical decisions
-- [Security model](docs/security.md) — how your data is protected
-- [Local setup](docs/local-setup.md) — manual setup guide
-- [Backup & restore](docs/database-backup-restore.md) — keeping your data safe
-
----
-
-## Contributing
-
-Allerac One is MIT licensed. Contributions welcome.
-
-```bash
-git clone https://github.com/allerac/allerac-one.git
-cd allerac-one
-cp .env.local.example .env   # fill in your keys
+cp .env.example .env
 docker compose up -d
 ```
 
-Open an issue before large changes so we can align on direction.
+Default local URLs:
 
----
+- App: `http://localhost:8080`
+- Docs: `http://localhost:8000`
 
-## Community
+The install scripts are still available for device-style setup:
 
-- [Discord](https://discord.gg/allerac) — get help, share setups, discuss models
-- [GitHub Issues](https://github.com/allerac/allerac-one/issues) — bugs and feature requests
-- [allerac.ai](https://allerac.ai) — pre-configured hardware and cloud hosting
+```bash
+./install.sh
+./install-cloud.sh
+./update.sh
+```
 
----
+## Documentation
+
+The documentation is part of the repo and is served by the `docs` container:
+
+```bash
+docker compose up -d docs
+```
+
+Important entry points:
+
+- [Documentation Home](docs/index.md)
+- [Roadmap](docs/roadmap/README.md)
+- [Control API v1 Architecture](docs/architecture/control-api-v1.md)
+- [Control API v1 Roadmap](docs/roadmap/control-api-v1.md)
+- [Testing Strategy](docs/tests/testing-strategy.md)
+- [CI and Versioning](docs/tests/ci-and-versioning.md)
+- [Security](docs/security/security.md)
+
+Private, commercial, or unfinished notes live under ignored/excluded docs areas
+such as `docs/private`, `docs/business-model`, and `docs/self-development`.
+
+## Control API V1
+
+The Control API is the current platform milestone. It is intended to decouple
+core Allerac functionality from the web container and provide a stable contract
+for external clients and automations.
+
+Current initial surface:
+
+- `GET /api/v1/me`
+- `GET /api/v1/tickets`
+- `POST /api/v1/tickets`
+- `GET /api/v1/tickets/:id`
+- `PATCH /api/v1/tickets/:id`
+- `DELETE /api/v1/tickets/:id`
+
+Use the Bruno collection in `bruno/Allerac-One` to exercise these endpoints
+locally.
+
+## Development
+
+Install dependencies:
+
+```bash
+npm install --legacy-peer-deps
+```
+
+Run the app outside Docker:
+
+```bash
+npm run dev
+```
+
+Run the Docker stack:
+
+```bash
+docker compose up -d
+```
+
+Useful commands:
+
+```bash
+npm test -- --runInBand
+npm run test:schema
+npm run build
+npm run test:e2e:release
+docker compose exec -T docs mkdocs build --strict
+```
+
+## Testing And Release Gates
+
+The project now has a first quality baseline:
+
+- Jest runs on pull requests to `main`.
+- Schema smoke tests validate database schema equivalence.
+- Production build runs in CI.
+- MkDocs strict build runs in CI.
+- Playwright release smoke tests run on GitHub pre-releases.
+
+The pre-release workflow is triggered when a GitHub Release is marked as a
+pre-release, or manually through `workflow_dispatch`.
+
+See [Testing Strategy](docs/tests/testing-strategy.md) and
+[CI and Versioning](docs/tests/ci-and-versioning.md).
+
+## Repository Map
+
+```text
+src/app                 Next.js app, routes, actions, services, UI
+src/database            Database init, migrations, schema smoke support
+infra                   Executor, notifier, webhook, infrastructure services
+services                Worker services outside the Next.js app
+docs                    Public technical documentation
+bruno                   API client collection for local testing
+e2e                     Playwright tests
+.github/workflows       CI and pre-release automation
+```
+
+## Security And Privacy
+
+Allerac One is designed around local ownership of data:
+
+- Conversations, memories, documents, tickets, and settings live in PostgreSQL.
+- API keys and provider tokens are encrypted at rest.
+- Ollama inference can run locally.
+- Shell execution is isolated through the executor service and configurable
+  workspace mounts.
+- Cloudflare Tunnel, OIDC, and remote access features are optional.
+
+Read the [Security](docs/security/security.md) docs before exposing an instance
+outside a trusted local network.
+
+## Contributing
+
+This repository is being prepared as the real foundation for Allerac One. Before
+large changes, start from the docs:
+
+- Architecture decisions: `docs/architecture/decisions`
+- Roadmap: `docs/roadmap`
+- Testing policy: `docs/tests`
+- Domain docs: `docs/domains`
+
+Run the relevant tests before opening a PR and update documentation when a
+change affects architecture, operations, user-facing behavior, or public API
+contracts.
 
 ## License
 
-MIT — free to use, modify, and self-host.
+The public license has not been finalized in this branch yet. Add a root
+`LICENSE` file and `package.json` license metadata before opening the repository
+as an open-source project.
 
-Built with ♥ by [Allerac](https://allerac.ai)
+Built by [Allerac](https://allerac.ai).

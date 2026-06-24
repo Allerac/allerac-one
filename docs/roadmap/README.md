@@ -17,5 +17,4 @@ sequence of implementation.
 
 | Roadmap | Status | Purpose |
 |---|---|---|
-| [Control API v1](control-api-v1.md) | Planned | Introduce a stable `/api/v1` control plane for UI, CLI, Telegram, automation, and headless operation |
-
+| [Control API v1](control-api-v1.md) | In progress | Introduce a stable `/api/v1` control plane for UI, CLI, Telegram, automation, and headless operation |

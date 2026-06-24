@@ -1,0 +1,24 @@
+meta {
+  name: Resolve Ticket
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Cookie: session_token={{sessionToken}}
+}
+
+body:json {
+  {
+    "status": "resolved",
+    "resolutionNotes": "Resolved from Bruno smoke test."
+  }
+}
+

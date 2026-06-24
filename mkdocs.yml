@@ -106,6 +106,8 @@ nav:
           - Standard: logging/logging-standard.md
           - Pattern: logging/logging-pattern.md
       - Deploy Test Plan: tests/deploy-test-plan.md
+      - Testing Strategy: tests/testing-strategy.md
+      - CI and Versioning: tests/ci-and-versioning.md
   - Security:
       - Overview: security/security.md
       - Hardening Roadmap: security/product-hardening-roadmap.md

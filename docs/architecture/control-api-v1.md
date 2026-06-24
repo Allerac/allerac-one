@@ -2,7 +2,8 @@
 
 ## Status
 
-Planned. This is an architecture milestone, not an implemented contract yet.
+In progress. The first session-authenticated `/api/v1` endpoints exist for
+`me` and `tickets`; scoped API keys are still planned.
 
 ## Purpose
 
@@ -98,6 +99,22 @@ POST   /api/v1/tools/:name/run
 Existing `/api/*` routes may continue to serve the UI while `/api/v1/*` is introduced.
 Over time, UI code should migrate to the same contracts where practical.
 
+### Implemented Initial Slice
+
+The first implemented slice is intentionally small and session-authenticated:
+
+```text
+GET    /api/v1/me
+GET    /api/v1/tickets
+POST   /api/v1/tickets
+GET    /api/v1/tickets/:id
+PATCH  /api/v1/tickets/:id
+DELETE /api/v1/tickets/:id
+```
+
+This proves the route shape, Zod validation, response envelopes, domain access, DTO
+mapping, and Bruno smoke tests without changing the current web UI.
+
 ## Authentication
 
 The API needs browser and non-browser authentication.
@@ -107,6 +124,8 @@ The API needs browser and non-browser authentication.
 Browser UI can continue using the existing session cookie. `/api/v1` routes should be
 able to resolve the current user through the same session validation used by existing
 routes.
+
+The initial `/api/v1` implementation uses this mode only.
 
 ### Headless Clients
 

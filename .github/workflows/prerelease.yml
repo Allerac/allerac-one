@@ -1,0 +1,54 @@
+name: Pre-release
+
+on:
+  release:
+    types:
+      - prereleased
+  workflow_dispatch:
+
+concurrency:
+  group: prerelease-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI Baseline
+    uses: ./.github/workflows/ci.yml
+
+  e2e:
+    name: Playwright Release Smoke
+    runs-on: ubuntu-latest
+    needs:
+      - ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run release smoke tests
+        run: npm run test:e2e:release
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
