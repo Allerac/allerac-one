@@ -39,10 +39,11 @@ describe("database deployment hardening", () => {
   test("update backup happens before pull and migrations", () => {
     const updater = read("update.sh");
     const backup = updater.indexOf("backup pre-update");
-    const pull = updater.indexOf("git pull origin main");
+    const pull = updater.indexOf('git pull origin "${DEPLOY_BRANCH:-main}"');
     const migrations = updater.indexOf("up --force-recreate migrations");
 
     expect(backup).toBeGreaterThan(-1);
+    expect(pull).toBeGreaterThan(-1);
     expect(backup).toBeLessThan(pull);
     expect(pull).toBeLessThan(migrations);
   });
