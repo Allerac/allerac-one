@@ -11,7 +11,7 @@
 #   DEPLOY_VM_NAME             - Human-readable VM name shown in notifications
 #   DEPLOY_BRANCH              - Branch to deploy (defaults to main)
 
-PROJECT_DIR="/project"
+PROJECT_DIR="${COMPOSE_DIR:-/project}"
 LOG_FILE="/tmp/deploy-$(date +%Y%m%d-%H%M%S).log"
 START_TIME=$(date +%s)
 VM_NAME="${DEPLOY_VM_NAME:-$(hostname)}"
