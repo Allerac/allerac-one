@@ -57,6 +57,8 @@ nav:
   - Roadmap:
       - Overview: roadmap/README.md
       - Control API v1: roadmap/control-api-v1.md
+  - Releases:
+      - Overview: releases/README.md
   - API Reference:
       - Overview: api/README.md
       - Control API v1:
@@ -107,6 +109,7 @@ nav:
       - Deployments:
           - Overview: deploy/README.md
           - Sandbox Home: deploy/sandbox-home.md
+          - Prod Azure: deploy/prod-azure.md
       - Containers: containers/containers.md
       - Infrastructure: infrastructure/infrastructure.md
       - Local Setup: local-setup/local-setup.md

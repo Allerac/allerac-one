@@ -41,20 +41,31 @@ echo "    Triggered by push — current commit: ${OLD_COMMIT}" | tee -a "$LOG_FI
 echo "    Deploy branch: ${BRANCH}" | tee -a "$LOG_FILE"
 echo "" | tee -a "$LOG_FILE"
 
-# Ensure the working tree is on the branch handled by this webhook before update.sh
-# pulls. This avoids merging sandbox branches into whatever branch happened to be
-# checked out on the host.
+# Ensure the working tree is on the branch handled by this webhook before
+# update.sh pulls. This avoids merging deployment branches into whatever branch
+# happened to be checked out on the host.
 git fetch origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
-if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
-  git checkout "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
-else
-  git checkout -b "$BRANCH" "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+PREPARE_EXIT=${PIPESTATUS[0]}
+
+if [ "$PREPARE_EXIT" -eq 0 ]; then
+  if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    git checkout "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+    PREPARE_EXIT=${PIPESTATUS[0]}
+  else
+    git checkout -b "$BRANCH" "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+    PREPARE_EXIT=${PIPESTATUS[0]}
+  fi
 fi
 
 # ── Run update.sh ─────────────────────────────────────────────────────────────
 
-DEPLOY_BRANCH="$BRANCH" bash "$PROJECT_DIR/update.sh" 2>&1 | tee -a "$LOG_FILE"
-UPDATE_EXIT=${PIPESTATUS[0]}
+if [ "$PREPARE_EXIT" -eq 0 ]; then
+  DEPLOY_BRANCH="$BRANCH" bash "$PROJECT_DIR/update.sh" 2>&1 | tee -a "$LOG_FILE"
+  UPDATE_EXIT=${PIPESTATUS[0]}
+else
+  echo "=== Deploy preparation failed for branch ${BRANCH} (exit ${PREPARE_EXIT}) ===" | tee -a "$LOG_FILE"
+  UPDATE_EXIT="$PREPARE_EXIT"
+fi
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
