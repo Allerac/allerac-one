@@ -60,7 +60,7 @@ fi
 # ── Run update.sh ─────────────────────────────────────────────────────────────
 
 if [ "$PREPARE_EXIT" -eq 0 ]; then
-  DEPLOY_BRANCH="$BRANCH" bash "$PROJECT_DIR/update.sh" 2>&1 | tee -a "$LOG_FILE"
+  SKIP_WEBHOOK_RESTART=true DEPLOY_BRANCH="$BRANCH" bash "$PROJECT_DIR/update.sh" 2>&1 | tee -a "$LOG_FILE"
   UPDATE_EXIT=${PIPESTATUS[0]}
 else
   echo "=== Deploy preparation failed for branch ${BRANCH} (exit ${PREPARE_EXIT}) ===" | tee -a "$LOG_FILE"

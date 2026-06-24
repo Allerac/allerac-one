@@ -6,7 +6,9 @@ RUN apk add --no-cache bash curl git docker-cli jq gettext gcompat
 # Docker Compose v2
 RUN curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64" \
     -o /usr/local/bin/docker-compose \
-  && chmod +x /usr/local/bin/docker-compose
+  && chmod +x /usr/local/bin/docker-compose \
+  && mkdir -p /usr/libexec/docker/cli-plugins \
+  && ln -s /usr/local/bin/docker-compose /usr/libexec/docker/cli-plugins/docker-compose
 
 # webhook binary (adnanh/webhook)
 ARG WEBHOOK_VERSION=2.8.1

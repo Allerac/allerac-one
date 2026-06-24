@@ -91,6 +91,26 @@ detect_product_line() {
     COMPOSE_FLAGS=""
 }
 
+compose_profiles_without() {
+    local remove_profile="$1"
+    local source_profiles="${COMPOSE_PROFILES:-}"
+    local result=""
+    local profile
+
+    IFS=',' read -ra profiles <<< "$source_profiles"
+    for profile in "${profiles[@]}"; do
+        [ -z "$profile" ] && continue
+        [ "$profile" = "$remove_profile" ] && continue
+        if [ -z "$result" ]; then
+            result="$profile"
+        else
+            result="${result},${profile}"
+        fi
+    done
+
+    printf '%s' "$result"
+}
+
 # ============================================
 # Verify running containers (product-line aware)
 # ============================================
@@ -287,7 +307,13 @@ echo ""
 
 # Step 8: Restart services
 echo -e "${YELLOW}[8/9]${NC} Restarting services..."
+RESTART_COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
+if [ "${SKIP_WEBHOOK_RESTART:-false}" = "true" ]; then
+    RESTART_COMPOSE_PROFILES="$(compose_profiles_without webhook)"
+    echo -e "${YELLOW}  Skipping webhook profile during self-triggered deploy.${NC}"
+fi
 COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
+    COMPOSE_PROFILES="$RESTART_COMPOSE_PROFILES" \
     docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up -d \
     || fail_update "service restart" "Failed to restart services."
 echo -e "${GREEN}✓ Services restarted${NC}"
