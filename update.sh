@@ -302,6 +302,18 @@ for KNOWN in allerac-health-worker; do
         docker rm -f "$KNOWN" > /dev/null 2>&1 || true
     fi
 done
+
+# Docker Compose can leave prefixed containers behind when an interrupted deploy
+# is killed while services are being recreated. Do not let a no-match grep exit
+# abort the update under `set -euo pipefail`.
+ORPHAN_PATTERNS='^[[:alnum:]]+_allerac-(app|telegram|notifier|health-worker)$'
+ORPHAN_CONTAINERS="$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E "$ORPHAN_PATTERNS" || true)"
+if [ -n "$ORPHAN_CONTAINERS" ]; then
+    echo "$ORPHAN_CONTAINERS" | while read -r c; do
+        echo "  Removing prefixed orphan container: $c"
+        docker rm -f "$c" > /dev/null 2>&1 || true
+    done
+fi
 echo -e "${GREEN}✓ Cleanup done${NC}"
 echo ""
 
