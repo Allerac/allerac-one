@@ -36,6 +36,8 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Run Jest
+        env:
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         run: npm test -- --runInBand
 
   schema:
