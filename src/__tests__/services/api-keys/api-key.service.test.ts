@@ -2,7 +2,7 @@
 
 import '../../../__tests__/__mocks__/db';
 import pool from '@/app/clients/db';
-import { ApiKeyService } from '@/app/services/api-keys/api-key.service';
+import { ApiKeyMissingScopeError, ApiKeyService } from '@/app/services/api-keys/api-key.service';
 
 const mockQuery = (pool as any).query;
 
@@ -102,9 +102,8 @@ describe('ApiKeyService', () => {
       }],
     });
 
-    const user = await service.validateBearerToken('alr_live_valid_secret', 'tickets:write');
-
-    expect(user).toBeNull();
+    await expect(service.validateBearerToken('alr_live_valid_secret', 'tickets:write'))
+      .rejects.toBeInstanceOf(ApiKeyMissingScopeError);
     expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 

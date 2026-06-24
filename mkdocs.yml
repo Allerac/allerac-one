@@ -66,6 +66,7 @@ nav:
           - System: api/control-api-v1/system.md
           - API Keys: api/control-api-v1/api-keys.md
           - Tickets: api/control-api-v1/tickets.md
+          - Agent Runs: api/control-api-v1/agent-runs.md
       - OpenAPI:
           - Control API v1: api/openapi/control-api-v1.yaml
   - Architecture:

@@ -1,4 +1,5 @@
 import { ForbiddenError, UnauthorizedError } from '@/app/lib/auth-session';
+import { ApiKeyMissingScopeError } from '@/app/services/api-keys/api-key.service';
 
 export interface ApiErrorBody {
   error: {
@@ -32,6 +33,11 @@ export function apiAuthError(error: unknown): Response | null {
   if (error instanceof UnauthorizedError) {
     return apiError('unauthorized', 'Unauthorized', 401);
   }
+  if (error instanceof ApiKeyMissingScopeError) {
+    return apiError('missing_scope', 'API key does not have the required scope.', 403, {
+      requiredScope: error.requiredScope,
+    });
+  }
   if (error instanceof ForbiddenError) {
     return apiError('forbidden', 'Forbidden', 403);
   }
@@ -42,4 +48,3 @@ export function apiInternalError(context: string, error: unknown): Response {
   console.error(`[ControlApi] ${context}:`, error);
   return apiError('internal_error', 'Internal server error', 500);
 }
-
