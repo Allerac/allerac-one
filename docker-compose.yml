@@ -26,7 +26,7 @@
 #   OLLAMA_RUNTIME                   - Docker runtime for Ollama (runc or nvidia; default: runc)
 #
 # All services enabled by default:
-# - Core: app, db, executor, health-worker, ollama
+# - Core: app, docs, db, executor, health-worker, ollama
 # - Monitoring: prometheus, grafana, loki, promtail, node-exporter
 # - Notifications: redis, notifier, telegram-bot
 # - Management: portainer
@@ -213,6 +213,25 @@ services:
       resources:
         limits:
           memory: 1G
+
+  # ============================================
+  # Documentation
+  # ============================================
+
+  docs:
+    image: squidfunk/mkdocs-material:latest
+    container_name: allerac-docs
+    restart: unless-stopped
+    working_dir: /docs
+    volumes:
+      - .:/docs
+    ports:
+      - "${DOCS_PORT:-8000}:8000"
+    command: serve --dev-addr=0.0.0.0:8000
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   # ============================================
   # LLM - Ollama (Local AI)

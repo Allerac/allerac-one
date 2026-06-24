@@ -67,17 +67,21 @@ infra/terraform/
 
 Each cloud runs the same set of services. Switching clouds is a `terraform apply` in the target directory. DNS records are managed by Terraform and point to Cloudflare Tunnel IDs — switching a cloud updates the DNS automatically.
 
-The naming convention is consistent across clouds:
+The naming convention is consistent across clouds. Use deployment-specific
+hostnames for the real environment:
 
 | | App | Portainer | Grafana |
 |---|---|---|---|
-| GCP | `chat.allerac.ai` | `portainer.chat.allerac.ai` | `grafana.chat.allerac.ai` |
-| Azure | `app.allerac.ai` | `portainer.app.allerac.ai` | `grafana.app.allerac.ai` |
-| AWS | `hub.allerac.ai` | `portainer.hub.allerac.ai` | `grafana.hub.allerac.ai` |
+| GCP | `app.<gcp-domain>` | `portainer.<gcp-domain>` | `grafana.<gcp-domain>` |
+| Azure | `app.<azure-domain>` | `portainer.<azure-domain>` | `grafana.<azure-domain>` |
+| AWS | `app.<aws-domain>` | `portainer.<aws-domain>` | `grafana.<aws-domain>` |
 
-### `instagram.allerac.ai`
+### Stable Instagram callback hostname
 
-A separate global subdomain on Azure, kept independent from the cloud-specific naming. Instagram's OAuth app requires a fixed callback URL (`https://instagram.allerac.ai/api/instagram/callback`) — renaming it requires updating the app registration in Meta's developer portal and disrupts active OAuth sessions.
+A separate global subdomain is kept independent from the cloud-specific naming.
+Instagram's OAuth app requires a fixed callback URL; renaming it requires
+updating the app registration in Meta's developer portal and disrupts active
+OAuth sessions.
 
 ---
 

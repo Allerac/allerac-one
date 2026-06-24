@@ -15,6 +15,13 @@ Some containers (migrations, ollama-setup) are one-shot services that run once o
 **Persistent data:** `allerac_backups_data` (database backups)
 **Restart:** always
 
+### `allerac-docs`
+**Image:** `squidfunk/mkdocs-material:latest`
+**Port:** `8000` (configurable via `DOCS_PORT`)
+**Role:** Serves the official Allerac One documentation from the repository `docs/` directory using Material for MkDocs.
+Mounts the repository at `/docs`, so documentation edits are reflected live while the container is running.
+**Restart:** always
+
 ### `allerac-db`
 **Image:** `pgvector/pgvector:pg16`
 **Port:** internal only (not exposed)
@@ -103,7 +110,7 @@ Handles authentication with external health APIs and stores activity metrics (st
 
 ### `allerac-tunnel` *(profile: `cloud`)*
 **Image:** `cloudflare/cloudflared:latest`
-**Role:** Cloudflare Zero Trust tunnel. Routes public traffic from `allerac.ai` subdomains to the local app without opening firewall ports. Runs in host network mode.
+**Role:** Cloudflare Zero Trust tunnel. Routes public traffic from deployment-specific hostnames to the local app without opening firewall ports. Runs in host network mode.
 **Start with:** `COMPOSE_PROFILES=cloud docker compose up -d`
 **Restart:** always
 
@@ -124,7 +131,7 @@ Handles authentication with external health APIs and stores activity metrics (st
 ### `allerac-portainer`
 **Image:** `portainer/portainer-ce:latest`
 **Port:** `9000`
-**Role:** Docker management UI. Accessible via Cloudflare Zero Trust at `portainer.allerac.ai`.
+**Role:** Docker management UI. Accessible via Cloudflare Zero Trust.
 **Restart:** always
 
 ---

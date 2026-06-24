@@ -227,6 +227,7 @@ export default function ChatInput({
         onChange={(e) => setInputMessage(e.target.value)}
         onKeyDown={handleKeyPress}
         placeholder={t('typeMessage')}
+        disabled={isSending}
         className={`w-full px-4 pt-3 pb-2 focus:outline-none resize-none disabled:opacity-50 bg-transparent overflow-y-auto ${isDarkMode ? 'text-gray-100 placeholder-gray-400' : 'text-black placeholder-gray-400'}`}
         rows={1}
         style={{ minHeight: '48px', maxHeight: '200px', lineHeight: '28px' }}

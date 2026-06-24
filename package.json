@@ -12,6 +12,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
+    "test:e2e:release": "PLAYWRIGHT_PORT=3101 DISABLE_BACKGROUND_WORKERS=true DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/allerac EXECUTOR_URL=http://127.0.0.1:3001 EXECUTOR_SECRET=0123456789abcdef0123456789abcdef ENCRYPTION_KEY=0123456789abcdef0123456789abcdef TELEGRAM_TOKEN_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef playwright test e2e/release-smoke.spec.ts --project=chromium",
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
@@ -54,6 +55,7 @@
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^16.0.0",
     "@types/bcrypt": "^6.0.0",

@@ -1,0 +1,16 @@
+meta {
+  name: Delete Ticket
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: session_token={{sessionToken}}
+}
+

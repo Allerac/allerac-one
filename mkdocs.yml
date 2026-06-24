@@ -1,0 +1,120 @@
+site_name: Allerac One
+site_description: Private-first AI agent platform documentation
+site_url: http://localhost:8000
+repo_name: Allerac/allerac-one
+
+exclude_docs: |
+  architecture/decisions/template.md
+  business-model/*
+  private/*
+  self-development/*
+
+theme:
+  name: material
+  language: en
+  logo: assets/allerac-icon.svg
+  favicon: assets/allerac-icon.svg
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.indexes
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+
+extra_css:
+  - assets/stylesheets/allerac.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Product Map: ux-map.md
+  - Roadmap:
+      - Overview: roadmap/README.md
+      - Control API v1: roadmap/control-api-v1.md
+  - Architecture:
+      - Overview: architecture/architecture.md
+      - Control API v1: architecture/control-api-v1.md
+      - Decisions:
+          - Index: architecture/decisions/README.md
+          - ADR 0001 - Control API v1: architecture/decisions/0001-adopt-control-api-v1.md
+      - LLM Calls Map: architecture/llm-calls-map.md
+      - LLM Model Selection: architecture/llm-model-selection.md
+  - Domains:
+      - Overview: domains/README.md
+      - Layout Patterns: domains/layout-patterns.md
+      - Domains vs Skills: domains/domain-vs-skill.md
+      - Add Domain: domains/add-domain.md
+      - Chat: domains/chat.md
+      - Code: domains/code.md
+      - Design: domains/design.md
+      - Email: domains/email.md
+      - Finance: domains/finance.md
+      - Health: domains/health.md
+      - Notes: domains/notes.md
+      - Recipes: domains/recipes.md
+      - Search: domains/search.md
+      - Skills: domains/skills.md
+      - Social: domains/social.md
+      - Tickets: domains/tickets.md
+      - Write: domains/write.md
+  - Tickets:
+      - Overview: tickets/overview.md
+      - Architecture: tickets/architecture.md
+      - Data Model: tickets/data-model.md
+      - Priority: tickets/priority.md
+      - Implementation Plan: tickets/implementation-plan.md
+      - Instagram Carousel: tickets/instagram-carousel.md
+      - Instagram Image Editing: tickets/instagram-image-editing.md
+  - Agents:
+      - Architecture: agents/architecture.md
+      - Implementation: agents/agents-implementation.md
+  - Operations:
+      - Containers: containers/containers.md
+      - Infrastructure: infrastructure/infrastructure.md
+      - Local Setup: local-setup/local-setup.md
+      - Health Sync: health/README.md
+      - Monitoring: monitoring/README.md
+      - Metrics: monitoring/metrics.md
+      - Logging:
+          - Overview: logging/README.md
+          - Standard: logging/logging-standard.md
+          - Pattern: logging/logging-pattern.md
+      - Deploy Test Plan: tests/deploy-test-plan.md
+      - Testing Strategy: tests/testing-strategy.md
+      - CI and Versioning: tests/ci-and-versioning.md
+  - Security:
+      - Overview: security/security.md
+      - Hardening Roadmap: security/product-hardening-roadmap.md
+      - Distributed Rate Limiting: security/distributed-rate-limiting.md
+  - Users:
+      - Overview: users/README.md
+      - Authentication: users/authentication.md
+  - CLI: cli/cli.md
+  - Skills:
+      - Skill Router: skills/SKILL_ROUTER.md

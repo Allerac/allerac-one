@@ -26,19 +26,19 @@ If another user wants to use the CLI, they have two options:
 
 #### Option 1: Set the environment variable (per-session)
 ```bash
-export ALLERAC_HOME=/home/gianclaudiocarella/wsp/allerac-one
+export ALLERAC_HOME=/home/<user>/allerac-one
 allerac status
 ```
 
 #### Option 2: Set it permanently (in ~/.bashrc or ~/.zshrc)
 ```bash
-echo 'export ALLERAC_HOME=/home/gianclaudiocarella/wsp/allerac-one' >> ~/.bashrc
+echo 'export ALLERAC_HOME=/home/<user>/allerac-one' >> ~/.bashrc
 source ~/.bashrc
 ```
 
 #### Option 3: Run from the installation directory
 ```bash
-cd /home/gianclaudiocarella/wsp/allerac-one
+cd /home/<user>/allerac-one
 allerac status
 ```
 

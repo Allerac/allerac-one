@@ -1,0 +1,16 @@
+meta {
+  name: Get Ticket
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tickets/{{ticketId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: session_token={{sessionToken}}
+}
+

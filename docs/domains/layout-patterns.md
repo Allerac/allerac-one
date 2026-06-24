@@ -43,7 +43,7 @@ export default async function FinancePage() {
 │ │                                                        │
 │ S│                                                       │
 │ i│              [Allerac logo]                           │
-│ d│            Hello, Gianclaudio!                       │
+│ d│            Hello, Alex!                              │
 │ e│          How can I help you today?                   │
 │ b│                                                       │
 │ a│              [  Type your message...  ]  →           │
@@ -351,7 +351,7 @@ export default function <Name>Client({ userId, userName, userEmail, isAdmin, def
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ │                                              │                            │
 │ S│                                             │   [Allerac logo]          │
-│ i│                                             │  Hello, Gianclaudio!      │
+│ i│                                             │  Hello, Alex!             │
 │ d│       <Name>Component                       │  How can I help today?    │
 │ e│       (flex-1, fills all available space)   │                           │
 │ b│                                             │  [  Type your message  ]  │
