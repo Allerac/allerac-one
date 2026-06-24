@@ -8,8 +8,8 @@ The initial GitHub Actions workflow is `.github/workflows/ci.yml`.
 
 It runs on:
 
-- pull requests targeting `main`;
-- pushes to `main`;
+- pull requests targeting `development` or `main`;
+- pushes to `development` or `main`;
 - manual dispatch.
 
 Required checks:
