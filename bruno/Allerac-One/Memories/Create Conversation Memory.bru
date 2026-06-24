@@ -1,0 +1,22 @@
+meta {
+  name: Create Conversation Memory
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/conversations/{{conversationId}}/memory
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.memory?.id) {
+    bru.setEnvVar("memoryId", body.data.memory.id);
+  }
+}

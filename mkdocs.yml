@@ -66,6 +66,7 @@ nav:
           - System: api/control-api-v1/system.md
           - API Keys: api/control-api-v1/api-keys.md
           - Conversations: api/control-api-v1/conversations.md
+          - Memories: api/control-api-v1/memories.md
           - Tickets: api/control-api-v1/tickets.md
           - Agent Runs: api/control-api-v1/agent-runs.md
       - OpenAPI:

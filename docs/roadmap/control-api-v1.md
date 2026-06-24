@@ -3,8 +3,8 @@
 ## Status
 
 In progress. The first `/api/v1` contract exists for `me`, `domains`, `tickets`,
-and API key management. Browser session auth and scoped bearer API keys are both
-implemented for the current Control API slice.
+conversations, agent runs, memories, and API key management. Browser session auth
+and scoped bearer API keys are both implemented for the current Control API slice.
 
 ## How To Use This Document
 
@@ -44,8 +44,8 @@ As of 2026-06-24:
 - `app` is still the main Next.js container and owns UI, API routes, server actions,
   service calls, auth/session resolution, and background runner startup.
 - Existing browser-facing APIs live under `/api/*`.
-- Initial `/api/v1/*` routes exist for `me`, `domains`, `tickets`, and API key
-  management.
+- Initial `/api/v1/*` routes exist for `me`, `domains`, `tickets`, conversations,
+  agent runs, memories, and API key management.
 - Browser auth uses a `session_token` HTTP-only cookie and `requireCurrentUser()`.
 - Headless auth uses scoped bearer API keys with the `alr_live_` token prefix.
 - Domain access is stored in `domains` and `user_domain_access`; admins bypass
@@ -73,6 +73,7 @@ Use these files as the first reading path.
 | Agent route | `src/app/api/agents/route.ts` | Existing UI/API surface for pending agent runs |
 | Agent repository | `src/app/services/agents/worker-run.repository.ts` | Ownership-scoped run lookup and queue operations |
 | Agent runner | `src/app/services/agents/worker-runner.service.ts` | Background polling/execution runtime |
+| Memory service | `src/app/services/memory/conversation-memory.service.ts` | Conversation summary generation and owned memory lookup |
 | Domain schema | `src/database/migrations/034_multi_tenancy.sql` | Creates `domains`, `user_domain_access`, `users.is_admin` |
 | Ticket schema | `src/database/migrations/041_tickets.sql`, `080_ticket_number.sql` | Ticket tables and sequential numbers |
 | Agent schema | `src/database/migrations/028_agent_runs.sql`, `029_agent_runs_pending_status.sql`, `043_agent_runs_skill_id.sql` | Agent run queue state |
@@ -327,8 +328,10 @@ expires_at TIMESTAMPTZ
 | `tickets:write` | Create/update tickets |
 | `agents:read` | Read agent run status/results |
 | `agents:write` | Create/cancel agent runs |
+| `memory:read` | List owned memory summaries |
+| `memory:write` | Create or delete owned memory summaries |
 
-Keep `chat:*`, `tools:run`, and `settings:*` for later phases unless needed earlier.
+Keep `tools:run` and `settings:*` for later phases unless needed earlier.
 
 ### Exit Criteria
 
@@ -593,6 +596,41 @@ stable resource shape:
   }
 }
 ```
+
+## Phase 4.5: Memories API Slice
+
+Purpose: expose reusable conversation summaries through the Control API without
+mixing long-term memory operations into the conversation resource itself.
+
+Current status: memory endpoints are implemented for browser sessions and API keys.
+Read routes require `memory:read`; write routes require `memory:write`. Only memory
+generation depends on an available Google or GitHub model provider configured in
+system settings; listing and deleting existing memories remain database-only
+operations.
+
+### Endpoints
+
+```text
+POST   /api/v1/conversations/:id/memory
+GET    /api/v1/memories
+DELETE /api/v1/memories/:id
+```
+
+### Tasks
+
+- [x] Add memory DTO mapping that hides database snake_case fields.
+- [x] Reuse `ConversationMemoryService` instead of duplicating summary logic.
+- [x] Check conversation ownership before generating a memory.
+- [x] Enforce `memory:read` and `memory:write` scopes through API keys.
+- [x] Return stable `422` errors for missing provider configuration and conversations
+  without enough content.
+- [x] Add Bruno smoke requests and OpenAPI contract entries.
+
+### Exit Criteria
+
+- [x] A non-browser client can create, list, and delete reusable memory summaries.
+- [x] Memory remains a distinct API resource from conversations.
+- [x] Current conversation UI behavior remains unchanged.
 
 ## Phase 5: First Vertical Slice
 

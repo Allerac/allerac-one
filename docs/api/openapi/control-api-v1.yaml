@@ -15,6 +15,7 @@ tags:
   - name: System
   - name: API Keys
   - name: Conversations
+  - name: Memories
   - name: Tickets
   - name: Agent Runs
 paths:
@@ -167,6 +168,78 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/conversations/{id}/memory:
+    post:
+      tags: [Memories]
+      summary: Create memory from conversation
+      operationId: createConversationMemory
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "201":
+          description: Created or refreshed conversation memory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /api/v1/memories:
+    get:
+      tags: [Memories]
+      summary: List memories
+      operationId: listMemories
+      parameters:
+        - name: domainSlug
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - name: minImportance
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+      responses:
+        "200":
+          description: Memories owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/memories/{id}:
+    delete:
+      tags: [Memories]
+      summary: Delete memory
+      operationId: deleteMemory
+      parameters:
+        - $ref: "#/components/parameters/MemoryId"
+      responses:
+        "200":
+          description: Memory deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteMemoryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/tickets:
     get:
       tags: [Tickets]
@@ -408,6 +481,12 @@ components:
       required: true
       schema:
         type: string
+    MemoryId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     TicketId:
       name: id
       in: path
@@ -474,6 +553,12 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     ValidationError:
       description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnprocessableEntity:
+      description: Request is valid but cannot be processed in the current state
       content:
         application/json:
           schema:
@@ -697,6 +782,79 @@ components:
           type: [string, "null"]
         createdAt:
           type: [string, "null"]
+          format: date-time
+    MemoryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [memories]
+          properties:
+            memories:
+              type: array
+              items:
+                $ref: "#/components/schemas/Memory"
+    MemoryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [memory]
+          properties:
+            memory:
+              $ref: "#/components/schemas/Memory"
+    DeleteMemoryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [deleted]
+          properties:
+            deleted:
+              type: boolean
+              const: true
+    Memory:
+      type: object
+      required:
+        - id
+        - conversationId
+        - userId
+        - summary
+        - keyTopics
+        - importanceScore
+        - messageCount
+        - domainSlug
+        - emotion
+        - createdAt
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        userId:
+          type: string
+        summary:
+          type: string
+        keyTopics:
+          type: array
+          items:
+            type: string
+        importanceScore:
+          type: integer
+          minimum: 1
+          maximum: 10
+        messageCount:
+          type: integer
+          minimum: 0
+        domainSlug:
+          type: [string, "null"]
+        emotion:
+          type: [string, "null"]
+        createdAt:
+          type: string
           format: date-time
     TicketListResponse:
       type: object

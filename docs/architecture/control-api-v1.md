@@ -3,8 +3,8 @@
 ## Status
 
 In progress. The first `/api/v1` endpoints exist for `me`, `domains`, `tickets`,
-and API key management. Browser session auth and scoped bearer API keys are both
-supported by the current Control API slice.
+conversations, agent runs, memories, and API key management. Browser session auth
+and scoped bearer API keys are both supported by the current Control API slice.
 
 ## Purpose
 
@@ -65,6 +65,7 @@ service boundaries.
 | Resource | Purpose | Existing backing |
 |---|---|---|
 | `conversations` | Create/list conversations and read message history | `ChatService`, `chat_conversations`, `chat_messages` |
+| `memories` | Create/list/delete reusable conversation summaries | `ConversationMemoryService`, `conversation_summaries` |
 | `messages` | Send a user message and receive/poll assistant output | chat pipeline, LLM service, tools |
 | `agent-runs` | Create/poll/cancel background agent runs | `WorkerRunRepository`, `WorkerRunnerService` |
 | `tickets` | Create/list/update tickets and read events | `TicketService`, `tickets`, `ticket_events` |
@@ -83,6 +84,9 @@ GET    /api/v1/conversations
 POST   /api/v1/conversations
 GET    /api/v1/conversations/:id/messages
 POST   /api/v1/conversations/:id/messages
+POST   /api/v1/conversations/:id/memory
+GET    /api/v1/memories
+DELETE /api/v1/memories/:id
 
 GET    /api/v1/agent-runs
 POST   /api/v1/agent-runs
@@ -115,6 +119,9 @@ DELETE /api/v1/api-keys/:id
 GET    /api/v1/conversations
 POST   /api/v1/conversations
 GET    /api/v1/conversations/:id/messages
+POST   /api/v1/conversations/:id/memory
+GET    /api/v1/memories
+DELETE /api/v1/memories/:id
 GET    /api/v1/tickets
 POST   /api/v1/tickets
 GET    /api/v1/tickets/:id
@@ -176,6 +183,8 @@ Suggested first scopes:
 | `chat:write` | Create conversations/send messages |
 | `agents:read` | Read agent run status/results |
 | `agents:write` | Create/cancel agent runs |
+| `memory:read` | List owned memory summaries |
+| `memory:write` | Create or delete owned memory summaries |
 | `tickets:read` | List/read tickets and events |
 | `tickets:write` | Create/update tickets |
 | `tools:run` | Execute approved tools |
