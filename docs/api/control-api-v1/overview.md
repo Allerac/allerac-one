@@ -79,6 +79,7 @@ Common error codes:
 |---|---|
 | [System](system.md) | `GET /me`, `GET /domains` |
 | [API Keys](api-keys.md) | list, create, revoke |
+| [Conversations](conversations.md) | list, create, messages |
 | [Tickets](tickets.md) | list, create, get, update, delete, events |
 | [Agent Runs](agent-runs.md) | list, create, get, cancel |
 
@@ -98,6 +99,7 @@ Use the `Local` environment:
 | `sessionToken` | Browser `session_token` cookie value |
 | `ticketId` | Set automatically by `Tickets / Create Ticket` |
 | `agentRunId` | Set automatically by `Agent Runs / Create Agent Run` |
+| `conversationId` | Set automatically by `Conversations / Create Conversation` |
 
 Recommended smoke order:
 
@@ -114,6 +116,9 @@ Recommended smoke order:
 11. `Agent Runs / Create Agent Run`
 12. `Agent Runs / Get Agent Run`
 13. `Agent Runs / Cancel Agent Run`
+14. `Conversations / List Conversations`
+15. `Conversations / Create Conversation`
+16. `Conversations / List Messages`
 
 ## OpenAPI
 

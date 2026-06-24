@@ -1,0 +1,30 @@
+meta {
+  name: Create Conversation
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/conversations
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "title": "Control API conversation smoke",
+    "domainSlug": "chat"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.conversation?.id) {
+    bru.setEnvVar("conversationId", body.data.conversation.id);
+  }
+}
