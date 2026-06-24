@@ -1,0 +1,15 @@
+meta {
+  name: Remove from Watchlist
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/finance/watchlist/NVDA
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

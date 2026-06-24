@@ -1,0 +1,15 @@
+meta {
+  name: List Activities
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/activities?limit=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

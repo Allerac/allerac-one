@@ -1,0 +1,27 @@
+meta {
+  name: Upload Document
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/documents
+  body: multipartForm
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+body:multipart-form {
+  file: @file(/path/to/your/file.pdf)
+  domainSlug: notes
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.document?.id) {
+    bru.setEnvVar("documentId", body.data.document.id);
+  }
+}

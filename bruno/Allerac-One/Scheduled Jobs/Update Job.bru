@@ -1,0 +1,22 @@
+meta {
+  name: Update Job
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/jobs/{{jobId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "cronExpr": "0 9 * * MON-FRI"
+  }
+}

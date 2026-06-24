@@ -1,0 +1,22 @@
+meta {
+  name: Add to Watchlist
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/finance/watchlist
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "symbol": "NVDA"
+  }
+}
