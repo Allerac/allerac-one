@@ -20,10 +20,61 @@
         {
           "match": {
             "type": "value",
-            "value": "refs/heads/main",
+            "value": "refs/heads/${DEPLOY_BRANCH}",
             "parameter": {
               "source": "payload",
               "name": "ref"
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "deploy-release",
+    "execute-command": "/etc/webhook/deploy.sh",
+    "command-working-directory": "/project",
+    "response-message": "Release deploy triggered",
+    "include-command-output-in-response": false,
+    "trigger-rule": {
+      "and": [
+        {
+          "match": {
+            "type": "payload-hmac-sha256",
+            "secret": "${WEBHOOK_SECRET}",
+            "parameter": {
+              "source": "header",
+              "name": "X-Hub-Signature-256"
+            }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": "published",
+            "parameter": {
+              "source": "payload",
+              "name": "action"
+            }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": false,
+            "parameter": {
+              "source": "payload",
+              "name": "release.prerelease"
+            }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": "${DEPLOY_BRANCH}",
+            "parameter": {
+              "source": "payload",
+              "name": "release.target_commitish"
             }
           }
         }

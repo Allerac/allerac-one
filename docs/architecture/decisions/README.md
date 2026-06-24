@@ -10,7 +10,8 @@ explicit about context and consequences.
 
 | ADR | Status | Title |
 |---|---|---|
-| [0001](0001-adopt-control-api-v1.md) | Proposed | Adopt Control API v1 as the Allerac control plane |
+| [0001](0001-adopt-control-api-v1.md) | Accepted | Adopt Control API v1 as the Allerac control plane |
+| [0002](0002-keep-control-api-in-app-container-initially.md) | Accepted | Keep Control API in the app container initially |
 
 ## Status Values
 
@@ -18,4 +19,3 @@ explicit about context and consequences.
 - `Accepted` — current direction.
 - `Superseded` — replaced by a newer ADR.
 - `Rejected` — considered but not chosen.
-

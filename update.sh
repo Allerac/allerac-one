@@ -9,6 +9,7 @@
 #   ./update.sh                     # auto-detects product line
 #   ALLERAC_PRODUCT_LINE=local ./update.sh
 #   ALLERAC_PRODUCT_LINE=cloud ./update.sh
+#   DEPLOY_BRANCH=development ./update.sh
 
 set -eo pipefail
 
@@ -135,6 +136,7 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 echo -e "  Product line: ${YELLOW}${PRODUCT_LINE}${NC}"
 echo -e "  Compose file: ${YELLOW}${COMPOSE_FILE}${NC}"
+echo -e "  Deploy branch: ${YELLOW}${DEPLOY_BRANCH:-main}${NC}"
 echo ""
 
 # Check we're in the project directory
@@ -213,7 +215,7 @@ echo ""
 
 # Step 2: Pull latest changes
 echo -e "${YELLOW}[2/9]${NC} Pulling latest changes from GitHub..."
-git pull origin main || fail_update "source update" "Failed to pull changes."
+git pull origin "${DEPLOY_BRANCH:-main}" || fail_update "source update" "Failed to pull changes."
 echo -e "${GREEN}✓ Changes pulled${NC}"
 echo ""
 

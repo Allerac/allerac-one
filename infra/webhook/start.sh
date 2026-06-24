@@ -7,10 +7,12 @@ if [ -z "${WEBHOOK_SECRET:-}" ]; then
   exit 1
 fi
 
+export DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 envsubst < /etc/webhook/hooks.json.tmpl > /tmp/hooks.json
 
 echo "=== Allerac Webhook Server starting ==="
 echo "    Listening on :9000/hooks/deploy"
+echo "    Deploy branch: ${DEPLOY_BRANCH}"
 
 exec webhook \
   -hooks=/tmp/hooks.json \
