@@ -23,7 +23,7 @@ const createTicketSchema = z.object({
 
 export async function GET(request: Request): Promise<Response> {
   try {
-    const user = await requireApiDomainUser('tickets:read', 'tickets');
+    const user = await requireApiDomainUser('tickets:read', 'tickets', request);
     const parsed = listQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
     if (!parsed.success) {
       return apiError('validation_error', 'Invalid ticket filters', 400, parsed.error.flatten());
@@ -44,7 +44,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const user = await requireApiDomainUser('tickets:write', 'tickets');
+    const user = await requireApiDomainUser('tickets:write', 'tickets', request);
     const parsed = createTicketSchema.safeParse(await request.json());
     if (!parsed.success) {
       return apiError('validation_error', 'Invalid ticket payload', 400, parsed.error.flatten());

@@ -3,9 +3,9 @@ import { requireApiUser } from '../_lib/auth';
 import { domainDto } from '../_lib/domains';
 import { apiAuthError, apiData, apiInternalError } from '../_lib/responses';
 
-export async function GET(): Promise<Response> {
+export async function GET(request?: Request): Promise<Response> {
   try {
-    const user = await requireApiUser('domains:read');
+    const user = await requireApiUser('domains:read', request);
     const domains = await domainService.listAccessible({
       userId: user.id,
       isAdmin: user.isAdmin,
