@@ -555,6 +555,7 @@ services:
       - ./infra/webhook:/etc/webhook:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - ${COMPOSE_DIR:-.}:/project
+      - ${COMPOSE_DIR:-.}:${COMPOSE_DIR:-/project}
     environment:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
       - TELEGRAM_DEPLOY_BOT_TOKEN=${TELEGRAM_DEPLOY_BOT_TOKEN:-}
@@ -562,6 +563,7 @@ services:
       - GITHUB_DEPLOY_TOKEN=${GITHUB_DEPLOY_TOKEN:-}
       - DEPLOY_VM_NAME=${DEPLOY_VM_NAME:-allerac-vm}
       - DEPLOY_BRANCH=${DEPLOY_BRANCH:-main}
+      - COMPOSE_DIR=${COMPOSE_DIR:-/project}
     deploy:
       resources:
         limits:
