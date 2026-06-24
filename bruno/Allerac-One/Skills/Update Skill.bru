@@ -1,0 +1,22 @@
+meta {
+  name: Update Skill
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/skills/{{skillId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "shared": true
+  }
+}

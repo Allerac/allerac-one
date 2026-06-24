@@ -65,7 +65,16 @@ nav:
           - Overview: api/control-api-v1/overview.md
           - System: api/control-api-v1/system.md
           - API Keys: api/control-api-v1/api-keys.md
+          - Conversations: api/control-api-v1/conversations.md
+          - Memories: api/control-api-v1/memories.md
           - Tickets: api/control-api-v1/tickets.md
+          - Agent Runs: api/control-api-v1/agent-runs.md
+          - Documents: api/control-api-v1/documents.md
+          - Notes: api/control-api-v1/notes.md
+          - Scheduled Jobs: api/control-api-v1/scheduled-jobs.md
+          - Skills: api/control-api-v1/skills.md
+          - Health: api/control-api-v1/health.md
+          - Finance: api/control-api-v1/finance.md
       - OpenAPI:
           - Control API v1: api/openapi/control-api-v1.yaml
   - Architecture:

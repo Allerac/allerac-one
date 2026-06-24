@@ -2,8 +2,9 @@
 
 ## Status
 
-In progress. The first browser-session-authenticated `/api/v1` contract exists for
-`me` and `tickets`. Scoped API keys remain the next foundation milestone.
+In progress. The first `/api/v1` contract exists for `me`, `domains`, `tickets`,
+conversations, agent runs, memories, and API key management. Browser session auth
+and scoped bearer API keys are both implemented for the current Control API slice.
 
 ## How To Use This Document
 
@@ -43,8 +44,10 @@ As of 2026-06-24:
 - `app` is still the main Next.js container and owns UI, API routes, server actions,
   service calls, auth/session resolution, and background runner startup.
 - Existing browser-facing APIs live under `/api/*`.
-- Initial `/api/v1/*` routes exist for `me` and `tickets`.
+- Initial `/api/v1/*` routes exist for `me`, `domains`, `tickets`, conversations,
+  agent runs, memories, and API key management.
 - Browser auth uses a `session_token` HTTP-only cookie and `requireCurrentUser()`.
+- Headless auth uses scoped bearer API keys with the `alr_live_` token prefix.
 - Domain access is stored in `domains` and `user_domain_access`; admins bypass
   per-domain grants.
 - Tickets already have a service boundary through `TicketService`.
@@ -70,6 +73,7 @@ Use these files as the first reading path.
 | Agent route | `src/app/api/agents/route.ts` | Existing UI/API surface for pending agent runs |
 | Agent repository | `src/app/services/agents/worker-run.repository.ts` | Ownership-scoped run lookup and queue operations |
 | Agent runner | `src/app/services/agents/worker-runner.service.ts` | Background polling/execution runtime |
+| Memory service | `src/app/services/memory/conversation-memory.service.ts` | Conversation summary generation and owned memory lookup |
 | Domain schema | `src/database/migrations/034_multi_tenancy.sql` | Creates `domains`, `user_domain_access`, `users.is_admin` |
 | Ticket schema | `src/database/migrations/041_tickets.sql`, `080_ticket_number.sql` | Ticket tables and sequential numbers |
 | Agent schema | `src/database/migrations/028_agent_runs.sql`, `029_agent_runs_pending_status.sql`, `043_agent_runs_skill_id.sql` | Agent run queue state |
@@ -171,7 +175,7 @@ Suggested first error codes:
 Use bearer tokens for API keys:
 
 ```text
-Authorization: Bearer allerac_<key>
+Authorization: Bearer alr_live_<key>
 ```
 
 The visible key prefix is not a security boundary. It only makes keys recognizable to
@@ -180,7 +184,7 @@ humans and easier to validate in input.
 ### Suggested API Key Format
 
 ```text
-allerac_live_<random>
+alr_live_<random>
 ```
 
 Store a cryptographic hash of the full key. If a lookup prefix is needed later, store
@@ -221,9 +225,9 @@ Exit criteria:
 
 Purpose: create the minimum secure boundary for `/api/v1`.
 
-Current note: the first implementation slice deliberately started with browser
-session auth to make `/api/v1` testable through Bruno without changing credential
-storage yet. Scoped API keys remain the next auth milestone.
+Current note: the auth foundation now supports both browser sessions and scoped
+bearer API keys. Key management still requires a browser session so users can
+create/revoke credentials from an authenticated UI or session-backed API client.
 
 Recommended first PR scope:
 
@@ -238,21 +242,21 @@ well tested.
 
 ### Deliverables
 
-- [ ] Add migration for `api_keys`.
-- [ ] Store only key hashes, never raw API keys.
-- [ ] Show raw key only once when created.
-- [ ] Add API key service:
+- [x] Add migration for `control_api_keys`.
+- [x] Store only key hashes, never raw API keys.
+- [x] Show raw key only once when created.
+- [x] Add API key service:
   - create key;
   - hash key;
   - verify key;
   - revoke key;
   - update `last_used_at`.
-- [ ] Add scoped auth helper for API routes.
-- [ ] Support both auth modes:
+- [x] Add scoped auth helper for API routes.
+- [x] Support both auth modes:
   - browser session cookie;
   - API key bearer token.
-- [ ] Add standard API error response helper.
-- [ ] Add tests for:
+- [x] Add standard API error response helper.
+- [x] Add tests for:
   - missing auth;
   - invalid key;
   - revoked key;
@@ -265,14 +269,13 @@ well tested.
 New files:
 
 ```text
-src/database/migrations/081_api_keys.sql
+src/database/migrations/081_control_api_keys.sql
 src/app/services/api-keys/api-key.service.ts
-src/app/lib/api-auth.ts
-src/app/lib/api-response.ts
+src/app/api/v1/_lib/auth.ts
+src/app/api/v1/_lib/responses.ts
 src/app/api/v1/me/route.ts
-src/__tests__/lib/api-auth.test.ts
 src/__tests__/services/api-keys/api-key.service.test.ts
-src/__tests__/api/v1-auth.test.ts
+src/__tests__/api/control-api-api-keys.test.ts
 ```
 
 Existing files likely touched:
@@ -286,24 +289,27 @@ docs/architecture/control-api-v1.md
 ### Proposed Table
 
 ```sql
-api_keys (
+control_api_keys (
   id UUID PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id),
   name TEXT NOT NULL,
-  key_hash TEXT NOT NULL,
+  token_prefix TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
   scopes TEXT[] NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_used_at TIMESTAMPTZ,
-  revoked_at TIMESTAMPTZ
+  revoked_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ
 )
 ```
 
 Recommended additions for operational safety:
 
 ```sql
-CREATE UNIQUE INDEX api_keys_key_hash_idx ON api_keys(key_hash);
-CREATE INDEX api_keys_user_id_idx ON api_keys(user_id);
-CREATE INDEX api_keys_revoked_at_idx ON api_keys(revoked_at);
+CREATE UNIQUE INDEX control_api_keys_token_hash_idx ON control_api_keys(token_hash);
+CREATE INDEX control_api_keys_user_created_idx ON control_api_keys(user_id, created_at DESC);
+CREATE INDEX control_api_keys_active_prefix_idx ON control_api_keys(token_prefix)
+  WHERE revoked_at IS NULL;
 ```
 
 Optional later columns:
@@ -322,15 +328,17 @@ expires_at TIMESTAMPTZ
 | `tickets:write` | Create/update tickets |
 | `agents:read` | Read agent run status/results |
 | `agents:write` | Create/cancel agent runs |
+| `memory:read` | List owned memory summaries |
+| `memory:write` | Create or delete owned memory summaries |
 
-Keep `chat:*`, `tools:run`, and `settings:*` for later phases unless needed earlier.
+Keep `tools:run` and `settings:*` for later phases unless needed earlier.
 
 ### Exit Criteria
 
-- A non-browser client can call a protected `/api/v1` endpoint with `Authorization: Bearer <key>`.
-- A browser session can call the same endpoint without an API key.
-- A route can require a scope and deny keys without that scope.
-- No raw API key exists in Postgres.
+- [x] A non-browser client can call a protected `/api/v1` endpoint with `Authorization: Bearer <key>`.
+- [x] A browser session can call the same endpoint without an API key.
+- [x] A route can require a scope and deny keys without that scope.
+- [x] No raw API key exists in Postgres.
 
 ### Minimal Test Matrix
 
@@ -398,7 +406,7 @@ Do not return encrypted settings, raw API keys, provider tokens, or session toke
 
 - [x] Add `/api/v1/me`.
 - [x] Add `/api/v1/domains`.
-- [ ] Scope `/api/v1/domains` with `domains:read` through API keys.
+- [x] Scope `/api/v1/domains` with `domains:read` through API keys.
 - [x] Return only domains accessible to the authenticated user.
 - [x] Add tests for user visibility and admin visibility.
 
@@ -412,8 +420,8 @@ Do not return encrypted settings, raw API keys, provider tokens, or session toke
 
 Purpose: prove the Control API with a real product workflow.
 
-Current status: the session-authenticated tickets slice is implemented. API key
-scope enforcement is still pending and should be added with Phase 1 auth foundation.
+Current status: the tickets slice is implemented for browser sessions and API keys.
+Read routes require `tickets:read`; write routes require `tickets:write`.
 
 ### Endpoints
 
@@ -431,7 +439,7 @@ DELETE /api/v1/tickets/:id
 - [x] Add request/response schemas.
 - [x] Use existing `TicketService`.
 - [x] Map service errors to stable API errors.
-- [ ] Enforce `tickets:read` and `tickets:write` scopes through API keys.
+- [x] Enforce `tickets:read` and `tickets:write` scopes through API keys.
 - [x] Preserve existing `/api/tickets` routes for the UI.
 - [x] Add dedicated `GET /api/v1/tickets/:id/events`.
 - [x] Add session-authenticated contract tests for:
@@ -441,7 +449,7 @@ DELETE /api/v1/tickets/:id
   - read events;
   - read events through dedicated events endpoint;
   - unauthenticated access.
-- [ ] Add API-key contract tests for:
+- [x] Add API-key contract tests for:
   - missing/wrong scope;
   - valid `tickets:read`;
   - valid `tickets:write`.
@@ -502,9 +510,45 @@ Avoid leaking internal field naming. Convert database/service casing into API ca
 }
 ```
 
+## Phase 3.5: Conversations API Slice
+
+Purpose: expose conversation metadata and message history without committing to the
+assistant message execution contract yet.
+
+Current status: list/create conversations and list messages are implemented for
+browser sessions and API keys. Sending a user message to the assistant remains
+deferred until the chat execution contract is designed.
+
+### Endpoints
+
+```text
+GET  /api/v1/conversations
+POST /api/v1/conversations
+GET  /api/v1/conversations/:id/messages
+```
+
+### Tasks
+
+- [x] Add request/response schemas.
+- [x] Use existing `ChatService`.
+- [x] Enforce `chat:read` and `chat:write` scopes.
+- [x] Add contract tests for ownership and missing scope.
+- [ ] Design `POST /api/v1/conversations/:id/messages` execution semantics.
+
+### Exit Criteria
+
+- [x] A non-browser client can list owned conversations.
+- [x] A non-browser client can create a conversation.
+- [x] A non-browser client can read message history for an owned conversation.
+- [x] Unowned conversations return `not_found`.
+
 ## Phase 4: Agent Runs API Slice
 
 Purpose: expose background execution as a stable resource.
+
+Current status: the first agent-runs slice is implemented for browser sessions and
+API keys. It creates pending runs, lists owned runs, returns run details with workers,
+and cancels owned active runs. Streaming remains deferred.
 
 ### Endpoints
 
@@ -517,18 +561,18 @@ POST /api/v1/agent-runs/:id/cancel
 
 ### Tasks
 
-- [ ] Add request/response schemas.
-- [ ] Use existing `WorkerRunRepository`.
-- [ ] Create pending runs without blocking HTTP.
-- [ ] Poll run state through `GET /api/v1/agent-runs/:id`.
-- [ ] Enforce `agents:read` and `agents:write` scopes.
-- [ ] Add contract tests for ownership and cancellation.
+- [x] Add request/response schemas.
+- [x] Use existing `WorkerRunRepository`.
+- [x] Create pending runs without blocking HTTP.
+- [x] Poll run state through `GET /api/v1/agent-runs/:id`.
+- [x] Enforce `agents:read` and `agents:write` scopes.
+- [x] Add contract tests for ownership and cancellation.
 
 ### Exit Criteria
 
-- A non-browser client can start an agent run and poll until completion/failure.
-- Cancelling a run is scoped to the owning user.
-- Existing `/api/agents` route continues to work.
+- [x] A non-browser client can start an agent run and poll until completion/failure.
+- [x] Cancelling a run is scoped to the owning user.
+- [x] Existing `/api/agents` route continues to work.
 
 ### Agent Run DTO Notes
 
@@ -552,6 +596,41 @@ stable resource shape:
   }
 }
 ```
+
+## Phase 4.5: Memories API Slice
+
+Purpose: expose reusable conversation summaries through the Control API without
+mixing long-term memory operations into the conversation resource itself.
+
+Current status: memory endpoints are implemented for browser sessions and API keys.
+Read routes require `memory:read`; write routes require `memory:write`. Only memory
+generation depends on an available Google or GitHub model provider configured in
+system settings; listing and deleting existing memories remain database-only
+operations.
+
+### Endpoints
+
+```text
+POST   /api/v1/conversations/:id/memory
+GET    /api/v1/memories
+DELETE /api/v1/memories/:id
+```
+
+### Tasks
+
+- [x] Add memory DTO mapping that hides database snake_case fields.
+- [x] Reuse `ConversationMemoryService` instead of duplicating summary logic.
+- [x] Check conversation ownership before generating a memory.
+- [x] Enforce `memory:read` and `memory:write` scopes through API keys.
+- [x] Return stable `422` errors for missing provider configuration and conversations
+  without enough content.
+- [x] Add Bruno smoke requests and OpenAPI contract entries.
+
+### Exit Criteria
+
+- [x] A non-browser client can create, list, and delete reusable memory summaries.
+- [x] Memory remains a distinct API resource from conversations.
+- [x] Current conversation UI behavior remains unchanged.
 
 ## Phase 5: First Vertical Slice
 
@@ -612,7 +691,7 @@ Exit criteria:
 
 ## Deferred Work
 
-- Chat API.
+- Assistant message send API.
 - Tool execution API.
 - Streaming responses.
 - OpenAPI generation.
@@ -635,28 +714,25 @@ Exit criteria:
 Title:
 
 ```text
-Implement Control API v1 auth foundation
+Implement Control API v1 agent-runs slice
 ```
 
 Description:
 
 ```text
-Add scoped API key authentication for /api/v1 while preserving existing browser
-session auth. Implement api_keys migration, API key service, API auth helper,
-standard response/error helpers, and GET /api/v1/me as the first protected endpoint.
-Do not implement tickets or agents in this ticket.
+Prove the first vertical API-only workflow with API keys: create a key, list domains,
+create a ticket, create an agent run, poll the run, and patch the ticket with the
+outcome. Add Bruno requests and focused API smoke automation where useful.
 ```
 
 Acceptance criteria:
 
-- [ ] `api_keys` table stores only hashed keys.
-- [ ] Raw key is returned only by the create-key operation.
-- [ ] `GET /api/v1/me` works with a browser session.
-- [ ] `GET /api/v1/me` works with a valid API key.
-- [ ] Missing/invalid/revoked keys return 401.
-- [ ] Valid keys missing a required scope return 403 where a scope is required.
-- [ ] Tests cover the auth matrix in Phase 1.
-- [ ] Docs are updated with the implemented auth behavior.
+- [ ] API key can list domains with `domains:read`.
+- [ ] API key can create/read/update tickets with `tickets:read` and `tickets:write`.
+- [ ] API key can create/read/cancel agent runs with `agents:read` and `agents:write`.
+- [ ] Bruno collection includes the full vertical smoke path.
+- [ ] A repeatable script or Jest/API smoke command can exercise the vertical path.
+- [ ] Docs include the full curl sequence.
 
 ## Implementation Notes
 
@@ -671,3 +747,15 @@ Use this section to append discoveries while building.
   `{ runId }`. `/api/v1` should not inherit those shapes by accident.
 - Existing `requireCurrentUser()` is cookie-only. API key support should live in a new
   helper rather than overloading browser-only page helpers.
+
+### 2026-06-24
+
+- Phase 1 auth foundation was implemented with `control_api_keys`, hashed bearer
+  tokens, session-only key management endpoints, and scoped API route auth.
+- API key tokens use the `alr_live_` prefix. Raw secrets are returned only by the
+  create-key response and are not stored.
+- `/api/v1/me`, `/api/v1/domains`, and `/api/v1/tickets` now accept either browser
+  sessions or API keys.
+- `/api/v1/agent-runs` was implemented with list/create/detail/cancel endpoints.
+- The next implementation target is a first vertical slice smoke flow across domains,
+  tickets, and agent runs.

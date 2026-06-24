@@ -1,0 +1,15 @@
+meta {
+  name: Delete Skill
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/skills/{{skillId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

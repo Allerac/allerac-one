@@ -2,8 +2,9 @@
 
 ## Status
 
-In progress. The first session-authenticated `/api/v1` endpoints exist for
-`me` and `tickets`; scoped API keys are still planned.
+In progress. The first `/api/v1` endpoints exist for `me`, `domains`, `tickets`,
+conversations, agent runs, memories, and API key management. Browser session auth
+and scoped bearer API keys are both supported by the current Control API slice.
 
 ## Purpose
 
@@ -64,6 +65,7 @@ service boundaries.
 | Resource | Purpose | Existing backing |
 |---|---|---|
 | `conversations` | Create/list conversations and read message history | `ChatService`, `chat_conversations`, `chat_messages` |
+| `memories` | Create/list/delete reusable conversation summaries | `ConversationMemoryService`, `conversation_summaries` |
 | `messages` | Send a user message and receive/poll assistant output | chat pipeline, LLM service, tools |
 | `agent-runs` | Create/poll/cancel background agent runs | `WorkerRunRepository`, `WorkerRunnerService` |
 | `tickets` | Create/list/update tickets and read events | `TicketService`, `tickets`, `ticket_events` |
@@ -82,6 +84,9 @@ GET    /api/v1/conversations
 POST   /api/v1/conversations
 GET    /api/v1/conversations/:id/messages
 POST   /api/v1/conversations/:id/messages
+POST   /api/v1/conversations/:id/memory
+GET    /api/v1/memories
+DELETE /api/v1/memories/:id
 
 GET    /api/v1/agent-runs
 POST   /api/v1/agent-runs
@@ -102,21 +107,36 @@ Over time, UI code should migrate to the same contracts where practical.
 
 ### Implemented Initial Slice
 
-The first implemented slice is intentionally small and session-authenticated:
+The first implemented slice is intentionally small and supports both browser sessions
+and scoped API keys:
 
 ```text
 GET    /api/v1/me
 GET    /api/v1/domains
+GET    /api/v1/api-keys
+POST   /api/v1/api-keys
+DELETE /api/v1/api-keys/:id
+GET    /api/v1/conversations
+POST   /api/v1/conversations
+GET    /api/v1/conversations/:id/messages
+POST   /api/v1/conversations/:id/memory
+GET    /api/v1/memories
+DELETE /api/v1/memories/:id
 GET    /api/v1/tickets
 POST   /api/v1/tickets
 GET    /api/v1/tickets/:id
 PATCH  /api/v1/tickets/:id
 GET    /api/v1/tickets/:id/events
 DELETE /api/v1/tickets/:id
+GET    /api/v1/agent-runs
+POST   /api/v1/agent-runs
+GET    /api/v1/agent-runs/:id
+POST   /api/v1/agent-runs/:id/cancel
 ```
 
 This proves the route shape, Zod validation, response envelopes, domain access, DTO
-mapping, and Bruno smoke tests without changing the current web UI.
+mapping, API key auth, scoped route checks, and Bruno smoke tests without changing the
+current web UI.
 
 ## Authentication
 
@@ -128,24 +148,27 @@ Browser UI can continue using the existing session cookie. `/api/v1` routes shou
 able to resolve the current user through the same session validation used by existing
 routes.
 
-The initial `/api/v1` implementation uses this mode only.
+The initial `/api/v1` implementation keeps this mode so the browser UI and Bruno can
+test the same contracts with the existing `session_token` cookie.
 
 ### Headless Clients
 
-Non-browser clients need API keys with explicit scopes.
+Non-browser clients use API keys with explicit scopes.
 
 Suggested first table:
 
 ```sql
-api_keys (
+control_api_keys (
   id UUID PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id),
   name TEXT NOT NULL,
-  key_hash TEXT NOT NULL,
+  token_prefix TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
   scopes TEXT[] NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_used_at TIMESTAMPTZ,
-  revoked_at TIMESTAMPTZ
+  revoked_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ
 )
 ```
 
@@ -160,6 +183,8 @@ Suggested first scopes:
 | `chat:write` | Create conversations/send messages |
 | `agents:read` | Read agent run status/results |
 | `agents:write` | Create/cancel agent runs |
+| `memory:read` | List owned memory summaries |
+| `memory:write` | Create or delete owned memory summaries |
 | `tickets:read` | List/read tickets and events |
 | `tickets:write` | Create/update tickets |
 | `tools:run` | Execute approved tools |
@@ -196,16 +221,15 @@ Goal: `/api/v1` can authenticate either browser sessions or scoped API keys.
 
 Deliverables:
 
-- `api_keys` migration.
+- `control_api_keys` migration.
 - API key creation/revocation service.
 - Hashing and lookup logic.
 - `requireApiUser(scope)` helper for `/api/v1`.
-- Audit entry when keys are created, used, and revoked.
 - Tests for missing, revoked, wrong-scope, and valid keys.
 
 Exit criteria:
 
-- A non-browser client can call a test `/api/v1/me` or `/api/v1/domains` endpoint.
+- A non-browser client can call `/api/v1/me`, `/api/v1/domains`, and `/api/v1/tickets`.
 - Existing browser sessions still work.
 - No raw API key is stored in Postgres.
 

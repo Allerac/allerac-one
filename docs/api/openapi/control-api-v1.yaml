@@ -14,7 +14,16 @@ security:
 tags:
   - name: System
   - name: API Keys
+  - name: Conversations
+  - name: Memories
   - name: Tickets
+  - name: Agent Runs
+  - name: Documents
+  - name: Notes
+  - name: Scheduled Jobs
+  - name: Skills
+  - name: Health
+  - name: Finance
 paths:
   /api/v1/me:
     get:
@@ -97,6 +106,146 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/conversations:
+    get:
+      tags: [Conversations]
+      summary: List conversations
+      operationId: listConversations
+      parameters:
+        - name: domainSlug
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Conversations owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Conversations]
+      summary: Create conversation
+      operationId: createConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/conversations/{id}/messages:
+    get:
+      tags: [Conversations]
+      summary: List conversation messages
+      operationId: listConversationMessages
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Messages in an owned conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationMessagesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/conversations/{id}/memory:
+    post:
+      tags: [Memories]
+      summary: Create memory from conversation
+      operationId: createConversationMemory
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "201":
+          description: Created or refreshed conversation memory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /api/v1/memories:
+    get:
+      tags: [Memories]
+      summary: List memories
+      operationId: listMemories
+      parameters:
+        - name: domainSlug
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - name: minImportance
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+      responses:
+        "200":
+          description: Memories owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/memories/{id}:
+    delete:
+      tags: [Memories]
+      summary: Delete memory
+      operationId: deleteMemory
+      parameters:
+        - $ref: "#/components/parameters/MemoryId"
+      responses:
+        "200":
+          description: Memory deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteMemoryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/tickets:
     get:
       tags: [Tickets]
@@ -230,6 +379,661 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/agent-runs:
+    get:
+      tags: [Agent Runs]
+      summary: List agent runs
+      operationId: listAgentRuns
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Agent runs owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Agent Runs]
+      summary: Create agent run
+      operationId: createAgentRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentRunRequest"
+      responses:
+        "201":
+          description: Created pending agent run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/agent-runs/{id}:
+    get:
+      tags: [Agent Runs]
+      summary: Get agent run
+      operationId: getAgentRun
+      parameters:
+        - $ref: "#/components/parameters/AgentRunId"
+      responses:
+        "200":
+          description: Agent run with worker status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/agent-runs/{id}/cancel:
+    post:
+      tags: [Agent Runs]
+      summary: Cancel agent run
+      operationId: cancelAgentRun
+      parameters:
+        - $ref: "#/components/parameters/AgentRunId"
+      responses:
+        "200":
+          description: Agent run cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancelAgentRunResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/documents:
+    get:
+      tags: [Documents]
+      summary: List documents
+      operationId: listDocuments
+      parameters:
+        - name: domainSlug
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Documents owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Documents]
+      summary: Upload document
+      operationId: uploadDocument
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Max 20 MB
+                domainSlug:
+                  type: string
+      responses:
+        "201":
+          description: Document created, processing in background
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/documents/{id}:
+    delete:
+      tags: [Documents]
+      summary: Delete document
+      operationId: deleteDocument
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document and all chunks deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/notes:
+    get:
+      tags: [Notes]
+      summary: List notes
+      operationId: listNotes
+      parameters:
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: due_on
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: due_before
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: overdue
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Notes owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Notes]
+      summary: Create note
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNoteRequest"
+      responses:
+        "201":
+          description: Created note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/notes/search:
+    get:
+      tags: [Notes]
+      summary: Search notes
+      operationId: searchNotes
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Matching notes ranked by relevance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteSearchResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/notes/tags:
+    get:
+      tags: [Notes]
+      summary: List note tags
+      operationId: listNoteTags
+      responses:
+        "200":
+          description: All distinct tags used in the user's notes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteTagsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/notes/{id}:
+    patch:
+      tags: [Notes]
+      summary: Update note
+      operationId: updateNote
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNoteRequest"
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Notes]
+      summary: Delete note
+      operationId: deleteNote
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Note deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/jobs:
+    get:
+      tags: [Scheduled Jobs]
+      summary: List scheduled jobs
+      operationId: listJobs
+      responses:
+        "200":
+          description: Scheduled jobs owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Scheduled Jobs]
+      summary: Create scheduled job
+      operationId: createJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+      responses:
+        "201":
+          description: Created scheduled job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/jobs/{id}:
+    patch:
+      tags: [Scheduled Jobs]
+      summary: Update scheduled job
+      operationId: updateJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobRequest"
+      responses:
+        "200":
+          description: Updated scheduled job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Scheduled Jobs]
+      summary: Delete scheduled job
+      operationId: deleteJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Job and execution history deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/jobs/{id}/toggle:
+    post:
+      tags: [Scheduled Jobs]
+      summary: Toggle job enabled state
+      operationId: toggleJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Updated job with toggled enabled state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/jobs/{id}/executions:
+    get:
+      tags: [Scheduled Jobs]
+      summary: List job executions
+      operationId: listJobExecutions
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Execution history for the job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobExecutionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/skills:
+    get:
+      tags: [Skills]
+      summary: List skills
+      operationId: listSkills
+      responses:
+        "200":
+          description: Skills available to the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Skills]
+      summary: Create skill
+      operationId: createSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSkillRequest"
+      responses:
+        "201":
+          description: Created skill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/skills/{id}:
+    get:
+      tags: [Skills]
+      summary: Get skill
+      operationId: getSkill
+      parameters:
+        - $ref: "#/components/parameters/SkillId"
+      responses:
+        "200":
+          description: Skill including full system prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillDetailResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Skills]
+      summary: Update skill
+      operationId: updateSkill
+      parameters:
+        - $ref: "#/components/parameters/SkillId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSkillRequest"
+      responses:
+        "200":
+          description: Updated skill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Skills]
+      summary: Delete skill
+      operationId: deleteSkill
+      parameters:
+        - $ref: "#/components/parameters/SkillId"
+      responses:
+        "200":
+          description: Skill deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/health/status:
+    get:
+      tags: [Health]
+      summary: Get Garmin connection status
+      operationId: getHealthStatus
+      responses:
+        "200":
+          description: Garmin connection status for the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/health/summary:
+    get:
+      tags: [Health]
+      summary: Get health summary
+      operationId: getHealthSummary
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [day, 3days, week, month, year]
+            default: week
+      responses:
+        "200":
+          description: Aggregated health metrics for the requested period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthSummaryResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/health/daily:
+    get:
+      tags: [Health]
+      summary: Get daily health snapshot
+      operationId: getDailyHealth
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Defaults to today
+      responses:
+        "200":
+          description: Full health metrics for a single day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyHealthResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/health/activities:
+    get:
+      tags: [Health]
+      summary: List activities
+      operationId: listHealthActivities
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Recent Garmin activities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthActivitiesResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/finance/watchlist:
+    get:
+      tags: [Finance]
+      summary: Get watchlist
+      operationId: getWatchlist
+      responses:
+        "200":
+          description: Symbols on the authenticated user's watchlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Finance]
+      summary: Add symbol to watchlist
+      operationId: addToWatchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddWatchlistSymbolRequest"
+      responses:
+        "201":
+          description: Symbol added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistSymbolResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/finance/watchlist/{symbol}:
+    delete:
+      tags: [Finance]
+      summary: Remove symbol from watchlist
+      operationId: removeFromWatchlist
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Symbol removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistSymbolResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   securitySchemes:
     sessionCookie:
@@ -247,7 +1051,49 @@ components:
       required: true
       schema:
         type: string
+    ConversationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    MemoryId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     TicketId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    AgentRunId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    DocumentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    NoteId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    JobId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    SkillId:
       name: id
       in: path
       required: true
@@ -307,6 +1153,12 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     ValidationError:
       description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnprocessableEntity:
+      description: Request is valid but cannot be processed in the current state
       content:
         application/json:
           schema:
@@ -451,6 +1303,159 @@ components:
           type: string
         displayName:
           type: [string, "null"]
+    ConversationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [conversations]
+          properties:
+            conversations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Conversation"
+    ConversationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [conversation]
+          properties:
+            conversation:
+              $ref: "#/components/schemas/Conversation"
+    ConversationMessagesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [messages]
+          properties:
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/ConversationMessage"
+    CreateConversationRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        domainSlug:
+          type: string
+    Conversation:
+      type: object
+      required: [id, title, domainSlug, pinned, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        domainSlug:
+          type: [string, "null"]
+        pinned:
+          type: boolean
+        createdAt:
+          type: [string, "null"]
+          format: date-time
+        updatedAt:
+          type: [string, "null"]
+          format: date-time
+    ConversationMessage:
+      type: object
+      required: [id, conversationId, role, content, agentRunId, createdAt]
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+        content:
+          type: string
+        agentRunId:
+          type: [string, "null"]
+        createdAt:
+          type: [string, "null"]
+          format: date-time
+    MemoryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [memories]
+          properties:
+            memories:
+              type: array
+              items:
+                $ref: "#/components/schemas/Memory"
+    MemoryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [memory]
+          properties:
+            memory:
+              $ref: "#/components/schemas/Memory"
+    DeleteMemoryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [deleted]
+          properties:
+            deleted:
+              type: boolean
+              const: true
+    Memory:
+      type: object
+      required:
+        - id
+        - conversationId
+        - userId
+        - summary
+        - keyTopics
+        - importanceScore
+        - messageCount
+        - domainSlug
+        - emotion
+        - createdAt
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        userId:
+          type: string
+        summary:
+          type: string
+        keyTopics:
+          type: array
+          items:
+            type: string
+        importanceScore:
+          type: integer
+          minimum: 1
+          maximum: 10
+        messageCount:
+          type: integer
+          minimum: 0
+        domainSlug:
+          type: [string, "null"]
+        emotion:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
     TicketListResponse:
       type: object
       required: [data]
@@ -510,6 +1515,156 @@ components:
             deleted:
               type: boolean
               const: true
+    AgentRunListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [agentRuns]
+          properties:
+            agentRuns:
+              type: array
+              items:
+                $ref: "#/components/schemas/AgentRun"
+    AgentRunResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [agentRun]
+          properties:
+            agentRun:
+              $ref: "#/components/schemas/AgentRun"
+    CancelAgentRunResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [cancelled]
+          properties:
+            cancelled:
+              type: boolean
+              const: true
+    CreateAgentRunRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+        conversationId:
+          type: [string, "null"]
+          format: uuid
+        model:
+          type: string
+        provider:
+          type: string
+        skillName:
+          type: string
+    AgentRun:
+      type: object
+      required:
+        - id
+        - conversationId
+        - userId
+        - status
+        - prompt
+        - plan
+        - result
+        - error
+        - model
+        - provider
+        - skillId
+        - lastHeartbeat
+        - startedAt
+        - completedAt
+        - cancelledAt
+        - workers
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        userId:
+          type: string
+        status:
+          type: string
+          enum: [pending, planning, running, aggregating, completed, failed, cancelled]
+        prompt:
+          type: string
+        plan:
+          type: [object, "null"]
+          additionalProperties: true
+        result:
+          type: [string, "null"]
+        error:
+          type: [string, "null"]
+        model:
+          type: [string, "null"]
+        provider:
+          type: [string, "null"]
+        skillId:
+          type: [string, "null"]
+        lastHeartbeat:
+          type: [string, "null"]
+          format: date-time
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        cancelledAt:
+          type: [string, "null"]
+          format: date-time
+        workers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentWorker"
+    AgentWorker:
+      type: object
+      required:
+        - id
+        - name
+        - task
+        - skillId
+        - status
+        - result
+        - tokensUsed
+        - progressLog
+        - lastHeartbeat
+        - startedAt
+        - completedAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        task:
+          type: string
+        skillId:
+          type: [string, "null"]
+        status:
+          type: string
+          enum: [waiting, running, completed, failed]
+        result:
+          type: [string, "null"]
+        tokensUsed:
+          type: [integer, "null"]
+        progressLog:
+          type: [string, "null"]
+        lastHeartbeat:
+          type: [string, "null"]
+          format: date-time
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
     CreateTicketRequest:
       type: object
       required: [title]
@@ -689,6 +1844,543 @@ components:
     PriorityLevel:
       type: string
       enum: [low, medium, high, critical]
+    DeletedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [deleted]
+          properties:
+            deleted:
+              type: boolean
+              const: true
+    DocumentListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [documents]
+          properties:
+            documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/Document"
+    DocumentResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [document]
+          properties:
+            document:
+              $ref: "#/components/schemas/Document"
+    Document:
+      type: object
+      required: [id, filename, fileType, fileSize, domainSlug, status, errorMessage, uploadedAt]
+      properties:
+        id:
+          type: string
+        filename:
+          type: string
+        fileType:
+          type: string
+        fileSize:
+          type: integer
+        domainSlug:
+          type: [string, "null"]
+        status:
+          type: string
+          enum: [processing, completed, failed]
+        errorMessage:
+          type: [string, "null"]
+        uploadedAt:
+          type: string
+          format: date-time
+    NoteListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [notes]
+          properties:
+            notes:
+              type: array
+              items:
+                $ref: "#/components/schemas/Note"
+    NoteResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [note]
+          properties:
+            note:
+              $ref: "#/components/schemas/Note"
+    NoteSearchResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [results]
+          properties:
+            results:
+              type: array
+              items:
+                $ref: "#/components/schemas/NoteSearchResult"
+    NoteTagsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [tags]
+          properties:
+            tags:
+              type: array
+              items:
+                type: string
+    CreateNoteRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+        title:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        due_date:
+          type: [string, "null"]
+          format: date
+    UpdateNoteRequest:
+      type: object
+      properties:
+        content:
+          type: string
+        title:
+          type: [string, "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        due_date:
+          type: [string, "null"]
+          format: date
+    Note:
+      type: object
+      required: [id, title, content, tags, source, dueDate, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: [string, "null"]
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        dueDate:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NoteSearchResult:
+      type: object
+      required: [id, title, content, tags, similarity, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: [string, "null"]
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        similarity:
+          type: number
+          minimum: 0
+          maximum: 1
+        createdAt:
+          type: string
+          format: date-time
+    JobListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [jobs]
+          properties:
+            jobs:
+              type: array
+              items:
+                $ref: "#/components/schemas/ScheduledJob"
+    JobResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [job]
+          properties:
+            job:
+              $ref: "#/components/schemas/ScheduledJob"
+    JobExecutionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [executions]
+          properties:
+            executions:
+              type: array
+              items:
+                $ref: "#/components/schemas/JobExecution"
+    CreateJobRequest:
+      type: object
+      required: [name, cronExpr, prompt, channels]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        cronExpr:
+          type: string
+          description: Standard 5-field cron expression
+        prompt:
+          type: string
+          minLength: 1
+        channels:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        enabled:
+          type: boolean
+          default: true
+        domainSlug:
+          type: [string, "null"]
+    UpdateJobRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        cronExpr:
+          type: string
+        prompt:
+          type: string
+        channels:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+    ScheduledJob:
+      type: object
+      required: [id, name, cronExpr, prompt, channels, domainSlug, enabled, lastRunAt, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        cronExpr:
+          type: string
+        prompt:
+          type: string
+        channels:
+          type: array
+          items:
+            type: string
+        domainSlug:
+          type: [string, "null"]
+        enabled:
+          type: boolean
+        lastRunAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    JobExecution:
+      type: object
+      required: [id, jobId, status, result, startedAt, completedAt]
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [running, completed, failed]
+        result:
+          type: [string, "null"]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+    SkillListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [skills]
+          properties:
+            skills:
+              type: array
+              items:
+                $ref: "#/components/schemas/Skill"
+    SkillResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [skill]
+          properties:
+            skill:
+              $ref: "#/components/schemas/Skill"
+    SkillDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [skill]
+          properties:
+            skill:
+              $ref: "#/components/schemas/SkillDetail"
+    CreateSkillRequest:
+      type: object
+      required: [name, displayName, description, systemPrompt]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        displayName:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        systemPrompt:
+          type: string
+        category:
+          type: string
+          default: workflow
+        shared:
+          type: boolean
+          default: false
+    UpdateSkillRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        systemPrompt:
+          type: string
+        category:
+          type: string
+        shared:
+          type: boolean
+    Skill:
+      type: object
+      required: [id, name, displayName, description, category, shared, verified, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        shared:
+          type: boolean
+        verified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SkillDetail:
+      allOf:
+        - $ref: "#/components/schemas/Skill"
+        - type: object
+          required: [systemPrompt]
+          properties:
+            systemPrompt:
+              type: string
+    HealthStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [status]
+          properties:
+            status:
+              $ref: "#/components/schemas/HealthStatus"
+    HealthStatus:
+      type: object
+      required: [isConnected, mfaPending, syncEnabled, lastSyncAt, lastError]
+      properties:
+        isConnected:
+          type: boolean
+        mfaPending:
+          type: boolean
+        syncEnabled:
+          type: boolean
+        lastSyncAt:
+          type: [string, "null"]
+          format: date-time
+        lastError:
+          type: [string, "null"]
+    HealthSummaryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [summary]
+          properties:
+            summary:
+              $ref: "#/components/schemas/HealthSummary"
+    HealthSummary:
+      type: object
+      required: [period]
+      properties:
+        period:
+          type: string
+          enum: [day, 3days, week, month, year]
+        avgSteps:
+          type: [integer, "null"]
+        avgCalories:
+          type: [integer, "null"]
+        avgRestingHr:
+          type: [integer, "null"]
+        avgSleepHours:
+          type: [number, "null"]
+        totalSteps:
+          type: [integer, "null"]
+        totalCalories:
+          type: [integer, "null"]
+        maxSteps:
+          type: [integer, "null"]
+        daysWithData:
+          type: integer
+    DailyHealthResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [daily]
+          properties:
+            daily:
+              anyOf:
+                - $ref: "#/components/schemas/DailyHealth"
+                - type: "null"
+    DailyHealth:
+      type: object
+      required: [date]
+      properties:
+        date:
+          type: string
+          format: date
+        steps:
+          type: [integer, "null"]
+        calories:
+          type: [integer, "null"]
+        restingHr:
+          type: [integer, "null"]
+        sleepDurationMinutes:
+          type: [integer, "null"]
+        sleepScore:
+          type: [integer, "null"]
+        bodyBatteryMin:
+          type: [integer, "null"]
+        bodyBatteryMax:
+          type: [integer, "null"]
+        stressAvg:
+          type: [integer, "null"]
+    HealthActivitiesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activities]
+          properties:
+            activities:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+    WatchlistResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [symbols]
+          properties:
+            symbols:
+              type: array
+              items:
+                type: string
+    WatchlistSymbolResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [symbol]
+          properties:
+            symbol:
+              type: string
+            added:
+              type: boolean
+            deleted:
+              type: boolean
+    AddWatchlistSymbolRequest:
+      type: object
+      required: [symbol]
+      properties:
+        symbol:
+          type: string
+          minLength: 1
     ErrorResponse:
       type: object
       required: [error]

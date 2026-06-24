@@ -79,7 +79,16 @@ Common error codes:
 |---|---|
 | [System](system.md) | `GET /me`, `GET /domains` |
 | [API Keys](api-keys.md) | list, create, revoke |
+| [Conversations](conversations.md) | list, create, messages |
+| [Memories](memories.md) | list, create from conversation, delete |
 | [Tickets](tickets.md) | list, create, get, update, delete, events |
+| [Agent Runs](agent-runs.md) | list, create, get, cancel |
+| [Documents](documents.md) | list, upload, delete |
+| [Notes](notes.md) | list, search, tags, create, update, delete |
+| [Scheduled Jobs](scheduled-jobs.md) | list, create, update, toggle, executions, delete |
+| [Skills](skills.md) | list, get, create, update, delete |
+| [Health](health.md) | status, summary, daily, activities |
+| [Finance](finance.md) | watchlist list, add, remove |
 
 ## Bruno Collection
 
@@ -96,6 +105,9 @@ Use the `Local` environment:
 | `baseUrl` | `http://localhost:8080` |
 | `sessionToken` | Browser `session_token` cookie value |
 | `ticketId` | Set automatically by `Tickets / Create Ticket` |
+| `agentRunId` | Set automatically by `Agent Runs / Create Agent Run` |
+| `conversationId` | Set automatically by `Conversations / Create Conversation` |
+| `memoryId` | Set automatically by `Memories / Create Conversation Memory` |
 
 Recommended smoke order:
 
@@ -108,6 +120,50 @@ Recommended smoke order:
 7. `Tickets / Resolve Ticket`
 8. `Tickets / List Ticket Events`
 9. `Tickets / Delete Ticket`
+10. `Agent Runs / List Agent Runs`
+11. `Agent Runs / Create Agent Run`
+12. `Agent Runs / Get Agent Run`
+13. `Agent Runs / Cancel Agent Run`
+14. `Conversations / List Conversations`
+15. `Conversations / Create Conversation`
+16. `Conversations / List Messages`
+17. `Memories / Create Conversation Memory`
+18. `Memories / List Memories`
+19. `Memories / Delete Memory`
+20. `Documents / List Documents`
+21. `Documents / Upload Document`
+22. `Documents / Delete Document`
+23. `Notes / List Notes`
+24. `Notes / Create Note`
+25. `Notes / Search Notes`
+26. `Notes / List Note Tags`
+27. `Notes / Update Note`
+28. `Notes / Delete Note`
+29. `Scheduled Jobs / List Jobs`
+30. `Scheduled Jobs / Create Job`
+31. `Scheduled Jobs / Toggle Job`
+32. `Scheduled Jobs / Update Job`
+33. `Scheduled Jobs / List Job Executions`
+34. `Scheduled Jobs / Delete Job`
+35. `Skills / List Skills`
+36. `Skills / Create Skill`
+37. `Skills / Get Skill`
+38. `Skills / Update Skill`
+39. `Skills / Delete Skill`
+40. `Health / Health Status`
+41. `Health / Health Summary`
+42. `Health / Daily Health`
+43. `Health / List Activities`
+44. `Finance / Get Watchlist`
+45. `Finance / Add to Watchlist`
+46. `Finance / Remove from Watchlist`
+
+Memory creation requires `conversationId` to point to an owned conversation with
+enough messages to summarize. A newly created empty conversation should return
+`not_enough_content`.
+
+Document upload requires setting the file path in `Upload Document` before running.
+Health endpoints return empty/default data if Garmin is not connected.
 
 ## OpenAPI
 

@@ -1,0 +1,15 @@
+meta {
+  name: Search Notes
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/notes/search?q=smoke+test
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
