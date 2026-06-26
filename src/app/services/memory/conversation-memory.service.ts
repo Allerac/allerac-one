@@ -37,6 +37,11 @@ interface LLMConfig {
   model: string;
 }
 
+export interface MemoryGenerationOptions {
+  importanceScore?: number;
+  emotion?: -1 | 0 | 1 | null;
+}
+
 export class ConversationMemoryService {
   private llm: LLMConfig;
   private domainSlug: string | null;
@@ -65,7 +70,8 @@ export class ConversationMemoryService {
    */
   async generateConversationSummary(
     conversationId: string,
-    userId: string
+    userId: string,
+    options: MemoryGenerationOptions = {}
   ): Promise<ConversationSummary | null> {
     try {
       // Step 1: Load all messages from the conversation
@@ -155,6 +161,13 @@ ${conversationText}`;
           key_topics: [],
           importance_score: 5,
         };
+      }
+
+      if (options.importanceScore !== undefined) {
+        summaryData.importance_score = options.importanceScore;
+      }
+      if (options.emotion !== undefined) {
+        summaryData.emotion = options.emotion === null ? null : String(options.emotion);
       }
 
       // Step 5: Save summary to database (upsert so re-saving a conversation updates it)

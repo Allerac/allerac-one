@@ -6,12 +6,20 @@ meta {
 
 post {
   url: {{baseUrl}}/api/v1/conversations/{{conversationId}}/memory
-  body: none
+  body: json
   auth: none
 }
 
 headers {
+  Content-Type: application/json
   Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "importanceScore": 8,
+    "emotion": 0
+  }
 }
 
 script:post-response {

@@ -181,6 +181,12 @@ paths:
       operationId: createConversationMemory
       parameters:
         - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationMemoryRequest"
       responses:
         "201":
           description: Created or refreshed conversation memory
@@ -1383,6 +1389,19 @@ components:
         createdAt:
           type: [string, "null"]
           format: date-time
+    CreateConversationMemoryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        importanceScore:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Optional manual override for model-generated importance.
+        emotion:
+          type: [integer, "null"]
+          enum: [-1, 0, 1, null]
+          description: Optional UI-aligned sentiment override. -1 is frustrated/negative, 0 is neutral, 1 is happy/positive.
     MemoryListResponse:
       type: object
       required: [data]
