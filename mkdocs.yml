@@ -80,6 +80,7 @@ nav:
   - Architecture:
       - Overview: architecture/architecture.md
       - Control API v1: architecture/control-api-v1.md
+      - Allerac Federation: architecture/allerac-federation.md
       - Decisions:
           - Index: architecture/decisions/README.md
           - ADR 0001 - Control API v1: architecture/decisions/0001-adopt-control-api-v1.md
