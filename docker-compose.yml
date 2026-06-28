@@ -532,7 +532,7 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: allerac-tunnel
-    restart: unless-stopped
+    restart: always
     command: tunnel run
     network_mode: host
     environment:
