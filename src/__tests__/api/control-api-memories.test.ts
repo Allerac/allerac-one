@@ -148,7 +148,7 @@ describe('Control API v1 memories', () => {
 
     expect(response.status).toBe(201);
     expect(mockChatService.getConversationForUser).toHaveBeenCalledWith('conversation-id', user.id);
-    expect(mockMemoryService.generateConversationSummary).toHaveBeenCalledWith('conversation-id', user.id);
+    expect(mockMemoryService.generateConversationSummary).toHaveBeenCalledWith('conversation-id', user.id, {});
     expect(await response.json()).toEqual({
       data: {
         memory: {
@@ -165,6 +165,42 @@ describe('Control API v1 memories', () => {
         },
       },
     });
+  });
+
+  it('passes manual memory metadata overrides to the memory service', async () => {
+    const response = await createConversationMemory(
+      new Request('http://localhost/api/v1/conversations/conversation-id/memory', {
+        method: 'POST',
+        body: JSON.stringify({
+          importanceScore: 9,
+          emotion: 1,
+        }),
+      }),
+      routeParams(),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockMemoryService.generateConversationSummary).toHaveBeenCalledWith(
+      'conversation-id',
+      user.id,
+      { importanceScore: 9, emotion: 1 },
+    );
+  });
+
+  it('rejects invalid manual memory metadata overrides', async () => {
+    const response = await createConversationMemory(
+      new Request('http://localhost/api/v1/conversations/conversation-id/memory', {
+        method: 'POST',
+        body: JSON.stringify({
+          importanceScore: 11,
+        }),
+      }),
+      routeParams(),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockChatService.getConversationForUser).not.toHaveBeenCalled();
+    expect(mockMemoryService.generateConversationSummary).not.toHaveBeenCalled();
   });
 
   it('returns not_found for unowned conversations', async () => {

@@ -50,6 +50,11 @@ The Control API is not a separate container yet. It is currently implemented ins
 the Next.js app container so contracts can stabilize before process or container
 boundaries are split.
 
+The long-term platform direction is documented in
+[Allerac Federation](allerac-federation.md): a network of isolated domain cells that
+can run specialized agents and cooperate through stable APIs, events, identity, and
+durable work contracts.
+
 ## Tech Stack
 
 | Layer | Technology | Purpose |

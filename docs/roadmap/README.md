@@ -18,3 +18,9 @@ sequence of implementation.
 | Roadmap | Status | Purpose |
 |---|---|---|
 | [Control API v1](control-api-v1.md) | In progress | Introduce a stable `/api/v1` control plane for UI, CLI, Telegram, automation, and headless operation |
+
+## Long-Term Architecture
+
+| Document | Status | Purpose |
+|---|---|---|
+| [Allerac Federation](../architecture/allerac-federation.md) | Directional | Define the long-term model for isolated domain cells cooperating through stable contracts |

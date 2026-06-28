@@ -18,12 +18,21 @@ Browser sessions can call these endpoints without API key scopes.
 
 Creates or refreshes a memory summary from an owned conversation.
 
+Optional body fields override the model-generated metadata:
+
+| Field | Type | Notes |
+|---|---|---|
+| `importanceScore` | integer | Optional, `1` to `10` |
+| `emotion` | integer or `null` | Optional UI-aligned sentiment: `-1` frustrated/negative, `0` neutral, `1` happy/positive |
+
 Example:
 
 ```bash
 curl -s \
   -X POST \
   -H "Authorization: Bearer $ALLERAC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"importanceScore":8,"emotion":0}' \
   http://localhost:8080/api/v1/conversations/$CONVERSATION_ID/memory
 ```
 
@@ -40,7 +49,7 @@ Response:
       "importanceScore": 7,
       "messageCount": 4,
       "domainSlug": "chat",
-      "emotion": "focused",
+      "emotion": "0",
       "createdAt": "2026-06-24T12:00:00.000Z"
     }
   }
