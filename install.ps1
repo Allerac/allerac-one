@@ -85,8 +85,8 @@ function Test-WslAvailable {
 
 function Test-UbuntuInstalled {
     try {
-        $distros = & wsl --list --quiet 2>&1
-        return ($distros | Where-Object { $_ -match "Ubuntu" }).Count -gt 0
+        $result = & wsl -d Ubuntu -- echo ok 2>&1
+        return ($result -join '') -match 'ok'
     } catch {
         return $false
     }
@@ -323,4 +323,12 @@ function Main {
     Write-Host ""
 }
 
-Main
+try {
+    Main
+} catch {
+    Write-Host ""
+    Log-Error "Unexpected error: $_"
+    Write-Host ""
+} finally {
+    Read-Host "  Press Enter to close"
+}

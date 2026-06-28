@@ -24,8 +24,8 @@ param(
 
 function Test-WslAndUbuntu {
     try {
-        $distros = & wsl --list --quiet 2>&1
-        return ($distros | Where-Object { $_ -match "Ubuntu" }).Count -gt 0
+        $result = & wsl -d Ubuntu -- echo ok 2>&1
+        return ($result -join '') -match 'ok'
     } catch {
         return $false
     }

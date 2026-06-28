@@ -229,7 +229,11 @@ export async function getLoginRedirect(): Promise<string> {
 export async function checkFirstRun(): Promise<{ isFirstRun: boolean; userCount: number }> {
   try {
     const pool = (await import('@/app/clients/db')).default;
-    const result = await pool.query('SELECT COUNT(*) as count FROM users');
+    const result = await pool.query(
+      `SELECT COUNT(*) as count
+       FROM users
+       WHERE email <> 'dev@local.host'`
+    );
     const userCount = parseInt(result.rows[0].count, 10);
     return { isFirstRun: userCount === 0, userCount };
   } catch (error) {
