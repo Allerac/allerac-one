@@ -389,13 +389,35 @@ install_nvidia_toolkit() {
     log_success "nvidia-container-toolkit installed"
 }
 
+_nvidia_runtime_works() {
+    $USE_SUDO docker run --rm --runtime=nvidia --gpus all ubuntu:22.04 echo ok >/dev/null 2>&1
+}
+
+_nvidia_runtime_fail() {
+    log_warn "nvidia runtime not working in Docker - falling back to CPU."
+    log_warn "To re-enable later, run: sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker"
+    ENABLE_GPU="false"
+    sed -i 's/^ENABLE_GPU=true/ENABLE_GPU=false/' "${INSTALL_DIR}/.env" 2>/dev/null || true
+}
+
 detect_gpu() {
     # Only on Linux — macOS and others skip
     [[ "$OS" != "linux" && "$OS" != "debian" ]] && ENABLE_GPU="false" && return
 
-    # Already set via env var (non-interactive / CI)
+    # Load from existing .env if not already set via environment
+    if [ -z "$ENABLE_GPU" ] && [ -f "${INSTALL_DIR}/.env" ]; then
+        ENABLE_GPU=$(grep '^ENABLE_GPU=' "${INSTALL_DIR}/.env" 2>/dev/null | cut -d= -f2 | tr -d ' ')
+    fi
+
+    # Already set via env var or loaded from .env
     if [ -n "$ENABLE_GPU" ]; then
-        [ "$ENABLE_GPU" = "true" ] && OLLAMA_RUNTIME="nvidia"
+        if [ "$ENABLE_GPU" = "true" ]; then
+            if _nvidia_runtime_works; then
+                OLLAMA_RUNTIME="nvidia"
+            else
+                _nvidia_runtime_fail
+            fi
+        fi
         return
     fi
 
@@ -409,12 +431,16 @@ detect_gpu() {
     echo ""
     log_success "NVIDIA GPU detected: ${GPU_NAME}"
 
-    # Check if toolkit is already installed
+    # Check if toolkit is already installed - still test runtime before trusting it
     if command_exists nvidia-container-cli; then
-        log_success "nvidia-container-toolkit already installed"
-        ENABLE_GPU="true"
-        OLLAMA_RUNTIME="nvidia"
-        log_info "GPU acceleration will be enabled for Ollama"
+        if _nvidia_runtime_works; then
+            log_success "nvidia-container-toolkit already installed"
+            ENABLE_GPU="true"
+            OLLAMA_RUNTIME="nvidia"
+            log_info "GPU acceleration will be enabled for Ollama"
+        else
+            _nvidia_runtime_fail
+        fi
         return
     fi
 

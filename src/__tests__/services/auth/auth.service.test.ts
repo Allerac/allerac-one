@@ -159,6 +159,30 @@ describe('AuthService', () => {
       expect(firstCall[1]).toContain(email.toLowerCase());
     });
 
+    it('should ignore the seeded dev user when deciding the first admin', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // No existing user
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }] }); // No real users yet
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'user_123',
+            email: 'first@test.com',
+            name: null,
+            is_admin: true,
+            created_at: new Date(),
+          },
+        ],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // Session
+
+      const result = await authService.register('first@test.com', 'password123');
+
+      expect(result.success).toBe(true);
+      expect(mockQuery.mock.calls[1][0]).toContain('email <> $1');
+      expect(mockQuery.mock.calls[1][1]).toEqual(['dev@local.host']);
+      expect(mockQuery.mock.calls[2][1][3]).toBe(true);
+    });
+
     it('should return error when email already exists', async () => {
       const email = 'existing@test.com';
 
