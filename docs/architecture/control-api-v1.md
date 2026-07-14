@@ -2,9 +2,17 @@
 
 ## Status
 
-In progress. The first `/api/v1` endpoints exist for `me`, `domains`, `tickets`,
-conversations, agent runs, memories, and API key management. Browser session auth
-and scoped bearer API keys are both supported by the current Control API slice.
+In progress. As of 2026-07-14 the `/api/v1` surface covers system (`me`, `domains`,
+`capabilities`), API keys, conversations (including synchronous message execution),
+memories, tickets, agent runs, documents, notes, scheduled jobs (including manual
+run), skills, health, search, email, and finance. Browser session auth and scoped
+bearer API keys are both supported.
+
+Of the initial resources below, only `tools` (`POST /api/v1/tools/:name/run`) remains
+unimplemented. Phases 1-3 are complete; Phase 4 (worker separation) and Phase 5
+(headless mode) have not started. The full implemented contract is tracked in
+`docs/api/openapi/control-api-v1.yaml` and audited in
+`docs/roadmap/control-api-v1-gap-audit-2026-06-29.md`.
 
 ## Purpose
 
@@ -109,35 +117,29 @@ POST   /api/v1/tools/:name/run
 Existing `/api/*` routes may continue to serve the UI while `/api/v1/*` is introduced.
 Over time, UI code should migrate to the same contracts where practical.
 
-### Implemented Initial Slice
+### Implemented Surface
 
-The first implemented slice is intentionally small and supports both browser sessions
-and scoped API keys:
+The implemented surface has grown well beyond the initial slice. It supports both
+browser sessions and scoped API keys across:
 
-```text
-GET    /api/v1/me
-GET    /api/v1/domains
-GET    /api/v1/api-keys
-POST   /api/v1/api-keys
-DELETE /api/v1/api-keys/:id
-GET    /api/v1/conversations
-POST   /api/v1/conversations
-GET    /api/v1/conversations/:id/messages
-POST   /api/v1/conversations/:id/messages
-POST   /api/v1/conversations/:id/memory
-GET    /api/v1/memories
-DELETE /api/v1/memories/:id
-GET    /api/v1/tickets
-POST   /api/v1/tickets
-GET    /api/v1/tickets/:id
-PATCH  /api/v1/tickets/:id
-GET    /api/v1/tickets/:id/events
-DELETE /api/v1/tickets/:id
-GET    /api/v1/agent-runs
-POST   /api/v1/agent-runs
-GET    /api/v1/agent-runs/:id
-POST   /api/v1/agent-runs/:id/cancel
-```
+- System: `GET /api/v1/me`, `GET /api/v1/domains`, `GET /api/v1/capabilities`
+- API keys: list, create, revoke
+- Conversations: list, create, list messages, synchronous message send
+- Memories: create from conversation, list, delete
+- Tickets: list, create, get, update, events, delete
+- Agent runs: list, create, get, cancel
+- Documents: list, upload, delete
+- Notes: list, create, search, tags, update, delete
+- Scheduled jobs: list, create, update, toggle, executions, run now, delete
+- Skills: list, get, create, update, delete
+- Health: status, summary, daily, activities
+- Search: web search
+- Email: list messages, get message, send
+- Finance: quotes, symbol search, candles, watchlist list/add/remove
+
+The authoritative contract is `docs/api/openapi/control-api-v1.yaml`. Of the target
+route shape above, only `POST /api/v1/tools/:name/run` remains unimplemented; it is
+deliberately deferred until the tool permission model is explicit.
 
 This proves the route shape, Zod validation, response envelopes, domain access, DTO
 mapping, API key auth, scoped route checks, and Bruno smoke tests without changing the
@@ -230,6 +232,8 @@ Admin and system-level scopes should wait until there is a concrete use case.
 
 ### Phase 1: API Auth Foundation
 
+Status: complete.
+
 Goal: `/api/v1` can authenticate either browser sessions or scoped API keys.
 
 Deliverables:
@@ -247,6 +251,8 @@ Exit criteria:
 - No raw API key is stored in Postgres.
 
 ### Phase 2: Tickets and Agent Runs
+
+Status: complete.
 
 Goal: prove the control-plane model with resources that already have strong backing
 services and immediate operational value.
@@ -267,6 +273,11 @@ Exit criteria:
 
 ### Phase 3: Chat API
 
+Status: complete for the synchronous contract. `POST /api/v1/conversations/:id/messages`
+runs the full server-side chat pipeline and returns the final assistant message plus
+aggregated execution events. A streaming or async/polling contract remains an open
+decision.
+
 Goal: make chat usable by API clients without depending on React or Server Actions.
 
 Deliverables:
@@ -283,6 +294,8 @@ Exit criteria:
 
 ### Phase 4: Worker Separation
 
+Status: not started. `WorkerRunnerService` still runs inside the `app` container.
+
 Goal: allow background execution to move out of the web-serving process.
 
 Deliverables:
@@ -298,6 +311,8 @@ Exit criteria:
 
 ### Phase 5: Headless Mode
 
+Status: not started.
+
 Goal: run Allerac without the web UI as a first-class deployment profile.
 
 Deliverables:
@@ -311,6 +326,8 @@ Exit criteria:
 - A user can operate core Allerac workflows with API keys and no browser.
 
 ## First Milestone
+
+Status: complete.
 
 Create a small, real vertical slice:
 

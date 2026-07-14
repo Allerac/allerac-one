@@ -57,6 +57,7 @@ nav:
   - Roadmap:
       - Overview: roadmap/README.md
       - Control API v1: roadmap/control-api-v1.md
+      - Control API v1 Gap Audit (2026-06-29): roadmap/control-api-v1-gap-audit-2026-06-29.md
   - Releases:
       - Overview: releases/README.md
   - API Reference:
@@ -74,6 +75,8 @@ nav:
           - Scheduled Jobs: api/control-api-v1/scheduled-jobs.md
           - Skills: api/control-api-v1/skills.md
           - Health: api/control-api-v1/health.md
+          - Search: api/control-api-v1/search.md
+          - Email: api/control-api-v1/email.md
           - Finance: api/control-api-v1/finance.md
       - OpenAPI:
           - Control API v1: api/openapi/control-api-v1.yaml

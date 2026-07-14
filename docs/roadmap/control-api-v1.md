@@ -2,9 +2,16 @@
 
 ## Status
 
-In progress. The first `/api/v1` contract exists for `me`, `domains`, `tickets`,
-conversations, agent runs, memories, and API key management. Browser session auth
-and scoped bearer API keys are both implemented for the current Control API slice.
+In progress. As of 2026-07-14 the `/api/v1` contract covers `me`, `domains`,
+`capabilities`, API keys, conversations (including synchronous message send),
+memories, tickets, agent runs, documents, notes, scheduled jobs (including manual
+run), skills, health, search, email, and finance — 41 route paths and 57 operations,
+in sync with `docs/api/openapi/control-api-v1.yaml`. Browser session auth and scoped
+bearer API keys are both implemented.
+
+Remaining work: the `tools:run` contract, UI migration (Phase 6), app decoupling
+preparation (Phase 7), and the streaming/async chat decision. See
+`control-api-v1-gap-audit-2026-06-29.md` for the full gap analysis.
 
 ## How To Use This Document
 
@@ -39,13 +46,14 @@ the web UI, while preserving the current app and deployment model.
 
 ## Current System Snapshot
 
-As of 2026-06-24:
+As of 2026-07-14:
 
 - `app` is still the main Next.js container and owns UI, API routes, server actions,
   service calls, auth/session resolution, and background runner startup.
 - Existing browser-facing APIs live under `/api/*`.
-- Initial `/api/v1/*` routes exist for `me`, `domains`, `tickets`, conversations,
-  agent runs, memories, and API key management.
+- `/api/v1/*` routes exist for `me`, `domains`, `capabilities`, API keys,
+  conversations (including synchronous message send), memories, tickets, agent runs,
+  documents, notes, scheduled jobs, skills, health, search, email, and finance.
 - Browser auth uses a `session_token` HTTP-only cookie and `requireCurrentUser()`.
 - Headless auth uses scoped bearer API keys with the `alr_live_` token prefix.
 - Domain access is stored in `domains` and `user_domain_access`; admins bypass
@@ -530,9 +538,12 @@ Avoid leaking internal field naming. Convert database/service casing into API ca
 Purpose: expose conversation metadata and message history without committing to the
 assistant message execution contract yet.
 
-Current status: list/create conversations and list messages are implemented for
-browser sessions and API keys. Sending a user message to the assistant remains
-deferred until the chat execution contract is designed.
+Current status: complete. List/create conversations, list messages, and synchronous
+message send are implemented for browser sessions and API keys.
+`POST /api/v1/conversations/:id/messages` persists the user message, runs the full
+server-side chat pipeline through `ChatExecutionService`, persists the assistant
+response, and returns the final assistant message plus aggregated execution events.
+A streaming or async/polling contract remains an open decision.
 
 ### Endpoints
 
@@ -707,8 +718,7 @@ Exit criteria:
 
 ## Deferred Work
 
-- Assistant message send API.
-- Tool execution API.
+- Tool execution API (`tools:run`).
 - Streaming responses.
 - OpenAPI generation.
 - CLI packaging.
@@ -730,25 +740,29 @@ Exit criteria:
 Title:
 
 ```text
-Implement Control API v1 agent-runs slice
+Decide the next Control API increment: chat streaming, tools:run, or worker separation
 ```
 
 Description:
 
 ```text
-Prove the first vertical API-only workflow with API keys: create a key, list domains,
-create a ticket, create an agent run, poll the run, and patch the ticket with the
-outcome. Add Bruno requests and focused API smoke automation where useful.
+The v1 resource surface is complete except tools:run. Before implementing more
+endpoints, record decisions for the remaining high-judgment items from the
+2026-06-29 gap audit:
+
+1. Whether a streaming or async/polling chat contract is needed in addition to the
+   synchronous POST /api/v1/conversations/:id/messages endpoint.
+2. Whether tools:run becomes a standalone API or stays reachable only through chat
+   and agent runs (depends on an explicit tool permission model).
+3. Which surface comes next: workspace, social/Instagram, skill evaluation, or
+   worker separation (architecture Phase 4).
 ```
 
 Acceptance criteria:
 
-- [ ] API key can list domains with `domains:read`.
-- [ ] API key can create/read/update tickets with `tickets:read` and `tickets:write`.
-- [ ] API key can create/read/cancel agent runs with `agents:read` and `agents:write`.
-- [ ] Bruno collection includes the full vertical smoke path.
-- [ ] A repeatable script or Jest/API smoke command can exercise the vertical path.
-- [ ] Docs include the full curl sequence.
+- [ ] Each decision is recorded as an ADR or a dated entry in this roadmap.
+- [ ] The chosen next surface has a phase section in this roadmap with endpoints,
+      scopes, and exit criteria before implementation starts.
 
 ## Implementation Notes
 
@@ -777,3 +791,16 @@ Use this section to append discoveries while building.
   search, email, and finance market-data reads were added after the initial slices.
 - Current OpenAPI and handler counts are tracked in
   `docs/roadmap/control-api-v1-gap-audit-2026-06-29.md`.
+
+### 2026-07-14
+
+- The 2026-06-29 batch (capabilities, synchronous message send, job run-now, finance
+  quotes/candles/symbol search, search, email) was committed with all six Control API
+  test suites passing (56 tests).
+- Architecture and roadmap docs were synced with the implemented surface: 41 route
+  paths, 57 operations, matching the OpenAPI contract.
+- Of the target route shape, only `POST /api/v1/tools/:name/run` remains
+  unimplemented. Architecture Phase 4 (worker separation) and Phase 5 (headless mode)
+  have not started; `WorkerRunnerService` still runs inside the `app` container.
+- The stale "agent-runs" next ticket was replaced with a decision ticket covering
+  streaming chat, `tools:run`, and the next surface.

@@ -94,14 +94,15 @@ They still need security review, but not necessarily `/api/v1` replacement.
 
 ## Documentation Gaps
 
-- `docs/roadmap/control-api-v1.md` is stale in places. It still names the next ticket
-  as agent-runs even though agent-runs, documents, notes, jobs, skills, health,
-  search, email, and finance are already implemented.
-- `docs/architecture/control-api-v1.md` lists `POST /api/v1/conversations/:id/messages`
-  and `POST /api/v1/tools/:name/run` in the target route shape, but they remain
-  unimplemented.
-- The initial scope list in the architecture doc does not include newer scopes such
-  as `documents:*`, `notes:*`, `jobs:*`, `skills:*`, `health:*`, and `finance:*`.
+- ~~`docs/roadmap/control-api-v1.md` is stale in places.~~ Resolved 2026-07-14: the
+  roadmap status, snapshot, and next ticket were synced with the implemented surface.
+- ~~`docs/architecture/control-api-v1.md` lists unimplemented target routes.~~
+  Resolved 2026-07-14: `POST /api/v1/conversations/:id/messages` is implemented and
+  the architecture doc now marks phase status. Only `POST /api/v1/tools/:name/run`
+  remains unimplemented, by decision.
+- ~~The initial scope list in the architecture doc does not include newer scopes.~~
+  Resolved: the scope table now includes `documents:*`, `notes:*`, `jobs:*`,
+  `skills:*`, `health:*`, `search:read`, `email:*`, and `finance:*`.
 
 ## Recommended Next Work
 
