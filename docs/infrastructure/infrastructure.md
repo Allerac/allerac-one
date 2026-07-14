@@ -42,7 +42,7 @@ Models are pulled once and stored in a persistent Docker volume (`ollama_data`),
 
 ## Stateless Application, Stateful Data
 
-The application container (`allerac-app`) is fully stateless — it can be stopped, rebuilt, and restarted at any time without data loss. All persistent state lives in external Docker volumes:
+The application container (`allerac-app`) is fully stateless — it can be stopped, rebuilt, and restarted at any time without data loss. Background agent runs are unaffected by app restarts: they execute in the separate `allerac-agent-worker` container, coordinated through the `agent_runs` table in Postgres. All persistent state lives in external Docker volumes:
 
 - **PostgreSQL with pgvector** (`db_data`) — conversations, memory, user data, RAG embeddings
 - **Ollama models** (`ollama_data`) — downloaded LLM weights

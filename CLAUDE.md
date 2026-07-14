@@ -28,6 +28,8 @@ src/app/
     infrastructure/ # System metrics
   tools/        # AI function calling tools (web search)
   clients/      # Database client (pg pool)
+src/agent-worker.ts      # Entry for the agent-worker container (background agent runs)
+src/telegram-multi-bot.ts # Entry for the telegram container
 ```
 
 ## Key Patterns
@@ -38,6 +40,7 @@ src/app/
 - **Memory:** Automatic conversation summarization with importance scoring and topic extraction
 - **Auth:** Session-based with bcrypt password hashing
 - **Server Actions:** All data mutations go through `actions/` files
+- **Background agent runs:** Execute in the `agent-worker` container (not the app); coordination is DB-only via the `agent_runs` table with `FOR UPDATE SKIP LOCKED`
 
 ## Rules
 

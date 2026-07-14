@@ -25,7 +25,12 @@ Completed or substantially implemented:
 - Workspace file, tree, project, process, delete, and command APIs use shared authentication and strict path boundaries.
 - Chat validates provider/model/domain identifiers and payload limits before opening the stream, and preselected skills must be visible to the current user.
 - Instagram DM routes use the account assigned to the current user instead of assuming the user's own credential row.
-- Central log submission requires either a valid user session or the internal `EXECUTOR_SECRET`.
+- Central log submission requires either an admin session or the internal
+  `EXECUTOR_SECRET` (tightened from any user session on 2026-07-14 — the buffer feeds
+  the admin-only /logs monitor, so regular sessions must not inject lines into it).
+- The `read_logs` AI tool is admin-only in both chat and agent runs (2026-07-14): the
+  log buffer aggregates every user's activity in the process, so non-admin users get
+  a denial result and the tool is filtered from non-admin agent-run tool definitions.
 - Instagram webhook requests require an HMAC signature.
 - System settings reject unknown keys and oversized values.
 - Expensive chat, benchmark, image-editing, and model-download operations now have request-rate and active-concurrency limits.

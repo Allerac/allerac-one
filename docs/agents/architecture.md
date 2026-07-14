@@ -4,6 +4,13 @@
 
 This document describes the architecture for managing parallel agent execution in Allerac One. The system follows the **Orchestrator + Workers** pattern with a **Postgres-backed job queue** for durable background execution.
 
+> **Runtime update (2026-07-14):** the worker process described below no longer runs
+> inside the Next.js app. It runs in the dedicated `agent-worker` container
+> (`Dockerfile.agent-worker`, entry `src/agent-worker.ts`), which uses the same
+> `WorkerRunnerService` and Postgres queue unchanged. The app sets
+> `DISABLE_AGENT_RUNNER=true`. See
+> [Control API architecture, Phase 4](../architecture/control-api-v1.md).
+
 ## Problem Statement
 
 The initial implementation used `Promise.all()` within the HTTP handler with SSE streaming to the client. This approach failed in production because:

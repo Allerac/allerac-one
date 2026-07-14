@@ -12,8 +12,21 @@ Some containers (migrations, ollama-setup) are one-shot services that run once o
 **Image:** custom build (`Dockerfile`)
 **Port:** `8080`
 **Role:** Main Next.js application — serves the web UI and all API routes.
+Background agent runs execute in `allerac-agent-worker`, not here (the compose file
+sets `DISABLE_AGENT_RUNNER=true`).
 **Persistent data:** `allerac_backups_data` (database backups)
 **Restart:** always
+
+### `allerac-agent-worker`
+**Image:** custom build (`Dockerfile.agent-worker`, esbuild bundle of `src/agent-worker.ts`)
+**Port:** `8090` (internal health endpoint)
+**Role:** Executes background agent runs. Polls the `agent_runs` table in Postgres
+(`FOR UPDATE SKIP LOCKED`), runs the orchestrator/worker pipeline, and recovers stale
+runs after restarts. Coordination with the app is DB-only; console lines are forwarded
+to the app's `/logs` UI via `/api/log-submit`. Drains active runs for up to 25s on
+shutdown (`stop_grace_period: 30s`).
+**Memory limit:** 512 MB
+**Restart:** unless-stopped
 
 ### `allerac-docs`
 **Image:** `squidfunk/mkdocs-material:latest`
@@ -216,5 +229,6 @@ Start with multiple profiles: `COMPOSE_PROFILES=cloud,webhook docker compose up 
 | `11434` | `allerac-ollama` | Internal only |
 | `6379` | `allerac-redis` | Internal only |
 | `8001` | `allerac-health-worker` | Internal only |
+| `8090` | `allerac-agent-worker` | Internal only |
 | `3001` (internal) | `allerac-executor` | Internal only |
 | `3002` (internal) | `allerac-notifier` | Internal only |
