@@ -9,10 +9,15 @@ interface ReadLogsArgs {
   limit?: number;
 }
 
-export function buildLogsTool() {
+export function buildLogsTool(isAdmin: boolean) {
   return {
     read_logs: async (args: ReadLogsArgs) => {
-      // logBuffer lives in the same Next.js server process — direct import, no HTTP.
+      // The buffer aggregates logs from every user's activity in this process,
+      // so reading it is an admin-only capability (same rule as the /logs UI).
+      if (!isAdmin) {
+        return { error: 'read_logs requires an admin user' };
+      }
+      // logBuffer lives in the same server process — direct import, no HTTP.
       const { logBuffer } = await import('@/lib/logger');
       const all = logBuffer.getAll();
 

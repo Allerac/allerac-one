@@ -1,0 +1,30 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install --ignore-scripts
+COPY tsconfig.json ./
+COPY src/agent-worker.ts ./src/
+COPY src/lib/ ./src/lib/
+COPY src/app/clients/ ./src/app/clients/
+COPY src/app/lib/ ./src/app/lib/
+COPY src/app/actions/ ./src/app/actions/
+COPY src/app/services/ ./src/app/services/
+COPY src/app/tools/ ./src/app/tools/
+COPY src/app/config/ ./src/app/config/
+COPY src/app/types.ts ./src/app/types.ts
+COPY src/app/constants.ts ./src/app/constants.ts
+COPY src/app/constants/ ./src/app/constants/
+RUN npx esbuild src/agent-worker.ts \
+    --bundle \
+    --platform=node \
+    --target=node20 \
+    --external:pg-native \
+    --outfile=dist/agent-worker.js
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+COPY --from=builder /app/dist/agent-worker.js ./
+EXPOSE 8090
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8090/health || exit 1
+CMD ["node", "agent-worker.js"]

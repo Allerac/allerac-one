@@ -45,6 +45,7 @@ export interface UserSettings {
   google_api_key: string | null;
   anthropic_api_key: string | null;
   system_message: string | null;
+  is_admin: boolean;
 }
 
 export class WorkerRunRepository {
@@ -210,9 +211,10 @@ export class WorkerRunRepository {
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | null> {
-    const [user, sys] = await Promise.all([
+    const [user, sys, adminResult] = await Promise.all([
       userSettingsService.loadUserSettings(userId),
       systemSettingsService.loadAll(),
+      pool.query<{ is_admin: boolean }>('SELECT is_admin FROM users WHERE id = $1', [userId]),
     ]);
 
     if (!user) return null;
@@ -224,6 +226,7 @@ export class WorkerRunRepository {
       google_api_key:    user.google_api_key    || sys.google_api_key    || null,
       anthropic_api_key: user.anthropic_api_key || sys.anthropic_api_key || null,
       system_message:    user.system_message,
+      is_admin:          adminResult.rows[0]?.is_admin ?? false,
     };
   }
 

@@ -20,6 +20,7 @@ export interface WorkerExecutionConfig {
   modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic';
   modelBaseUrl: string;
   systemMessage: string;
+  isAdmin: boolean;
 }
 
 export interface WorkerResult {
@@ -59,8 +60,12 @@ export class WorkerService {
       enrichedSystemMessage = enrichedSystemMessage.replace(/\/workspace\/projects\//g, `${workspacePath}/`);
       enrichedSystemMessage = enrichedSystemMessage.replace(/\/workspace\/projects(?=\s|$|["'])/g, workspacePath);
 
-      // Filter tools based on worker spec
-      const availableTools = spec.tools.length > 0 ? TOOLS.filter((t) => spec.tools.includes(t.function.name)) : TOOLS;
+      // Filter tools based on worker spec; logs tools are admin-only (the buffer
+      // aggregates every user's activity in this process)
+      let availableTools = spec.tools.length > 0 ? TOOLS.filter((t) => spec.tools.includes(t.function.name)) : TOOLS;
+      if (!config.isAdmin) {
+        availableTools = availableTools.filter((t) => !LOGS_TOOL_NAMES.includes(t.function.name));
+      }
 
       // Initial message: just the worker task
       const messages: Array<{ role: string; content: string | any[]; tool_call_id?: string; tool_calls?: any }> = [
@@ -154,7 +159,7 @@ export class WorkerService {
                 toolResult = await handler(toolArgs);
               }
             } else if (LOGS_TOOL_NAMES.includes(toolName)) {
-              const logsHandlers = buildLogsTool();
+              const logsHandlers = buildLogsTool(config.isAdmin);
               const handler = logsHandlers[toolName as keyof typeof logsHandlers] as (args: any) => Promise<any>;
               toolResult = await handler(toolArgs);
             } else {

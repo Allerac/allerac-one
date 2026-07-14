@@ -244,6 +244,7 @@ describe('WorkerRunRepository', () => {
         resend_api_key: null,
         resend_from_email: null,
       });
+      mockQuery.mockResolvedValueOnce({ rows: [{ is_admin: true }] });
 
       const result = await repo.getUserSettings('user_1');
 
@@ -251,7 +252,12 @@ describe('WorkerRunRepository', () => {
       expect(result!.github_token).toBe('gh_123');
       expect(result!.github_repo_token).toBe('gh_repo');
       expect(result!.anthropic_api_key).toBe('sk-ant-user');
+      expect(result!.is_admin).toBe(true);
       expect(UserSettingsService.prototype.loadUserSettings).toHaveBeenCalledWith('user_1');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('is_admin'),
+        ['user_1'],
+      );
     });
 
     it('should return null for user without settings', async () => {
@@ -265,6 +271,7 @@ describe('WorkerRunRepository', () => {
         resend_api_key: null,
         resend_from_email: null,
       });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
 
       const result = await repo.getUserSettings('nonexistent');
 

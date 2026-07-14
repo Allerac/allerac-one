@@ -66,6 +66,7 @@ const defaultSettings = {
   system_message: 'You are helpful',
   model_provider: 'ollama',
   model_name: 'qwen2.5:3b',
+  is_admin: false,
 };
 
 describe('WorkerRunnerService', () => {

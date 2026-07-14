@@ -716,6 +716,60 @@ Exit criteria:
   - agent worker;
   - specialized services.
 
+## Phase 8: Worker Separation (Architecture Phase 4)
+
+Purpose: move the background agent-run runner out of the web-serving process so the
+web app can serve requests while runs execute elsewhere, and restarting the web app
+does not interrupt active runs. This is the first concrete step of app decoupling and
+unblocks headless mode (architecture Phase 5).
+
+Design decisions:
+
+- The runner moves to a dedicated `agent-worker` container built from
+  `Dockerfile.agent-worker` (esbuild bundle, same pattern as `Dockerfile.telegram`).
+  Same-repo build means no code drift between app and worker.
+- Coordination stays DB-only through `agent_runs` and `FOR UPDATE SKIP LOCKED`
+  claiming — no route changes; multiple runner instances are safe.
+- The scheduler logger stays in the `app` container (it feeds the /logs UI and is
+  advisory-locked).
+- Flag scheme (backwards compatible): `DISABLE_BACKGROUND_WORKERS=true` (legacy)
+  disables both the in-app runner and the scheduler logger; `DISABLE_AGENT_RUNNER=true`
+  (new, set by compose on `app`) disables only the runner. The worker entry ignores
+  both flags.
+- The worker exposes `GET /health` on `AGENT_WORKER_HEALTH_PORT` (default 8090)
+  reporting runner status, active run count, and a DB ping, wired as the compose
+  healthcheck.
+- Graceful shutdown: SIGTERM stops polling, drains active runs up to
+  `AGENT_WORKER_SHUTDOWN_TIMEOUT_MS` (default 25s), then exits; interrupted runs
+  recover through the existing stale-run retry (5-minute window).
+
+### Deliverables
+
+- [x] `src/agent-worker.ts` entry script using the existing `WorkerRunnerService`.
+- [x] `validateWorkerRuntimeConfig()` in `src/lib/runtime-config.ts` (worker does not
+      require `TELEGRAM_TOKEN_ENCRYPTION_KEY`).
+- [x] `Dockerfile.agent-worker` and an `agent-worker` compose service with explicit
+      env contract, healthcheck, and `stop_grace_period`.
+- [x] Two-flag gate in `src/instrumentation.ts`; compose sets
+      `DISABLE_AGENT_RUNNER=true` on `app`.
+- [x] `.env.example` documents the worker flags and `AGENT_WORKER_*` tuning vars.
+- [x] Architecture doc Phase 4 updated with ownership statement and the `read_logs`
+      caveat (agent runs now see only worker-container logs).
+
+### Exit Criteria
+
+Verified end-to-end on 2026-07-14 with local Docker (qwen2.5:3b via Ollama):
+
+- [x] The web app serves requests while the worker handles agent runs.
+- [x] Restarting the web app mid-run does not interrupt the active run (run completed
+      normally while `app` restarted; worker health reported the active run
+      throughout).
+- [x] Restarting the worker mid-run recovers the run via stale-run retry (SIGTERM
+      drained gracefully, "Retrying stale run" fired after the 5-minute window, run
+      completed on the second attempt).
+- [x] The app container no longer starts the runner; the scheduler logger still runs
+      in the app.
+
 ## Deferred Work
 
 - Tool execution API (`tools:run`).
@@ -723,7 +777,6 @@ Exit criteria:
 - OpenAPI generation.
 - CLI packaging.
 - Separate `api` container.
-- Separate `agent-worker` container.
 - Public docs publishing.
 
 ## Definition Of Done For Any Phase
@@ -736,6 +789,15 @@ Exit criteria:
 - If a new contract exists, the docs include at least one curl example.
 
 ## Recommended Next Ticket
+
+Resolved 2026-07-14 — decisions recorded below and in the dated implementation note;
+the chosen increment is Phase 8 (Worker Separation) above.
+
+1. Streaming/async chat: deferred until a real client needs incremental tokens; the
+   synchronous send endpoint covers CLI, automations, and Telegram.
+2. `tools:run`: deferred until the tool permission model is explicit; tools remain
+   reachable through chat and agent runs.
+3. Next surface: worker separation (architecture Phase 4 / roadmap Phase 8).
 
 Title:
 
@@ -804,3 +866,27 @@ Use this section to append discoveries while building.
   have not started; `WorkerRunnerService` still runs inside the `app` container.
 - The stale "agent-runs" next ticket was replaced with a decision ticket covering
   streaming chat, `tools:run`, and the next surface.
+- Decisions taken the same day: streaming/async chat deferred until a client needs
+  it; `tools:run` deferred until the tool permission model is explicit; the next
+  increment is worker separation (roadmap Phase 8, architecture Phase 4).
+- Exploration confirmed the runner tree has zero Next.js runtime coupling and that
+  run coordination is already DB-only (`FOR UPDATE SKIP LOCKED`), so no route changes
+  are needed for the split. `Dockerfile.telegram` proves the services/tools tree
+  bundles with esbuild using only `--external:pg-native`.
+- Phase 8 (worker separation) was implemented and verified the same day: the
+  `agent-worker` container claims and executes runs; app restarts mid-run do not
+  interrupt execution; worker restarts recover runs via stale retry. The worker
+  forwards console lines to the app /logs UI via `/api/log-submit` (`LOG_API_URL`).
+  Known behavior change: `read_logs` inside agent runs sees only the worker's own
+  local log buffer.
+- Multi-tenant hardening, same day: the log buffer aggregates every user's activity,
+  so `read_logs` is now admin-only (gated in `buildLogsTool(isAdmin)` and filtered
+  from non-admin worker tool definitions) and `/api/log-submit` browser sessions now
+  require admin (`requireCurrentAdmin`), closing a log-injection vector into the
+  admin-only /logs monitor. Service callers keep using `EXECUTOR_SECRET`. Remaining
+  known cross-tenant exposure: the app scheduler logger writes job result snippets of
+  all users into the admin-visible buffer (acceptable under the trusted-operator
+  model; revisit if log entries gain per-user attribution). The
+  claim path (`SKIP LOCKED` in autocommit) leaves a small double-execution window if
+  two runners ever run simultaneously; optional follow-up hardening is an atomic
+  claim UPDATE.

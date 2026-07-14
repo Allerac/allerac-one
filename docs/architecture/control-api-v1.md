@@ -9,8 +9,9 @@ run), skills, health, search, email, and finance. Browser session auth and scope
 bearer API keys are both supported.
 
 Of the initial resources below, only `tools` (`POST /api/v1/tools/:name/run`) remains
-unimplemented. Phases 1-3 are complete; Phase 4 (worker separation) and Phase 5
-(headless mode) have not started. The full implemented contract is tracked in
+unimplemented. Phases 1-4 are complete (agent runs execute in the dedicated
+`agent-worker` container); Phase 5 (headless mode) has not started. The full
+implemented contract is tracked in
 `docs/api/openapi/control-api-v1.yaml` and audited in
 `docs/roadmap/control-api-v1-gap-audit-2026-06-29.md`.
 
@@ -294,7 +295,24 @@ Exit criteria:
 
 ### Phase 4: Worker Separation
 
-Status: not started. `WorkerRunnerService` still runs inside the `app` container.
+Status: implemented. Agent runs execute in the dedicated `agent-worker` compose
+service (`Dockerfile.agent-worker`, entry `src/agent-worker.ts`), which reuses
+`WorkerRunnerService` unchanged and coordinates with the app exclusively through the
+`agent_runs` table (`FOR UPDATE SKIP LOCKED` claiming).
+
+Ownership after the split:
+
+- The `agent-worker` container owns polling interval, concurrency, and stale-run
+  recovery (`AGENT_WORKER_*` env vars) and exposes its own `GET /health` on port 8090.
+- The `app` container owns the scheduler logger (feeds the /logs UI) and system skill
+  sync; compose sets `DISABLE_AGENT_RUNNER=true` on `app` so the runner does not also
+  start there. The legacy `DISABLE_BACKGROUND_WORKERS=true` still disables both.
+
+The worker forwards its `[Context]` console lines to the app's /logs UI through
+`POST /api/log-submit` (`LOG_API_URL`, same pattern as the telegram and executor
+services), so agent-run activity stays visible in the System Monitor terminal.
+Known behavior change: the `read_logs` tool inside agent runs still reads only the
+worker container's own local log buffer, not the web app's.
 
 Goal: allow background execution to move out of the web-serving process.
 

@@ -125,7 +125,7 @@ describe('security-sensitive API routes', () => {
   });
 
   it('does not accept log submission without a session or service secret', async () => {
-    mockRequireCurrentUser.mockRejectedValueOnce(new UnauthorizedError());
+    mockRequireCurrentAdmin.mockRejectedValueOnce(new UnauthorizedError());
 
     const response = await submitApiLog(jsonRequest(
       'http://localhost/api/log-submit',
@@ -133,6 +133,18 @@ describe('security-sensitive API routes', () => {
     ));
 
     expect(response.status).toBe(401);
+    expect(mockSubmitLog).not.toHaveBeenCalled();
+  });
+
+  it('does not accept log submission from a non-admin session', async () => {
+    mockRequireCurrentAdmin.mockRejectedValueOnce(new ForbiddenError());
+
+    const response = await submitApiLog(jsonRequest(
+      'http://localhost/api/log-submit',
+      { context: 'Auth', message: 'spoofed line' }
+    ));
+
+    expect(response.status).toBe(403);
     expect(mockSubmitLog).not.toHaveBeenCalled();
   });
 
@@ -144,7 +156,7 @@ describe('security-sensitive API routes', () => {
     ));
 
     expect(response.status).toBe(200);
-    expect(mockRequireCurrentUser).not.toHaveBeenCalled();
+    expect(mockRequireCurrentAdmin).not.toHaveBeenCalled();
     expect(mockSubmitLog).toHaveBeenCalledWith('Executor', 'message', 'info');
   });
 
