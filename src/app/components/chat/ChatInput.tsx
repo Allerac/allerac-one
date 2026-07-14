@@ -33,6 +33,7 @@ interface ChatInputProps {
   MODELS?: any[];
   githubConfigured?: boolean;
   googleConfigured?: boolean;
+  anthropicConfigured?: boolean;
   ollamaConnected?: boolean;
   ollamaModels?: any[];
   onDownloadModel?: (modelName: string) => void;
@@ -68,6 +69,7 @@ export default function ChatInput({
   MODELS = [],
   githubConfigured = false,
   googleConfigured = false,
+  anthropicConfigured = false,
   ollamaConnected = false,
   ollamaModels = [],
   onDownloadModel,
@@ -95,6 +97,7 @@ export default function ChatInput({
   const isProviderReady =
     currentModelConfig?.provider === 'ollama' ? ollamaConnected :
     currentModelConfig?.provider === 'gemini' ? googleConfigured :
+    currentModelConfig?.provider === 'anthropic' ? anthropicConfigured :
     githubConfigured;
 
   const providerHint = !isProviderReady
@@ -102,6 +105,8 @@ export default function ChatInput({
       ? t('ollamaNotConnected')
       : currentModelConfig?.provider === 'gemini'
       ? t('googleNotConfigured')
+      : currentModelConfig?.provider === 'anthropic'
+      ? t('anthropicNotConfigured')
       : t('githubNotConfigured')
     : null;
 

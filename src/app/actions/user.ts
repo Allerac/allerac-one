@@ -2,14 +2,31 @@
 
 import { cookies } from 'next/headers';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 import pool from '@/app/clients/db';
 
 const userSettingsService = new UserSettingsService();
+const systemSettingsService = new SystemSettingsService();
 
 export async function loadUserSettings() {
     const user = await requireCurrentUser();
     return await userSettingsService.loadUserSettings(user.id);
+}
+
+export async function loadProviderConfigurationStatus() {
+    const user = await requireCurrentUser();
+    const [settings, systemSettings] = await Promise.all([
+        userSettingsService.loadUserSettings(user.id),
+        systemSettingsService.loadAll(),
+    ]);
+
+    return {
+        githubConfigured: Boolean(settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN),
+        googleConfigured: Boolean(settings?.google_api_key || systemSettings.google_api_key),
+        anthropicConfigured: Boolean(settings?.anthropic_api_key || systemSettings.anthropic_api_key),
+        tavilyConfigured: Boolean(settings?.tavily_api_key || systemSettings.tavily_api_key || process.env.TAVILY_API_KEY),
+    };
 }
 
 export async function saveUserSettings(githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string) {

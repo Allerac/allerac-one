@@ -55,6 +55,7 @@ const translations: Record<string, Record<string, any>> = {
       ollamaNotConnected: 'Ollama is not connected',
       googleNotConfigured: 'Google API key not configured',
       githubNotConfigured: 'GitHub token not configured',
+      anthropicNotConfigured: 'Anthropic API key not configured',
     },
   },
   pt: {
@@ -112,6 +113,7 @@ const translations: Record<string, Record<string, any>> = {
       ollamaNotConnected: 'Ollama não está conectado',
       googleNotConfigured: 'Chave de API do Google não configurada',
       githubNotConfigured: 'Token do GitHub não configurado',
+      anthropicNotConfigured: 'Chave de API da Anthropic não configurada',
     },
   },
   es: {
@@ -169,6 +171,7 @@ const translations: Record<string, Record<string, any>> = {
       ollamaNotConnected: 'Ollama no está conectado',
       googleNotConfigured: 'Clave de API de Google no configurada',
       githubNotConfigured: 'Token de GitHub no configurado',
+      anthropicNotConfigured: 'Clave de API de Anthropic no configurada',
     },
   },
 };

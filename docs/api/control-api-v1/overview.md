@@ -77,7 +77,7 @@ Common error codes:
 
 | Resource | Endpoints |
 |---|---|
-| [System](system.md) | `GET /me`, `GET /domains` |
+| [System](system.md) | `GET /me`, `GET /domains`, `GET /capabilities` |
 | [API Keys](api-keys.md) | list, create, revoke |
 | [Conversations](conversations.md) | list, create, messages |
 | [Memories](memories.md) | list, create from conversation, delete |
@@ -88,7 +88,9 @@ Common error codes:
 | [Scheduled Jobs](scheduled-jobs.md) | list, create, update, toggle, executions, delete |
 | [Skills](skills.md) | list, get, create, update, delete |
 | [Health](health.md) | status, summary, daily, activities |
-| [Finance](finance.md) | watchlist list, add, remove |
+| [Search](search.md) | web search |
+| [Email](email.md) | list messages, get message, send |
+| [Finance](finance.md) | quotes, symbol search, candles, watchlist list, add, remove |
 
 ## Bruno Collection
 
@@ -108,55 +110,67 @@ Use the `Local` environment:
 | `agentRunId` | Set automatically by `Agent Runs / Create Agent Run` |
 | `conversationId` | Set automatically by `Conversations / Create Conversation` |
 | `memoryId` | Set automatically by `Memories / Create Conversation Memory` |
+| `emailAccountId` | Email account id to test IMAP/SMTP endpoints |
+| `emailMessageUid` | IMAP UID to test `Email / Get Message` |
 
 Recommended smoke order:
 
 1. `System / Me`
 2. `System / List Domains`
-3. `Tickets / List Tickets`
-4. `Tickets / Create Ticket`
-5. `Tickets / Get Ticket`
-6. `Tickets / List Ticket Events`
-7. `Tickets / Resolve Ticket`
-8. `Tickets / List Ticket Events`
-9. `Tickets / Delete Ticket`
-10. `Agent Runs / List Agent Runs`
-11. `Agent Runs / Create Agent Run`
-12. `Agent Runs / Get Agent Run`
-13. `Agent Runs / Cancel Agent Run`
-14. `Conversations / List Conversations`
-15. `Conversations / Create Conversation`
-16. `Conversations / List Messages`
-17. `Memories / Create Conversation Memory`
-18. `Memories / List Memories`
-19. `Memories / Delete Memory`
-20. `Documents / List Documents`
-21. `Documents / Upload Document`
-22. `Documents / Delete Document`
-23. `Notes / List Notes`
-24. `Notes / Create Note`
-25. `Notes / Search Notes`
-26. `Notes / List Note Tags`
-27. `Notes / Update Note`
-28. `Notes / Delete Note`
-29. `Scheduled Jobs / List Jobs`
-30. `Scheduled Jobs / Create Job`
-31. `Scheduled Jobs / Toggle Job`
-32. `Scheduled Jobs / Update Job`
-33. `Scheduled Jobs / List Job Executions`
-34. `Scheduled Jobs / Delete Job`
-35. `Skills / List Skills`
-36. `Skills / Create Skill`
-37. `Skills / Get Skill`
-38. `Skills / Update Skill`
-39. `Skills / Delete Skill`
-40. `Health / Health Status`
-41. `Health / Health Summary`
-42. `Health / Daily Health`
-43. `Health / List Activities`
-44. `Finance / Get Watchlist`
-45. `Finance / Add to Watchlist`
-46. `Finance / Remove from Watchlist`
+3. `System / Capabilities`
+4. `Tickets / List Tickets`
+5. `Tickets / Create Ticket`
+6. `Tickets / Get Ticket`
+7. `Tickets / List Ticket Events`
+8. `Tickets / Resolve Ticket`
+9. `Tickets / List Ticket Events`
+10. `Tickets / Delete Ticket`
+11. `Agent Runs / List Agent Runs`
+12. `Agent Runs / Create Agent Run`
+13. `Agent Runs / Get Agent Run`
+14. `Agent Runs / Cancel Agent Run`
+15. `Conversations / List Conversations`
+16. `Conversations / Create Conversation`
+17. `Conversations / Send Message`
+18. `Conversations / List Messages`
+19. `Memories / Create Conversation Memory`
+20. `Memories / List Memories`
+21. `Memories / Delete Memory`
+22. `Documents / List Documents`
+23. `Documents / Upload Document`
+24. `Documents / Delete Document`
+25. `Notes / List Notes`
+26. `Notes / Create Note`
+27. `Notes / Search Notes`
+28. `Notes / List Note Tags`
+29. `Notes / Update Note`
+30. `Notes / Delete Note`
+31. `Scheduled Jobs / List Jobs`
+32. `Scheduled Jobs / Create Job`
+33. `Scheduled Jobs / Toggle Job`
+34. `Scheduled Jobs / Update Job`
+35. `Scheduled Jobs / Run Job`
+36. `Scheduled Jobs / List Job Executions`
+37. `Scheduled Jobs / Delete Job`
+38. `Skills / List Skills`
+39. `Skills / Create Skill`
+40. `Skills / Get Skill`
+41. `Skills / Update Skill`
+42. `Skills / Delete Skill`
+43. `Health / Health Status`
+44. `Health / Health Summary`
+45. `Health / Daily Health`
+46. `Health / List Activities`
+47. `Search / Web Search`
+48. `Email / List Messages`
+49. `Email / Get Message`
+50. `Email / Send Email`
+51. `Finance / Get Quotes`
+52. `Finance / Search Symbols`
+53. `Finance / Get Candles`
+54. `Finance / Get Watchlist`
+55. `Finance / Add to Watchlist`
+56. `Finance / Remove from Watchlist`
 
 Memory creation requires `conversationId` to point to an owned conversation with
 enough messages to summarize. A newly created empty conversation should return

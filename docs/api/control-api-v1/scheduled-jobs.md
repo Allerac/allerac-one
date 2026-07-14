@@ -13,6 +13,7 @@ channels (e.g. `telegram`).
 | `POST /api/v1/jobs` | `jobs:write` |
 | `PATCH /api/v1/jobs/:id` | `jobs:write` |
 | `POST /api/v1/jobs/:id/toggle` | `jobs:write` |
+| `POST /api/v1/jobs/:id/run` | `jobs:write` |
 | `DELETE /api/v1/jobs/:id` | `jobs:write` |
 
 Browser sessions can call these endpoints without API key scopes.
@@ -133,7 +134,7 @@ curl -s \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ALLERAC_API_KEY" \
   http://localhost:8080/api/v1/jobs/$JOB_ID \
-  -d '{"cronExpr": "0 9 * * MON-FRI"}'
+  -d '{"cronExpr": "0 9 * * 1-5"}'
 ```
 
 Response:
@@ -144,7 +145,7 @@ Response:
     "job": {
       "id": "job-id",
       "name": "Morning digest",
-      "cronExpr": "0 9 * * MON-FRI",
+      "cronExpr": "0 9 * * 1-5",
       "enabled": true
     }
   }
@@ -207,6 +208,39 @@ Response:
   }
 }
 ```
+
+## `POST /api/v1/jobs/:id/run`
+
+Runs an enabled job immediately and records the result in the job execution history.
+This uses the same prompt execution path as scheduled runs.
+
+Example:
+
+```bash
+curl -s \
+  -X POST \
+  -H "Authorization: Bearer $ALLERAC_API_KEY" \
+  http://localhost:8080/api/v1/jobs/$JOB_ID/run
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "execution": {
+      "id": "exec-id",
+      "jobId": "job-id",
+      "status": "completed",
+      "result": "3 open tickets. Health score: 82. No activities yesterday.",
+      "startedAt": "2026-06-25T08:00:00.000Z",
+      "completedAt": "2026-06-25T08:00:04.000Z"
+    }
+  }
+}
+```
+
+Missing, unowned, or disabled jobs return `404 not_found`.
 
 ## `DELETE /api/v1/jobs/:id`
 

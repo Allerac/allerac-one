@@ -5,6 +5,7 @@ import { scheduledJobsService } from '@/app/services/scheduled-jobs/scheduled-jo
 import { GET as listJobs, POST as createJob } from '@/app/api/v1/jobs/route';
 import { PATCH as updateJob, DELETE as deleteJob } from '@/app/api/v1/jobs/[id]/route';
 import { POST as toggleJob } from '@/app/api/v1/jobs/[id]/toggle/route';
+import { POST as runJob } from '@/app/api/v1/jobs/[id]/run/route';
 import { GET as listJobExecutions } from '@/app/api/v1/jobs/[id]/executions/route';
 
 jest.mock('@/app/lib/auth-session', () => {
@@ -25,6 +26,7 @@ jest.mock('@/app/services/scheduled-jobs/scheduled-jobs.service', () => ({
     updateScheduledJob: jest.fn(),
     deleteScheduledJob: jest.fn(),
     toggleJobEnabled: jest.fn(),
+    runJobNow: jest.fn(),
     getJobExecutions: jest.fn(),
   },
 }));
@@ -236,5 +238,36 @@ describe('Control API v1 scheduled jobs', () => {
     expect(mockJobsService.getJobExecutions).toHaveBeenCalledWith('job-id', user.id);
     const body = await response.json();
     expect(body.data.executions[0]).toMatchObject({ id: 'exec-id', status: 'completed' });
+  });
+
+  it('runs a job immediately', async () => {
+    mockJobsService.runJobNow.mockResolvedValueOnce(execution);
+
+    const response = await runJob(
+      new Request('http://localhost/api/v1/jobs/job-id/run', { method: 'POST' }),
+      routeParams(),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockJobsService.runJobNow).toHaveBeenCalledWith('job-id', user.id);
+    const body = await response.json();
+    expect(body.data.execution).toMatchObject({
+      id: 'exec-id',
+      jobId: 'job-id',
+      status: 'completed',
+      result: 'All good.',
+    });
+  });
+
+  it('returns 404 when running a missing or disabled job', async () => {
+    mockJobsService.runJobNow.mockResolvedValueOnce(null as any);
+
+    const response = await runJob(
+      new Request('http://localhost/api/v1/jobs/missing/run', { method: 'POST' }),
+      routeParams('missing'),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: { code: 'not_found' } });
   });
 });

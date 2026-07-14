@@ -1,0 +1,15 @@
+meta {
+  name: Get Quotes
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/quote?symbols=AAPL,NVDA
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

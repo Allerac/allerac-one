@@ -83,3 +83,64 @@ Response:
   }
 }
 ```
+
+## `GET /api/v1/capabilities`
+
+Returns a safe capability map for the authenticated user. This endpoint reports
+whether integrations and providers are configured and, when cheaply verifiable,
+connected. It never returns API keys, tokens, encrypted values, or other secrets.
+
+Required scope:
+
+```text
+capabilities:read
+```
+
+Example:
+
+```bash
+curl -s \
+  -H "Authorization: Bearer $ALLERAC_API_KEY" \
+  http://localhost:8080/api/v1/capabilities
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "capabilities": {
+      "llm": {
+        "github": { "configured": true, "available": true },
+        "gemini": { "configured": true, "available": true },
+        "anthropic": { "configured": false, "available": false },
+        "ollama": { "configured": true, "connected": true, "available": true }
+      },
+      "search": {
+        "tavily": { "configured": true, "available": true }
+      },
+      "notifications": {
+        "telegram": { "configured": false, "available": false },
+        "resend": { "configured": false, "available": false }
+      },
+      "storage": {
+        "azureBlob": { "configured": false, "available": false }
+      },
+      "social": {
+        "instagram": { "configured": false, "connected": false, "available": false },
+        "tiktok": { "configured": false, "connected": false, "available": false }
+      },
+      "email": {
+        "imap": { "configured": false, "available": false },
+        "smtp": { "configured": false, "available": false }
+      },
+      "health": {
+        "garmin": { "configured": false, "connected": false, "available": false }
+      }
+    },
+    "defaults": {
+      "chatModel": "gemini-2.5-flash"
+    }
+  }
+}
+```

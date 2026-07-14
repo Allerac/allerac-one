@@ -1,0 +1,15 @@
+meta {
+  name: Capabilities
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/capabilities
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

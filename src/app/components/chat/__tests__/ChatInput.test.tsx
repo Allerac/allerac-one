@@ -15,11 +15,13 @@ describe('ChatInput', () => {
     MODELS: [
       { id: 'model_1', name: 'Fast Model', provider: 'gemini', category: 'Fast' },
       { id: 'model_2', name: 'Thinking Model', provider: 'github', category: 'Thinking' },
+      { id: 'model_3', name: 'Anthropic Model', provider: 'anthropic', category: 'Pro' },
     ],
     selectedModel: 'model_1',
     setSelectedModel: jest.fn(),
     googleConfigured: true,
     githubConfigured: true,
+    anthropicConfigured: true,
     ollamaConnected: false,
     ollamaModels: [],
   };
@@ -162,6 +164,33 @@ describe('ChatInput', () => {
       );
 
       const hint = screen.getByText(/github.*not configured|not configured/i);
+      expect(hint).toBeInTheDocument();
+    });
+
+    it('should not show GitHub hint when GitHub is configured without a local token', () => {
+      render(
+        <ChatInput
+          {...defaultProps}
+          selectedModel={'model_2'}
+          githubToken=""
+          githubConfigured={true}
+        />
+      );
+
+      const hint = screen.queryByText(/github.*not configured/i);
+      expect(hint).not.toBeInTheDocument();
+    });
+
+    it('should show hint when Anthropic is not configured', () => {
+      render(
+        <ChatInput
+          {...defaultProps}
+          selectedModel={'model_3'}
+          anthropicConfigured={false}
+        />
+      );
+
+      const hint = screen.getByText(/anthropic.*not configured/i);
       expect(hint).toBeInTheDocument();
     });
 

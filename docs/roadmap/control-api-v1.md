@@ -117,7 +117,7 @@ Clients
         |
         v
 Services
-  tickets · agents · chat · domains · tools · jobs
+  tickets · agents · chat · domains · search · email · finance · jobs
         |
         v
 Runtime
@@ -330,6 +330,21 @@ expires_at TIMESTAMPTZ
 | `agents:write` | Create/cancel agent runs |
 | `memory:read` | List owned memory summaries |
 | `memory:write` | Create or delete owned memory summaries |
+| `capabilities:read` | Read safe provider/integration capability status |
+| `documents:read` | List owned documents |
+| `documents:write` | Upload or delete owned documents |
+| `notes:read` | List/search owned notes |
+| `notes:write` | Create/update/delete owned notes |
+| `jobs:read` | List jobs and executions |
+| `jobs:write` | Create/update/toggle/delete/run owned jobs |
+| `skills:read` | List/read skills |
+| `skills:write` | Create/update/delete owned skills |
+| `health:read` | Read health status and metrics |
+| `search:read` | Run configured web search |
+| `email:read` | List/read messages from owned email accounts |
+| `email:write` | Send mail through owned email accounts |
+| `finance:read` | Read market data and watchlist |
+| `finance:write` | Add/remove watchlist symbols |
 
 Keep `tools:run` and `settings:*` for later phases unless needed earlier.
 
@@ -525,6 +540,7 @@ deferred until the chat execution contract is designed.
 GET  /api/v1/conversations
 POST /api/v1/conversations
 GET  /api/v1/conversations/:id/messages
+POST /api/v1/conversations/:id/messages
 ```
 
 ### Tasks
@@ -533,7 +549,7 @@ GET  /api/v1/conversations/:id/messages
 - [x] Use existing `ChatService`.
 - [x] Enforce `chat:read` and `chat:write` scopes.
 - [x] Add contract tests for ownership and missing scope.
-- [ ] Design `POST /api/v1/conversations/:id/messages` execution semantics.
+- [x] Design and implement synchronous `POST /api/v1/conversations/:id/messages`.
 
 ### Exit Criteria
 
@@ -757,5 +773,7 @@ Use this section to append discoveries while building.
 - `/api/v1/me`, `/api/v1/domains`, and `/api/v1/tickets` now accept either browser
   sessions or API keys.
 - `/api/v1/agent-runs` was implemented with list/create/detail/cancel endpoints.
-- The next implementation target is a first vertical slice smoke flow across domains,
-  tickets, and agent runs.
+- `/api/v1/capabilities`, synchronous conversation message execution, manual job run,
+  search, email, and finance market-data reads were added after the initial slices.
+- Current OpenAPI and handler counts are tracked in
+  `docs/roadmap/control-api-v1-gap-audit-2026-06-29.md`.

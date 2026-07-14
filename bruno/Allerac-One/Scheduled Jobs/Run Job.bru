@@ -1,0 +1,15 @@
+meta {
+  name: Run Job
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/jobs/{{jobId}}/run
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

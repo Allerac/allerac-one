@@ -1,0 +1,24 @@
+meta {
+  name: Send Message
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/conversations/{{conversationId}}/messages
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "message": "Reply with a short confirmation that the Control API chat endpoint works.",
+    "model": "gemini-2.5-flash",
+    "provider": "gemini"
+  }
+}

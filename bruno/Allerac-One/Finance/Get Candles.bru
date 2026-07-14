@@ -1,0 +1,15 @@
+meta {
+  name: Get Candles
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/candles?symbol=AAPL&period=1M
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

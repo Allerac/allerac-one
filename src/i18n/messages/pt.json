@@ -104,6 +104,7 @@
     "modelNotAvailable": "Modelo não disponível. Faça o download no Ollama primeiro.",
     "googleNotConfigured": "Chave de API do Google não configurada. Adicione nas Configurações.",
     "githubNotConfigured": "Token do GitHub não configurado. Adicione nas Configurações.",
+    "anthropicNotConfigured": "Chave de API da Anthropic não configurada. Adicione nas Configurações.",
     "stoppedByUser": "Geração cancelada pelo utilizador."
   },
   "home": {

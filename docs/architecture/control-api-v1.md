@@ -37,7 +37,7 @@ Allerac Control API v1
         |
         v
 Core services
-  Chat · agents · tickets · domains · tools · settings · jobs
+  Chat · agents · tickets · domains · search · email · finance · jobs
         |
         v
 Runtime services
@@ -70,6 +70,10 @@ service boundaries.
 | `agent-runs` | Create/poll/cancel background agent runs | `WorkerRunRepository`, `WorkerRunnerService` |
 | `tickets` | Create/list/update tickets and read events | `TicketService`, `tickets`, `ticket_events` |
 | `domains` | Discover available domains and active skill defaults | domain access tables, skill defaults |
+| `capabilities` | Read safe provider/integration availability | user settings, system settings, environment |
+| `search` | Run configured web search | `SearchWebTool`, Tavily settings/cache |
+| `email` | Read/send through owned email accounts | IMAP/SMTP services, `user_email_accounts` |
+| `finance` | Read market data and manage watchlist | Yahoo-backed market data, `user_watchlist` |
 | `tools` | Run approved tools through a scoped API boundary | chat/tool registry |
 | `jobs` | Create/list/run scheduled or ad hoc jobs | jobs domain services |
 
@@ -119,6 +123,7 @@ DELETE /api/v1/api-keys/:id
 GET    /api/v1/conversations
 POST   /api/v1/conversations
 GET    /api/v1/conversations/:id/messages
+POST   /api/v1/conversations/:id/messages
 POST   /api/v1/conversations/:id/memory
 GET    /api/v1/memories
 DELETE /api/v1/memories/:id
@@ -188,7 +193,15 @@ Suggested first scopes:
 | `tickets:read` | List/read tickets and events |
 | `tickets:write` | Create/update tickets |
 | `tools:run` | Execute approved tools |
-| `settings:read` | Read non-secret effective settings |
+| `capabilities:read` | Read non-secret provider/integration capability status |
+| `documents:read` / `documents:write` | List/upload/delete documents |
+| `notes:read` / `notes:write` | List/search/create/update/delete notes |
+| `jobs:read` / `jobs:write` | List/manage/run scheduled jobs |
+| `skills:read` / `skills:write` | List/manage skills |
+| `health:read` | Read Garmin-backed health data |
+| `search:read` | Run configured web search |
+| `email:read` / `email:write` | Read/send through owned email accounts |
+| `finance:read` / `finance:write` | Read market data and manage watchlist |
 
 Admin and system-level scopes should wait until there is a concrete use case.
 

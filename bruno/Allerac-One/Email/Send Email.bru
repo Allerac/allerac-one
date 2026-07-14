@@ -1,0 +1,25 @@
+meta {
+  name: Send Email
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/email/send
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "accountId": "{{emailAccountId}}",
+    "to": "recipient@example.com",
+    "subject": "Allerac One test",
+    "body": "Test email from Control API v1."
+  }
+}

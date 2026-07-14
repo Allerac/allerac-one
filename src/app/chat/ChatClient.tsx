@@ -184,6 +184,12 @@ export default function AdminChat({
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
   const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [providerConfig, setProviderConfig] = useState({
+    githubConfigured: false,
+    googleConfigured: false,
+    anthropicConfigured: false,
+    tavilyConfigured: false,
+  });
   const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social'>(initialDashboardTab ?? 'preferences');
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
@@ -475,7 +481,11 @@ const savedModel = localStorage.getItem('selected_model');
       let savedToken = localStorage.getItem('github_token') || process.env.NEXT_PUBLIC_GITHUB_TOKEN || '';
       let savedTavilyKey = localStorage.getItem('tavily_api_key') || process.env.NEXT_PUBLIC_TAVILY_API_KEY || '';
 
-      const settings = await userActions.loadUserSettings();
+      const [settings, effectiveProviderConfig] = await Promise.all([
+        userActions.loadUserSettings(),
+        userActions.loadProviderConfigurationStatus(),
+      ]);
+      setProviderConfig(effectiveProviderConfig);
       if (settings) {
         if (!savedToken && settings.github_token) savedToken = settings.github_token;
         if (!savedTavilyKey && settings.tavily_api_key) savedTavilyKey = settings.tavily_api_key;
@@ -1158,8 +1168,9 @@ const savedModel = localStorage.getItem('selected_model');
                   selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel}
                   MODELS={MODELS}
-                  githubConfigured={!!githubToken}
-                  googleConfigured={!!googleApiKey}
+                  githubConfigured={!!githubToken || providerConfig.githubConfigured}
+                  googleConfigured={!!googleApiKey || providerConfig.googleConfigured}
+                  anthropicConfigured={!!anthropicApiKey || providerConfig.anthropicConfigured}
                   ollamaConnected={ollamaConnected}
                   ollamaModels={ollamaModels}
                   onDownloadModel={handleDownloadModel}
@@ -1216,8 +1227,9 @@ const savedModel = localStorage.getItem('selected_model');
                     selectedModel={selectedModel}
                     setSelectedModel={setSelectedModel}
                     MODELS={MODELS}
-                    githubConfigured={!!githubToken}
-                    googleConfigured={!!googleApiKey}
+                    githubConfigured={!!githubToken || providerConfig.githubConfigured}
+                    googleConfigured={!!googleApiKey || providerConfig.googleConfigured}
+                    anthropicConfigured={!!anthropicApiKey || providerConfig.anthropicConfigured}
                     ollamaConnected={ollamaConnected}
                     ollamaModels={ollamaModels}
                     onDownloadModel={handleDownloadModel}
