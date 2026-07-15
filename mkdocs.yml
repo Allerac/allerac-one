@@ -60,6 +60,7 @@ nav:
       - Control API v1 Gap Audit (2026-06-29): roadmap/control-api-v1-gap-audit-2026-06-29.md
   - Releases:
       - Overview: releases/README.md
+      - v0.1.0 Beta Release Plan: releases/v0.1.0-beta.md
   - API Reference:
       - Overview: api/README.md
       - Control API v1:
@@ -84,10 +85,12 @@ nav:
       - Overview: architecture/architecture.md
       - Control API v1: architecture/control-api-v1.md
       - Allerac Federation: architecture/allerac-federation.md
+      - Mobile & Robot Clients: architecture/mobile-and-robot-clients.md
       - Decisions:
           - Index: architecture/decisions/README.md
           - ADR 0001 - Control API v1: architecture/decisions/0001-adopt-control-api-v1.md
           - ADR 0002 - Control API Container Boundary: architecture/decisions/0002-keep-control-api-in-app-container-initially.md
+          - ADR 0003 - Control API Cloudflare Edge Policy: architecture/decisions/0003-expose-control-api-through-cloudflare-path-policy.md
       - LLM Calls Map: architecture/llm-calls-map.md
       - LLM Model Selection: architecture/llm-model-selection.md
   - Domains:

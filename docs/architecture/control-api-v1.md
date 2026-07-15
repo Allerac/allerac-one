@@ -34,6 +34,20 @@ The Control API v1 moves Allerac toward a platform shape:
 This is intentionally incremental. The first version should wrap existing services
 and data models, not rewrite them.
 
+## Public Edge Policy
+
+Production deployments may serve the browser UI and `/api/v1` from the same app
+container and hostname while the Control API remains in the `app` container. The edge
+must still treat them as different surfaces.
+
+For Cloudflare-backed deployments, `/api/v1/*` should be reachable by non-browser
+clients using `Authorization: Bearer alr_live_...` without interactive browser
+challenges, Cloudflare Access login pages, or caching. Allerac remains responsible
+for API authentication, scoped authorization, and user ownership checks.
+
+See [ADR 0003](decisions/0003-expose-control-api-through-cloudflare-path-policy.md)
+for the accepted Cloudflare path policy.
+
 ## Platform Model
 
 ```

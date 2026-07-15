@@ -13,6 +13,16 @@ Local Docker deployment:
 http://localhost:8080
 ```
 
+Production deployments should use the HTTPS Control API hostname, for example:
+
+```text
+https://app.allerac.ai
+```
+
+When Cloudflare is in front of the deployment, `/api/v1/*` must allow bearer-token
+API clients through without browser challenges or caching. See
+[ADR 0003](../../architecture/decisions/0003-expose-control-api-through-cloudflare-path-policy.md).
+
 All v1 endpoints are under:
 
 ```text

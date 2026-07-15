@@ -15,8 +15,15 @@ The current release model is:
 
 | Version | Date | Source | Status |
 |---|---|---|---|
+| `v0.1.0-beta.1` | TBD | TBD | Planned beta |
 | `v0.0.1` | 2026-06-24 | `main` | Released |
 | `v0.0.1-rc.1` | 2026-06-24 | `development` | Validated release candidate |
+
+## Planned Beta
+
+[v0.1.0 Beta Release Plan](v0.1.0-beta.md) tracks the first beta focused on the
+Control API as a production client surface, Cloudflare `/api/v1` edge policy, and
+the Android robot app as the first external client prototype.
 
 ## v0.0.1
 
