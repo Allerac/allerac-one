@@ -25,6 +25,7 @@ tags:
   - name: Skills
   - name: Health
   - name: Search
+  - name: Robot
   - name: Email
   - name: Finance
 paths:
@@ -1085,6 +1086,77 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
+  /api/v1/speech:
+    post:
+      tags: [Robot]
+      summary: Synthesize speech audio
+      operationId: synthesizeSpeech
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpeechRequest"
+      responses:
+        "200":
+          description: MPEG audio containing the synthesized speech
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /api/v1/robot/settings:
+    get:
+      tags: [Robot]
+      summary: Get robot assistant settings and tool availability
+      operationId: getRobotSettings
+      responses:
+        "200":
+          description: Robot assistant settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RobotSettingsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [Robot]
+      summary: Update robot assistant speech settings
+      operationId: updateRobotSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RobotSettingsUpdateRequest"
+      responses:
+        "200":
+          description: Updated robot assistant speech settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RobotSettingsUpdateResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/email/messages:
     get:
       tags: [Email]
@@ -3013,6 +3085,93 @@ components:
         symbol:
           type: string
           minLength: 1
+    SpeechRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        voice:
+          type: string
+          minLength: 1
+          maxLength: 80
+        model:
+          type: string
+          minLength: 1
+          maxLength: 120
+        speed:
+          type: number
+          minimum: 0.25
+          maximum: 4
+    RobotSpeechSettings:
+      type: object
+      required: [voice, speed, style]
+      properties:
+        voice:
+          type: string
+        speed:
+          type: number
+          minimum: 0.25
+          maximum: 4
+        style:
+          type: string
+    RobotSettingsUpdateRequest:
+      allOf:
+        - $ref: "#/components/schemas/RobotSpeechSettings"
+    RobotSettingsUpdateResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/RobotSpeechSettings"
+    RobotSettingsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - $ref: "#/components/schemas/RobotSpeechSettings"
+            - type: object
+              required: [voices, defaultSkill, tools]
+              properties:
+                voices:
+                  type: array
+                  items:
+                    type: string
+                defaultSkill:
+                  oneOf:
+                    - $ref: "#/components/schemas/RobotDefaultSkill"
+                    - type: "null"
+                tools:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RobotTool"
+    RobotDefaultSkill:
+      type: object
+      required: [id, name, displayName]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        displayName:
+          type: string
+    RobotTool:
+      type: object
+      required: [name, label, description, group, runtimeAvailable]
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        group:
+          type: string
+        runtimeAvailable:
+          type: boolean
     ErrorResponse:
       type: object
       required: [error]
