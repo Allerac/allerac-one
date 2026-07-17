@@ -10,6 +10,7 @@ const GITHUB_API = 'https://api.github.com';
 export interface BuildInfo {
   commit: string;
   date: string;
+  release: string;
 }
 
 export interface CommitInfo {
@@ -24,6 +25,7 @@ export interface CommitInfo {
 export interface UpdateStatus {
   currentCommit: string;
   currentDate: string;
+  currentRelease: string;
   latestCommit: string | null;
   latestDate: string | null;
   updateAvailable: boolean;
@@ -41,9 +43,10 @@ async function getBuildInfo(): Promise<BuildInfo> {
     return {
       commit: data.commit || 'unknown',
       date: data.date || 'unknown',
+      release: data.release || 'unreleased',
     };
   } catch {
-    return { commit: 'unknown', date: 'unknown' };
+    return { commit: 'unknown', date: 'unknown', release: 'unreleased' };
   }
 }
 
@@ -97,6 +100,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
       return {
         currentCommit: buildInfo.commit,
         currentDate: buildInfo.date,
+        currentRelease: buildInfo.release,
         latestCommit: null,
         latestDate: null,
         updateAvailable: false,
@@ -111,6 +115,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
       return {
         currentCommit: buildInfo.commit,
         currentDate: buildInfo.date,
+        currentRelease: buildInfo.release,
         latestCommit: latestCommit.shortSha,
         latestDate: latestCommit.date,
         updateAvailable: false,
@@ -129,6 +134,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
     return {
       currentCommit: buildInfo.commit,
       currentDate: buildInfo.date,
+      currentRelease: buildInfo.release,
       latestCommit: latestCommit.shortSha,
       latestDate: latestCommit.date,
       updateAvailable,
@@ -139,6 +145,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
     return {
       currentCommit: buildInfo.commit,
       currentDate: buildInfo.date,
+      currentRelease: buildInfo.release,
       latestCommit: null,
       latestDate: null,
       updateAvailable: false,

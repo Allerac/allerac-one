@@ -244,8 +244,11 @@ echo ""
 echo -e "${YELLOW}[3/9]${NC} Generating build information..."
 export COMMIT_HASH=$(git rev-parse HEAD)
 export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+export RELEASE_VERSION=$(git tag --points-at HEAD --sort=-version:refname | head -n 1)
+[ -n "$RELEASE_VERSION" ] || RELEASE_VERSION="unreleased"
 echo "   Commit: ${COMMIT_HASH:0:7}"
 echo "   Date:   $BUILD_DATE"
+echo "   Release: $RELEASE_VERSION"
 echo -e "${GREEN}✓ Build info ready${NC}"
 echo ""
 
@@ -325,7 +328,7 @@ if [ "${SKIP_WEBHOOK_RESTART:-false}" = "true" ]; then
     RESTART_COMPOSE_PROFILES="$(compose_profiles_without webhook)"
     echo -e "${YELLOW}  Skipping webhook profile during self-triggered deploy.${NC}"
 fi
-COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE \
+COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE RELEASE_VERSION=$RELEASE_VERSION \
     COMPOSE_PROFILES="$RESTART_COMPOSE_PROFILES" \
     docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up -d \
     || fail_update "service restart" "Failed to restart services."
@@ -348,6 +351,7 @@ echo -e "${GREEN}║   Update completed successfully!   ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════╝${NC}"
 echo ""
 echo "  Build: ${COMMIT_HASH:0:7} ($BUILD_DATE)"
+echo "  Release: $RELEASE_VERSION"
 if [ "$PRODUCT_LINE" = "cloud" ]; then
     echo "  App:     http://localhost:8080"
     echo "  Grafana: http://localhost:3001"

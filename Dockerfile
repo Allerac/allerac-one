@@ -19,7 +19,8 @@ COPY . .
 # Build info (commit hash and date baked into the image)
 ARG COMMIT_HASH=unknown
 ARG BUILD_DATE=unknown
-RUN printf '{"commit":"%s","date":"%s"}' "$COMMIT_HASH" "$BUILD_DATE" > /app/build-info.json
+ARG RELEASE_VERSION=unreleased
+RUN printf '{"commit":"%s","date":"%s","release":"%s"}' "$COMMIT_HASH" "$BUILD_DATE" "$RELEASE_VERSION" > /app/build-info.json
 
 # NEXT_PUBLIC_* vars needed during build
 ARG NEXT_PUBLIC_VISIBLE_DOMAINS
