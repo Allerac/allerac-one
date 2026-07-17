@@ -1,0 +1,15 @@
+meta {
+  name: Get Message
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/email/message?accountId={{emailAccountId}}&uid={{emailMessageUid}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

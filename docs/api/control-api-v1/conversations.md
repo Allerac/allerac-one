@@ -1,8 +1,7 @@
 # Conversations
 
-Conversation endpoints expose chat conversation metadata and message history through
-the Control API. Sending messages to the assistant is intentionally deferred to a
-separate chat/message contract.
+Conversation endpoints expose chat conversation metadata, message history, and
+synchronous assistant message execution through the Control API.
 
 Required scopes:
 
@@ -11,6 +10,7 @@ Required scopes:
 | `GET /api/v1/conversations` | `chat:read` |
 | `POST /api/v1/conversations` | `chat:write` |
 | `GET /api/v1/conversations/:id/messages` | `chat:read` |
+| `POST /api/v1/conversations/:id/messages` | `chat:write` |
 
 Browser sessions can call these endpoints without API key scopes.
 
@@ -113,3 +113,63 @@ Response:
   }
 }
 ```
+
+## `POST /api/v1/conversations/:id/messages`
+
+Sends a user message to an owned conversation and returns the final assistant
+response after it is generated. This first v1 contract is synchronous and non-streaming.
+Tool events are returned as an aggregated event list.
+
+Request:
+
+```json
+{
+  "message": "Summarize the current plan",
+  "model": "gpt-4o",
+  "provider": "github"
+}
+```
+
+Fields:
+
+| Name | Required | Notes |
+|---|---:|---|
+| `message` | yes, unless images are provided | Max `100000` chars |
+| `model` | yes | Model id to execute |
+| `provider` | yes | `github`, `ollama`, `gemini`, or `anthropic` |
+| `imageAttachments` | no | Up to 5 `data:image/*` or `https://` URLs |
+| `postContext` | no | Extra domain context, max `20000` chars |
+
+Example:
+
+```bash
+curl -s \
+  -X POST \
+  -H "Authorization: Bearer $ALLERAC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Summarize the current plan","model":"gpt-4o","provider":"github"}' \
+  http://localhost:8080/api/v1/conversations/$CONVERSATION_ID/messages
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "message": {
+      "conversationId": "conversation-id",
+      "role": "assistant",
+      "content": "Here is the summary..."
+    },
+    "events": [
+      {
+        "type": "token",
+        "content": "Here"
+      }
+    ]
+  }
+}
+```
+
+Provider configuration errors return `422 provider_not_configured`. Rate and
+concurrency limits return `429`.

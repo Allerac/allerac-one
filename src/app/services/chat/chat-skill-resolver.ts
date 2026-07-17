@@ -5,6 +5,7 @@ export interface ResolveChatSkillInput {
   conversationId: string;
   userId: string;
   message: string;
+  domain?: string;
   isNewConversation: boolean;
   preSelectedSkillId?: string;
   defaultSkillName?: string;
@@ -48,6 +49,20 @@ export async function resolveActiveChatSkill(
           'Domain default skill',
         );
         activeSkill = defaultByName;
+      }
+    }
+
+    if (!activeSkill && input.domain) {
+      const defaultByDomain = await skillsService.getDefaultDomainSkill(input.domain);
+      if (defaultByDomain) {
+        await skillsService.activateSkill(
+          defaultByDomain.id,
+          input.conversationId,
+          input.userId,
+          'manual',
+          'Domain default skill',
+        );
+        activeSkill = defaultByDomain;
       }
     }
 

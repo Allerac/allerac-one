@@ -60,6 +60,7 @@ const translations = {
     ollamaNotConnected: 'Ollama is not connected',
     googleNotConfigured: 'Google API key not configured',
     githubNotConfigured: 'GitHub token not configured',
+    anthropicNotConfigured: 'Anthropic API key not configured',
   },
 };
 

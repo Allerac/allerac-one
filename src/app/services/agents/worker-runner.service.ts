@@ -300,6 +300,7 @@ export class WorkerRunnerService {
       modelProvider: modelProvider as any,
       modelBaseUrl,
       systemMessage: skillContent,
+      isAdmin: settings.is_admin,
     };
 
     await this.repository.updateWorkerStatus(workerId, 'running', { progress_log: 'Starting skill run...' });
@@ -373,6 +374,7 @@ export class WorkerRunnerService {
           modelProvider: modelProvider as any,
           modelBaseUrl,
           systemMessage,
+          isAdmin: settings.is_admin,
         };
 
         const result = await this.withTimeout(

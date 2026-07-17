@@ -1,10 +1,11 @@
 import { submitLog } from '@/lib/submit-log';
-import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { authenticationErrorResponse, requireCurrentAdmin, UnauthorizedError } from '@/app/lib/auth-session';
 
 /**
  * POST /api/log-submit — Accept logs from services (Telegram, Executor, Health Worker, etc)
  *
- * Browser callers authenticate with their session. Internal services use
+ * Browser callers need an admin session (the buffer feeds the admin-only /logs
+ * monitor; regular sessions must not inject lines into it). Internal services use
  * Authorization: Bearer {EXECUTOR_SECRET}.
  * Logs are added to the in-memory buffer and streamed via /api/logs SSE.
  */
@@ -17,7 +18,7 @@ export async function POST(request: Request): Promise<Response> {
 
   if (!hasServiceAccess) {
     try {
-      await requireCurrentUser();
+      await requireCurrentAdmin();
     } catch (error) {
       const authError = authenticationErrorResponse(error);
       if (authError) return authError;

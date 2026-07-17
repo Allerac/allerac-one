@@ -13,6 +13,7 @@ security:
   - bearerApiKey: []
 tags:
   - name: System
+  - name: Capabilities
   - name: API Keys
   - name: Conversations
   - name: Memories
@@ -23,6 +24,9 @@ tags:
   - name: Scheduled Jobs
   - name: Skills
   - name: Health
+  - name: Search
+  - name: Robot
+  - name: Email
   - name: Finance
 paths:
   /api/v1/me:
@@ -53,6 +57,23 @@ paths:
                 $ref: "#/components/schemas/DomainListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/capabilities:
+    get:
+      tags: [Capabilities]
+      summary: Get effective capabilities
+      operationId: getCapabilities
+      description: Returns safe availability metadata for integrations and providers visible to the authenticated user. Secrets are never returned.
+      responses:
+        "200":
+          description: Effective capability map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilitiesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/api-keys:
     get:
       tags: [API Keys]
@@ -174,6 +195,42 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Conversations]
+      summary: Send conversation message
+      description: Sends a user message and returns the final assistant response synchronously.
+      operationId: sendConversationMessage
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendConversationMessageRequest"
+      responses:
+        "201":
+          description: Assistant response generated and persisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendConversationMessageResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          description: Chat rate or concurrency limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/conversations/{id}/memory:
     post:
       tags: [Memories]
@@ -181,6 +238,12 @@ paths:
       operationId: createConversationMemory
       parameters:
         - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationMemoryRequest"
       responses:
         "201":
           description: Created or refreshed conversation memory
@@ -771,6 +834,24 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/jobs/{id}/run:
+    post:
+      tags: [Scheduled Jobs]
+      summary: Run scheduled job now
+      operationId: runJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "201":
+          description: Job executed immediately and execution record returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobExecutionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/jobs/{id}/executions:
     get:
       tags: [Scheduled Jobs]
@@ -977,6 +1058,253 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/search:
+    get:
+      tags: [Search]
+      summary: Search the web
+      operationId: searchWeb
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+      responses:
+        "200":
+          description: Tavily-backed web search result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebSearchResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /api/v1/speech:
+    post:
+      tags: [Robot]
+      summary: Synthesize speech audio
+      operationId: synthesizeSpeech
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpeechRequest"
+      responses:
+        "200":
+          description: MPEG audio containing the synthesized speech
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /api/v1/robot/settings:
+    get:
+      tags: [Robot]
+      summary: Get robot assistant settings and tool availability
+      operationId: getRobotSettings
+      responses:
+        "200":
+          description: Robot assistant settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RobotSettingsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [Robot]
+      summary: Update robot assistant speech settings
+      operationId: updateRobotSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RobotSettingsUpdateRequest"
+      responses:
+        "200":
+          description: Updated robot assistant speech settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RobotSettingsUpdateResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/email/messages:
+    get:
+      tags: [Email]
+      summary: List email messages
+      operationId: listEmailMessages
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: sinceUid
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Recent messages for an owned email account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailMessageListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/email/message:
+    get:
+      tags: [Email]
+      summary: Get email message
+      operationId: getEmailMessage
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: uid
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Email message detail for an owned account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailMessageResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/email/send:
+    post:
+      tags: [Email]
+      summary: Send email
+      operationId: sendEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendEmailRequest"
+      responses:
+        "200":
+          description: Email accepted by SMTP transport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendEmailResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/finance/quote:
+    get:
+      tags: [Finance]
+      summary: Get market quotes or search symbols
+      operationId: getFinanceQuote
+      parameters:
+        - name: symbols
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated ticker symbols. Required unless `q` is provided.
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Symbol search query. Required unless `symbols` is provided.
+      responses:
+        "200":
+          description: Quote list or symbol search results
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/FinanceQuotesResponse"
+                  - $ref: "#/components/schemas/FinanceSymbolSearchResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/finance/candles:
+    get:
+      tags: [Finance]
+      summary: Get market candles
+      operationId: getFinanceCandles
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1W, 1M, 6M]
+            default: 1M
+      responses:
+        "200":
+          description: Candle close series for the requested symbol and period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceCandlesResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/finance/watchlist:
     get:
       tags: [Finance]
@@ -1190,6 +1518,90 @@ components:
         authMode:
           type: string
           enum: [session, api_key]
+    CapabilitiesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [capabilities, defaults]
+          properties:
+            capabilities:
+              $ref: "#/components/schemas/CapabilityMap"
+            defaults:
+              type: object
+              required: [chatModel]
+              properties:
+                chatModel:
+                  type: [string, "null"]
+    CapabilityMap:
+      type: object
+      required: [llm, search, notifications, storage, social, email, health]
+      properties:
+        llm:
+          type: object
+          required: [github, gemini, anthropic, ollama]
+          properties:
+            github:
+              $ref: "#/components/schemas/CapabilityStatus"
+            gemini:
+              $ref: "#/components/schemas/CapabilityStatus"
+            anthropic:
+              $ref: "#/components/schemas/CapabilityStatus"
+            ollama:
+              $ref: "#/components/schemas/CapabilityStatus"
+        search:
+          type: object
+          required: [tavily]
+          properties:
+            tavily:
+              $ref: "#/components/schemas/CapabilityStatus"
+        notifications:
+          type: object
+          required: [telegram, resend]
+          properties:
+            telegram:
+              $ref: "#/components/schemas/CapabilityStatus"
+            resend:
+              $ref: "#/components/schemas/CapabilityStatus"
+        storage:
+          type: object
+          required: [azureBlob]
+          properties:
+            azureBlob:
+              $ref: "#/components/schemas/CapabilityStatus"
+        social:
+          type: object
+          required: [instagram, tiktok]
+          properties:
+            instagram:
+              $ref: "#/components/schemas/CapabilityStatus"
+            tiktok:
+              $ref: "#/components/schemas/CapabilityStatus"
+        email:
+          type: object
+          required: [imap, smtp]
+          properties:
+            imap:
+              $ref: "#/components/schemas/CapabilityStatus"
+            smtp:
+              $ref: "#/components/schemas/CapabilityStatus"
+        health:
+          type: object
+          required: [garmin]
+          properties:
+            garmin:
+              $ref: "#/components/schemas/CapabilityStatus"
+    CapabilityStatus:
+      type: object
+      required: [configured, available]
+      properties:
+        configured:
+          type: boolean
+        available:
+          type: boolean
+        connected:
+          type: boolean
     ApiKeyListResponse:
       type: object
       required: [data]
@@ -1337,6 +1749,73 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/ConversationMessage"
+    SendConversationMessageRequest:
+      type: object
+      required: [model, provider]
+      properties:
+        message:
+          type: string
+          maxLength: 100000
+        model:
+          type: string
+          minLength: 1
+          maxLength: 200
+        provider:
+          type: string
+          enum: [github, ollama, gemini, anthropic]
+        imageAttachments:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            required: [url]
+            properties:
+              url:
+                type: string
+                maxLength: 8388608
+                description: Must be a data:image/* URL or https URL.
+        preSelectedSkillId:
+          type: string
+          format: uuid
+        defaultSkillName:
+          type: string
+        postContext:
+          type: string
+          maxLength: 20000
+      anyOf:
+        - required: [message]
+        - required: [imageAttachments]
+    SendConversationMessageResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [message, events]
+          properties:
+            message:
+              type: object
+              required: [conversationId, role, content]
+              properties:
+                conversationId:
+                  type: string
+                role:
+                  type: string
+                  const: assistant
+                content:
+                  type: string
+            events:
+              type: array
+              items:
+                $ref: "#/components/schemas/ChatExecutionEvent"
+    ChatExecutionEvent:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          examples: [token, tool_call, tool_result, skill_activated]
+      additionalProperties: true
     CreateConversationRequest:
       type: object
       required: [title]
@@ -1383,6 +1862,19 @@ components:
         createdAt:
           type: [string, "null"]
           format: date-time
+    CreateConversationMemoryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        importanceScore:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Optional manual override for model-generated importance.
+        emotion:
+          type: [integer, "null"]
+          enum: [-1, 0, 1, null]
+          description: Optional UI-aligned sentiment override. -1 is frustrated/negative, 0 is neutral, 1 is happy/positive.
     MemoryListResponse:
       type: object
       required: [data]
@@ -2057,6 +2549,16 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/JobExecution"
+    JobExecutionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [execution]
+          properties:
+            execution:
+              $ref: "#/components/schemas/JobExecution"
     CreateJobRequest:
       type: object
       required: [name, cronExpr, prompt, channels]
@@ -2348,6 +2850,208 @@ components:
               items:
                 type: object
                 additionalProperties: true
+    WebSearchResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [search]
+          properties:
+            search:
+              $ref: "#/components/schemas/WebSearchResult"
+    WebSearchResult:
+      type: object
+      required: [results, query]
+      properties:
+        answer:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebSearchItem"
+        query:
+          type: string
+        from_cache:
+          type: boolean
+        cached_at:
+          type: string
+          format: date-time
+        error:
+          type: string
+    WebSearchItem:
+      type: object
+      required: [title, url, content]
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        content:
+          type: string
+        score:
+          type: number
+    EmailMessageListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [messages]
+          properties:
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/EmailSummary"
+    EmailMessageResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [message]
+          properties:
+            message:
+              $ref: "#/components/schemas/EmailDetail"
+    SendEmailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [sent]
+          properties:
+            sent:
+              type: boolean
+              const: true
+    SendEmailRequest:
+      type: object
+      required: [accountId, to, subject, body]
+      properties:
+        accountId:
+          type: string
+        to:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        inReplyTo:
+          type: string
+        references:
+          type: string
+    EmailSummary:
+      type: object
+      required: [uid, messageId, subject, from, fromName, date, snippet, seen]
+      properties:
+        uid:
+          type: integer
+        messageId:
+          type: string
+        subject:
+          type: string
+        from:
+          type: string
+        fromName:
+          type: string
+        date:
+          type: string
+        snippet:
+          type: string
+        seen:
+          type: boolean
+    EmailDetail:
+      allOf:
+        - $ref: "#/components/schemas/EmailSummary"
+        - type: object
+          required: [to, cc, bodyText, bodyHtml]
+          properties:
+            to:
+              type: string
+            cc:
+              type: string
+            bodyText:
+              type: string
+            bodyHtml:
+              type: string
+    FinanceQuotesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [quotes]
+          properties:
+            quotes:
+              type: array
+              items:
+                $ref: "#/components/schemas/FinanceQuote"
+    FinanceSymbolSearchResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [result]
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/FinanceSymbolSearchResult"
+    FinanceCandlesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [candles]
+          properties:
+            candles:
+              type: array
+              items:
+                $ref: "#/components/schemas/FinanceCandle"
+    FinanceQuote:
+      type: object
+      required: [symbol]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        c:
+          type: number
+          description: Current price
+        d:
+          type: number
+          description: Absolute change versus previous close
+        dp:
+          type: number
+          description: Percent change versus previous close
+        error:
+          type: boolean
+    FinanceSymbolSearchResult:
+      type: object
+      required: [symbol, displaySymbol, description, type]
+      properties:
+        symbol:
+          type: string
+        displaySymbol:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+    FinanceCandle:
+      type: object
+      required: [t, c]
+      properties:
+        t:
+          type: integer
+          description: Unix timestamp in milliseconds
+        c:
+          type: number
+          description: Close price
     WatchlistResponse:
       type: object
       required: [data]
@@ -2381,6 +3085,93 @@ components:
         symbol:
           type: string
           minLength: 1
+    SpeechRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        voice:
+          type: string
+          minLength: 1
+          maxLength: 80
+        model:
+          type: string
+          minLength: 1
+          maxLength: 120
+        speed:
+          type: number
+          minimum: 0.25
+          maximum: 4
+    RobotSpeechSettings:
+      type: object
+      required: [voice, speed, style]
+      properties:
+        voice:
+          type: string
+        speed:
+          type: number
+          minimum: 0.25
+          maximum: 4
+        style:
+          type: string
+    RobotSettingsUpdateRequest:
+      allOf:
+        - $ref: "#/components/schemas/RobotSpeechSettings"
+    RobotSettingsUpdateResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/RobotSpeechSettings"
+    RobotSettingsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - $ref: "#/components/schemas/RobotSpeechSettings"
+            - type: object
+              required: [voices, defaultSkill, tools]
+              properties:
+                voices:
+                  type: array
+                  items:
+                    type: string
+                defaultSkill:
+                  oneOf:
+                    - $ref: "#/components/schemas/RobotDefaultSkill"
+                    - type: "null"
+                tools:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RobotTool"
+    RobotDefaultSkill:
+      type: object
+      required: [id, name, displayName]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        displayName:
+          type: string
+    RobotTool:
+      type: object
+      required: [name, label, description, group, runtimeAvailable]
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        group:
+          type: string
+        runtimeAvailable:
+          type: boolean
     ErrorResponse:
       type: object
       required: [error]

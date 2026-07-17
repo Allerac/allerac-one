@@ -10,11 +10,19 @@ export async function register() {
     const { syncSystemSkills } = await import('./app/services/skills/system-skills-loader');
     await syncSystemSkills();
 
-    if (process.env.DISABLE_BACKGROUND_WORKERS !== 'true') {
+    // DISABLE_BACKGROUND_WORKERS (legacy) disables both the in-app agent runner and
+    // the scheduler logger. DISABLE_AGENT_RUNNER disables only the runner — set by
+    // docker-compose on `app` now that the runner lives in the agent-worker container.
+    const workersDisabled = process.env.DISABLE_BACKGROUND_WORKERS === 'true';
+    const runnerDisabled = workersDisabled || process.env.DISABLE_AGENT_RUNNER === 'true';
+
+    if (!runnerDisabled) {
       // Start background agent worker runner
       const { getWorkerRunner } = await import('./app/services/agents/worker-runner.service');
       getWorkerRunner().start();
+    }
 
+    if (!workersDisabled) {
       // Poll job_executions and emit to log buffer so scheduler activity appears in /logs
       startSchedulerLogger();
     }

@@ -4,6 +4,8 @@ import { requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import pool from '@/app/clients/db';
 import { GET as getWatchlist, POST as addToWatchlist } from '@/app/api/v1/finance/watchlist/route';
 import { DELETE as removeFromWatchlist } from '@/app/api/v1/finance/watchlist/[symbol]/route';
+import { GET as getQuote } from '@/app/api/v1/finance/quote/route';
+import { GET as getCandles } from '@/app/api/v1/finance/candles/route';
 
 jest.mock('@/app/lib/auth-session', () => {
   class MockUnauthorizedError extends Error {}
@@ -45,9 +47,16 @@ function routeParams(symbol = 'AAPL') {
 }
 
 describe('Control API v1 finance', () => {
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockRequireCurrentUser.mockResolvedValue(user);
+    global.fetch = jest.fn();
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
   });
 
   it('returns 401 when unauthenticated', async () => {
@@ -155,5 +164,108 @@ describe('Control API v1 finance', () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toMatchObject({ error: { code: 'not_found' } });
+  });
+
+  it('returns quotes for symbols', async () => {
+    jest.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        chart: {
+          result: [{
+            meta: {
+              shortName: 'Apple Inc.',
+              regularMarketPrice: 210,
+              chartPreviousClose: 200,
+            },
+          }],
+        },
+      }),
+    } as Response);
+
+    const response = await getQuote(new Request('http://localhost/api/v1/finance/quote?symbols=aapl'));
+
+    expect(response.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v8/finance/chart/AAPL'),
+      expect.objectContaining({ headers: { 'User-Agent': 'Mozilla/5.0' } }),
+    );
+    expect(await response.json()).toEqual({
+      data: {
+        quotes: [{
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          c: 210,
+          d: 10,
+          dp: 5,
+        }],
+      },
+    });
+  });
+
+  it('searches finance symbols', async () => {
+    jest.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        quotes: [
+          { symbol: 'VOO', quoteType: 'ETF', shortname: 'Vanguard S&P 500 ETF' },
+          { symbol: 'NEWS', quoteType: 'NEWS', shortname: 'Ignored' },
+        ],
+      }),
+    } as Response);
+
+    const response = await getQuote(new Request('http://localhost/api/v1/finance/quote?q=voo'));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: {
+        result: [{
+          symbol: 'VOO',
+          displaySymbol: 'VOO',
+          description: 'Vanguard S&P 500 ETF',
+          type: 'ETP',
+        }],
+      },
+    });
+  });
+
+  it('validates quote query', async () => {
+    const response = await getQuote(new Request('http://localhost/api/v1/finance/quote'));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'validation_error' } });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns candles for a symbol', async () => {
+    jest.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        chart: {
+          result: [{
+            timestamp: [1717200000, 1717286400],
+            indicators: { quote: [{ close: [100, null] }] },
+          }],
+        },
+      }),
+    } as Response);
+
+    const response = await getCandles(new Request('http://localhost/api/v1/finance/candles?symbol=msft&period=1W'));
+
+    expect(response.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('interval=1h&range=5d'),
+      expect.objectContaining({ headers: { 'User-Agent': 'Mozilla/5.0' } }),
+    );
+    expect(await response.json()).toEqual({
+      data: { candles: [{ t: 1717200000000, c: 100 }] },
+    });
+  });
+
+  it('validates candle period', async () => {
+    const response = await getCandles(new Request('http://localhost/api/v1/finance/candles?symbol=MSFT&period=1Y'));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'validation_error' } });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

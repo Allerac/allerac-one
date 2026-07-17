@@ -24,6 +24,11 @@ When you call a service with log interception installed, all `console.log/error/
 ### Log API
 **Endpoint:** `POST /api/log-submit`
 
+**Auth:** internal services send `Authorization: Bearer {EXECUTOR_SECRET}` (the
+interceptor does this automatically). Browser callers need an **admin** session —
+the buffer feeds the admin-only `/logs` monitor, so regular sessions cannot inject
+lines into it.
+
 **Request:**
 ```json
 {

@@ -1,5 +1,9 @@
 import pool from '@/app/clients/db';
 import type { ScheduledJob, JobExecution } from '@/app/types';
+import { handleChatMessage } from '@/app/services/chat/chat-handler';
+import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+import { buildSoul } from '@/app/config/allerac-soul';
 
 interface DBScheduledJob {
   id: string;
@@ -8,6 +12,7 @@ interface DBScheduledJob {
   cron_expr: string;
   prompt: string;
   channels: string[];
+  domain_slug: string | null;
   enabled: boolean;
   last_run_at: Date | null;
   created_at: Date;
@@ -31,6 +36,7 @@ function mapJob(row: DBScheduledJob): ScheduledJob {
     cronExpr: row.cron_expr,
     prompt: row.prompt,
     channels: row.channels,
+    domainSlug: row.domain_slug ?? null,
     enabled: row.enabled,
     lastRunAt: row.last_run_at ? row.last_run_at.toISOString() : null,
     createdAt: row.created_at.toISOString(),
@@ -50,6 +56,9 @@ function mapExecution(row: DBJobExecution): JobExecution {
 }
 
 export class ScheduledJobsService {
+  private userSettingsService = new UserSettingsService();
+  private systemSettingsService = new SystemSettingsService();
+
   async getScheduledJobs(userId: string): Promise<ScheduledJob[]> {
     const result = await pool.query<DBScheduledJob>(
       `SELECT * FROM scheduled_jobs WHERE user_id = $1 ORDER BY created_at DESC`,
@@ -128,6 +137,120 @@ export class ScheduledJobsService {
       [jobId, userId, limit]
     );
     return result.rows.map(mapExecution);
+  }
+
+  async runJobNow(jobId: string, userId: string): Promise<JobExecution | null> {
+    const jobResult = await pool.query<DBScheduledJob>(
+      `SELECT *
+       FROM scheduled_jobs
+       WHERE id = $1 AND user_id = $2 AND enabled = TRUE`,
+      [jobId, userId],
+    );
+    const job = jobResult.rows[0];
+    if (!job) return null;
+
+    const executionResult = await pool.query<DBJobExecution>(
+      `INSERT INTO job_executions (job_id, status)
+       VALUES ($1, 'running')
+       RETURNING *`,
+      [jobId],
+    );
+    const executionId = executionResult.rows[0].id;
+
+    try {
+      const [settings, systemSettings] = await Promise.all([
+        this.userSettingsService.loadUserSettings(userId),
+        this.systemSettingsService.loadAll(),
+      ]);
+
+      const githubToken = settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN || '';
+      const tavilyApiKey = settings?.tavily_api_key || systemSettings.tavily_api_key || process.env.TAVILY_API_KEY || undefined;
+      const googleApiKey = settings?.google_api_key || systemSettings.google_api_key || '';
+      const anthropicApiKey = settings?.anthropic_api_key || systemSettings.anthropic_api_key || '';
+
+      let selectedModel = 'qwen2.5:3b';
+      let modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' = 'ollama';
+      let modelBaseUrl = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
+
+      if (googleApiKey) {
+        selectedModel = 'gemini-2.5-flash';
+        modelProvider = 'gemini';
+        modelBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
+      } else if (githubToken) {
+        selectedModel = 'gpt-4o-mini';
+        modelProvider = 'github';
+        modelBaseUrl = 'https://models.inference.ai.azure.com';
+      } else if (anthropicApiKey) {
+        selectedModel = 'claude-haiku-4-5-20251001';
+        modelProvider = 'anthropic';
+        modelBaseUrl = 'https://api.anthropic.com';
+      }
+
+      const userResult = await pool.query<{ name: string | null }>(
+        'SELECT name FROM users WHERE id = $1',
+        [userId],
+      );
+      const timezone = settings?.timezone || 'UTC';
+      const now = new Date();
+      const today = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        weekday: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(now).replace(/(\d+)\/(\d+)\/(\d+),/, '$3-$1-$2');
+
+      let systemMessage = buildSoul('jobs');
+      systemMessage += `\n\n## Context\n- Current date & time: ${today} (${timezone})`;
+      if (userResult.rows[0]?.name) {
+        systemMessage += `\n- User: ${userResult.rows[0].name}`;
+      }
+
+      const result = await handleChatMessage(job.prompt, null, {
+        userId,
+        githubToken,
+        geminiToken: googleApiKey || undefined,
+        anthropicToken: anthropicApiKey || undefined,
+        tavilyApiKey,
+        selectedModel,
+        modelProvider,
+        modelBaseUrl,
+        systemMessage,
+        domainSlug: job.domain_slug ?? 'jobs',
+        language: settings?.language ?? undefined,
+      });
+
+      const completed = await pool.query<DBJobExecution>(
+        `UPDATE job_executions
+         SET status = 'completed', result = $2, completed_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [executionId, result.response],
+      );
+      await pool.query(
+        `UPDATE scheduled_jobs SET last_run_at = NOW() WHERE id = $1`,
+        [jobId],
+      );
+      return mapExecution(completed.rows[0]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      const failed = await pool.query<DBJobExecution>(
+        `UPDATE job_executions
+         SET status = 'failed', result = $2, completed_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [executionId, message],
+      );
+      await pool.query(
+        `UPDATE scheduled_jobs SET last_run_at = NOW() WHERE id = $1`,
+        [jobId],
+      );
+      return mapExecution(failed.rows[0]);
+    }
   }
 }
 

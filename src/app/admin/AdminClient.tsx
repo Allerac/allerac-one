@@ -1050,6 +1050,17 @@ export default function AdminClient({
                   isDarkMode={isDarkMode}
                   helpText="Default key for Gemini chat and Gemini Image editing."
                 />
+                <ApiKeyField
+                  label="OpenAI API Key"
+                  description="(speech / TTS)"
+                  placeholder="sk-..."
+                  provider="openai"
+                  hasStoredValue={!!sysSettings.openai_api_key}
+                  value={sysSettings.openai_api_key ?? ''}
+                  onChange={v => setSysSettings(prev => ({ ...prev, openai_api_key: v }))}
+                  isDarkMode={isDarkMode}
+                  helpText="Default key for cloud text-to-speech."
+                />
               </div>
             </div>
 

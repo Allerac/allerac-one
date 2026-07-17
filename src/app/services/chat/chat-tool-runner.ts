@@ -217,7 +217,7 @@ export async function executeChatTool(
   }
 
   if (LOGS_TOOL_NAMES.includes(toolName)) {
-    const handlers = buildLogsTool();
+    const handlers = buildLogsTool(user.is_admin);
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
     return handler(toolArgs);
   }

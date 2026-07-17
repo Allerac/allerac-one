@@ -31,6 +31,11 @@ integrations while keeping product data under user control.
 |  +-------------------------+------------------------------+   |
 +----------------------------|---------------------------------+
                              |
++--------------------------------------------------------------+
+| Agent Worker Container (agent-worker)                        |
+| polls agent_runs in Postgres · executes runs · stale recovery |
++----------------------------+---------------------------------+
+                             |
       +----------------------+----------------------+
       |                      |                      |
       v                      v                      v
@@ -49,6 +54,16 @@ integrations while keeping product data under user control.
 The Control API is not a separate container yet. It is currently implemented inside
 the Next.js app container so contracts can stabilize before process or container
 boundaries are split.
+
+Background agent runs are the first extracted boundary (2026-07-14): they execute in
+the dedicated `agent-worker` container, which coordinates with the app exclusively
+through the `agent_runs` table in Postgres. The app and the worker share the same
+service-layer code; only the hosting process differs.
+
+The long-term platform direction is documented in
+[Allerac Federation](allerac-federation.md): a network of isolated domain cells that
+can run specialized agents and cooperate through stable APIs, events, identity, and
+durable work contracts.
 
 ## Tech Stack
 
@@ -324,7 +339,8 @@ docker compose --profile ollama --profile monitoring up -d
 ```
 db (pgvector:pg16)
   └─> migrations (postgres:16-alpine, runs once)
-       └─> app (Next.js, port 8080)
+       ├─> app (Next.js, port 8080)
+       └─> agent-worker (background agent runs, health on 8090)
 
 ollama (ollama/ollama)           [profile: ollama]
   └─> ollama-setup (pulls model) [profile: ollama]
@@ -374,16 +390,19 @@ services that need non-browser clients or headless operation.
 ## Control API Direction
 
 ADR 0001 accepts the Allerac Control API v1 as the platform control plane. ADR 0002
-keeps the Control API inside the existing app container initially. The first slice is
-in progress using browser session auth first and adding scoped API keys next.
+keeps the Control API inside the existing app container initially. The `/api/v1`
+surface is implemented with browser session auth and scoped API keys across system,
+conversations, memories, tickets, agent runs, documents, notes, jobs, skills, health,
+search, email, and finance.
 
-The intended evolution is:
+The intended evolution, with current status:
 
-1. Stabilize `/api/v1` contracts inside the current app.
-2. Add API key authentication and scopes.
-3. Expose agent runs, domains, and chat through stable resources.
-4. Migrate UI surfaces to the same contracts where practical.
-5. Split worker/API processes only after contracts are stable.
+1. Stabilize `/api/v1` contracts inside the current app. — done
+2. Add API key authentication and scopes. — done
+3. Expose agent runs, domains, and chat through stable resources. — done
+4. Migrate UI surfaces to the same contracts where practical. — pending
+5. Split worker/API processes only after contracts are stable. — worker split done
+   (`agent-worker` container, 2026-07-14); API extraction still deferred per ADR 0002.
 
 See [Allerac Control API v1](control-api-v1.md), [Control API v1 Reference](../api/control-api-v1/overview.md),
 and [Architecture Decision Records](decisions/README.md).

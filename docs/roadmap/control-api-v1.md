@@ -2,9 +2,16 @@
 
 ## Status
 
-In progress. The first `/api/v1` contract exists for `me`, `domains`, `tickets`,
-conversations, agent runs, memories, and API key management. Browser session auth
-and scoped bearer API keys are both implemented for the current Control API slice.
+In progress. As of 2026-07-14 the `/api/v1` contract covers `me`, `domains`,
+`capabilities`, API keys, conversations (including synchronous message send),
+memories, tickets, agent runs, documents, notes, scheduled jobs (including manual
+run), skills, health, search, email, and finance — 41 route paths and 57 operations,
+in sync with `docs/api/openapi/control-api-v1.yaml`. Browser session auth and scoped
+bearer API keys are both implemented.
+
+Remaining work: the `tools:run` contract, UI migration (Phase 6), app decoupling
+preparation (Phase 7), and the streaming/async chat decision. See
+`control-api-v1-gap-audit-2026-06-29.md` for the full gap analysis.
 
 ## How To Use This Document
 
@@ -39,13 +46,14 @@ the web UI, while preserving the current app and deployment model.
 
 ## Current System Snapshot
 
-As of 2026-06-24:
+As of 2026-07-14:
 
 - `app` is still the main Next.js container and owns UI, API routes, server actions,
   service calls, auth/session resolution, and background runner startup.
 - Existing browser-facing APIs live under `/api/*`.
-- Initial `/api/v1/*` routes exist for `me`, `domains`, `tickets`, conversations,
-  agent runs, memories, and API key management.
+- `/api/v1/*` routes exist for `me`, `domains`, `capabilities`, API keys,
+  conversations (including synchronous message send), memories, tickets, agent runs,
+  documents, notes, scheduled jobs, skills, health, search, email, and finance.
 - Browser auth uses a `session_token` HTTP-only cookie and `requireCurrentUser()`.
 - Headless auth uses scoped bearer API keys with the `alr_live_` token prefix.
 - Domain access is stored in `domains` and `user_domain_access`; admins bypass
@@ -117,7 +125,7 @@ Clients
         |
         v
 Services
-  tickets · agents · chat · domains · tools · jobs
+  tickets · agents · chat · domains · search · email · finance · jobs
         |
         v
 Runtime
@@ -330,6 +338,21 @@ expires_at TIMESTAMPTZ
 | `agents:write` | Create/cancel agent runs |
 | `memory:read` | List owned memory summaries |
 | `memory:write` | Create or delete owned memory summaries |
+| `capabilities:read` | Read safe provider/integration capability status |
+| `documents:read` | List owned documents |
+| `documents:write` | Upload or delete owned documents |
+| `notes:read` | List/search owned notes |
+| `notes:write` | Create/update/delete owned notes |
+| `jobs:read` | List jobs and executions |
+| `jobs:write` | Create/update/toggle/delete/run owned jobs |
+| `skills:read` | List/read skills |
+| `skills:write` | Create/update/delete owned skills |
+| `health:read` | Read health status and metrics |
+| `search:read` | Run configured web search |
+| `email:read` | List/read messages from owned email accounts |
+| `email:write` | Send mail through owned email accounts |
+| `finance:read` | Read market data and watchlist |
+| `finance:write` | Add/remove watchlist symbols |
 
 Keep `tools:run` and `settings:*` for later phases unless needed earlier.
 
@@ -515,9 +538,12 @@ Avoid leaking internal field naming. Convert database/service casing into API ca
 Purpose: expose conversation metadata and message history without committing to the
 assistant message execution contract yet.
 
-Current status: list/create conversations and list messages are implemented for
-browser sessions and API keys. Sending a user message to the assistant remains
-deferred until the chat execution contract is designed.
+Current status: complete. List/create conversations, list messages, and synchronous
+message send are implemented for browser sessions and API keys.
+`POST /api/v1/conversations/:id/messages` persists the user message, runs the full
+server-side chat pipeline through `ChatExecutionService`, persists the assistant
+response, and returns the final assistant message plus aggregated execution events.
+A streaming or async/polling contract remains an open decision.
 
 ### Endpoints
 
@@ -525,6 +551,7 @@ deferred until the chat execution contract is designed.
 GET  /api/v1/conversations
 POST /api/v1/conversations
 GET  /api/v1/conversations/:id/messages
+POST /api/v1/conversations/:id/messages
 ```
 
 ### Tasks
@@ -533,7 +560,7 @@ GET  /api/v1/conversations/:id/messages
 - [x] Use existing `ChatService`.
 - [x] Enforce `chat:read` and `chat:write` scopes.
 - [x] Add contract tests for ownership and missing scope.
-- [ ] Design `POST /api/v1/conversations/:id/messages` execution semantics.
+- [x] Design and implement synchronous `POST /api/v1/conversations/:id/messages`.
 
 ### Exit Criteria
 
@@ -689,15 +716,67 @@ Exit criteria:
   - agent worker;
   - specialized services.
 
+## Phase 8: Worker Separation (Architecture Phase 4)
+
+Purpose: move the background agent-run runner out of the web-serving process so the
+web app can serve requests while runs execute elsewhere, and restarting the web app
+does not interrupt active runs. This is the first concrete step of app decoupling and
+unblocks headless mode (architecture Phase 5).
+
+Design decisions:
+
+- The runner moves to a dedicated `agent-worker` container built from
+  `Dockerfile.agent-worker` (esbuild bundle, same pattern as `Dockerfile.telegram`).
+  Same-repo build means no code drift between app and worker.
+- Coordination stays DB-only through `agent_runs` and `FOR UPDATE SKIP LOCKED`
+  claiming — no route changes; multiple runner instances are safe.
+- The scheduler logger stays in the `app` container (it feeds the /logs UI and is
+  advisory-locked).
+- Flag scheme (backwards compatible): `DISABLE_BACKGROUND_WORKERS=true` (legacy)
+  disables both the in-app runner and the scheduler logger; `DISABLE_AGENT_RUNNER=true`
+  (new, set by compose on `app`) disables only the runner. The worker entry ignores
+  both flags.
+- The worker exposes `GET /health` on `AGENT_WORKER_HEALTH_PORT` (default 8090)
+  reporting runner status, active run count, and a DB ping, wired as the compose
+  healthcheck.
+- Graceful shutdown: SIGTERM stops polling, drains active runs up to
+  `AGENT_WORKER_SHUTDOWN_TIMEOUT_MS` (default 25s), then exits; interrupted runs
+  recover through the existing stale-run retry (5-minute window).
+
+### Deliverables
+
+- [x] `src/agent-worker.ts` entry script using the existing `WorkerRunnerService`.
+- [x] `validateWorkerRuntimeConfig()` in `src/lib/runtime-config.ts` (worker does not
+      require `TELEGRAM_TOKEN_ENCRYPTION_KEY`).
+- [x] `Dockerfile.agent-worker` and an `agent-worker` compose service with explicit
+      env contract, healthcheck, and `stop_grace_period`.
+- [x] Two-flag gate in `src/instrumentation.ts`; compose sets
+      `DISABLE_AGENT_RUNNER=true` on `app`.
+- [x] `.env.example` documents the worker flags and `AGENT_WORKER_*` tuning vars.
+- [x] Architecture doc Phase 4 updated with ownership statement and the `read_logs`
+      caveat (agent runs now see only worker-container logs).
+
+### Exit Criteria
+
+Verified end-to-end on 2026-07-14 with local Docker (qwen2.5:3b via Ollama):
+
+- [x] The web app serves requests while the worker handles agent runs.
+- [x] Restarting the web app mid-run does not interrupt the active run (run completed
+      normally while `app` restarted; worker health reported the active run
+      throughout).
+- [x] Restarting the worker mid-run recovers the run via stale-run retry (SIGTERM
+      drained gracefully, "Retrying stale run" fired after the 5-minute window, run
+      completed on the second attempt).
+- [x] The app container no longer starts the runner; the scheduler logger still runs
+      in the app.
+
 ## Deferred Work
 
-- Assistant message send API.
-- Tool execution API.
+- Tool execution API (`tools:run`).
 - Streaming responses.
 - OpenAPI generation.
 - CLI packaging.
 - Separate `api` container.
-- Separate `agent-worker` container.
 - Public docs publishing.
 
 ## Definition Of Done For Any Phase
@@ -711,28 +790,41 @@ Exit criteria:
 
 ## Recommended Next Ticket
 
+Resolved 2026-07-14 — decisions recorded below and in the dated implementation note;
+the chosen increment is Phase 8 (Worker Separation) above.
+
+1. Streaming/async chat: deferred until a real client needs incremental tokens; the
+   synchronous send endpoint covers CLI, automations, and Telegram.
+2. `tools:run`: deferred until the tool permission model is explicit; tools remain
+   reachable through chat and agent runs.
+3. Next surface: worker separation (architecture Phase 4 / roadmap Phase 8).
+
 Title:
 
 ```text
-Implement Control API v1 agent-runs slice
+Decide the next Control API increment: chat streaming, tools:run, or worker separation
 ```
 
 Description:
 
 ```text
-Prove the first vertical API-only workflow with API keys: create a key, list domains,
-create a ticket, create an agent run, poll the run, and patch the ticket with the
-outcome. Add Bruno requests and focused API smoke automation where useful.
+The v1 resource surface is complete except tools:run. Before implementing more
+endpoints, record decisions for the remaining high-judgment items from the
+2026-06-29 gap audit:
+
+1. Whether a streaming or async/polling chat contract is needed in addition to the
+   synchronous POST /api/v1/conversations/:id/messages endpoint.
+2. Whether tools:run becomes a standalone API or stays reachable only through chat
+   and agent runs (depends on an explicit tool permission model).
+3. Which surface comes next: workspace, social/Instagram, skill evaluation, or
+   worker separation (architecture Phase 4).
 ```
 
 Acceptance criteria:
 
-- [ ] API key can list domains with `domains:read`.
-- [ ] API key can create/read/update tickets with `tickets:read` and `tickets:write`.
-- [ ] API key can create/read/cancel agent runs with `agents:read` and `agents:write`.
-- [ ] Bruno collection includes the full vertical smoke path.
-- [ ] A repeatable script or Jest/API smoke command can exercise the vertical path.
-- [ ] Docs include the full curl sequence.
+- [ ] Each decision is recorded as an ADR or a dated entry in this roadmap.
+- [ ] The chosen next surface has a phase section in this roadmap with endpoints,
+      scopes, and exit criteria before implementation starts.
 
 ## Implementation Notes
 
@@ -757,5 +849,44 @@ Use this section to append discoveries while building.
 - `/api/v1/me`, `/api/v1/domains`, and `/api/v1/tickets` now accept either browser
   sessions or API keys.
 - `/api/v1/agent-runs` was implemented with list/create/detail/cancel endpoints.
-- The next implementation target is a first vertical slice smoke flow across domains,
-  tickets, and agent runs.
+- `/api/v1/capabilities`, synchronous conversation message execution, manual job run,
+  search, email, and finance market-data reads were added after the initial slices.
+- Current OpenAPI and handler counts are tracked in
+  `docs/roadmap/control-api-v1-gap-audit-2026-06-29.md`.
+
+### 2026-07-14
+
+- The 2026-06-29 batch (capabilities, synchronous message send, job run-now, finance
+  quotes/candles/symbol search, search, email) was committed with all six Control API
+  test suites passing (56 tests).
+- Architecture and roadmap docs were synced with the implemented surface: 41 route
+  paths, 57 operations, matching the OpenAPI contract.
+- Of the target route shape, only `POST /api/v1/tools/:name/run` remains
+  unimplemented. Architecture Phase 4 (worker separation) and Phase 5 (headless mode)
+  have not started; `WorkerRunnerService` still runs inside the `app` container.
+- The stale "agent-runs" next ticket was replaced with a decision ticket covering
+  streaming chat, `tools:run`, and the next surface.
+- Decisions taken the same day: streaming/async chat deferred until a client needs
+  it; `tools:run` deferred until the tool permission model is explicit; the next
+  increment is worker separation (roadmap Phase 8, architecture Phase 4).
+- Exploration confirmed the runner tree has zero Next.js runtime coupling and that
+  run coordination is already DB-only (`FOR UPDATE SKIP LOCKED`), so no route changes
+  are needed for the split. `Dockerfile.telegram` proves the services/tools tree
+  bundles with esbuild using only `--external:pg-native`.
+- Phase 8 (worker separation) was implemented and verified the same day: the
+  `agent-worker` container claims and executes runs; app restarts mid-run do not
+  interrupt execution; worker restarts recover runs via stale retry. The worker
+  forwards console lines to the app /logs UI via `/api/log-submit` (`LOG_API_URL`).
+  Known behavior change: `read_logs` inside agent runs sees only the worker's own
+  local log buffer.
+- Multi-tenant hardening, same day: the log buffer aggregates every user's activity,
+  so `read_logs` is now admin-only (gated in `buildLogsTool(isAdmin)` and filtered
+  from non-admin worker tool definitions) and `/api/log-submit` browser sessions now
+  require admin (`requireCurrentAdmin`), closing a log-injection vector into the
+  admin-only /logs monitor. Service callers keep using `EXECUTOR_SECRET`. Remaining
+  known cross-tenant exposure: the app scheduler logger writes job result snippets of
+  all users into the admin-visible buffer (acceptable under the trusted-operator
+  model; revisit if log entries gain per-user attribution). The
+  claim path (`SKIP LOCKED` in autocommit) leaves a small double-execution window if
+  two runners ever run simultaneously; optional follow-up hardening is an atomic
+  claim UPDATE.

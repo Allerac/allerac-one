@@ -1,0 +1,15 @@
+meta {
+  name: Search Symbols
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/finance/quote?q=voo
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

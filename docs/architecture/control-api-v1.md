@@ -2,9 +2,18 @@
 
 ## Status
 
-In progress. The first `/api/v1` endpoints exist for `me`, `domains`, `tickets`,
-conversations, agent runs, memories, and API key management. Browser session auth
-and scoped bearer API keys are both supported by the current Control API slice.
+In progress. As of 2026-07-14 the `/api/v1` surface covers system (`me`, `domains`,
+`capabilities`), API keys, conversations (including synchronous message execution),
+memories, tickets, agent runs, documents, notes, scheduled jobs (including manual
+run), skills, health, search, email, and finance. Browser session auth and scoped
+bearer API keys are both supported.
+
+Of the initial resources below, only `tools` (`POST /api/v1/tools/:name/run`) remains
+unimplemented. Phases 1-4 are complete (agent runs execute in the dedicated
+`agent-worker` container); Phase 5 (headless mode) has not started. The full
+implemented contract is tracked in
+`docs/api/openapi/control-api-v1.yaml` and audited in
+`docs/roadmap/control-api-v1-gap-audit-2026-06-29.md`.
 
 ## Purpose
 
@@ -25,6 +34,20 @@ The Control API v1 moves Allerac toward a platform shape:
 This is intentionally incremental. The first version should wrap existing services
 and data models, not rewrite them.
 
+## Public Edge Policy
+
+Production deployments may serve the browser UI and `/api/v1` from the same app
+container and hostname while the Control API remains in the `app` container. The edge
+must still treat them as different surfaces.
+
+For Cloudflare-backed deployments, `/api/v1/*` should be reachable by non-browser
+clients using `Authorization: Bearer alr_live_...` without interactive browser
+challenges, Cloudflare Access login pages, or caching. Allerac remains responsible
+for API authentication, scoped authorization, and user ownership checks.
+
+See [ADR 0003](decisions/0003-expose-control-api-through-cloudflare-path-policy.md)
+for the accepted Cloudflare path policy.
+
 ## Platform Model
 
 ```
@@ -37,7 +60,7 @@ Allerac Control API v1
         |
         v
 Core services
-  Chat · agents · tickets · domains · tools · settings · jobs
+  Chat · agents · tickets · domains · search · email · finance · jobs
         |
         v
 Runtime services
@@ -70,6 +93,10 @@ service boundaries.
 | `agent-runs` | Create/poll/cancel background agent runs | `WorkerRunRepository`, `WorkerRunnerService` |
 | `tickets` | Create/list/update tickets and read events | `TicketService`, `tickets`, `ticket_events` |
 | `domains` | Discover available domains and active skill defaults | domain access tables, skill defaults |
+| `capabilities` | Read safe provider/integration availability | user settings, system settings, environment |
+| `search` | Run configured web search | `SearchWebTool`, Tavily settings/cache |
+| `email` | Read/send through owned email accounts | IMAP/SMTP services, `user_email_accounts` |
+| `finance` | Read market data and manage watchlist | Yahoo-backed market data, `user_watchlist` |
 | `tools` | Run approved tools through a scoped API boundary | chat/tool registry |
 | `jobs` | Create/list/run scheduled or ad hoc jobs | jobs domain services |
 
@@ -105,34 +132,29 @@ POST   /api/v1/tools/:name/run
 Existing `/api/*` routes may continue to serve the UI while `/api/v1/*` is introduced.
 Over time, UI code should migrate to the same contracts where practical.
 
-### Implemented Initial Slice
+### Implemented Surface
 
-The first implemented slice is intentionally small and supports both browser sessions
-and scoped API keys:
+The implemented surface has grown well beyond the initial slice. It supports both
+browser sessions and scoped API keys across:
 
-```text
-GET    /api/v1/me
-GET    /api/v1/domains
-GET    /api/v1/api-keys
-POST   /api/v1/api-keys
-DELETE /api/v1/api-keys/:id
-GET    /api/v1/conversations
-POST   /api/v1/conversations
-GET    /api/v1/conversations/:id/messages
-POST   /api/v1/conversations/:id/memory
-GET    /api/v1/memories
-DELETE /api/v1/memories/:id
-GET    /api/v1/tickets
-POST   /api/v1/tickets
-GET    /api/v1/tickets/:id
-PATCH  /api/v1/tickets/:id
-GET    /api/v1/tickets/:id/events
-DELETE /api/v1/tickets/:id
-GET    /api/v1/agent-runs
-POST   /api/v1/agent-runs
-GET    /api/v1/agent-runs/:id
-POST   /api/v1/agent-runs/:id/cancel
-```
+- System: `GET /api/v1/me`, `GET /api/v1/domains`, `GET /api/v1/capabilities`
+- API keys: list, create, revoke
+- Conversations: list, create, list messages, synchronous message send
+- Memories: create from conversation, list, delete
+- Tickets: list, create, get, update, events, delete
+- Agent runs: list, create, get, cancel
+- Documents: list, upload, delete
+- Notes: list, create, search, tags, update, delete
+- Scheduled jobs: list, create, update, toggle, executions, run now, delete
+- Skills: list, get, create, update, delete
+- Health: status, summary, daily, activities
+- Search: web search
+- Email: list messages, get message, send
+- Finance: quotes, symbol search, candles, watchlist list/add/remove
+
+The authoritative contract is `docs/api/openapi/control-api-v1.yaml`. Of the target
+route shape above, only `POST /api/v1/tools/:name/run` remains unimplemented; it is
+deliberately deferred until the tool permission model is explicit.
 
 This proves the route shape, Zod validation, response envelopes, domain access, DTO
 mapping, API key auth, scoped route checks, and Bruno smoke tests without changing the
@@ -188,7 +210,15 @@ Suggested first scopes:
 | `tickets:read` | List/read tickets and events |
 | `tickets:write` | Create/update tickets |
 | `tools:run` | Execute approved tools |
-| `settings:read` | Read non-secret effective settings |
+| `capabilities:read` | Read non-secret provider/integration capability status |
+| `documents:read` / `documents:write` | List/upload/delete documents |
+| `notes:read` / `notes:write` | List/search/create/update/delete notes |
+| `jobs:read` / `jobs:write` | List/manage/run scheduled jobs |
+| `skills:read` / `skills:write` | List/manage skills |
+| `health:read` | Read Garmin-backed health data |
+| `search:read` | Run configured web search |
+| `email:read` / `email:write` | Read/send through owned email accounts |
+| `finance:read` / `finance:write` | Read market data and manage watchlist |
 
 Admin and system-level scopes should wait until there is a concrete use case.
 
@@ -217,6 +247,8 @@ Admin and system-level scopes should wait until there is a concrete use case.
 
 ### Phase 1: API Auth Foundation
 
+Status: complete.
+
 Goal: `/api/v1` can authenticate either browser sessions or scoped API keys.
 
 Deliverables:
@@ -234,6 +266,8 @@ Exit criteria:
 - No raw API key is stored in Postgres.
 
 ### Phase 2: Tickets and Agent Runs
+
+Status: complete.
 
 Goal: prove the control-plane model with resources that already have strong backing
 services and immediate operational value.
@@ -254,6 +288,11 @@ Exit criteria:
 
 ### Phase 3: Chat API
 
+Status: complete for the synchronous contract. `POST /api/v1/conversations/:id/messages`
+runs the full server-side chat pipeline and returns the final assistant message plus
+aggregated execution events. A streaming or async/polling contract remains an open
+decision.
+
 Goal: make chat usable by API clients without depending on React or Server Actions.
 
 Deliverables:
@@ -270,6 +309,25 @@ Exit criteria:
 
 ### Phase 4: Worker Separation
 
+Status: implemented. Agent runs execute in the dedicated `agent-worker` compose
+service (`Dockerfile.agent-worker`, entry `src/agent-worker.ts`), which reuses
+`WorkerRunnerService` unchanged and coordinates with the app exclusively through the
+`agent_runs` table (`FOR UPDATE SKIP LOCKED` claiming).
+
+Ownership after the split:
+
+- The `agent-worker` container owns polling interval, concurrency, and stale-run
+  recovery (`AGENT_WORKER_*` env vars) and exposes its own `GET /health` on port 8090.
+- The `app` container owns the scheduler logger (feeds the /logs UI) and system skill
+  sync; compose sets `DISABLE_AGENT_RUNNER=true` on `app` so the runner does not also
+  start there. The legacy `DISABLE_BACKGROUND_WORKERS=true` still disables both.
+
+The worker forwards its `[Context]` console lines to the app's /logs UI through
+`POST /api/log-submit` (`LOG_API_URL`, same pattern as the telegram and executor
+services), so agent-run activity stays visible in the System Monitor terminal.
+Known behavior change: the `read_logs` tool inside agent runs still reads only the
+worker container's own local log buffer, not the web app's.
+
 Goal: allow background execution to move out of the web-serving process.
 
 Deliverables:
@@ -285,6 +343,8 @@ Exit criteria:
 
 ### Phase 5: Headless Mode
 
+Status: not started.
+
 Goal: run Allerac without the web UI as a first-class deployment profile.
 
 Deliverables:
@@ -298,6 +358,8 @@ Exit criteria:
 - A user can operate core Allerac workflows with API keys and no browser.
 
 ## First Milestone
+
+Status: complete.
 
 Create a small, real vertical slice:
 

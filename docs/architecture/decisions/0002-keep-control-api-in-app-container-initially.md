@@ -4,6 +4,11 @@
 
 Accepted
 
+Update 2026-07-14: step 1 of the preferred split order below was executed — the
+`agent-worker` container now owns background agent execution. The Control API itself
+remains in the `app` container as decided here; the `api` and `web` extractions are
+still deferred.
+
 ## Date
 
 2026-06-24

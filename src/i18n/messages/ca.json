@@ -104,6 +104,7 @@
     "modelNotAvailable": "Model no disponible. Descarrega'l a Ollama primer.",
     "googleNotConfigured": "Clau d'API de Google no configurada. Afegeix-la a Configuració.",
     "githubNotConfigured": "Token de GitHub no configurat. Afegeix-lo a Configuració.",
+    "anthropicNotConfigured": "Clau d'API d'Anthropic no configurada. Afegeix-la a Configuració.",
     "stoppedByUser": "Generació cancel·lada per l'usuari."
   },
   "home": {

@@ -6,6 +6,7 @@ import pool from '@/app/clients/db';
 
 const BCRYPT_COST_FACTOR = 12;
 const SESSION_EXPIRY_DAYS = 7;
+const BOOTSTRAP_USER_EMAIL = 'dev@local.host';
 
 export interface User {
   id: string;
@@ -24,6 +25,14 @@ export interface Session {
 }
 
 export class AuthService {
+  private async isFirstRealUser(): Promise<boolean> {
+    const result = await pool.query(
+      'SELECT COUNT(*) FROM users WHERE email <> $1',
+      [BOOTSTRAP_USER_EMAIL]
+    );
+    return parseInt(result.rows[0].count, 10) === 0;
+  }
+
   /**
    * Hash a password using bcrypt
    */
@@ -84,9 +93,9 @@ export class AuthService {
       // Hash password
       const passwordHash = await this.hashPassword(password);
 
-      // First user ever created becomes admin automatically
-      const userCount = await pool.query('SELECT COUNT(*) FROM users');
-      const isFirstUser = parseInt(userCount.rows[0].count) === 0;
+      // First real user becomes admin automatically. Ignore the seeded dev user
+      // created by init.sql so first-run setup works on fresh Docker installs.
+      const isFirstUser = await this.isFirstRealUser();
 
       // Create user
       const result = await pool.query(
@@ -343,8 +352,7 @@ export class AuthService {
           row = byEmail.rows[0];
         } else {
           // Brand-new user via Google
-          const userCount = await pool.query('SELECT COUNT(*) FROM users');
-          const isFirstUser = parseInt(userCount.rows[0].count) === 0;
+          const isFirstUser = await this.isFirstRealUser();
 
           const created = await pool.query(
             `INSERT INTO users (email, name, is_admin, google_id)

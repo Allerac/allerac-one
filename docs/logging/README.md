@@ -51,6 +51,7 @@ UI (http://localhost:8080/logs)
 ## Services Using Logging
 
 - ✅ **App (Chat)** — Via global logger in logger.ts
+- ✅ **Agent Worker** — Via installLogInterceptor() in src/agent-worker.ts (`LOG_API_URL`)
 - ✅ **Telegram** — Via installLogInterceptor()
 - ✅ **Executor** — Via installLogInterceptor() in server.js
 - 📋 **Health Worker** — Python example in logging-pattern.md

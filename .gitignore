@@ -26,6 +26,10 @@
 # misc
 .DS_Store
 *.pem
+/android-platform-tools/
+/platform-tools-latest-windows.zip
+/.android-sdk/
+/.tools/
 
 # debug
 npm-debug.log*
