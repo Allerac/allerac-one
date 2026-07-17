@@ -18,7 +18,7 @@ class AlleracApi(
     suspend fun createConversation(): String = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("title", "Allerac Robot")
-            .put("domainSlug", "chat")
+            .put("domainSlug", "robot-assistant")
 
         val json = request("POST", "/api/v1/conversations", body)
         json.getJSONObject("data").getJSONObject("conversation").getString("id")
@@ -41,6 +41,13 @@ class AlleracApi(
                 eventCount = events.length(),
             )
         }
+
+    suspend fun synthesizeSpeech(text: String): ByteArray = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("text", text)
+
+        requestBytes("POST", "/api/v1/speech", body)
+    }
 
     private fun request(method: String, path: String, body: JSONObject): JSONObject {
         val normalizedBase = baseUrl.trimEnd('/')
@@ -70,6 +77,36 @@ class AlleracApi(
         }
 
         return JSONObject(text)
+    }
+
+    private fun requestBytes(method: String, path: String, body: JSONObject): ByteArray {
+        val normalizedBase = baseUrl.trimEnd('/')
+        val connection = (URL("$normalizedBase$path").openConnection() as HttpURLConnection)
+        connection.requestMethod = method
+        connection.connectTimeout = 15000
+        connection.readTimeout = 120000
+        connection.setRequestProperty("Authorization", "Bearer $apiKey")
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.setRequestProperty("Accept", "audio/mpeg")
+        connection.doOutput = true
+
+        OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
+            writer.write(body.toString())
+        }
+
+        val responseCode = connection.responseCode
+        val stream = if (responseCode in 200..299) {
+            connection.inputStream
+        } else {
+            connection.errorStream ?: connection.inputStream
+        }
+        val bytes = stream.use { it.readBytes() }
+
+        if (responseCode !in 200..299) {
+            throw IllegalStateException("HTTP $responseCode: ${bytes.toString(Charsets.UTF_8)}")
+        }
+
+        return bytes
     }
 }
 

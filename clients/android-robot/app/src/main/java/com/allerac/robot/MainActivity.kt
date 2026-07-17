@@ -3,6 +3,7 @@ package com.allerac.robot
 import android.Manifest
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,6 +12,7 @@ import android.speech.SpeechRecognizer
 import android.speech.RecognizerIntent
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -31,8 +33,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +60,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -131,6 +136,7 @@ private fun RobotApp(preferences: SharedPreferences) {
     val scope = rememberCoroutineScope()
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val startListeningAction = remember { arrayOfNulls<() -> Unit>(1) }
+    val mediaPlayerRef = remember { arrayOfNulls<MediaPlayer>(1) }
 
     val tts = remember {
         TextToSpeech(context) { }
@@ -139,8 +145,60 @@ private fun RobotApp(preferences: SharedPreferences) {
         if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
     }
 
+    fun completeSpeech() {
+        if (conversationActive) {
+            robotState = RobotState.Idle
+            lastHeard = ""
+            status = "Listening again..."
+            mainHandler.postDelayed({
+                startListeningAction[0]?.invoke()
+            }, 550L)
+        } else {
+            robotState = RobotState.Paused
+            status = "Paused."
+        }
+    }
+
+    fun speakWithNativeTts(text: String) {
+        configureTts(tts, detectSpeechLocale(text))
+        val speechResult = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "allerac-reply")
+        if (speechResult == TextToSpeech.ERROR) {
+            robotState = RobotState.Error
+            status = "Could not start speech."
+        }
+    }
+
+    fun playCloudSpeech(audio: ByteArray, fallbackText: String) {
+        mediaPlayerRef[0]?.release()
+        val audioFile = File.createTempFile("allerac-speech-", ".mp3", context.cacheDir)
+        audioFile.writeBytes(audio)
+
+        val player = MediaPlayer()
+        mediaPlayerRef[0] = player
+        player.setDataSource(audioFile.absolutePath)
+        player.setOnPreparedListener {
+            robotState = RobotState.Speaking
+            status = "Speaking."
+            it.start()
+        }
+        player.setOnCompletionListener {
+            it.release()
+            mediaPlayerRef[0] = null
+            audioFile.delete()
+            completeSpeech()
+        }
+        player.setOnErrorListener { mp, _, _ ->
+            mp.release()
+            mediaPlayerRef[0] = null
+            audioFile.delete()
+            speakWithNativeTts(fallbackText)
+            true
+        }
+        player.prepareAsync()
+    }
+
     DisposableEffect(tts) {
-        tts.language = Locale.getDefault()
+        configureTts(tts, Locale("pt", "BR"))
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
                 (context as ComponentActivity).runOnUiThread {
@@ -151,17 +209,7 @@ private fun RobotApp(preferences: SharedPreferences) {
 
             override fun onDone(utteranceId: String?) {
                 (context as ComponentActivity).runOnUiThread {
-                    if (conversationActive) {
-                        robotState = RobotState.Idle
-                        lastHeard = ""
-                        status = "Listening again..."
-                        mainHandler.postDelayed({
-                            startListeningAction[0]?.invoke()
-                        }, 550L)
-                    } else {
-                        robotState = RobotState.Paused
-                        status = "Paused."
-                    }
+                    completeSpeech()
                 }
             }
 
@@ -174,6 +222,8 @@ private fun RobotApp(preferences: SharedPreferences) {
             }
         })
         onDispose {
+            mediaPlayerRef[0]?.release()
+            mediaPlayerRef[0] = null
             tts.stop()
             tts.shutdown()
         }
@@ -204,12 +254,14 @@ private fun RobotApp(preferences: SharedPreferences) {
                 }
                 val reply = api.sendMessage(currentConversationId, message)
                 lastReply = reply.content
-                robotState = RobotState.Speaking
-                status = "Speaking."
-                val speechResult = tts.speak(reply.content, TextToSpeech.QUEUE_FLUSH, null, "allerac-reply")
-                if (speechResult == TextToSpeech.ERROR) {
-                    robotState = RobotState.Error
-                    status = "Could not start speech."
+                robotState = RobotState.Thinking
+                status = "Preparing voice..."
+                val speechText = prepareSpeechText(reply.content)
+                try {
+                    val audio = api.synthesizeSpeech(speechText)
+                    playCloudSpeech(audio, speechText)
+                } catch (_: Exception) {
+                    speakWithNativeTts(speechText)
                 }
             } catch (error: Exception) {
                 robotState = RobotState.Error
@@ -345,6 +397,8 @@ private fun RobotApp(preferences: SharedPreferences) {
             conversationActive = false
             mainHandler.removeCallbacksAndMessages(null)
             speechRecognizer?.cancel()
+            mediaPlayerRef[0]?.release()
+            mediaPlayerRef[0] = null
             tts.stop()
             robotState = RobotState.Paused
             status = "Paused."
@@ -484,8 +538,15 @@ private fun SettingsForm(
             RobotTextField("Model", model, onModelChange, modifier = Modifier.weight(1f))
         }
         RobotTextField("Conversation ID", conversationId, onConversationIdChange)
-        Button(onClick = onSave, modifier = Modifier.fillMaxWidth()) {
-            Text("Save")
+        Button(
+            onClick = onSave,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF7CE7FF),
+                contentColor = Color.Black,
+            ),
+        ) {
+            Text("Save", color = Color.Black)
         }
     }
 }
@@ -502,10 +563,22 @@ private fun RobotTextField(
         modifier = modifier.fillMaxWidth(),
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
+        label = { Text(label, color = Color(0xFFE9F7FF)) },
         singleLine = true,
         visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            focusedContainerColor = Color(0xFF050A0D),
+            unfocusedContainerColor = Color(0xFF050A0D),
+            focusedBorderColor = Color(0xFF7CE7FF),
+            unfocusedBorderColor = Color(0xFF6C8792),
+            focusedLabelColor = Color(0xFF7CE7FF),
+            unfocusedLabelColor = Color(0xFFE9F7FF),
+            cursorColor = Color(0xFF7CE7FF),
+        ),
     )
 }
 
@@ -535,6 +608,132 @@ private fun speechIntent(): android.content.Intent {
         putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 900L)
         putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1400L)
         putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
+    }
+}
+
+private fun sanitizeForSpeech(text: String): String {
+    return text
+        .replace(Regex("```[\\s\\S]*?```"), " ")
+        .replace(Regex("`([^`]*)`"), "$1")
+        .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1")
+        .replace(Regex("(?m)^\\s{0,3}#{1,6}\\s*"), "")
+        .replace(Regex("(?m)^\\s*[-*+]\\s+"), "")
+        .replace(Regex("(?m)^\\s*\\d+[.)]\\s+"), "")
+        .replace(Regex("[*_~>#|\\[\\]{}]"), " ")
+        .replace(Regex("[\\uD83C-\\uDBFF\\uDC00-\\uDFFF]+"), " ")
+        .replace(Regex("[\\u2600-\\u27BF]+"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .ifBlank { "Não tenho uma resposta para ler." }
+}
+
+private fun prepareSpeechText(text: String): String {
+    return text
+        .replace(Regex("```[\\s\\S]*?```"), " ")
+        .replace(Regex("`([^`]*)`"), "$1")
+        .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1")
+        .replace(Regex("https?://\\S+"), " link ")
+        .replace(Regex("(?m)^\\s{0,3}#{1,6}\\s*"), "")
+        .replace(Regex("(?m)^\\s*[-*+]\\s+"), "")
+        .replace(Regex("(?m)^\\s*\\d+[.)]\\s+"), "")
+        .replace("&", " e ")
+        .replace("@", " arroba ")
+        .replace("%", " por cento ")
+        .replace(Regex("\\bAI\\b"), "A I")
+        .replace(Regex("\\bIA\\b"), "I A")
+        .replace(Regex("\\bAPI\\b"), "A P I")
+        .replace(Regex("\\bURL\\b"), "U R L")
+        .replace(Regex("\\bTTS\\b"), "T T S")
+        .replace(Regex("\\bSTT\\b"), "S T T")
+        .replace(Regex("[*_~>#|\\[\\]{}]"), " ")
+        .replace(Regex("[•●■□▪▫◦]"), " ")
+        .replace(Regex("[\\uD83C-\\uDBFF\\uDC00-\\uDFFF]+"), " ")
+        .replace(Regex("[\\u2600-\\u27BF]+"), " ")
+        .replace(Regex("\\s*[-–—]\\s*"), ", ")
+        .replace(Regex("\\s*/\\s*"), " ou ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .let { collapseForSpeech(it) }
+        .ifBlank { "Nao tenho uma resposta para ler." }
+}
+
+private fun collapseForSpeech(text: String): String {
+    val maxChars = 700
+    val normalized = text
+        .replace(Regex("\\s*([,.;:!?])\\s*"), "$1 ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+
+    if (normalized.length <= maxChars) return normalized
+
+    val clipped = normalized.take(maxChars)
+    val sentenceEnd = listOf(
+        clipped.lastIndexOf(". "),
+        clipped.lastIndexOf("! "),
+        clipped.lastIndexOf("? "),
+    ).maxOrNull() ?: -1
+
+    return if (sentenceEnd > 220) {
+        clipped.take(sentenceEnd + 1).trim()
+    } else {
+        clipped.trimEnd(',', ';', ':') + "."
+    }
+}
+
+private fun detectSpeechLocale(text: String): Locale {
+    val lower = text.lowercase(Locale.ROOT)
+    val portugueseMarkers = listOf(
+        " o ", " a ", " os ", " as ", " de ", " que ", " para ", " voce ",
+        " hoje", " nao ", " noticia", " pesquisa", " resposta",
+    ).count { lower.contains(it) }
+    val englishMarkers = listOf(
+        " the ", " and ", " you ", " for ", " with ", " today", " search", " answer",
+        " news", " current",
+    ).count { lower.contains(it) }
+
+    return if (englishMarkers > portugueseMarkers + 1) Locale.US else Locale("pt", "BR")
+}
+
+private fun configureTts(tts: TextToSpeech, locale: Locale) {
+    val available = tts.isLanguageAvailable(locale)
+    val effectiveLocale = if (available >= TextToSpeech.LANG_AVAILABLE) locale else Locale.US
+    tts.language = effectiveLocale
+    chooseVoice(tts, effectiveLocale)?.let { tts.voice = it }
+    tts.setSpeechRate(1.05f)
+    tts.setPitch(1.03f)
+}
+
+private fun chooseVoice(tts: TextToSpeech, locale: Locale): Voice? {
+    val voices = tts.voices ?: return null
+    val language = locale.language
+    val country = locale.country
+
+    return voices
+        .filter { voice ->
+            voice.locale.language == language &&
+                (country.isBlank() || voice.locale.country == country) &&
+                !voice.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)
+        }
+        .sortedWith(
+            compareBy<Voice>(
+                { voiceGenderRank(it.name) },
+                { it.isNetworkConnectionRequired },
+                { it.quality * -1 },
+                { it.latency },
+            ),
+        )
+        .firstOrNull()
+}
+
+private fun voiceGenderRank(name: String): Int {
+    val lower = name.lowercase(Locale.ROOT)
+    val maleMarkers = listOf("male", "mascul", "homem", "man", "m3", "pt-br-x-afs")
+    val femaleMarkers = listOf("female", "fem", "mulher", "woman", "f1", "f2", "pt-br-x-afh")
+
+    return when {
+        maleMarkers.any { lower.contains(it) } -> 0
+        femaleMarkers.any { lower.contains(it) } -> 2
+        else -> 1
     }
 }
 

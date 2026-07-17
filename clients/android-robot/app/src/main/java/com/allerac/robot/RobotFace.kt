@@ -173,21 +173,51 @@ fun RobotFace(
         }
 
         fun drawSpeakingMouth(center: Offset, width: Float, height: Float, color: Color) {
-            val columns = 17
+            val columns = 19
             val open = mouthPulse
-            val halfOpen = height * (0.18f + open * 0.82f)
+            val halfOpen = height * (0.20f + open * 0.92f)
+            val interiorWidth = width * (0.66f + open * 0.18f)
+            val interiorHeight = halfOpen * (0.54f + open * 0.28f)
+
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.96f),
+                topLeft = Offset(center.x - interiorWidth / 2f, center.y - interiorHeight / 2f),
+                size = Size(interiorWidth, interiorHeight),
+                cornerRadius = CornerRadius(dot * 1.2f, dot * 1.2f),
+            )
+
             for (i in 0 until columns) {
                 val t = i / (columns - 1).toFloat()
                 val x = center.x - width / 2f + width * t
                 val edge = kotlin.math.abs(t - 0.5f) * 2f
-                val columnOpen = halfOpen * (1f - edge * edge * 0.55f)
+                val columnOpen = halfOpen * (1f - edge * edge * 0.62f)
                 val topY = center.y - columnOpen / 2f
                 val bottomY = center.y + columnOpen / 2f
                 drawLedDot(x, topY, color, 0.92f)
                 drawLedDot(x, bottomY, color, 0.92f)
-                if (open > 0.72f && edge < 0.55f) {
-                    drawLedDot(x, center.y, color, 0.55f)
+            }
+
+            if (open > 0.64f) {
+                val tongueColor = Color(0xFFFF7AAE)
+                val tongueRows = if (open > 0.86f) 2 else 1
+                val tongueColumns = 7
+                for (row in 0 until tongueRows) {
+                    for (i in 0 until tongueColumns) {
+                        val t = i / (tongueColumns - 1).toFloat()
+                        val edge = kotlin.math.abs(t - 0.5f) * 2f
+                        val x = center.x - width * 0.18f + width * 0.36f * t
+                        val y = center.y + interiorHeight * 0.19f + row * pitch * 0.82f -
+                            dot * 0.35f * (1f - edge * edge)
+                        drawLedDot(x, y, tongueColor, 0.72f)
+                    }
                 }
+            }
+
+            val shineColumns = 5
+            for (i in 0 until shineColumns) {
+                val t = i / (shineColumns - 1).toFloat()
+                val x = center.x - width * 0.14f + width * 0.28f * t
+                drawLedDot(x, center.y - interiorHeight * 0.18f, color, 0.24f)
             }
         }
 

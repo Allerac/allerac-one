@@ -7,6 +7,7 @@ jest.mock('@/app/services/skills/skills.service', () => ({
     getActiveSkill: jest.fn(),
     getSkillForUser: jest.fn(),
     getSkillByName: jest.fn(),
+    getDefaultDomainSkill: jest.fn(),
     getDefaultUserSkill: jest.fn(),
     getAvailableSkills: jest.fn(),
     detectIntent: jest.fn(),
@@ -22,6 +23,8 @@ describe('resolveActiveChatSkill', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (skillsService.getActiveSkill as jest.Mock).mockResolvedValue(null);
+    (skillsService.getDefaultDomainSkill as jest.Mock).mockResolvedValue(null);
+    (skillsService.getDefaultUserSkill as jest.Mock).mockResolvedValue(null);
     (skillsService.getAvailableSkills as jest.Mock).mockResolvedValue([]);
     (skillsService.detectIntent as jest.Mock).mockResolvedValue(null);
     (pool.query as jest.Mock).mockResolvedValue({ rows: [] });
@@ -46,6 +49,28 @@ describe('resolveActiveChatSkill', () => {
       'user-1',
       'manual',
       'Pre-selected by user',
+    );
+  });
+
+  test('activates the domain default skill for a new conversation', async () => {
+    const domainDefault = { id: 'skill-domain', name: 'robot-assistant', display_name: 'Robot Assistant' };
+    (skillsService.getDefaultDomainSkill as jest.Mock).mockResolvedValue(domainDefault);
+
+    await expect(resolveActiveChatSkill({
+      conversationId: 'conv-1',
+      userId: 'user-1',
+      message: 'hey allerac',
+      domain: 'robot-assistant',
+      isNewConversation: true,
+      emit: jest.fn(),
+    })).resolves.toBe(domainDefault);
+
+    expect(skillsService.activateSkill).toHaveBeenCalledWith(
+      'skill-domain',
+      'conv-1',
+      'user-1',
+      'manual',
+      'Domain default skill',
     );
   });
 

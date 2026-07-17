@@ -20,6 +20,9 @@ export interface CapabilityMap {
   search: {
     tavily: CapabilityStatus;
   };
+  speech: {
+    openai: CapabilityStatus;
+  };
   notifications: {
     telegram: CapabilityStatus;
     resend: CapabilityStatus;
@@ -122,6 +125,8 @@ export class CapabilitiesService {
       || configured(systemSettings.google_api_key);
     const anthropicConfigured = configured(userSettings?.anthropic_api_key)
       || configured(systemSettings.anthropic_api_key);
+    const openaiConfigured = configured(systemSettings.openai_api_key)
+      || configured(process.env.OPENAI_API_KEY);
     const tavilyConfigured = configured(userSettings?.tavily_api_key)
       || configured(systemSettings.tavily_api_key)
       || configured(process.env.TAVILY_API_KEY);
@@ -149,6 +154,9 @@ export class CapabilitiesService {
         },
         search: {
           tavily: status(tavilyConfigured),
+        },
+        speech: {
+          openai: status(openaiConfigured),
         },
         notifications: {
           telegram: status(telegramConfigured),

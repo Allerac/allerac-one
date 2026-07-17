@@ -2,7 +2,7 @@
 
 import { requireCurrentUser } from '@/app/lib/auth-session';
 
-export type ApiKeyProvider = 'github' | 'anthropic' | 'google' | 'tavily';
+export type ApiKeyProvider = 'github' | 'anthropic' | 'google' | 'openai' | 'tavily';
 
 export async function validateApiKey(
   provider: ApiKeyProvider,
@@ -37,6 +37,11 @@ export async function validateApiKey(
         `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmed)}`,
         { signal: controller.signal }
       );
+    } else if (provider === 'openai') {
+      res = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${trimmed}` },
+        signal: controller.signal,
+      });
     } else {
       // tavily
       res = await fetch('https://api.tavily.com/search', {

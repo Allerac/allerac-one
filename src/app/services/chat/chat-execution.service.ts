@@ -62,6 +62,8 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     throw new ChatConversationNotFoundError();
   }
 
+  const history = await chatService.loadMessages(input.conversationId, input.user.id);
+  const isNewConversation = history.length === 0;
   const processedImages = await processChatImages(input.imageAttachments);
   const runtimeContext = await loadChatRuntimeContext(input.user.id, input.domain, input.provider);
   const {
@@ -78,7 +80,8 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     conversationId: input.conversationId,
     userId: input.user.id,
     message: input.message,
-    isNewConversation: false,
+    domain: input.domain,
+    isNewConversation,
     preSelectedSkillId: input.preSelectedSkillId,
     defaultSkillName: input.defaultSkillName,
     emit,
@@ -142,7 +145,6 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
   });
 
   const activeTools = await resolveChatTools(activeSkill?.id, input.domain);
-  const history = await chatService.loadMessages(input.conversationId, input.user.id);
   const conversationMessages: Array<{
     role: string;
     content: string | any[];
