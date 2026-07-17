@@ -66,6 +66,7 @@ interface CommitInfo {
 interface UpdateStatus {
   currentCommit: string;
   currentDate: string;
+  currentRelease: string;
   latestCommit: string | null;
   latestDate: string | null;
   updateAvailable: boolean;
@@ -387,6 +388,11 @@ export default function SystemTab({ isDarkMode, userId }: SystemTabProps) {
         <div className={`mt-4 pt-4 border-t ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
+              <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
+                Release: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                  {updateStatus?.currentRelease || 'unreleased'}
+                </span>
+              </span>
               <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
                 Build: <span className={`font-mono ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                   {updateStatus?.currentCommit || 'unknown'}

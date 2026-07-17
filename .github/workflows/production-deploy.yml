@@ -1,0 +1,83 @@
+name: Production Deploy
+
+on:
+  release:
+    types:
+      - published
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI Baseline
+    if: github.event.release.prerelease == false
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to Azure production
+    needs: ci
+    if: >-
+      github.event.release.prerelease == false &&
+      github.event.release.target_commitish == 'main'
+    runs-on: [self-hosted, Linux, X64, production]
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://app.allerac.ai
+    env:
+      DEPLOY_REPOSITORY: /home/allerac-adm/allerac-one
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Validate release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_REPOSITORY"
+          git fetch origin main --tags
+
+          release_commit="$(git rev-list -n 1 "$RELEASE_TAG")"
+          main_commit="$(git rev-parse origin/main)"
+
+          if [ -z "$release_commit" ]; then
+            echo "Release tag not found: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          if [ "$release_commit" != "$main_commit" ]; then
+            echo "Release $RELEASE_TAG does not point to origin/main." >&2
+            echo "Release: $release_commit" >&2
+            echo "Main:    $main_commit" >&2
+            exit 1
+          fi
+
+      - name: Deploy release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_REPOSITORY"
+          ALLERAC_PRODUCT_LINE=cloud DEPLOY_BRANCH=main bash ./update.sh
+
+      - name: Verify deployed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_REPOSITORY"
+
+          expected_commit="$(git rev-parse HEAD)"
+          build_info="$(docker exec allerac-app cat /app/build-info.json)"
+
+          printf '%s' "$build_info" | grep -F "\"commit\":\"$expected_commit\"" >/dev/null
+          printf '%s' "$build_info" | grep -F "\"release\":\"$RELEASE_TAG\"" >/dev/null
+
+          {
+            echo "## Production deploy succeeded"
+            echo
+            echo "- Release: \`$RELEASE_TAG\`"
+            echo "- Commit: \`$expected_commit\`"
+            echo "- Environment: https://app.allerac.ai"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -144,6 +144,7 @@ services:
       args:
         COMMIT_HASH: ${COMMIT_HASH:-unknown}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        RELEASE_VERSION: ${RELEASE_VERSION:-unreleased}
         NEXT_PUBLIC_VISIBLE_DOMAINS: ${NEXT_PUBLIC_VISIBLE_DOMAINS:-}
     container_name: allerac-app
     restart: unless-stopped
