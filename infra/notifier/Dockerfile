@@ -1,11 +1,23 @@
+# syntax=docker/dockerfile:1
+
 FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+  attempt=1; \
+  while [ "$attempt" -le 5 ]; do \
+    go mod download && exit 0; \
+    echo "go mod download failed (attempt $attempt/5); retrying..." >&2; \
+    sleep "$((attempt * 10))"; \
+    attempt="$((attempt + 1))"; \
+  done; \
+  exit 1
 
 COPY . .
-RUN go build -o notifier ./cmd/notifier
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+  go build -o notifier ./cmd/notifier
 
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates

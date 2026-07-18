@@ -272,14 +272,14 @@ echo ""
 # Step 6: Rebuild app images
 echo -e "${YELLOW}[6/9]${NC} Rebuilding application images..."
 if [ "$PRODUCT_LINE" = "cloud" ]; then
-    docker compose -f "$COMPOSE_FILE" build --no-cache app allerac-telegram notifier \
+    docker compose -f "$COMPOSE_FILE" build app allerac-telegram notifier \
         || fail_update "image build" "Failed to rebuild application images."
 else
     # Only rebuild images that exist in this deployment
     BUILD_TARGETS="app health-worker"
     docker ps --format '{{.Names}}' | grep -q "allerac-telegram" && BUILD_TARGETS="$BUILD_TARGETS allerac-telegram"
     docker ps --format '{{.Names}}' | grep -q "allerac-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
-    docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS build --no-cache $BUILD_TARGETS \
+    docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS build $BUILD_TARGETS \
         || fail_update "image build" "Failed to rebuild application images."
 fi
 echo -e "${GREEN}✓ Images rebuilt${NC}"
