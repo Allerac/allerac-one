@@ -28,7 +28,10 @@ docker run --detach --rm \
     "$IMAGE" >/dev/null
 
 for attempt in $(seq 1 30); do
-    if docker exec "$CONTAINER" pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+    # The PostgreSQL entrypoint briefly starts a socket-only temporary server
+    # during initialization, then shuts it down before launching the real
+    # server. TCP readiness avoids racing createdb against that shutdown.
+    if docker exec "$CONTAINER" pg_isready -h 127.0.0.1 -U postgres -d postgres >/dev/null 2>&1; then
         break
     fi
     if [ "$attempt" -eq 30 ]; then
