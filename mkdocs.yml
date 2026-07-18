@@ -123,6 +123,7 @@ nav:
       - Architecture: agents/architecture.md
       - Implementation: agents/agents-implementation.md
   - Operations:
+      - Session Backlog: sessions/backlog.md
       - Deployments:
           - Overview: deploy/README.md
           - Sandbox Home: deploy/sandbox-home.md
