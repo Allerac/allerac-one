@@ -9,7 +9,6 @@ import { updateLanguage } from '@/app/actions/user';
 import { getMyCreditBalance } from '@/app/actions/credits';
 import type { CreditBalance } from '@/app/services/credits/credit.service';
 import DomainSkillsModal from '@/app/components/hub/DomainSkillsModal';
-import ConfigModal from './ConfigModal';
 import { MODELS } from '@/app/services/llm/models';
 
 const LANGUAGES = [
@@ -52,7 +51,6 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
   const [creditLoadFailed, setCreditLoadFailed] = useState(false);
   const [openDomains, setOpenDomains] = useState<string[]>([]);
   const [domainsModalOpen, setDomainsModalOpen] = useState(false);
-  const [configModalOpen, setConfigModalOpen]   = useState(false);
   const [windowsOpen, setWindowsOpen]           = useState(false);
   const [isMobile, setIsMobile]                 = useState(false);
   const [currentModelId, setCurrentModelId]     = useState<string>('gemini-2.5-flash');
@@ -224,7 +222,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
                   <>
                     <div style={{ height: 1, background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
                     <StartMenuItem icon="📡" label="Monitor" onClick={() => { setStartOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
-                    <StartMenuItem icon="⚙️" label="Configuration" onClick={() => { setStartOpen(false); setConfigModalOpen(true); }} />
+                    <StartMenuItem icon="⚙️" label="Configuration" onClick={() => navigate('/config')} />
                     <StartMenuItem icon="🌐" label="Domains" onClick={() => { setStartOpen(false); setDomainsModalOpen(true); }} />
                     <StartMenuItem icon="🔧" label="Admin" onClick={() => navigate('/admin')} />
                     <div style={{ height: 1, background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
@@ -480,14 +478,6 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
         isDarkMode={isDark}
       />
 
-      <ConfigModal
-        isOpen={configModalOpen}
-        onClose={() => setConfigModalOpen(false)}
-        userId={userId}
-        userName={userName}
-        userEmail={userEmail}
-        isDarkMode={isDark}
-      />
     </>
   );
 }

@@ -1,12 +1,14 @@
 import { Metadata } from 'next';
 import { VisionBenchmark } from '@/app/components/benchmark/vision-benchmark';
+import { requireAdmin } from '@/app/lib/domain-access';
 
 export const metadata: Metadata = {
   title: 'Vision Benchmark - Allerac',
   description: 'Test which AI models can describe images',
 };
 
-export default function VisionBenchmarkPage() {
+export default async function VisionBenchmarkPage() {
+  await requireAdmin();
   return (
     <div className="min-h-screen bg-slate-950 p-6">
       <div className="max-w-4xl mx-auto">

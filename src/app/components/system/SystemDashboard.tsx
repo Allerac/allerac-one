@@ -2,21 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import BenchmarkPanel from './BenchmarkPanel';
-import GarminSettings from '../settings/GarminSettings';
-import InstagramSettings from '../settings/InstagramSettings';
-import TikTokSettings from '../settings/TikTokSettings';
 import SystemTab from './SystemTab';
 import ApiKeysTab from './ApiKeysTab';
+import ControlApiAccessTab from './ControlApiAccessTab';
 import PreferencesTab from './PreferencesTab';
 import { Model } from '@/app/types';
 
 interface SystemDashboardProps {
   isOpen: boolean;
   onClose: () => void;
+  displayMode?: 'modal' | 'page';
   isDarkMode: boolean;
   userId?: string;
-  initialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social';
+  initialTab?: 'preferences' | 'system' | 'apiKeys' | 'apiAccess';
   MODELS?: Model[];
   selectedModel?: string;
   setSelectedModel: (modelId: string) => void;
@@ -38,23 +36,21 @@ interface SystemDashboardProps {
   timezoneInput: string;
   setTimezoneInput: (v: string) => void;
   onSaveToken: () => Promise<void>;
-  onOpenTelegramSettings?: () => void;
   userName?: string;
   userEmail?: string;
 }
 
 const TABS = [
-  { id: 'preferences' as const, label: 'preferences' },
-  { id: 'apiKeys'     as const, label: 'api-keys'    },
-  { id: 'health'      as const, label: 'health'      },
-  { id: 'social'      as const, label: 'social'      },
-  { id: 'system'      as const, label: 'system'      },
-  { id: 'benchmark'   as const, label: 'benchmark'   },
+  { id: 'preferences' as const, label: 'Preferences' },
+  { id: 'apiAccess'   as const, label: 'Allerac API'   },
+  { id: 'apiKeys'     as const, label: 'External APIs' },
+  { id: 'system'      as const, label: 'System'      },
 ];
 
 export default function SystemDashboardModal({
   isOpen,
   onClose,
+  displayMode = 'modal',
   isDarkMode,
   userId,
   initialTab = 'preferences',
@@ -76,7 +72,6 @@ export default function SystemDashboardModal({
   timezoneInput,
   setTimezoneInput,
   onSaveToken,
-  onOpenTelegramSettings,
   MODELS = [],
   selectedModel = '',
   setSelectedModel,
@@ -84,7 +79,7 @@ export default function SystemDashboardModal({
   userEmail,
 }: SystemDashboardProps) {
   const t = useTranslations('system');
-  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'preferences' | 'health' | 'benchmark' | 'social'>(initialTab ?? 'preferences');
+  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'apiAccess' | 'preferences'>(initialTab ?? 'preferences');
   const [retroMode, setRetroMode] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('cfg-retro') !== 'off' : true
   );
@@ -122,8 +117,10 @@ export default function SystemDashboardModal({
 
   if (!isOpen) return null;
 
+  const isPage = displayMode === 'page';
+
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
+    if (!isPage && e.target === e.currentTarget) onClose();
   };
 
   return (
@@ -131,11 +128,11 @@ export default function SystemDashboardModal({
       <style>{`
         .allerac-cfg {
           font-family: 'Courier New', Courier, monospace;
-          color: #c9d1d9;
+          color: #e6edf3;
         }
         .allerac-cfg label {
-          color: #8b949e !important;
-          font-size: 0.72rem;
+          color: #c9d1d9 !important;
+          font-size: 0.78rem;
           letter-spacing: 0.06em;
           text-transform: uppercase;
           font-weight: 600;
@@ -144,11 +141,11 @@ export default function SystemDashboardModal({
         .allerac-cfg textarea,
         .allerac-cfg select {
           background: #161b22 !important;
-          border: 1px solid #30363d !important;
-          color: #c9d1d9 !important;
+          border: 1px solid #484f58 !important;
+          color: #f0f6fc !important;
           border-radius: 4px !important;
           font-family: inherit !important;
-          font-size: 0.82rem !important;
+          font-size: 0.88rem !important;
         }
         .allerac-cfg input:focus,
         .allerac-cfg textarea:focus,
@@ -159,7 +156,7 @@ export default function SystemDashboardModal({
         }
         .allerac-cfg input::placeholder,
         .allerac-cfg textarea::placeholder {
-          color: #484f58 !important;
+          color: #8b949e !important;
         }
         .allerac-cfg p.hint {
           color: #8b949e;
@@ -167,11 +164,11 @@ export default function SystemDashboardModal({
           margin-top: 6px;
         }
         .allerac-cfg hr, .allerac-cfg [class*="border-b"], .allerac-cfg [class*="border-t"] {
-          border-color: #21262d !important;
+          border-color: #30363d !important;
         }
         .allerac-cfg h3 {
-          color: #8b949e !important;
-          font-size: 0.72rem !important;
+          color: #c9d1d9 !important;
+          font-size: 0.78rem !important;
           letter-spacing: 0.08em;
           text-transform: uppercase;
           font-weight: 700;
@@ -189,7 +186,7 @@ export default function SystemDashboardModal({
           color: #c9d1d9 !important;
         }
         .allerac-cfg [class*="text-gray-400"], .allerac-cfg [class*="text-gray-500"] {
-          color: #8b949e !important;
+          color: #aeb6c2 !important;
         }
         .allerac-cfg [class*="rounded-lg"], .allerac-cfg [class*="rounded-md"] {
           border-radius: 4px !important;
@@ -216,10 +213,10 @@ export default function SystemDashboardModal({
         .allerac-cfg [class*="bg-white"] { background-color: #0d0d0d !important; }
         .allerac-cfg [class*="text-gray-900"] { color: #e6edf3 !important; }
         .allerac-cfg [class*="text-gray-800"] { color: #c9d1d9 !important; }
-        .allerac-cfg [class*="text-gray-700"] { color: #8b949e !important; }
-        .allerac-cfg [class*="text-gray-600"] { color: #8b949e !important; }
-        .allerac-cfg [class*="border-gray-200"] { border-color: #21262d !important; }
-        .allerac-cfg [class*="border-gray-300"] { border-color: #30363d !important; }
+        .allerac-cfg [class*="text-gray-700"] { color: #aeb6c2 !important; }
+        .allerac-cfg [class*="text-gray-600"] { color: #aeb6c2 !important; }
+        .allerac-cfg [class*="border-gray-200"] { border-color: #30363d !important; }
+        .allerac-cfg [class*="border-gray-300"] { border-color: #484f58 !important; }
         .allerac-cfg [class*="bg-green-50"] { background-color: #0a2218 !important; }
         .allerac-cfg [class*="text-green-700"] { color: #3fb950 !important; }
         .allerac-cfg [class*="bg-red-50"] { background-color: #2a0a0a !important; }
@@ -231,15 +228,20 @@ export default function SystemDashboardModal({
       `}</style>
 
       <div
-        className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 sm:p-4"
+        className={isPage
+          ? `h-[100dvh] min-h-0 flex overflow-hidden ${isDarkMode ? 'bg-gray-950' : 'bg-gray-100'}`
+          : 'fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 sm:p-4'}
+        style={isPage ? undefined : { paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
         onClick={handleBackdropClick}
       >
         <div
-          className={`${retroMode ? 'allerac-cfg' : `backdrop-blur-md ${isDarkMode ? 'bg-gray-800/95 border-t sm:border border-gray-700' : 'bg-white/95 border-t sm:border border-gray-200'}`} w-full sm:max-w-4xl rounded-t-sm sm:rounded max-h-[95dvh] sm:max-h-[90dvh] overflow-hidden shadow-2xl`}
-          style={retroMode ? { background: '#0d0d0d', border: '1px solid #30363d' } : undefined}
+          className={`${retroMode ? 'allerac-cfg' : `backdrop-blur-md ${isDarkMode ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-200'}`} w-full overflow-hidden flex flex-col ${isPage ? 'h-full min-h-0' : 'sm:max-w-4xl shadow-2xl rounded-t-sm sm:rounded max-h-[95dvh] sm:max-h-[90dvh] border-t sm:border'}`}
+          style={retroMode
+            ? { background: '#0d0d0d', border: isPage ? 'none' : '1px solid #30363d' }
+            : undefined}
         >
           {/* Mobile drag indicator */}
-          <div className="flex justify-center pt-2 sm:hidden">
+          <div className={`justify-center pt-2 sm:hidden ${isPage ? 'hidden' : 'flex'}`}>
             {retroMode
               ? <div style={{ width: 32, height: 3, background: '#30363d', borderRadius: 2 }} />
               : <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`} />
@@ -248,26 +250,26 @@ export default function SystemDashboardModal({
 
           {/* Header */}
           {retroMode ? (
-            <div style={{ borderBottom: '1px solid #21262d', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className={isPage ? 'w-full max-w-5xl mx-auto' : undefined} style={{ borderBottom: '1px solid #21262d', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ color: '#818cf8', fontSize: '0.75rem' }}>▸</span>
                 <span style={{ color: '#e6edf3', fontSize: '0.82rem', fontWeight: 700, letterSpacing: '0.06em' }}>{t('title')}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <button onClick={toggleRetro} title="Switch to modern UI"
-                  style={{ background: 'none', border: 'none', color: '#484f58', cursor: 'pointer', fontSize: '0.72rem', fontFamily: 'inherit', padding: '2px 6px' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#8b949e')}
-                  onMouseLeave={e => (e.currentTarget.style.color = '#484f58')}
+                  style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '0.78rem', fontFamily: 'inherit', padding: '4px 6px' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#c9d1d9')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#8b949e')}
                 >[modern]</button>
                 <button onClick={onClose}
-                  style={{ background: 'none', border: 'none', color: '#484f58', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', padding: '2px 8px' }}
+                  style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '0.9rem', fontFamily: 'inherit', padding: '4px 8px' }}
                   onMouseEnter={e => (e.currentTarget.style.color = '#f85149')}
-                  onMouseLeave={e => (e.currentTarget.style.color = '#484f58')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#8b949e')}
                 >[×]</button>
               </div>
             </div>
           ) : (
-            <div className={`px-4 py-3 sm:p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`px-4 py-3 sm:p-4 border-b flex items-center justify-between ${isPage ? 'w-full max-w-5xl mx-auto' : ''} ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center flex-shrink-0">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -295,7 +297,7 @@ export default function SystemDashboardModal({
 
           {/* Tabs */}
           {retroMode ? (
-            <div style={{ borderBottom: '1px solid #21262d', padding: '0 20px', display: 'flex', overflowX: 'auto' }}>
+            <div className={isPage ? 'w-full max-w-5xl mx-auto' : undefined} style={{ borderBottom: '1px solid #21262d', padding: '0 20px', display: 'flex', overflowX: 'auto' }}>
               {TABS.map(tab => {
                 const active = activeTab === tab.id;
                 return (
@@ -303,20 +305,20 @@ export default function SystemDashboardModal({
                     style={{
                       background: 'none', border: 'none',
                       borderBottom: active ? '1px solid #818cf8' : '1px solid transparent',
-                      color: active ? '#818cf8' : '#484f58',
+                      color: active ? '#a5b4fc' : '#aeb6c2',
                       cursor: 'pointer', fontFamily: 'inherit',
-                      fontSize: '0.72rem', letterSpacing: '0.05em',
-                      padding: '10px 14px', whiteSpace: 'nowrap',
+                      fontSize: '0.84rem', fontWeight: active ? 700 : 600, letterSpacing: '0.04em',
+                      padding: '12px 16px', whiteSpace: 'nowrap',
                       transition: 'color 0.15s', marginBottom: -1,
                     }}
-                    onMouseEnter={e => { if (!active) e.currentTarget.style.color = '#8b949e'; }}
-                    onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#484f58'; }}
+                    onMouseEnter={e => { if (!active) e.currentTarget.style.color = '#e6edf3'; }}
+                    onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#aeb6c2'; }}
                   >{active ? `[${tab.label}]` : tab.label}</button>
                 );
               })}
             </div>
           ) : (
-            <div className={`flex overflow-x-auto border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`flex overflow-x-auto border-b ${isPage ? 'w-full max-w-5xl mx-auto' : ''} ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               {TABS.map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                   className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
@@ -330,7 +332,7 @@ export default function SystemDashboardModal({
           )}
 
           {/* Tab content */}
-          <div className={`${retroMode ? 'p-3 sm:p-5' : 'p-3 sm:p-4'} overflow-y-auto max-h-[calc(95dvh-120px)] sm:max-h-[calc(90dvh-140px)]`}
+          <div className={`${retroMode ? 'p-3 sm:p-5' : 'p-3 sm:p-4'} overflow-y-auto flex-1 min-h-0 ${isPage ? 'w-full max-w-5xl mx-auto' : 'max-h-[calc(95dvh-120px)] sm:max-h-[calc(90dvh-140px)]'}`}
             style={retroMode ? { color: '#c9d1d9' } : undefined}
           >
             {activeTab === 'system' && (
@@ -359,6 +361,10 @@ export default function SystemDashboardModal({
               />
             )}
 
+            {activeTab === 'apiAccess' && (
+              <ControlApiAccessTab isDarkMode={retroMode || isDarkMode} />
+            )}
+
             {activeTab === 'preferences' && (
               <PreferencesTab
                 isDarkMode={retroMode || isDarkMode}
@@ -369,7 +375,6 @@ export default function SystemDashboardModal({
                 setLocationInput={setLocationInput}
                 timezoneInput={timezoneInput}
                 setTimezoneInput={setTimezoneInput}
-                onOpenTelegramSettings={onOpenTelegramSettings}
                 onSave={handleSaveApiKeys}
                 isSavingKeys={isSavingKeys}
                 keySaveMessage={keySaveMessage}
@@ -378,27 +383,6 @@ export default function SystemDashboardModal({
               />
             )}
 
-            {activeTab === 'health' && (
-              <GarminSettings userId={userId} isDarkMode={retroMode || isDarkMode} />
-            )}
-
-            {activeTab === 'social' && (
-              <div className="space-y-8">
-                <InstagramSettings userId={userId} isDarkMode={retroMode || isDarkMode} />
-                <div className="border-t border-gray-700/40 pt-6">
-                  <TikTokSettings userId={userId} isDarkMode={retroMode || isDarkMode} />
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'benchmark' && (
-              <BenchmarkPanel
-                isDarkMode={retroMode || isDarkMode}
-                userId={userId}
-                MODELS={MODELS}
-                selectedModel={selectedModel}
-              />
-            )}
           </div>
         </div>
       </div>

@@ -1,5 +1,10 @@
 # Control API v1 Gap Audit - 2026-06-29
 
+> Historical snapshot: this audit records the surface as it existed on 2026-06-29.
+> The current beta baseline has 44 route paths and 61 operations, including public
+> deployment identity, speech, and robot settings. See
+> [Control API v1 Roadmap](control-api-v1.md) for current status.
+
 ## Summary
 
 The current OpenAPI contract and implementation are in sync:

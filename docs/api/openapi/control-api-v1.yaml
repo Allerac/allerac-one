@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: Allerac Control API
-  version: 1.0.0-in-progress
+  version: 1.0.0-beta
   description: >
-    Emerging Control API v1 contract for Allerac One. The current implementation
-    supports browser session authentication and bearer API keys.
+    Control API v1 beta contract for Allerac One. The current implementation supports
+    browser session authentication and bearer API keys. The version endpoint is
+    intentionally public for deployment verification.
 servers:
   - url: http://localhost:8080
     description: Local Docker deployment
@@ -28,7 +29,26 @@ tags:
   - name: Robot
   - name: Email
   - name: Finance
+  - name: Benchmark
 paths:
+  /api/v1/version:
+    get:
+      tags: [System]
+      summary: Get deployed release identity
+      operationId: getApiVersion
+      security: []
+      responses:
+        "200":
+          description: Release and build identity served by this application instance
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store, max-age=0
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResponse"
   /api/v1/me:
     get:
       tags: [System]
@@ -1362,6 +1382,88 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/benchmark/models:
+    get:
+      tags: [Benchmark]
+      summary: List benchmark models and current availability
+      operationId: listBenchmarkModels
+      responses:
+        "200":
+          description: Model catalog and provider availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BenchmarkModelListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/benchmark/runs:
+    get:
+      tags: [Benchmark]
+      summary: List benchmark runs owned by the authenticated user
+      operationId: listBenchmarkRuns
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 5
+      responses:
+        "200":
+          description: Benchmark history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BenchmarkRunListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Benchmark]
+      summary: Run the standard benchmark suite
+      operationId: runBenchmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BenchmarkRunRequest"
+      responses:
+        "200":
+          description: Server-sent event stream containing benchmark progress and results
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: Selected provider is not configured
+        "429":
+          description: Benchmark concurrency limit reached
+    delete:
+      tags: [Benchmark]
+      summary: Delete all benchmark history owned by the authenticated user
+      operationId: clearBenchmarkRuns
+      responses:
+        "200":
+          description: History deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1492,6 +1594,20 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    VersionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [release, commit, builtAt]
+          properties:
+            release:
+              type: string
+            commit:
+              type: string
+            builtAt:
+              type: string
     MeResponse:
       type: object
       required: [data]
@@ -2559,6 +2675,72 @@ components:
           properties:
             execution:
               $ref: "#/components/schemas/JobExecution"
+    BenchmarkRunRequest:
+      type: object
+      required: [model, provider]
+      properties:
+        model:
+          type: string
+          minLength: 1
+          maxLength: 200
+        provider:
+          type: string
+          enum: [github, ollama, gemini, anthropic]
+    BenchmarkModelListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [models, providers]
+          properties:
+            models:
+              type: array
+              items:
+                type: object
+                required: [id, name, provider, available]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+                  provider: { type: string, enum: [github, ollama, gemini, anthropic] }
+                  available: { type: boolean }
+            providers:
+              type: object
+              additionalProperties:
+                type: boolean
+    BenchmarkRunListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [runs]
+          properties:
+            runs:
+              type: array
+              items:
+                $ref: "#/components/schemas/BenchmarkRun"
+    BenchmarkRun:
+      type: object
+      required: [run_id, model, provider, created_at, tests]
+      properties:
+        run_id: { type: string, format: uuid }
+        model: { type: string }
+        provider: { type: string }
+        created_at: { type: string, format: date-time }
+        tests:
+          type: array
+          items:
+            type: object
+            required: [prompt_name, prompt_label, total_ms, chars_generated]
+            properties:
+              prompt_name: { type: string }
+              prompt_label: { type: string }
+              ttft_ms: { type: [number, "null"] }
+              total_ms: { type: number }
+              chars_generated: { type: integer }
+              tokens_generated: { type: [integer, "null"] }
+              tokens_per_second: { type: [number, "null"] }
     CreateJobRequest:
       type: object
       required: [name, cronExpr, prompt, channels]
@@ -2582,6 +2764,13 @@ components:
           default: true
         domainSlug:
           type: [string, "null"]
+        llmModel:
+          type: [string, "null"]
+          description: Explicit model ID. Null uses automatic selection.
+        llmProvider:
+          type: [string, "null"]
+          enum: [github, ollama, gemini, anthropic, null]
+          description: Must be provided together with llmModel.
     UpdateJobRequest:
       type: object
       properties:
@@ -2597,9 +2786,15 @@ components:
             type: string
         enabled:
           type: boolean
+        llmModel:
+          type: [string, "null"]
+          description: Set both model fields to null to restore automatic selection.
+        llmProvider:
+          type: [string, "null"]
+          enum: [github, ollama, gemini, anthropic, null]
     ScheduledJob:
       type: object
-      required: [id, name, cronExpr, prompt, channels, domainSlug, enabled, lastRunAt, createdAt, updatedAt]
+      required: [id, name, cronExpr, prompt, channels, domainSlug, llmModel, llmProvider, enabled, lastRunAt, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2615,6 +2810,11 @@ components:
             type: string
         domainSlug:
           type: [string, "null"]
+        llmModel:
+          type: [string, "null"]
+        llmProvider:
+          type: [string, "null"]
+          enum: [github, ollama, gemini, anthropic, null]
         enabled:
           type: boolean
         lastRunAt:

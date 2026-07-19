@@ -12,6 +12,8 @@ import {
 import type { TikTokCreatorInfo, TikTokPrivacyLevel } from '@/app/services/tiktok/tiktok-api.service';
 import ImageEditModal from '@/app/components/instagram/ImageEditModal';
 import { MODELS } from '@/app/services/llm/models';
+import InstagramSettings from '@/app/components/settings/InstagramSettings';
+import TikTokSettings from '@/app/components/settings/TikTokSettings';
 
 export type SocialPlatform = 'instagram' | 'tiktok';
 type TikTokPrivacy = '' | TikTokPrivacyLevel;
@@ -109,6 +111,7 @@ export default function SocialPostStudio({
   const [refCounter, setRefCounter] = useState(0);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [imageEditOpen, setImageEditOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
@@ -500,6 +503,17 @@ export default function SocialPostStudio({
         <div className={`flex-shrink-0 border-b ${border} px-5 h-12 flex justify-between items-center ${bg}`}>
           <p className={`text-xs font-semibold ${txtMuted} uppercase tracking-wider`}>{t('title')}</p>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className={`h-8 w-8 flex items-center justify-center rounded-md transition-colors ${d ? 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+              title="Social settings"
+              aria-label="Social settings"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('openInstagramDM'))}
               className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-colors ${d ? 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
@@ -1059,6 +1073,41 @@ export default function SocialPostStudio({
       </div>
 
     </div>
+
+    {settingsOpen && (
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
+        onClick={() => setSettingsOpen(false)}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Social settings"
+          className={`w-full max-h-[90dvh] overflow-hidden rounded-t-xl border shadow-2xl sm:max-w-xl sm:rounded-xl ${d ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className={`flex items-center justify-between border-b px-4 py-3 ${border}`}>
+            <h2 className={`font-semibold ${txt}`}>Social settings</h2>
+            <button
+              onClick={() => setSettingsOpen(false)}
+              aria-label="Close social settings"
+              className={`rounded-lg p-2 ${d ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-500 hover:bg-gray-100'}`}
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="max-h-[calc(90dvh-60px)] space-y-8 overflow-y-auto p-4">
+            <InstagramSettings userId={userId} isDarkMode={d} />
+            <div className={`border-t pt-6 ${border}`}>
+              <TikTokSettings userId={userId} isDarkMode={d} />
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Image edit modal */}
 

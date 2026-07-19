@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Model } from '@/app/types';
-import { getBenchmarkHistory, clearBenchmarkHistory, BenchmarkRun } from '@/app/actions/benchmark';
+import { getBenchmarkHistory, clearBenchmarkHistory, getBenchmarkAvailability, BenchmarkRun, type BenchmarkAvailability } from '@/app/actions/benchmark';
 
 interface TestState {
   status: 'pending' | 'running' | 'done' | 'error';
@@ -50,6 +50,8 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
   const [lastRunId, setLastRunId] = useState<string | null>(null);
   const [currentTestIdx, setCurrentTestIdx] = useState(0);
   const [copiedRunId, setCopiedRunId] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<BenchmarkAvailability | null>(null);
+  const [runError, setRunError] = useState('');
 
   useEffect(() => {
     setBenchModel(selectedModel);
@@ -57,8 +59,9 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
 
   useEffect(() => {
     if (!userId) return;
-    getBenchmarkHistory().then(h => {
+    Promise.all([getBenchmarkHistory(), getBenchmarkAvailability()]).then(([h, available]) => {
       setHistory(h);
+      setAvailability(available);
       setHistoryLoading(false);
     });
   }, [userId]);
@@ -76,6 +79,7 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
     setIsWarmingUp(false);
     setLastRunId(null);
     setCurrentTestIdx(0);
+    setRunError('');
 
     try {
       const response = await fetch('/api/benchmark', {
@@ -84,7 +88,11 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
         body: JSON.stringify({ model: benchModel, provider: currentModelConfig.provider }),
       });
 
-      if (!response.ok || !response.body) throw new Error('Failed to start benchmark');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || `Failed to start benchmark (${response.status})`);
+      }
+      if (!response.body) throw new Error('Benchmark response stream is unavailable');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -133,12 +141,13 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
               setHistory(h);
             }
           } else if (event.type === 'error') {
-            console.error('[Benchmark]', event.message);
+            setRunError(event.message || 'Benchmark failed');
           }
         }
       }
     } catch (err: any) {
       console.error('[Benchmark] Error:', err);
+      setRunError(err?.message || 'Benchmark failed');
     } finally {
       setIsRunning(false);
     }
@@ -213,8 +222,12 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
               }`}
             >
               {MODELS.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.icon} {m.name} ({m.provider})
+                <option
+                  key={m.id}
+                  value={m.id}
+                  disabled={availability ? (m.provider === 'ollama' ? !availability.ollamaModels.includes(m.id) : !availability.providers[m.provider]) : false}
+                >
+                  {m.icon} {m.name} ({m.provider}){availability && (m.provider === 'ollama' ? !availability.ollamaModels.includes(m.id) : !availability.providers[m.provider]) ? ' — unavailable' : ''}
                 </option>
               ))}
             </select>
@@ -246,6 +259,11 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
             {isWarmingUp
               ? 'Warming up model (loading into memory)…'
               : `Running test ${currentTestIdx + 1} of ${TESTS.length} — ${TESTS[currentTestIdx]?.label}`}
+          </div>
+        )}
+        {runError && (
+          <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${isDarkMode ? 'border-red-900/60 bg-red-950/30 text-red-300' : 'border-red-200 bg-red-50 text-red-700'}`}>
+            {runError}
           </div>
         )}
       </div>

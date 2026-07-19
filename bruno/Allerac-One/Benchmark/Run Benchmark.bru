@@ -1,0 +1,23 @@
+meta {
+  name: Run Benchmark
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/benchmark/runs
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+  Accept: text/event-stream
+}
+
+body:json {
+  {
+    "model": "qwen2.5:3b",
+    "provider": "ollama"
+  }
+}

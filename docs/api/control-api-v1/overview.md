@@ -2,8 +2,11 @@
 
 ## Status
 
-In progress. The implemented v1 surface supports browser session authentication
-and Control API bearer keys.
+Beta baseline complete. The implemented v1 surface contains 44 route paths and 61
+operations, supports browser session authentication and scoped Control API bearer
+keys, and is deployed as a production client surface. Standalone tool execution,
+streaming chat, and legacy UI migration are deferred evolutions rather than beta
+baseline blockers.
 
 ## Base URL
 
@@ -87,7 +90,7 @@ Common error codes:
 
 | Resource | Endpoints |
 |---|---|
-| [System](system.md) | `GET /me`, `GET /domains`, `GET /capabilities` |
+| [System](system.md) | `GET /version`, `GET /me`, `GET /domains`, `GET /capabilities` |
 | [API Keys](api-keys.md) | list, create, revoke |
 | [Conversations](conversations.md) | list, create, messages |
 | [Memories](memories.md) | list, create from conversation, delete |
@@ -99,8 +102,10 @@ Common error codes:
 | [Skills](skills.md) | list, get, create, update, delete |
 | [Health](health.md) | status, summary, daily, activities |
 | [Search](search.md) | web search |
+| [Robot](robot.md) | speech synthesis, get/update robot settings |
 | [Email](email.md) | list messages, get message, send |
 | [Finance](finance.md) | quotes, symbol search, candles, watchlist list, add, remove |
+| [Benchmark](benchmark.md) | model availability, run via SSE, history, clear history |
 
 ## Bruno Collection
 
@@ -124,6 +129,9 @@ Use the `Local` environment:
 | `emailMessageUid` | IMAP UID to test `Email / Get Message` |
 
 Recommended smoke order:
+
+Start with `System / Version` to record the deployment identity, then continue with
+the authenticated resource flow:
 
 1. `System / Me`
 2. `System / List Domains`
@@ -172,15 +180,17 @@ Recommended smoke order:
 45. `Health / Daily Health`
 46. `Health / List Activities`
 47. `Search / Web Search`
-48. `Email / List Messages`
-49. `Email / Get Message`
-50. `Email / Send Email`
-51. `Finance / Get Quotes`
-52. `Finance / Search Symbols`
-53. `Finance / Get Candles`
-54. `Finance / Get Watchlist`
-55. `Finance / Add to Watchlist`
-56. `Finance / Remove from Watchlist`
+48. `Robot / Get Settings`
+49. `Robot / Synthesize Speech`
+50. `Email / List Messages`
+51. `Email / Get Message`
+52. `Email / Send Email`
+53. `Finance / Get Quotes`
+54. `Finance / Search Symbols`
+55. `Finance / Get Candles`
+56. `Finance / Get Watchlist`
+57. `Finance / Add to Watchlist`
+58. `Finance / Remove from Watchlist`
 
 Memory creation requires `conversationId` to point to an owned conversation with
 enough messages to summarize. A newly created empty conversation should return

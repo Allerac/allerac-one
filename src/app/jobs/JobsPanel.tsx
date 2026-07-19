@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import type { ScheduledJob, JobExecution } from '@/app/types';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
+import { MODELS } from '@/app/services/llm/models';
 import {
   getScheduledJobs, createScheduledJob, updateScheduledJob,
   deleteScheduledJob, toggleJobEnabled, getJobExecutions,
@@ -100,18 +101,19 @@ function JobRow({ job, selected, onSelect, onToggle, d }: {
 
 interface FormState {
   name: string; prompt: string; channels: string[]; enabled: boolean;
+  modelSelection: string;
   preset: Preset; hour: string; minute: string; weekday: string; monthDay: string;
   cMin: string; cHour: string; cDom: string; cMonth: string; cDow: string; cronExpr: string;
 }
 
 const emptyForm: FormState = {
-  name: '', prompt: '', channels: ['telegram'], enabled: true,
+  name: '', prompt: '', channels: ['telegram'], enabled: true, modelSelection: 'automatic',
   preset: 'daily', hour: '8', minute: '0', weekday: '1', monthDay: '1',
   cMin: '0', cHour: '8', cDom: '*', cMonth: '*', cDow: '*', cronExpr: '',
 };
 
 function jobToForm(job: ScheduledJob): FormState {
-  return { ...emptyForm, name: job.name, prompt: job.prompt, channels: job.channels, enabled: job.enabled, preset: 'custom', cronExpr: job.cronExpr };
+  return { ...emptyForm, name: job.name, prompt: job.prompt, channels: job.channels, enabled: job.enabled, modelSelection: job.llmModel ?? 'automatic', preset: 'custom', cronExpr: job.cronExpr };
 }
 
 function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted, onClose }: {
@@ -154,7 +156,17 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
     if (!form.prompt.trim()) { setError(t('errors.promptRequired')); return; }
     if (form.channels.length === 0) { setError(t('errors.channelRequired')); return; }
     setSaving(true); setError('');
-    const data = { name: form.name, cronExpr: derivedCron.trim(), prompt: form.prompt, channels: form.channels, enabled: form.enabled, domainSlug: domainSlug ?? null };
+    const selectedModel = MODELS.find(model => model.id === form.modelSelection);
+    const data = {
+      name: form.name,
+      cronExpr: derivedCron.trim(),
+      prompt: form.prompt,
+      channels: form.channels,
+      enabled: form.enabled,
+      domainSlug: domainSlug ?? null,
+      llmModel: selectedModel?.id ?? null,
+      llmProvider: selectedModel?.provider ?? null,
+    };
     const res = job
       ? await updateScheduledJob(job.id, data)
       : await createScheduledJob(data);
@@ -204,6 +216,27 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
         <div>
           <label className={labelCls}>{t('fields.prompt')}</label>
           <textarea value={form.prompt} onChange={e => s({ prompt: e.target.value })} rows={4} className={inputCls} placeholder={t('placeholderPrompt')} />
+        </div>
+
+        {/* Channels */}
+        <div>
+          <label className={labelCls}>Model</label>
+          <select value={form.modelSelection} onChange={e => s({ modelSelection: e.target.value })} className={inputCls}>
+            <option value="automatic">Automatic (current availability)</option>
+            <optgroup label="Local models">
+              {MODELS.filter(model => model.provider === 'ollama').map(model => (
+                <option key={model.id} value={model.id}>{model.name}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Cloud models">
+              {MODELS.filter(model => model.provider !== 'ollama').map(model => (
+                <option key={model.id} value={model.id}>{model.name} ({model.provider})</option>
+              ))}
+            </optgroup>
+          </select>
+          <p className={`mt-1 text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+            Local models can run asynchronously without consuming a cloud provider. Explicit selections fail if unavailable.
+          </p>
         </div>
 
         {/* Channels */}

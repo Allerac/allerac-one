@@ -2,16 +2,18 @@
 
 ## Status
 
-In progress. As of 2026-07-14 the `/api/v1` contract covers `me`, `domains`,
-`capabilities`, API keys, conversations (including synchronous message send),
-memories, tickets, agent runs, documents, notes, scheduled jobs (including manual
-run), skills, health, search, email, and finance — 41 route paths and 57 operations,
-in sync with `docs/api/openapi/control-api-v1.yaml`. Browser session auth and scoped
-bearer API keys are both implemented.
+Beta baseline complete. As of 2026-07-19 the `/api/v1` contract covers `version`, `me`,
+`domains`, `capabilities`, API keys, conversations (including synchronous message
+send), memories, tickets, agent runs, documents, notes, scheduled jobs (including
+manual run), skills, health, search, speech, robot settings, email, and finance —
+44 route paths and 61 operations, in sync with
+`docs/api/openapi/control-api-v1.yaml`. Browser session auth and scoped bearer API
+keys are both implemented.
 
-Remaining work: the `tools:run` contract, UI migration (Phase 6), app decoupling
-preparation (Phase 7), and the streaming/async chat decision. See
-`control-api-v1-gap-audit-2026-06-29.md` for the full gap analysis.
+The remaining items are post-baseline evolution rather than blockers for the beta
+Control API: standalone `tools:run`, streaming/async chat, and incremental migration
+of legacy UI surfaces. Worker separation was completed in Phase 8. See
+`control-api-v1-gap-audit-2026-06-29.md` for the historical gap analysis.
 
 ## How To Use This Document
 
@@ -222,7 +224,8 @@ Tasks:
 - [x] Create this roadmap.
 - [x] Serve docs through Material for MkDocs container.
 - [x] Add implementation tickets for Phase 1 in this roadmap.
-- [ ] Create actual Allerac tickets for Phase 1 when implementation starts.
+- [x] Superseded: Phase 1 was implemented directly and its completed work is tracked
+  in this roadmap and the implementation history.
 
 Exit criteria:
 
@@ -663,6 +666,11 @@ DELETE /api/v1/memories/:id
 
 Purpose: prove that the Control API is useful before broadening it.
 
+Status: complete at the contract baseline. API-key clients, Bruno requests, contract
+tests, and the Android robot prototype have exercised the same headless auth and
+resource patterns. Production Android validation is tracked separately as client
+integration work.
+
 ### Scenario
 
 ```text
@@ -676,14 +684,18 @@ Purpose: prove that the Control API is useful before broadening it.
 
 ### Exit Criteria
 
-- The full scenario works with curl or a small script.
-- No browser UI is required.
-- The current UI still works.
-- The docs include example commands.
+- [x] The complete resource scenario is represented by API-key contract tests and
+  Bruno requests.
+- [x] No browser UI is required.
+- [x] The current UI remains available alongside `/api/v1`.
+- [x] The API reference includes command examples.
 
-## Phase 6: UI Migration Candidates
+## Phase 6: UI Migration Candidates (Post-Baseline)
 
 Purpose: reduce duplicate surfaces after the API has proven itself.
+
+Status: deferred. UI migration is an incremental cleanup and is not required for the
+Control API v1 beta baseline. Existing UI routes remain supported.
 
 Candidates:
 
@@ -691,7 +703,8 @@ Candidates:
 - Agent run polling can use `/api/v1/agent-runs`.
 - Domain discovery can use `/api/v1/domains`.
 
-Do not migrate chat UI until the chat API contract is designed separately.
+The synchronous chat API contract now exists, but chat UI migration should still be
+handled as a separate product change with regression testing.
 
 Migration rule: migrate one UI surface at a time and keep the old `/api/*` route until
 the replacement is tested in production-like Docker.
@@ -700,13 +713,19 @@ the replacement is tested in production-like Docker.
 
 Purpose: prepare for container/process separation after API contracts stabilize.
 
+Status: complete for the beta boundary. The analysis was recorded across the Control
+API architecture, ADR 0002, the dated gap audit, and Phase 8. Phase 8 then implemented
+the first process split by moving agent execution into `agent-worker`.
+
 Tasks:
 
-- [ ] Document current `app` responsibilities.
-- [ ] Identify runtime code that should move to an `agent-worker` process.
-- [ ] Identify routes that are UI-only versus API control-plane routes.
-- [ ] Decide whether `/api/v1` remains in Next.js or moves to a separate API service later.
-- [ ] Add healthchecks for API and worker responsibilities separately.
+- [x] Document current `app` responsibilities in the architecture documents.
+- [x] Identify and move the agent-run runtime into `agent-worker`.
+- [x] Classify UI-only, protocol callback, legacy, and Control API routes in the gap
+  audit.
+- [x] Keep `/api/v1` in Next.js for the current boundary; reconsider a separate API
+  service only after contracts and operational needs justify it, per ADR 0002.
+- [x] Keep the application healthcheck and add a dedicated worker healthcheck.
 
 Exit criteria:
 
@@ -770,14 +789,17 @@ Verified end-to-end on 2026-07-14 with local Docker (qwen2.5:3b via Ollama):
 - [x] The app container no longer starts the runner; the scheduler logger still runs
       in the app.
 
-## Deferred Work
+## Post-Baseline Work
 
-- Tool execution API (`tools:run`).
-- Streaming responses.
-- OpenAPI generation.
-- CLI packaging.
-- Separate `api` container.
-- Public docs publishing.
+| Item | Status | Trigger for reconsideration |
+|---|---|---|
+| Tool execution API (`tools:run`) | Deferred | An explicit per-tool permission and audit model is designed |
+| Streaming or async chat | Deferred | A real client requires incremental tokens or long-running message execution |
+| UI migration to `/api/v1` | Incremental | Migrate one surface at a time with production-like regression testing |
+| OpenAPI generation | Optional | Manual contract maintenance becomes unreliable or expensive |
+| CLI packaging | Separate client project | The API baseline and authentication flow are validated in production |
+| Separate `api` container | Architectural option | Scaling, isolation, or deployment requirements justify extraction |
+| Public docs publishing | Operational follow-up | Authentication, redaction, and publishing policy are approved |
 
 ## Definition Of Done For Any Phase
 
@@ -788,43 +810,18 @@ Verified end-to-end on 2026-07-14 with local Docker (qwen2.5:3b via Ollama):
 - This roadmap is updated with completed tasks and any discovered constraints.
 - If a new contract exists, the docs include at least one curl example.
 
-## Recommended Next Ticket
+## Post-Baseline Direction
 
-Resolved 2026-07-14 — decisions recorded below and in the dated implementation note;
-the chosen increment is Phase 8 (Worker Separation) above.
+The previous next-ticket decision was resolved on 2026-07-14:
 
-1. Streaming/async chat: deferred until a real client needs incremental tokens; the
-   synchronous send endpoint covers CLI, automations, and Telegram.
-2. `tools:run`: deferred until the tool permission model is explicit; tools remain
-   reachable through chat and agent runs.
-3. Next surface: worker separation (architecture Phase 4 / roadmap Phase 8).
+1. Streaming/async chat remains deferred until a real client needs incremental
+   tokens; synchronous message send covers current clients.
+2. `tools:run` remains deferred until the tool permission model is explicit; tools
+   remain reachable through chat and agent runs.
+3. Worker separation was selected and completed in Phase 8.
 
-Title:
-
-```text
-Decide the next Control API increment: chat streaming, tools:run, or worker separation
-```
-
-Description:
-
-```text
-The v1 resource surface is complete except tools:run. Before implementing more
-endpoints, record decisions for the remaining high-judgment items from the
-2026-06-29 gap audit:
-
-1. Whether a streaming or async/polling chat contract is needed in addition to the
-   synchronous POST /api/v1/conversations/:id/messages endpoint.
-2. Whether tools:run becomes a standalone API or stays reachable only through chat
-   and agent runs (depends on an explicit tool permission model).
-3. Which surface comes next: workspace, social/Instagram, skill evaluation, or
-   worker separation (architecture Phase 4).
-```
-
-Acceptance criteria:
-
-- [ ] Each decision is recorded as an ADR or a dated entry in this roadmap.
-- [ ] The chosen next surface has a phase section in this roadmap with endpoints,
-      scopes, and exit criteria before implementation starts.
+New client integrations and resource surfaces should be tracked in their own
+roadmaps or tickets instead of reopening the completed beta baseline.
 
 ## Implementation Notes
 

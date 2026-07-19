@@ -3,15 +3,10 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { requireCurrentAdmin } from '@/app/lib/auth-session';
+import { readBuildInfo } from '@/app/lib/build-info';
 
 const GITHUB_REPO = 'Allerac/allerac-one';
 const GITHUB_API = 'https://api.github.com';
-
-export interface BuildInfo {
-  commit: string;
-  date: string;
-  release: string;
-}
 
 export interface CommitInfo {
   sha: string;
@@ -31,23 +26,6 @@ export interface UpdateStatus {
   updateAvailable: boolean;
   newCommits: CommitInfo[];
   error?: string;
-}
-
-/**
- * Read build info baked into the Docker image at build time
- */
-async function getBuildInfo(): Promise<BuildInfo> {
-  try {
-    const buildInfoPath = path.join(process.cwd(), 'build-info.json');
-    const data = JSON.parse(await fs.readFile(buildInfoPath, 'utf-8'));
-    return {
-      commit: data.commit || 'unknown',
-      date: data.date || 'unknown',
-      release: data.release || 'unreleased',
-    };
-  } catch {
-    return { commit: 'unknown', date: 'unknown', release: 'unreleased' };
-  }
 }
 
 /**
@@ -93,7 +71,7 @@ async function getLatestCommits(since?: string): Promise<CommitInfo[]> {
 export async function checkForUpdates(): Promise<UpdateStatus> {
   await requireCurrentAdmin();
   try {
-    const buildInfo = await getBuildInfo();
+    const buildInfo = await readBuildInfo();
     const commits = await getLatestCommits();
 
     if (commits.length === 0) {
@@ -141,7 +119,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
       newCommits,
     };
   } catch (error: any) {
-    const buildInfo = await getBuildInfo();
+    const buildInfo = await readBuildInfo();
     return {
       currentCommit: buildInfo.commit,
       currentDate: buildInfo.date,

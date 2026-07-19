@@ -16,8 +16,10 @@ The assistant must not commit, push, merge, tag, release, or deploy changes.
 
 ### Connect the Android robot app to production
 
-**Status:** Ready to start  
-**Production baseline:** `v0.0.13`, commit `0d1cf33`  
+**Status:** Ready to start
+
+**Production baseline:** `v0.0.13`, commit `0d1cf33`
+
 **Production URL:** `https://app.allerac.ai`
 
 Objective: connect the physical Android robot client to the production Control API without `adb reverse`.
@@ -35,6 +37,25 @@ Detailed Android context and launch commands are in the [Robot Beta Handoff](../
 
 ## Parked investigations
 
+### Benchmark evolution into Quality Evaluator
+
+**Status:** Direction recorded; initial Benchmark domain implemented locally
+
+Evolve the `/benchmark` domain from latency and throughput measurements into a broader Quality Evaluator. Future iterations may add reusable evaluation datasets, expected-answer criteria, model comparisons, scoring, cost and token analysis, regression detection, and release quality gates. Keep the current benchmark workflows working while introducing these capabilities incrementally.
+
+### Portable recovery and multi-cloud environments
+
+**Priority:** High for beta
+
+**Status:** Documented; implementation not started
+
+Build this as two sequential projects:
+
+1. [Portable Allerac Backup and Restore](../roadmap/portable-backup-restore.md) — create a verified, provider-independent recovery package and prove restoration on a clean host.
+2. [Multi-Cloud Environment Provisioning](../roadmap/multi-cloud-environment-provisioning.md) — use the existing Azure, AWS, and GCP Terraform foundation to provision compatible hosts, restore the package, validate them, and perform controlled cutovers.
+
+Start with the portable backup inventory and recovery contract. Do not begin by automating DNS changes or production cutover. All infrastructure mutations, restores, and destructive cleanup require explicit user approval.
+
 ### Grafana SQLite I/O saturation
 
 **Status:** Open; intentionally deferred
@@ -49,4 +70,3 @@ Do not delete `allerac_grafana_data` or `grafana.db`. The database integrity che
 - Deployed build information reported commit `0d1cf33` and release `v0.0.13`.
 - Application, Cloudflare tunnel, Telegram bot, Loki, notifier, and Ollama passed deployment verification.
 - The GitHub Actions deployment timed out during the image build; the same update completed in the persistent VM `tmux` session after Grafana was temporarily stopped.
-

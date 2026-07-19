@@ -28,7 +28,6 @@ import MyAlleracModal, { type MyAlleracTab, type MemorySubTab } from '../compone
 import SkillsLibrary from '../components/skills/SkillsLibrary';
 import UserSettingsModal from '../components/auth/UserSettingsModal';
 import SystemDashboard from '../components/system/SystemDashboard';
-import TelegramBotSettings from '../components/settings/TelegramBotSettings';
 import HealthDashboard from '../components/health/HealthDashboard';
 import InstagramDMPanel from '../components/social/InstagramDMPanel';
 import InstagramPostModal from '../components/instagram/InstagramPostModal';
@@ -71,7 +70,7 @@ export default function AdminChat({
   isAdmin?: boolean;
   chatMode?: 'default' | 'terminal';
   terminalTheme?: TerminalTheme;
-  systemDashboardInitialTab?: 'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social';
+  systemDashboardInitialTab?: 'preferences' | 'system' | 'apiKeys' | 'apiAccess';
 }) {
   const t = useTranslations('home');
   const tChat = useTranslations('chat');
@@ -190,7 +189,7 @@ export default function AdminChat({
     anthropicConfigured: false,
     tavilyConfigured: false,
   });
-  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'preferences' | 'system' | 'apiKeys' | 'health' | 'benchmark' | 'social'>(initialDashboardTab ?? 'preferences');
+  const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'preferences' | 'system' | 'apiKeys' | 'apiAccess'>(initialDashboardTab ?? 'preferences');
   const [tokenInput, setTokenInput] = useState('');
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
@@ -221,7 +220,6 @@ export default function AdminChat({
   const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
   const [memorySaveResult, setMemorySaveResult] = useState<MemorySaveResult | null>(null);
   const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
-  const [isTelegramBotSettingsOpen, setIsTelegramBotSettingsOpen] = useState(false);
   const [terminalTeachContent, setTerminalTeachContent] = useState<string | null>(null);
   const [instagramDraft, setInstagramDraft] = useState<{ caption: string; tags: string } | null>(null);
   const [lastSentImages, setLastSentImages] = useState<Array<{ file: File; preview: string }>>([]);
@@ -1319,15 +1317,6 @@ const savedModel = localStorage.getItem('selected_model');
         onLogout={handleLogout}
       />
 
-      {/* Telegram Bot Settings Modal */}
-      {isTelegramBotSettingsOpen && userId && (
-        <TelegramBotSettings
-          userId={userId}
-          onClose={() => setIsTelegramBotSettingsOpen(false)}
-        />
-      )}
-
-
       {/* Instagram DM Panel */}
       <InstagramDMPanel
         isOpen={isInstagramDMOpen}
@@ -1397,10 +1386,6 @@ const savedModel = localStorage.getItem('selected_model');
         timezoneInput={timezoneInput}
         setTimezoneInput={setTimezoneInput}
         onSaveToken={handleSaveToken}
-        onOpenTelegramSettings={() => {
-          setIsSystemDashboardOpen(false);
-          setIsTelegramBotSettingsOpen(true);
-        }}
         MODELS={MODELS}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}

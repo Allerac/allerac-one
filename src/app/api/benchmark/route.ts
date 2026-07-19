@@ -12,8 +12,10 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { requireApiUser } from '@/app/api/v1/_lib/auth';
+import { apiAuthError } from '@/app/api/v1/_lib/responses';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import pool from '@/app/clients/db';
 import {
   acquireOperationLimit,
@@ -21,6 +23,7 @@ import {
 } from '@/app/lib/operation-limiter';
 
 const userSettingsService = new UserSettingsService();
+const systemSettingsService = new SystemSettingsService();
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
@@ -249,9 +252,9 @@ export async function POST(request: Request) {
   // Auth and body must be read here — cookies()/headers() lose context inside ReadableStream callbacks
   let user;
   try {
-    user = await requireCurrentUser();
+    user = await requireApiUser('benchmark:write', request);
   } catch (error) {
-    const authError = authenticationErrorResponse(error);
+    const authError = apiAuthError(error);
     if (authError) return authError;
     return Response.json({ error: 'Authentication failed' }, { status: 500 });
   }
@@ -272,10 +275,13 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Invalid model or provider' }, { status: 400 });
   }
 
-  const settings = await userSettingsService.loadUserSettings(user.id);
-  const githubToken = settings?.github_token || '';
-  const geminiToken = settings?.google_api_key || '';
-  const anthropicToken = settings?.anthropic_api_key || '';
+  const [settings, systemSettings] = await Promise.all([
+    userSettingsService.loadUserSettings(user.id),
+    systemSettingsService.loadAll(),
+  ]);
+  const githubToken = settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN || '';
+  const geminiToken = settings?.google_api_key || systemSettings.google_api_key || '';
+  const anthropicToken = settings?.anthropic_api_key || systemSettings.anthropic_api_key || '';
   const userId = user.id;
   const providerToken = provider === 'github'
     ? githubToken

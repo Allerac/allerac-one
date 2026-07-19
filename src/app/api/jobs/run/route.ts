@@ -12,6 +12,7 @@ import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { buildSoul } from '@/app/config/allerac-soul';
 import pool from '@/app/clients/db';
+import { resolveJobModel, type JobModelProvider } from '@/app/services/scheduled-jobs/job-model';
 
 const userSettingsService   = new UserSettingsService();
 const systemSettingsService = new SystemSettingsService();
@@ -42,8 +43,10 @@ export async function POST(request: Request): Promise<Response> {
       user_id: string;
       prompt: string;
       domain_slug: string | null;
+      llm_model: string | null;
+      llm_provider: JobModelProvider | null;
     }>(
-      `SELECT user_id, prompt, domain_slug
+      `SELECT user_id, prompt, domain_slug, llm_model, llm_provider
        FROM scheduled_jobs
        WHERE id = $1 AND enabled = TRUE`,
       [jobId]
@@ -67,24 +70,11 @@ export async function POST(request: Request): Promise<Response> {
     const googleApiKey   = settings?.google_api_key  || sysSettings.google_api_key  || '';
     const anthropicApiKey = settings?.anthropic_api_key || sysSettings.anthropic_api_key || '';
 
-    // Pick best available model (prefer gemini-flash if configured, fallback to ollama)
-    let selectedModel  = 'qwen2.5:3b';
-    let modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' = 'ollama';
-    let modelBaseUrl   = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
-
-    if (googleApiKey) {
-      selectedModel = 'gemini-2.5-flash';
-      modelProvider = 'gemini';
-      modelBaseUrl  = 'https://generativelanguage.googleapis.com/v1beta/openai';
-    } else if (githubToken) {
-      selectedModel = 'gpt-4o-mini';
-      modelProvider = 'github';
-      modelBaseUrl  = 'https://models.inference.ai.azure.com';
-    } else if (anthropicApiKey) {
-      selectedModel = 'claude-haiku-4-5-20251001';
-      modelProvider = 'anthropic';
-      modelBaseUrl  = 'https://api.anthropic.com';
-    }
+    const { selectedModel, modelProvider, modelBaseUrl } = resolveJobModel(
+      job.llm_model,
+      job.llm_provider,
+      { githubToken, googleApiKey, anthropicApiKey },
+    );
 
     // Build system message
     const now      = new Date();
