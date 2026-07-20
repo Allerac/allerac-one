@@ -8,9 +8,13 @@ The initial GitHub Actions workflow is `.github/workflows/ci.yml`.
 
 It runs on:
 
-- pull requests targeting `development` or `main`;
-- pushes to `development` or `main`;
+- release pull requests from `development` to `main`;
+- reusable calls from the pre-release and production release workflows;
 - manual dispatch.
+
+It does not run for ordinary pushes to `development` or `main`, or for pull
+requests targeting `development`. This avoids duplicate runs while preserving the
+release gate before `development` is merged into `main`.
 
 Required checks:
 
@@ -82,13 +86,18 @@ Rules:
 Recommended release sequence:
 
 1. Merge feature PRs into `development`.
-2. Create a GitHub pre-release from `development`.
-3. Wait for the pre-release workflow to pass:
+2. Open the release PR from `development` to `main` and wait for the CI baseline.
+3. Merge the green release PR into `main`.
+4. Create a GitHub pre-release from `main`.
+5. Wait for the pre-release workflow to pass:
    - CI baseline;
    - Playwright release smoke.
-4. Promote the same commit to `main`.
-5. Create a final GitHub release from `main`.
-6. Deploy production from `main`.
+6. Promote the same release to final.
+7. Wait for the production workflow to pass:
+   - CI baseline;
+   - Azure deployment;
+   - internal release verification;
+   - public Control API smoke through Cloudflare.
 
 Stable release tags use:
 
@@ -102,7 +111,8 @@ Release candidate tags use:
 v0.2.0-rc.1
 ```
 
-For release candidates, create a GitHub pre-release. The pre-release workflow runs:
+For release candidates, create a GitHub pre-release from the already merged `main`
+commit. The pre-release workflow runs:
 
 - the full CI baseline;
 - Playwright release smoke tests.
@@ -143,10 +153,10 @@ Do not publish production images from arbitrary branches.
 | CI workflow for PRs | Done | `.github/workflows/ci.yml` |
 | Schema smoke in CI | Done | Requires Docker on GitHub-hosted runner |
 | Docs strict build in CI | Done | Uses MkDocs Material Docker image |
-| API smoke script | Planned | Should mirror Bruno flow |
-| API key auth in smoke tests | Planned | Replace session cookie dependency |
+| Public production API smoke | Done | Validates `/version` and API-key-authenticated `/me` through Cloudflare |
+| API key auth in smoke tests | Done | Uses the `production` environment secret `PRODUCTION_SMOKE_API_KEY` |
 | TypeScript CI gate | Blocked | Fix existing `npx tsc --noEmit` failures first |
 | Pre-release Playwright smoke | Done | `.github/workflows/prerelease.yml` |
 | Release docs | Done | `docs/releases/README.md` |
-| Release-triggered Azure deploy | Prepared | `/hooks/deploy-release`; requires GitHub release webhook |
+| Release-triggered Azure deploy | Done | Final GitHub releases run the self-hosted production deploy workflow |
 | Release workflow | Planned | Add once Docker image publishing is required |
