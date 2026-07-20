@@ -74,10 +74,74 @@ jobs:
           printf '%s' "$build_info" | grep -F "\"commit\":\"$expected_commit\"" >/dev/null
           printf '%s' "$build_info" | grep -F "\"release\":\"$RELEASE_TAG\"" >/dev/null
 
+      - name: Smoke test public production API
+        shell: bash
+        env:
+          API_BASE_URL: https://app.allerac.ai
+          PRODUCTION_SMOKE_API_KEY: ${{ secrets.PRODUCTION_SMOKE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$PRODUCTION_SMOKE_API_KEY" ]; then
+            echo "Missing production environment secret: PRODUCTION_SMOKE_API_KEY" >&2
+            exit 1
+          fi
+
+          expected_commit="$(git -C "$DEPLOY_REPOSITORY" rev-parse HEAD)"
+          version_response="$RUNNER_TEMP/allerac-production-version.json"
+          me_response="$RUNNER_TEMP/allerac-production-me.json"
+          curl_config="$RUNNER_TEMP/allerac-production-smoke.curl"
+          trap 'rm -f "$version_response" "$me_response" "$curl_config"' EXIT
+
+          umask 077
+          printf 'header = "Authorization: Bearer %s"\n' "$PRODUCTION_SMOKE_API_KEY" > "$curl_config"
+
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-all-errors --retry-delay 2 \
+            --connect-timeout 10 --max-time 30 \
+            "$API_BASE_URL/api/v1/version" \
+            --output "$version_response"
+
+          curl --config "$curl_config" \
+            --fail-with-body --silent --show-error \
+            --retry 3 --retry-all-errors --retry-delay 2 \
+            --connect-timeout 10 --max-time 30 \
+            "$API_BASE_URL/api/v1/me" \
+            --output "$me_response"
+
+          EXPECTED_RELEASE="$RELEASE_TAG" EXPECTED_COMMIT="$expected_commit" \
+            VERSION_RESPONSE="$version_response" ME_RESPONSE="$me_response" \
+            python3 - <<'PY'
+          import json
+          import os
+
+          with open(os.environ['VERSION_RESPONSE'], encoding='utf-8') as response_file:
+              version = json.load(response_file).get('data', {})
+
+          if version.get('release') != os.environ['EXPECTED_RELEASE']:
+              raise SystemExit(
+                  f"Unexpected deployed release: {version.get('release')!r}; "
+                  f"expected {os.environ['EXPECTED_RELEASE']!r}"
+              )
+
+          if version.get('commit') != os.environ['EXPECTED_COMMIT']:
+              raise SystemExit(
+                  f"Unexpected deployed commit: {version.get('commit')!r}; "
+                  f"expected {os.environ['EXPECTED_COMMIT']!r}"
+              )
+
+          with open(os.environ['ME_RESPONSE'], encoding='utf-8') as response_file:
+              user = json.load(response_file).get('data', {}).get('user', {})
+
+          if user.get('authMode') != 'api_key' or not user.get('id') or not user.get('email'):
+              raise SystemExit('Production /api/v1/me did not return an API-key-authenticated user')
+          PY
+
           {
             echo "## Production deploy succeeded"
             echo
             echo "- Release: \`$RELEASE_TAG\`"
             echo "- Commit: \`$expected_commit\`"
             echo "- Environment: https://app.allerac.ai"
+            echo "- Public API smoke: \`/api/v1/version\` and \`/api/v1/me\` passed"
           } >> "$GITHUB_STEP_SUMMARY"

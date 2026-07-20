@@ -5,11 +5,12 @@ Allerac One releases record operational milestones, not only source code tags.
 The current release model is:
 
 1. validate the candidate from `development`;
-2. create a GitHub pre-release;
-3. wait for CI baseline and Playwright release smoke;
-4. promote the same commit to `main`;
-5. create the final GitHub release from `main`;
-6. deploy production from `main`.
+2. open a release PR from `development` to `main` and wait for the CI baseline;
+3. merge the green release PR into `main`;
+4. create a GitHub pre-release from `main`;
+5. wait for CI baseline and Playwright release smoke;
+6. promote the same release to final;
+7. deploy production and run the public Control API smoke through Cloudflare.
 
 ## Releases
 
@@ -53,7 +54,8 @@ Release candidates use tags like:
 v0.0.1-rc.1
 ```
 
-They target `development` and must stay marked as GitHub pre-releases.
+They target the release commit on `main` and stay marked as GitHub pre-releases
+until the pre-release workflow is green.
 
 Final releases use tags like:
 
