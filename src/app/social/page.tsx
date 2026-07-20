@@ -5,5 +5,5 @@ import ChatClient from '../chat/ChatClient';
 export default async function SocialPage() {
   const user = await requireDomainAccess('social');
   const skill = await getDomainSkillDefault('social');
-  return <ChatClient defaultSkillName={skill?.skill_name} defaultSidebarCollapsed domainName="Social" systemDashboardInitialTab="social" showInstagramDM showInstagramPost isAdmin={user.is_admin} />;
+  return <ChatClient defaultSkillName={skill?.skill_name} defaultSidebarCollapsed domainName="Social" showInstagramDM showInstagramPost isAdmin={user.is_admin} />;
 }

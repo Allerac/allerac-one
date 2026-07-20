@@ -174,8 +174,15 @@ describe('Control API v1 documents', () => {
     const response = await uploadDocument(request);
 
     expect(response.status).toBe(201);
-    expect(instance.createDocumentRecord).toHaveBeenCalledWith(file, user.id, null);
-    expect(instance.extractTextFromFile).toHaveBeenCalledWith(file);
+    const uploadedFile = instance.createDocumentRecord.mock.calls[0][0] as File;
+    expect(uploadedFile).toBeInstanceOf(File);
+    expect(uploadedFile).toMatchObject({
+      name: 'report.pdf',
+      type: 'application/pdf',
+      size: 7,
+    });
+    expect(instance.createDocumentRecord).toHaveBeenCalledWith(uploadedFile, user.id, null);
+    expect(instance.extractTextFromFile).toHaveBeenCalledWith(uploadedFile);
     expect(instance.processDocumentContent).toHaveBeenCalledWith('doc-id', 'text content');
     const body = await response.json();
     expect(body.data.document).toMatchObject({ id: 'doc-id', filename: 'report.pdf' });

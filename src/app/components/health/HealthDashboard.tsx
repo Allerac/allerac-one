@@ -80,6 +80,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
   const [hrHistory, setHrHistory] = useState<{ date: string; value: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Reset to today when switching away from 'today' period and back
@@ -230,7 +231,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                   <>
                     <button
                       onClick={goToPrevDay}
-                      className={`h-8 w-8 flex items-center justify-center rounded-full border transition-colors flex-shrink-0
+                      className={`hidden sm:flex h-8 w-8 items-center justify-center rounded-full border transition-colors flex-shrink-0
                         ${isDarkMode
                           ? 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-white'
                           : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
@@ -244,7 +245,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
                       max={getTodayStr()}
-                      className={`px-2 py-1.5 rounded-lg text-sm font-semibold border transition-colors
+                      className={`min-w-0 w-[8.5rem] px-2 py-1.5 rounded-lg text-sm font-semibold border transition-colors
                         ${isDarkMode
                           ? 'bg-gray-800 border-gray-700 text-gray-200 focus:border-brand-500 focus:outline-none'
                           : 'bg-white border-gray-200 text-gray-900 focus:border-brand-500 focus:outline-none'}`}
@@ -252,7 +253,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                     <button
                       onClick={goToNextDay}
                       disabled={isViewingToday}
-                      className={`h-8 w-8 flex items-center justify-center rounded-full border transition-colors flex-shrink-0
+                      className={`hidden sm:flex h-8 w-8 items-center justify-center rounded-full border transition-colors flex-shrink-0
                         ${isViewingToday
                           ? 'opacity-0 pointer-events-none'
                           : isDarkMode
@@ -271,17 +272,31 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                 )}
 
                 {showSync && (
-                  <button
-                    onClick={handleSync}
-                    disabled={syncing}
-                    title={syncing ? t('syncing') : t('syncNow')}
-                    className={`ml-auto h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors disabled:opacity-50
-                      ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                  >
-                    <svg className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </button>
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      onClick={handleSync}
+                      disabled={syncing}
+                      title={syncing ? t('syncing') : t('syncNow')}
+                      className={`h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors disabled:opacity-50
+                        ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      <svg className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setSettingsOpen(true)}
+                      title="Health settings"
+                      aria-label="Health settings"
+                      className={`h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors
+                        ${isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                  </div>
                 )}
               </div>
               </div>
@@ -388,6 +403,37 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
             </>
           )}
         </div>
+        {settingsOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
+            onClick={() => { setSettingsOpen(false); void loadData(); }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Health settings"
+              className={`w-full max-h-[90dvh] overflow-hidden rounded-t-xl border shadow-2xl sm:max-w-lg sm:rounded-xl ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className={`flex items-center justify-between border-b px-4 py-3 ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                <h2 className={`font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Health settings</h2>
+                <button
+                  onClick={() => { setSettingsOpen(false); void loadData(); }}
+                  aria-label="Close health settings"
+                  className={`rounded-lg p-2 ${isDarkMode ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="max-h-[calc(90dvh-60px)] overflow-y-auto p-4">
+                <GarminSettings userId={userId} isDarkMode={isDarkMode} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

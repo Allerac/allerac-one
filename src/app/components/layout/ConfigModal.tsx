@@ -2,20 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import SystemDashboard from '@/app/components/system/SystemDashboard';
-import TelegramBotSettings from '@/app/components/settings/TelegramBotSettings';
 import { MODELS } from '@/app/services/llm/models';
 import * as userActions from '@/app/actions/user';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  displayMode?: 'modal' | 'page';
   userId: string;
   userName?: string | null;
   userEmail?: string;
   isDarkMode: boolean;
 }
 
-export default function ConfigModal({ isOpen, onClose, userId, userName, userEmail, isDarkMode }: Props) {
+export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', userId, userName, userEmail, isDarkMode }: Props) {
   const [githubToken, setGithubToken]     = useState('');
   const [tavilyApiKey, setTavilyApiKey]   = useState('');
   const [googleApiKey, setGoogleApiKey]   = useState('');
@@ -28,7 +28,6 @@ export default function ConfigModal({ isOpen, onClose, userId, userName, userEma
   const [locationInput, setLocationInput]     = useState('');
   const [timezoneInput, setTimezoneInput]     = useState('');
   const [selectedModel, setSelectedModel]         = useState('gemini-2.5-flash');
-  const [telegramOpen, setTelegramOpen]           = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -87,10 +86,10 @@ export default function ConfigModal({ isOpen, onClose, userId, userName, userEma
   };
 
   return (
-    <>
     <SystemDashboard
       isOpen={isOpen}
       onClose={onClose}
+      displayMode={displayMode}
       isDarkMode={isDarkMode}
       userId={userId}
       userName={userName ?? undefined}
@@ -116,14 +115,6 @@ export default function ConfigModal({ isOpen, onClose, userId, userName, userEma
       timezoneInput={timezoneInput}
       setTimezoneInput={setTimezoneInput}
       onSaveToken={handleSave}
-      onOpenTelegramSettings={() => { onClose(); setTelegramOpen(true); }}
     />
-    {telegramOpen && (
-      <TelegramBotSettings
-        userId={userId}
-        onClose={() => setTelegramOpen(false)}
-      />
-    )}
-    </>
   );
 }

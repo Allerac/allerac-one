@@ -74,6 +74,10 @@ Datasources provisioned automatically:
 | Prometheus | prometheus | `http://prometheus:9090` | Yes |
 | Loki | loki | `http://loki:3100` | No |
 
+### Known operational issues
+
+- [Grafana SQLite I/O saturation incident](grafana-sqlite-io-incident.md) — open incident in which the Grafana process repeatedly locks and rereads its SQLite database, causing severe host disk contention. The document contains diagnosis commands, the temporary workaround, and the remaining investigation.
+
 ## Dashboards
 
 Dashboards are provisioned automatically from `grafana/dashboards/` on startup.

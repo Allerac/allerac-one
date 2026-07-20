@@ -3,6 +3,9 @@
 import { scheduledJobsService } from '../services/scheduled-jobs/scheduled-jobs.service';
 import type { ScheduledJob, JobExecution } from '../types';
 import { assertDomainAccess, requireCurrentUser } from '../lib/auth-session';
+import { validateJobModelSelection, type JobModelProvider } from '../services/scheduled-jobs/job-model';
+
+type JobModelSelection = { llmModel?: string | null; llmProvider?: JobModelProvider | null };
 
 const CRON_REGEX =
   /^(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)$/;
@@ -26,7 +29,7 @@ export async function getScheduledJobs(): Promise<{ success: boolean; data?: Sch
 }
 
 export async function createScheduledJob(
-  data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null }
+  data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null } & JobModelSelection
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (!data.name?.trim()) {
     return { success: false, error: 'Name is required' };
@@ -41,6 +44,8 @@ export async function createScheduledJob(
   if (cronError) {
     return { success: false, error: cronError };
   }
+  const modelError = validateJobModelSelection(data.llmModel, data.llmProvider);
+  if (modelError) return { success: false, error: modelError };
 
   try {
     const user = await requireCurrentUser();
@@ -60,7 +65,7 @@ export async function createScheduledJob(
 
 export async function updateScheduledJob(
   jobId: string,
-  data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; enabled?: boolean }
+  data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; enabled?: boolean } & JobModelSelection
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (data.cronExpr !== undefined) {
     const cronError = validateCron(data.cronExpr);
@@ -68,6 +73,8 @@ export async function updateScheduledJob(
       return { success: false, error: cronError };
     }
   }
+  const modelError = validateJobModelSelection(data.llmModel, data.llmProvider);
+  if (modelError) return { success: false, error: modelError };
 
   try {
     const user = await requireCurrentUser();

@@ -40,6 +40,9 @@ describe('ScheduledJobsService ownership', () => {
       null,
       null,
       null,
+      false,
+      null,
+      null,
     ]);
   });
 });

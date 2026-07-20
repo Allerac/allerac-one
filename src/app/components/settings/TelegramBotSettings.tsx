@@ -29,11 +29,18 @@ interface BotConfig {
 
 interface TelegramBotSettingsProps {
   userId: string;
-  onClose: () => void;
+  onClose?: () => void;
+  displayMode?: 'modal' | 'page';
+  isDarkMode?: boolean;
 }
 
-export default function TelegramBotSettings({ userId, onClose }: TelegramBotSettingsProps) {
+export default function TelegramBotSettings({ userId, onClose, displayMode = 'modal', isDarkMode = true }: TelegramBotSettingsProps) {
   const t = useTranslations('telegram');
+  const isPage = displayMode === 'page';
+  const d = isDarkMode;
+  const labelClass = `block text-sm font-medium mb-1 ${d ? 'text-gray-300' : 'text-gray-700'}`;
+  const inputClass = `w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 ${d ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`;
+  const mutedClass = d ? 'text-gray-400' : 'text-gray-500';
   const [bots, setBots] = useState<BotConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -172,50 +179,52 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[95dvh] sm:max-h-[90dvh] overflow-hidden flex flex-col">
+    <div className={isPage
+      ? `h-full min-h-0 flex ${d ? 'bg-gray-950' : 'bg-gray-100'}`
+      : 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4'}>
+      <div className={`w-full overflow-hidden flex flex-col ${d ? 'bg-gray-800' : 'bg-white'} ${isPage ? 'h-full' : 'max-w-4xl max-h-[95dvh] sm:max-h-[90dvh] rounded-xl shadow-2xl'}`}>
         {/* Header */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <div className={`px-4 sm:px-6 py-3 sm:py-4 border-b flex items-center justify-between ${d ? 'border-gray-700' : 'border-gray-200'} ${isPage ? 'w-full max-w-5xl mx-auto' : ''}`}>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
+            <h2 className={`text-lg sm:text-2xl font-bold truncate ${d ? 'text-white' : 'text-gray-900'}`}>
               {t('title')}
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
+            <p className={`text-xs sm:text-sm mt-1 ${d ? 'text-gray-400' : 'text-gray-600'}`}>
               {t('subtitle')}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl sm:text-3xl leading-none flex-shrink-0 ml-2"
+            className={`${onClose ? '' : 'hidden '}${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'} text-2xl sm:text-3xl leading-none flex-shrink-0 ml-2`}
           >
             ×
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+        <div className={`flex-1 overflow-y-auto p-3 sm:p-6 ${isPage ? 'w-full max-w-5xl mx-auto' : ''}`}>
           {/* Add/Edit Form */}
           {showAddForm ? (
-            <form onSubmit={handleSubmit} className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-white">
+            <form onSubmit={handleSubmit} className={`mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg border ${d ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+              <h3 className={`text-base sm:text-lg font-semibold mb-3 sm:mb-4 ${d ? 'text-white' : 'text-gray-900'}`}>
                 {editingBot ? t('editBot') : t('addNewBot')}
               </h3>
 
               {formError && (
-                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
+                <div className={`mb-4 p-3 border rounded text-sm ${d ? 'bg-red-900/30 border-red-800 text-red-300' : 'bg-red-50 border-red-200 text-red-700'}`}>
                   {formError}
                 </div>
               )}
 
               {formSuccess && (
-                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded text-green-700 dark:text-green-300 text-sm">
+                <div className={`mb-4 p-3 border rounded text-sm ${d ? 'bg-green-900/30 border-green-800 text-green-300' : 'bg-green-50 border-green-200 text-green-700'}`}>
                   {formSuccess}
                 </div>
               )}
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className={labelClass}>
                     {t('botName')} *
                   </label>
                   <input
@@ -224,12 +233,12 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     onChange={(e) => setFormData({ ...formData, botName: e.target.value })}
                     placeholder="My Telegram Bot"
                     required
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white"
+                    className={inputClass}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className={labelClass}>
                     {t('botToken')} *
                     {editingBot && <span className="text-xs ml-2 text-gray-500">{t('leavemasked')}</span>}
                   </label>
@@ -240,7 +249,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                       onChange={(e) => setFormData({ ...formData, botToken: e.target.value })}
                       placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
                       required={!editingBot}
-                      className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white font-mono text-sm"
+                      className={`${inputClass} flex-1 font-mono text-sm`}
                     />
                     <button
                       type="button"
@@ -251,13 +260,13 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                       {testingToken ? t('testing') : t('testToken')}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className={`text-xs mt-1 ${mutedClass}`}>
                     {t('botTokenHint')}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className={labelClass}>
                     {t('botUsername')}
                   </label>
                   <input
@@ -265,12 +274,12 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     value={formData.botUsername}
                     onChange={(e) => setFormData({ ...formData, botUsername: e.target.value })}
                     placeholder={t('botUsernameHint')}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white"
+                    className={inputClass}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className={labelClass}>
                     {t('allowedIds')} *
                   </label>
                   <input
@@ -279,9 +288,9 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     onChange={(e) => setFormData({ ...formData, allowedTelegramIds: e.target.value })}
                     placeholder="123456789, 987654321"
                     required
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white"
+                    className={inputClass}
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className={`text-xs mt-1 ${mutedClass}`}>
                     {t('allowedIdsHint')}
                   </p>
                 </div>
@@ -298,7 +307,7 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                 <button
                   type="button"
                   onClick={cancelForm}
-                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                  className={`px-4 py-2 rounded-lg ${d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
                 >
                   {t('cancel')}
                 </button>
@@ -327,24 +336,24 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
               {bots.map((bot) => (
                 <div
                   key={bot.id}
-                  className="p-3 sm:p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow"
+                  className={`p-3 sm:p-4 border rounded-lg hover:shadow-md transition-shadow ${d ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
+                      <h3 className={`text-base sm:text-lg font-semibold flex items-center gap-2 flex-wrap ${d ? 'text-white' : 'text-gray-900'}`}>
                         <span className="truncate">{bot.botName}</span>
                         {bot.enabled ? (
-                          <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full whitespace-nowrap">
+                          <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${d ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-700'}`}>
                             {t('active')}
                           </span>
                         ) : (
-                          <span className="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full whitespace-nowrap">
+                          <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${d ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'}`}>
                             {t('inactive')}
                           </span>
                         )}
                       </h3>
                       {bot.botUsername && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 truncate">
+                        <p className={`text-sm mt-1 truncate ${d ? 'text-gray-400' : 'text-gray-600'}`}>
                           @{bot.botUsername}
                         </p>
                       )}
@@ -352,26 +361,26 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
                     <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                       <button
                         onClick={() => handleToggle(bot.id)}
-                        className="px-3 py-1 text-sm bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded hover:bg-brand-200 dark:hover:bg-brand-900/50"
+                        className={`px-3 py-1 text-sm rounded ${d ? 'bg-brand-900/30 text-brand-300 hover:bg-brand-900/50' : 'bg-brand-100 text-brand-700 hover:bg-brand-200'}`}
                       >
                         {bot.enabled ? t('disable') : t('enable')}
                       </button>
                       <button
                         onClick={() => handleEdit(bot)}
-                        className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                        className={`px-3 py-1 text-sm rounded ${d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                       >
                         {t('edit')}
                       </button>
                       <button
                         onClick={() => handleDelete(bot.id, bot.botName)}
-                        className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
+                        className={`px-3 py-1 text-sm rounded ${d ? 'bg-red-900/30 text-red-300 hover:bg-red-900/50' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
                       >
                         {t('delete')}
                       </button>
                     </div>
                   </div>
 
-                  <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                  <div className={`text-sm space-y-1 ${d ? 'text-gray-400' : 'text-gray-600'}`}>
                     <p>
                       <span className="font-medium">{t('allowedUsers')}:</span>{' '}
                       {bot.allowedTelegramIds.join(', ')}
@@ -387,11 +396,11 @@ export default function TelegramBotSettings({ userId, onClose }: TelegramBotSett
           )}
 
           {/* Help Section */}
-          <div className="mt-8 p-4 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg">
-            <h4 className="font-semibold text-brand-900 dark:text-brand-300 mb-2">
+          <div className={`mt-8 p-4 border rounded-lg ${d ? 'bg-brand-900/20 border-brand-800' : 'bg-brand-50 border-brand-200'}`}>
+            <h4 className={`font-semibold mb-2 ${d ? 'text-brand-300' : 'text-brand-900'}`}>
               📱 {t('howToCreate')}
             </h4>
-            <ol className="text-sm text-brand-800 dark:text-brand-300 space-y-1 list-decimal list-inside">
+            <ol className={`text-sm space-y-1 list-decimal list-inside ${d ? 'text-brand-300' : 'text-brand-800'}`}>
               <li>{t('howToStep1')}</li>
               <li>{t('howToStep2')}</li>
               <li>{t('howToStep3')}</li>

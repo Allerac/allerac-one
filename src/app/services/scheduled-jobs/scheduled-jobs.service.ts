@@ -4,6 +4,7 @@ import { handleChatMessage } from '@/app/services/chat/chat-handler';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { buildSoul } from '@/app/config/allerac-soul';
+import { resolveJobModel, type JobModelProvider } from './job-model';
 
 interface DBScheduledJob {
   id: string;
@@ -13,6 +14,8 @@ interface DBScheduledJob {
   prompt: string;
   channels: string[];
   domain_slug: string | null;
+  llm_model: string | null;
+  llm_provider: JobModelProvider | null;
   enabled: boolean;
   last_run_at: Date | null;
   created_at: Date;
@@ -37,6 +40,8 @@ function mapJob(row: DBScheduledJob): ScheduledJob {
     prompt: row.prompt,
     channels: row.channels,
     domainSlug: row.domain_slug ?? null,
+    llmModel: row.llm_model ?? null,
+    llmProvider: row.llm_provider ?? null,
     enabled: row.enabled,
     lastRunAt: row.last_run_at ? row.last_run_at.toISOString() : null,
     createdAt: row.created_at.toISOString(),
@@ -69,13 +74,13 @@ export class ScheduledJobsService {
 
   async createScheduledJob(
     userId: string,
-    data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null }
+    data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null; llmModel?: string | null; llmProvider?: JobModelProvider | null }
   ): Promise<ScheduledJob> {
     const result = await pool.query<DBScheduledJob>(
-      `INSERT INTO scheduled_jobs (user_id, name, cron_expr, prompt, channels, enabled, domain_slug)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO scheduled_jobs (user_id, name, cron_expr, prompt, channels, enabled, domain_slug, llm_model, llm_provider)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [userId, data.name, data.cronExpr, data.prompt, data.channels, data.enabled, data.domainSlug ?? null]
+      [userId, data.name, data.cronExpr, data.prompt, data.channels, data.enabled, data.domainSlug ?? null, data.llmModel ?? null, data.llmProvider ?? null]
     );
     return mapJob(result.rows[0]);
   }
@@ -83,7 +88,7 @@ export class ScheduledJobsService {
   async updateScheduledJob(
     jobId: string,
     userId: string,
-    data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; enabled?: boolean }
+    data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; enabled?: boolean; llmModel?: string | null; llmProvider?: JobModelProvider | null }
   ): Promise<ScheduledJob | null> {
     const result = await pool.query<DBScheduledJob>(
       `UPDATE scheduled_jobs
@@ -91,7 +96,9 @@ export class ScheduledJobsService {
            cron_expr  = COALESCE($4, cron_expr),
            prompt     = COALESCE($5, prompt),
            channels   = COALESCE($6, channels),
-           enabled    = COALESCE($7, enabled)
+           enabled    = COALESCE($7, enabled),
+           llm_model  = CASE WHEN $8::boolean THEN $9 ELSE llm_model END,
+           llm_provider = CASE WHEN $8::boolean THEN $10 ELSE llm_provider END
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
       [
@@ -102,6 +109,9 @@ export class ScheduledJobsService {
         data.prompt ?? null,
         data.channels ?? null,
         data.enabled ?? null,
+        data.llmModel !== undefined || data.llmProvider !== undefined,
+        data.llmModel ?? null,
+        data.llmProvider ?? null,
       ]
     );
     return result.rows[0] ? mapJob(result.rows[0]) : null;
@@ -168,23 +178,11 @@ export class ScheduledJobsService {
       const googleApiKey = settings?.google_api_key || systemSettings.google_api_key || '';
       const anthropicApiKey = settings?.anthropic_api_key || systemSettings.anthropic_api_key || '';
 
-      let selectedModel = 'qwen2.5:3b';
-      let modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' = 'ollama';
-      let modelBaseUrl = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
-
-      if (googleApiKey) {
-        selectedModel = 'gemini-2.5-flash';
-        modelProvider = 'gemini';
-        modelBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
-      } else if (githubToken) {
-        selectedModel = 'gpt-4o-mini';
-        modelProvider = 'github';
-        modelBaseUrl = 'https://models.inference.ai.azure.com';
-      } else if (anthropicApiKey) {
-        selectedModel = 'claude-haiku-4-5-20251001';
-        modelProvider = 'anthropic';
-        modelBaseUrl = 'https://api.anthropic.com';
-      }
+      const { selectedModel, modelProvider, modelBaseUrl } = resolveJobModel(
+        job.llm_model,
+        job.llm_provider,
+        { githubToken, googleApiKey, anthropicApiKey },
+      );
 
       const userResult = await pool.query<{ name: string | null }>(
         'SELECT name FROM users WHERE id = $1',

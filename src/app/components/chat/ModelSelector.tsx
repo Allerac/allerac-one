@@ -254,7 +254,9 @@ export default function ModelSelector({ selectedModel, onModelChange, isDarkMode
                   // Unavailable Ollama model: show download button or progress
                   <div
                     className={`px-3 py-2 border-b last:border-b-0 ${
-                      isDarkMode ? 'bg-gray-750 border-gray-600' : 'bg-orange-50 border-orange-200'
+                      isDarkMode
+                        ? 'bg-gray-750 border-gray-600 text-gray-100'
+                        : 'bg-orange-50 border-orange-200 text-gray-900'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">

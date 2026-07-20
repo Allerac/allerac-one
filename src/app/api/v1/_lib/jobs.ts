@@ -8,6 +8,8 @@ export function jobDto(job: ScheduledJob & { domainSlug?: string | null }) {
     prompt: job.prompt,
     channels: job.channels,
     domainSlug: job.domainSlug ?? null,
+    llmModel: job.llmModel,
+    llmProvider: job.llmProvider,
     enabled: job.enabled,
     lastRunAt: job.lastRunAt,
     createdAt: job.createdAt,

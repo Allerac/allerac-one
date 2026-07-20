@@ -1,7 +1,39 @@
 # System API
 
-System endpoints describe the authenticated caller and the capabilities visible to
-that caller.
+System endpoints expose the deployed build identity, describe the authenticated
+caller, and report the capabilities visible to that caller.
+
+## `GET /api/v1/version`
+
+Returns the release, commit, and build timestamp baked into the running application
+image. This endpoint is intentionally public so deployment automation and clients
+can confirm which version they are reaching through the public edge.
+
+No authentication or API key scope is required. The response uses
+`Cache-Control: no-store, max-age=0` so Cloudflare and browsers do not retain stale
+deployment identity.
+
+Example:
+
+```bash
+curl -sS https://app.allerac.ai/api/v1/version
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "release": "v0.0.13",
+    "commit": "0d1cf337b6139af859e0ce6bc6498e6f0add6688",
+    "builtAt": "2026-07-18T14:30:59Z"
+  }
+}
+```
+
+Development builds without `build-info.json` return `unreleased` and `unknown`
+fallback values. The endpoint never returns environment variables, hostname,
+provider credentials, or other runtime configuration.
 
 ## `GET /api/v1/me`
 

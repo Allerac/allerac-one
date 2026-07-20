@@ -215,6 +215,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
       <div
         ref={backdropRef}
         className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 sm:p-4"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
         onClick={handleBackdropClick}
       >
         <div

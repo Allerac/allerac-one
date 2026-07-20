@@ -4,6 +4,18 @@ import { AuthService, User } from '@/app/services/auth/auth.service';
 
 const authService = new AuthService();
 
+/** Validates a session for authenticated pages that are not tied to a domain. */
+export async function requireAuthenticatedUser(): Promise<User> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('session_token')?.value;
+  if (!token) redirect('/login');
+
+  const user = await authService.validateSession(token);
+  if (!user) redirect('/login');
+
+  return user;
+}
+
 /**
  * Validates session and checks domain access.
  * Redirects to /login if not authenticated.

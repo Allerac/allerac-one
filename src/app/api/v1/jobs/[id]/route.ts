@@ -3,6 +3,7 @@ import { scheduledJobsService } from '@/app/services/scheduled-jobs/scheduled-jo
 import { requireApiUser } from '../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../_lib/responses';
 import { jobDto } from '../../_lib/jobs';
+import { validateJobModelSelection } from '@/app/services/scheduled-jobs/job-model';
 
 const CRON_REGEX = /^(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)$/;
 
@@ -12,6 +13,12 @@ const updateJobSchema = z.object({
   prompt: z.string().trim().min(1).optional(),
   channels: z.array(z.string()).min(1).optional(),
   enabled: z.boolean().optional(),
+  llmModel: z.string().trim().min(1).nullable().optional(),
+  llmProvider: z.enum(['github', 'ollama', 'gemini', 'anthropic']).nullable().optional(),
+}).superRefine((data, context) => {
+  if (data.llmModel === undefined && data.llmProvider === undefined) return;
+  const error = validateJobModelSelection(data.llmModel, data.llmProvider);
+  if (error) context.addIssue({ code: 'custom', message: error });
 });
 
 interface RouteContext {

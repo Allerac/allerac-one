@@ -24,6 +24,7 @@ export const ALLERAC_DOMAINS: AlleracDomain[] = [
   { key: 'learn',     name: 'Learn',     icon: '🧠', path: '/learn' },
   { key: 'admin',     name: 'Admin',     icon: '⚙️', path: '/admin' },
   { key: 'robot-assistant', name: 'Robot', icon: 'R', path: '/robot-assistant' },
+  { key: 'channels', name: 'Channels', icon: '📡', path: '/channels' },
 ];
 
 export function getDomainByKey(key: string): AlleracDomain | undefined {

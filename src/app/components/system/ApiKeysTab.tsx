@@ -91,7 +91,7 @@ export default function ApiKeysTab({
   };
 
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
       <ApiKeyField
         label="Allerac API Key"
         description="(Pro models: GPT-4o, Ministral, Gemini)"

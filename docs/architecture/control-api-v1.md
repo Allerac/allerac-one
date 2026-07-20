@@ -2,16 +2,18 @@
 
 ## Status
 
-In progress. As of 2026-07-14 the `/api/v1` surface covers system (`me`, `domains`,
-`capabilities`), API keys, conversations (including synchronous message execution),
-memories, tickets, agent runs, documents, notes, scheduled jobs (including manual
-run), skills, health, search, email, and finance. Browser session auth and scoped
-bearer API keys are both supported.
+Beta baseline complete. As of 2026-07-19 the `/api/v1` surface covers system
+(`version`, `me`, `domains`, `capabilities`), API keys, conversations (including synchronous message
+execution), memories, tickets, agent runs, documents, notes, scheduled jobs
+(including manual run), skills, health, search, speech, robot settings, email, and
+finance. Browser session auth and scoped bearer API keys are both supported.
 
-Of the initial resources below, only `tools` (`POST /api/v1/tools/:name/run`) remains
-unimplemented. Phases 1-4 are complete (agent runs execute in the dedicated
-`agent-worker` container); Phase 5 (headless mode) has not started. The full
-implemented contract is tracked in
+Of the initial target resources below, only standalone `tools` execution
+(`POST /api/v1/tools/:name/run`) remains unimplemented and is deliberately deferred
+until the permission model is explicit. Phases 1-4 are complete (agent runs execute
+in the dedicated `agent-worker` container); Phase 5 (headless mode) is a later
+architectural evolution, not a beta Control API blocker. The full implemented
+contract is tracked in
 `docs/api/openapi/control-api-v1.yaml` and audited in
 `docs/roadmap/control-api-v1-gap-audit-2026-06-29.md`.
 
@@ -137,7 +139,8 @@ Over time, UI code should migrate to the same contracts where practical.
 The implemented surface has grown well beyond the initial slice. It supports both
 browser sessions and scoped API keys across:
 
-- System: `GET /api/v1/me`, `GET /api/v1/domains`, `GET /api/v1/capabilities`
+- System: public `GET /api/v1/version`, authenticated `GET /api/v1/me`,
+  `GET /api/v1/domains`, and `GET /api/v1/capabilities`
 - API keys: list, create, revoke
 - Conversations: list, create, list messages, synchronous message send
 - Memories: create from conversation, list, delete
@@ -149,6 +152,7 @@ browser sessions and scoped API keys across:
 - Skills: list, get, create, update, delete
 - Health: status, summary, daily, activities
 - Search: web search
+- Robot: speech synthesis, get/update robot settings
 - Email: list messages, get message, send
 - Finance: quotes, symbol search, candles, watchlist list/add/remove
 

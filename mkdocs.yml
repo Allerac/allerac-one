@@ -57,10 +57,13 @@ nav:
   - Roadmap:
       - Overview: roadmap/README.md
       - Control API v1: roadmap/control-api-v1.md
+      - Portable Backup and Restore: roadmap/portable-backup-restore.md
+      - Multi-Cloud Provisioning: roadmap/multi-cloud-environment-provisioning.md
       - Control API v1 Gap Audit (2026-06-29): roadmap/control-api-v1-gap-audit-2026-06-29.md
   - Releases:
       - Overview: releases/README.md
       - v0.1.0 Beta Release Plan: releases/v0.1.0-beta.md
+      - Robot Beta Handoff: releases/robot-beta-handoff.md
   - API Reference:
       - Overview: api/README.md
       - Control API v1:
@@ -74,9 +77,11 @@ nav:
           - Documents: api/control-api-v1/documents.md
           - Notes: api/control-api-v1/notes.md
           - Scheduled Jobs: api/control-api-v1/scheduled-jobs.md
+          - Benchmark: api/control-api-v1/benchmark.md
           - Skills: api/control-api-v1/skills.md
           - Health: api/control-api-v1/health.md
           - Search: api/control-api-v1/search.md
+          - Robot: api/control-api-v1/robot.md
           - Email: api/control-api-v1/email.md
           - Finance: api/control-api-v1/finance.md
       - OpenAPI:
@@ -123,6 +128,7 @@ nav:
       - Architecture: agents/architecture.md
       - Implementation: agents/agents-implementation.md
   - Operations:
+      - Session Backlog: sessions/backlog.md
       - Deployments:
           - Overview: deploy/README.md
           - Sandbox Home: deploy/sandbox-home.md
@@ -132,6 +138,7 @@ nav:
       - Local Setup: local-setup/local-setup.md
       - Health Sync: health/README.md
       - Monitoring: monitoring/README.md
+      - Grafana SQLite I/O Incident: monitoring/grafana-sqlite-io-incident.md
       - Metrics: monitoring/metrics.md
       - Logging:
           - Overview: logging/README.md

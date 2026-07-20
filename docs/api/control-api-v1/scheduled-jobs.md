@@ -43,6 +43,8 @@ Response:
         "prompt": "Summarize my open tickets and health metrics for today.",
         "channels": ["telegram"],
         "domainSlug": null,
+        "llmModel": null,
+        "llmProvider": null,
         "enabled": true,
         "lastRunAt": "2026-06-25T08:00:00.000Z",
         "createdAt": "2026-06-01T00:00:00.000Z",
@@ -67,6 +69,10 @@ Request body:
 | `channels` | string array | Yes | Delivery channels, e.g. `["telegram"]` |
 | `enabled` | boolean | No | Defaults to `true` |
 | `domainSlug` | string | No | Scopes the job to a domain |
+| `llmModel` | string or null | No | Explicit model ID; omit or use `null` for automatic selection |
+| `llmProvider` | string or null | No | `ollama`, `github`, `gemini`, or `anthropic`; paired with `llmModel` |
+
+An explicit selection is never silently replaced. Execution fails if the selected model or its required provider credentials are unavailable. Existing jobs retain automatic selection.
 
 Example:
 
@@ -103,6 +109,8 @@ Response:
       "prompt": "Summarize my open tickets and health metrics for today.",
       "channels": ["telegram"],
       "domainSlug": null,
+      "llmModel": null,
+      "llmProvider": null,
       "enabled": true,
       "lastRunAt": null,
       "createdAt": "2026-06-25T10:00:00.000Z",
@@ -125,6 +133,8 @@ Request body:
 | `prompt` | string | Prompt sent on each run |
 | `channels` | string array | Replaces existing channels |
 | `enabled` | boolean | Enable or disable without toggling |
+| `llmModel` | string or null | Explicit model ID, or `null` for automatic selection |
+| `llmProvider` | string or null | Provider paired with `llmModel` |
 
 Example:
 

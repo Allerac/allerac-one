@@ -78,6 +78,9 @@ export interface ScheduledJob {
   cronExpr: string;
   prompt: string;
   channels: string[];
+  domainSlug: string | null;
+  llmModel: string | null;
+  llmProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | null;
   enabled: boolean;
   lastRunAt: string | null;
   createdAt: string;
