@@ -21,6 +21,7 @@ const SCOPE_GROUPS = [
   {
     label: 'Core',
     scopes: [
+      ['profile:read', 'Profile: read'],
       ['domains:read', 'Domains: read'],
       ['capabilities:read', 'Capabilities: read'],
       ['chat:read', 'Chat: read'],
@@ -69,11 +70,12 @@ const SCOPE_GROUPS = [
 const PRESETS = {
   robot: {
     label: 'Android Robot',
-    scopes: ['chat:read', 'chat:write', 'capabilities:read'],
+    scopes: ['profile:read', 'chat:read', 'chat:write', 'capabilities:read'],
   },
   readonly: {
     label: 'Read only',
     scopes: [
+      'profile:read',
       'domains:read',
       'capabilities:read',
       'chat:read',
@@ -93,6 +95,7 @@ const PRESETS = {
   automation: {
     label: 'Automation',
     scopes: [
+      'profile:read',
       'domains:read',
       'capabilities:read',
       'chat:read',

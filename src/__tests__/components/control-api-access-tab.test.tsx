@@ -48,7 +48,7 @@ describe('ControlApiAccessTab', () => {
             id: 'new-key',
             name: 'Android Robot',
             prefix: 'alr_live_new123',
-            scopes: ['chat:read', 'chat:write', 'capabilities:read'],
+            scopes: ['profile:read', 'chat:read', 'chat:write', 'capabilities:read'],
             lastUsedAt: null,
             revokedAt: null,
             expiresAt: null,
@@ -74,7 +74,7 @@ describe('ControlApiAccessTab', () => {
     });
     expect(JSON.parse(request[1].body)).toEqual({
       name: 'Android Robot',
-      scopes: ['chat:read', 'chat:write', 'capabilities:read'],
+      scopes: ['profile:read', 'chat:read', 'chat:write', 'capabilities:read'],
       expiresAt: null,
     });
   });
