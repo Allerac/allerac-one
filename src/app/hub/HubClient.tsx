@@ -30,6 +30,21 @@ const DOMAINS_ALL = [
   { id: 'channels', label: 'Channels', icon: '📡', path: '/channels', desc: 'Messaging channels & bots' },
 ];
 
+const DOCS_SHORTCUT = {
+  id: 'docs',
+  label: 'Docs',
+  icon: '📚',
+  path: '#docs',
+  desc: 'Allerac documentation',
+};
+
+function getDocsUrl(): string {
+  const configuredUrl = process.env.NEXT_PUBLIC_DOCS_URL?.trim();
+  if (configuredUrl) return configuredUrl;
+  if (typeof window === 'undefined') return 'http://localhost:8000';
+  return `http://${window.location.hostname}:8000`;
+}
+
 export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[] }) {
   const router = useRouter();
   const [domains, setDomains] = useState<typeof DOMAINS_ALL>([]);
@@ -66,9 +81,9 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
         const filtered = data.visible
           .map((slug: string) => DOMAINS_ALL.find(d => d.id === slug))
           .filter(Boolean);
-        setDomains(filtered);
+        setDomains([...filtered, DOCS_SHORTCUT]);
       })
-      .catch(() => setDomains(DOMAINS_ALL)); // Fallback to all
+      .catch(() => setDomains([...DOMAINS_ALL, DOCS_SHORTCUT])); // Fallback to all
   }, []);
 
   useEffect(() => {
@@ -115,7 +130,10 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     setSelected(domain.id);
 
     if (count >= 2) {
-      if (domain.id === 'logs') {
+      if (domain.id === 'docs') {
+        window.open(getDocsUrl(), '_blank', 'noopener,noreferrer');
+        setClickCount(c => ({ ...c, [domain.id]: 0 }));
+      } else if (domain.id === 'logs') {
         // Monitor always opens as a floating window
         window.open(domain.path, 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
         setClickCount(c => ({ ...c, [domain.id]: 0 }));

@@ -63,6 +63,7 @@ nav:
   - Releases:
       - Overview: releases/README.md
       - v0.1.0 Beta Release Plan: releases/v0.1.0-beta.md
+      - Robot Beta Handoff: releases/robot-beta-handoff.md
   - API Reference:
       - Overview: api/README.md
       - Control API v1:
@@ -137,6 +138,7 @@ nav:
       - Local Setup: local-setup/local-setup.md
       - Health Sync: health/README.md
       - Monitoring: monitoring/README.md
+      - Grafana SQLite I/O Incident: monitoring/grafana-sqlite-io-incident.md
       - Metrics: monitoring/metrics.md
       - Logging:
           - Overview: logging/README.md

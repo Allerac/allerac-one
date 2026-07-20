@@ -60,7 +60,7 @@ Start with the portable backup inventory and recovery contract. Do not begin by 
 
 **Status:** Open; intentionally deferred
 
-The `allerac-grafana` container repeatedly reads approximately 220-280 MB/s while reporting SQLite locks. Stopping the container returns host I/O wait to normal. Continue from the [Grafana SQLite I/O saturation incident](../../infra/monitoring/grafana-sqlite-io-incident.md).
+The `allerac-grafana` container repeatedly reads approximately 220-280 MB/s while reporting SQLite locks. Stopping the container returns host I/O wait to normal. Continue from the [Grafana SQLite I/O saturation incident](../monitoring/grafana-sqlite-io-incident.md).
 
 Do not delete `allerac_grafana_data` or `grafana.db`. The database integrity check returned `ok`.
 
