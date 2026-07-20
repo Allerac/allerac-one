@@ -62,3 +62,5 @@ infra/terraform/**/.terraform.lock.hcl
 /docs/business-model/
 /docs/private/
 /docs/self-development/
+bruno/Allerac-One/environments/Azure.bru
+bruno/Allerac-One/environments/Local.bru
