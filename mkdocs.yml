@@ -59,6 +59,7 @@ nav:
       - Control API v1: roadmap/control-api-v1.md
       - Portable Backup and Restore: roadmap/portable-backup-restore.md
       - Multi-Cloud Provisioning: roadmap/multi-cloud-environment-provisioning.md
+      - Native iOS Client: roadmap/ios-client.md
       - Control API v1 Gap Audit (2026-06-29): roadmap/control-api-v1-gap-audit-2026-06-29.md
   - Releases:
       - Overview: releases/README.md
@@ -91,6 +92,7 @@ nav:
       - Control API v1: architecture/control-api-v1.md
       - Allerac Federation: architecture/allerac-federation.md
       - Mobile & Robot Clients: architecture/mobile-and-robot-clients.md
+      - Native iOS Client: architecture/ios-client.md
       - Decisions:
           - Index: architecture/decisions/README.md
           - ADR 0001 - Control API v1: architecture/decisions/0001-adopt-control-api-v1.md
