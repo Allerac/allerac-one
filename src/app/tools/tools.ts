@@ -22,6 +22,10 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'get_daily_snapshot',         label: 'Daily Snapshot',      description: 'All health metrics for a single day',            group: 'Health'    },
   { name: 'get_garmin_status',          label: 'Garmin Status',       description: 'Check Garmin device connection',                 group: 'Health'    },
   { name: 'get_recent_activities',      label: 'Recent Activities',   description: 'Recent workouts from Garmin',                    group: 'Health'    },
+  { name: 'get_music_recommendations',  label: 'Music Recommendations', description: 'Personalized track recommendations',           group: 'Music'     },
+  { name: 'get_top_tracks',             label: 'Top Tracks',          description: 'Most-listened tracks for a time window',        group: 'Music'     },
+  { name: 'get_listening_stats',        label: 'Listening Stats',     description: 'Listening totals and top genres',                group: 'Music'     },
+  { name: 'get_spotify_status',         label: 'Spotify Status',      description: 'Check Spotify connection status',                group: 'Music'     },
   { name: 'update_social_form',         label: 'Update Post Form',    description: 'Update the social post draft form',              group: 'Social' },
   { name: 'instagram_publish_post',     label: 'Publish Post',        description: 'Publish a post to Instagram',                    group: 'Instagram' },
   { name: 'instagram_get_profile',      label: 'Get Profile',         description: 'Fetch Instagram account profile info',           group: 'Instagram' },
@@ -152,6 +156,75 @@ const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
   },
 ] : [];
 
+// Music tools are conditionally included based on SPOTIFY_CLIENT_ID being set.
+const MUSIC_TOOLS = process.env.SPOTIFY_CLIENT_ID ? [
+  {
+    type: 'function',
+    function: {
+      name: 'get_music_recommendations',
+      description: 'Get personalized music track recommendations based on the user\'s Spotify listening history. Use this when the user asks what to listen to, for song suggestions, or discovery.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Number of recommendations to return (default 10, max 50).',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_top_tracks',
+      description: 'Get the user\'s most-listened tracks for a time window. Use this when the user asks about their favorite songs or listening habits.',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: {
+            type: 'string',
+            enum: ['short', 'medium', 'long'],
+            description: '"short" ≈ last 4 weeks, "medium" ≈ last 6 months, "long" ≈ all time. Default to "medium" when unsure.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_listening_stats',
+      description: 'Get aggregate listening stats (play count, unique tracks, top genres) for a period. Use this for questions about listening trends or genre preferences.',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: {
+            type: 'string',
+            enum: ['week', 'month', 'year'],
+            description: 'The time period to summarize. Default to "month" when unsure.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_spotify_status',
+      description: 'Check whether the user has Spotify connected and when data was last synced. Use this before other music tools if unsure whether Spotify is configured.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+] : [];
+
 export const TOOLS = [
   {
     type: 'function',
@@ -225,6 +298,7 @@ export const TOOLS = [
     },
   },
   ...HEALTH_TOOLS,
+  ...MUSIC_TOOLS,
   ...NOTES_TOOL_DEFINITIONS,
   ...EMAIL_TOOL_DEFINITIONS,
   {
