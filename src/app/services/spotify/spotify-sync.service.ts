@@ -25,6 +25,9 @@ const EMBEDDING_BATCH_SIZE = 16;
 const CANDIDATE_ARTIST_LIMIT = 12;
 const ALBUMS_PER_ARTIST = 3;
 const TRACKS_PER_ALBUM = 8;
+const SAVED_TRACKS_LIMIT = 300;
+const PLAYLIST_LIMIT = 15;
+const TRACKS_PER_PLAYLIST = 50;
 
 const api = new SpotifyApiService();
 const credentials = new SpotifyCredentialsService(api);
@@ -110,17 +113,22 @@ async function embedMissingTracks(githubToken: string): Promise<number> {
   return embedded;
 }
 
-async function insertHistory(
-  userId: string,
-  entries: Array<{ trackId: string; playedAt: string | null; source: string; rank: number | null }>,
-): Promise<number> {
+interface HistoryEntry {
+  trackId: string;
+  playedAt: string | null;
+  source: string;
+  rank: number | null;
+  playlistName?: string | null;
+}
+
+async function insertHistory(userId: string, entries: HistoryEntry[]): Promise<number> {
   let inserted = 0;
   for (const entry of entries) {
     const res = await pool.query(
-      `INSERT INTO spotify_listening_history (user_id, track_id, played_at, source, rank)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO spotify_listening_history (user_id, track_id, played_at, source, rank, playlist_name)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (user_id, track_id, source, played_at) DO NOTHING`,
-      [userId, entry.trackId, entry.playedAt, entry.source, entry.rank],
+      [userId, entry.trackId, entry.playedAt, entry.source, entry.rank, entry.playlistName ?? null],
     );
     inserted += res.rowCount ?? 0;
   }
@@ -166,6 +174,28 @@ export async function runSpotifySync(userId: string): Promise<SpotifySyncResult>
     Promise.all(TOP_WINDOWS.map((w) => api.getTopArtists(accessToken, w.range, 20))),
   ]);
 
+  // Saved tracks (Liked Songs) and playlists require scopes granted on reconnect —
+  // best-effort so a stale token (connected before these scopes existed) doesn't
+  // fail the whole sync, it just skips these two sources until the user reconnects.
+  const savedTracks = await api.getSavedTracks(accessToken, SAVED_TRACKS_LIMIT).catch((error) => {
+    console.error('[Spotify] Saved tracks fetch failed (may need to reconnect for user-library-read):', error instanceof Error ? error.message : error);
+    return [];
+  });
+  const playlists = await api.getUserPlaylists(accessToken, PLAYLIST_LIMIT).catch((error) => {
+    console.error('[Spotify] Playlists fetch failed (may need to reconnect for playlist-read-private):', error instanceof Error ? error.message : error);
+    return [];
+  });
+  const playlistTrackLists = await Promise.all(
+    playlists.map((playlist) =>
+      api.getPlaylistTracks(accessToken, playlist.id, TRACKS_PER_PLAYLIST)
+        .then((items) => ({ playlist, items }))
+        .catch((error) => {
+          console.error(`[Spotify] Playlist tracks fetch failed for "${playlist.name}":`, error instanceof Error ? error.message : error);
+          return { playlist, items: [] as Awaited<ReturnType<typeof api.getPlaylistTracks>> };
+        }),
+    ),
+  );
+
   const allTopArtists = topArtistsByWindow.flat();
   const uniqueArtistGenres = new Map<string, string[]>(allTopArtists.map((a) => [a.id, a.genres]));
 
@@ -186,14 +216,22 @@ export async function runSpotifySync(userId: string): Promise<SpotifySyncResult>
   const knownTracks = new Map<string, SpotifyTrack>();
   for (const item of recentlyPlayed) knownTracks.set(item.track.id, item.track);
   for (const list of topTracksByWindow) for (const track of list) knownTracks.set(track.id, track);
+  for (const item of savedTracks) knownTracks.set(item.track.id, item.track);
+  for (const { items } of playlistTrackLists) for (const item of items) knownTracks.set(item.track.id, item.track);
 
   await upsertTracks([...knownTracks.values()], uniqueArtistGenres);
 
-  const historyEntries: Array<{ trackId: string; playedAt: string | null; source: string; rank: number | null }> = [
+  const historyEntries: HistoryEntry[] = [
     ...recentlyPlayed.map((item) => ({
       trackId: item.track.id,
       playedAt: item.playedAt,
       source: 'recently_played',
+      rank: null,
+    })),
+    ...savedTracks.map((item) => ({
+      trackId: item.track.id,
+      playedAt: item.addedAt,
+      source: 'saved_tracks',
       rank: null,
     })),
   ];
@@ -207,6 +245,17 @@ export async function runSpotifySync(userId: string): Promise<SpotifySyncResult>
       });
     });
   });
+  for (const { playlist, items } of playlistTrackLists) {
+    for (const item of items) {
+      historyEntries.push({
+        trackId: item.track.id,
+        playedAt: item.addedAt,
+        source: 'playlist',
+        rank: null,
+        playlistName: playlist.name,
+      });
+    }
+  }
   const historyInserted = await insertHistory(userId, historyEntries);
 
   const { tracks: candidateTracks, genresByArtistId } = await discoverCandidates(

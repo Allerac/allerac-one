@@ -229,6 +229,7 @@ export default function MusicDashboard({ isDarkMode: d, onViewChange }: Props) {
                   name={t.name}
                   artists={t.artists}
                   rank={t.rank ?? i + 1}
+                  externalUrl={t.external_url}
                 />
               ))}
             </div>
@@ -248,6 +249,7 @@ export default function MusicDashboard({ isDarkMode: d, onViewChange }: Props) {
                   name={t.name}
                   artists={t.artists}
                   subtitle={t.played_at ? new Date(t.played_at).toLocaleString() : undefined}
+                  externalUrl={t.external_url}
                 />
               ))}
             </div>

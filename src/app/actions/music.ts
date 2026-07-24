@@ -63,13 +63,14 @@ export interface TopTrackRow {
   name: string;
   artists: Array<{ id: string; name: string }>;
   album_image_url: string | null;
+  external_url: string | null;
   rank: number | null;
 }
 
 export async function getTopTracks(period: 'top_short' | 'top_medium' | 'top_long' = 'top_medium', limit = 20): Promise<TopTrackRow[]> {
   const userId = await getSessionUserId();
   const res = await pool.query(
-    `SELECT lh.track_id, st.name, st.artists, st.album_image_url, lh.rank
+    `SELECT lh.track_id, st.name, st.artists, st.album_image_url, st.external_url, lh.rank
      FROM spotify_listening_history lh
      JOIN spotify_tracks st ON st.id = lh.track_id
      WHERE lh.user_id = $1 AND lh.source = $2
@@ -85,13 +86,14 @@ export interface RecentlyPlayedRow {
   name: string;
   artists: Array<{ id: string; name: string }>;
   album_image_url: string | null;
+  external_url: string | null;
   played_at: string | null;
 }
 
 export async function getRecentlyPlayed(limit = 20): Promise<RecentlyPlayedRow[]> {
   const userId = await getSessionUserId();
   const res = await pool.query(
-    `SELECT lh.track_id, st.name, st.artists, st.album_image_url, lh.played_at
+    `SELECT lh.track_id, st.name, st.artists, st.album_image_url, st.external_url, lh.played_at
      FROM spotify_listening_history lh
      JOIN spotify_tracks st ON st.id = lh.track_id
      WHERE lh.user_id = $1 AND lh.source = 'recently_played'

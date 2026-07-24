@@ -45,9 +45,11 @@ async function loadWeightedHistory(userId: string): Promise<HistoryRow[]> {
        st.embedding,
        CASE lh.source
          WHEN 'recently_played' THEN GREATEST(0.2, 1.0 - EXTRACT(EPOCH FROM (NOW() - lh.played_at)) / (86400.0 * 30))
-         WHEN 'top_short'  THEN 1.4 * (1.0 - LEAST(COALESCE(lh.rank, 25), 50) / 50.0)
-         WHEN 'top_medium' THEN 1.0 * (1.0 - LEAST(COALESCE(lh.rank, 25), 50) / 50.0)
-         WHEN 'top_long'   THEN 0.7 * (1.0 - LEAST(COALESCE(lh.rank, 25), 50) / 50.0)
+         WHEN 'top_short'    THEN 1.4 * (1.0 - LEAST(COALESCE(lh.rank, 25), 50) / 50.0)
+         WHEN 'top_medium'   THEN 1.0 * (1.0 - LEAST(COALESCE(lh.rank, 25), 50) / 50.0)
+         WHEN 'top_long'     THEN 0.7 * (1.0 - LEAST(COALESCE(lh.rank, 25), 50) / 50.0)
+         WHEN 'saved_tracks' THEN 1.3 -- explicit "Liked Songs" — one of the strongest taste signals
+         WHEN 'playlist'     THEN 1.0 -- curated into a playlist — solid but less deliberate than a like
          ELSE 0.5
        END AS weight
      FROM spotify_listening_history lh

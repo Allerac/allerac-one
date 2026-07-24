@@ -8,6 +8,9 @@ const SCOPES = [
   'user-read-recently-played',
   'user-top-read',
   'user-follow-read',
+  'user-library-read',
+  'playlist-read-private',
+  'playlist-read-collaborative',
 ].join(' ');
 
 export interface SpotifyTokenResponse {
@@ -45,6 +48,21 @@ export interface SpotifyTrack {
 export interface RecentlyPlayedItem {
   track: SpotifyTrack;
   playedAt: string;
+}
+
+export interface SavedTrackItem {
+  track: SpotifyTrack;
+  addedAt: string;
+}
+
+export interface PlaylistSummary {
+  id: string;
+  name: string;
+}
+
+export interface PlaylistTrackItem {
+  track: SpotifyTrack;
+  addedAt: string;
 }
 
 export type TopTimeRange = 'short_term' | 'medium_term' | 'long_term';
@@ -201,6 +219,63 @@ export class SpotifyApiService {
       genres: a.genres || [],
       popularity: a.popularity ?? 0,
     }));
+  }
+
+  async getSavedTracks(accessToken: string, maxItems = 200): Promise<SavedTrackItem[]> {
+    const results: SavedTrackItem[] = [];
+    let offset = 0;
+    const pageSize = 50;
+    while (results.length < maxItems) {
+      const response = await fetch(
+        `${SPOTIFY_API_URL}/me/tracks?limit=${pageSize}&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      const body = await parseResponse<{ items: Array<{ track: any; added_at: string }>; next: string | null }>(
+        response,
+        'saved tracks request',
+      );
+      const items = body.items || [];
+      for (const item of items) {
+        if (!item.track?.id) continue;
+        results.push({ track: mapTrack(item.track), addedAt: item.added_at });
+      }
+      if (!body.next || items.length === 0) break;
+      offset += pageSize;
+    }
+    return results.slice(0, maxItems);
+  }
+
+  async getUserPlaylists(accessToken: string, limit = 20): Promise<PlaylistSummary[]> {
+    const response = await fetch(
+      `${SPOTIFY_API_URL}/me/playlists?limit=${Math.min(limit, 50)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const body = await parseResponse<{ items: Array<{ id: string; name: string }> }>(response, 'playlists request');
+    return (body.items || []).filter((p) => p?.id).map((p) => ({ id: p.id, name: p.name }));
+  }
+
+  async getPlaylistTracks(accessToken: string, playlistId: string, maxItems = 50): Promise<PlaylistTrackItem[]> {
+    const results: PlaylistTrackItem[] = [];
+    let offset = 0;
+    const pageSize = 50;
+    while (results.length < maxItems) {
+      const response = await fetch(
+        `${SPOTIFY_API_URL}/playlists/${playlistId}/tracks?limit=${pageSize}&offset=${offset}&fields=items(added_at,track(id,name,artists,album,popularity,preview_url,external_urls)),next`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      const body = await parseResponse<{ items: Array<{ track: any; added_at: string }>; next: string | null }>(
+        response,
+        'playlist tracks request',
+      );
+      const items = body.items || [];
+      for (const item of items) {
+        if (!item.track?.id) continue; // local files / unavailable tracks have no id
+        results.push({ track: mapTrack(item.track), addedAt: item.added_at || new Date().toISOString() });
+      }
+      if (!body.next || items.length === 0) break;
+      offset += pageSize;
+    }
+    return results.slice(0, maxItems);
   }
 
   async getArtists(accessToken: string, artistIds: string[]): Promise<SpotifyArtist[]> {
