@@ -63,6 +63,8 @@ const SCOPE_GROUPS = [
       ['email:write', 'Email: write'],
       ['finance:read', 'Finance: read'],
       ['finance:write', 'Finance: write'],
+      ['music:read', 'Music: read'],
+      ['music:write', 'Music: write'],
     ],
   },
 ] as const;
@@ -90,6 +92,7 @@ const PRESETS = {
       'health:read',
       'email:read',
       'finance:read',
+      'music:read',
     ],
   },
   automation: {

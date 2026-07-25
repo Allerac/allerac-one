@@ -2,12 +2,14 @@
 
 import pool from '@/app/clients/db';
 import { requireCurrentUser } from '@/app/lib/auth-session';
+import { SpotifyApiService } from '@/app/services/spotify/spotify-api.service';
 import { SpotifyCredentialsService } from '@/app/services/spotify/spotify-credentials.service';
 import { runSpotifySync } from '@/app/services/spotify/spotify-sync.service';
 
 export type { SpotifyStatus } from '@/app/services/spotify/spotify-credentials.service';
 
-const credentials = new SpotifyCredentialsService();
+const api = new SpotifyApiService();
+const credentials = new SpotifyCredentialsService(api);
 
 async function getSessionUserId(): Promise<string> {
   const user = await requireCurrentUser();
@@ -29,6 +31,69 @@ export async function triggerSpotifySync() {
   const userId = await getSessionUserId();
   const result = await runSpotifySync(userId);
   return { success: true, ...result };
+}
+
+export interface SpotifyPlaylistOption {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  trackCount: number;
+  externalUrl: string | null;
+}
+
+export async function getSpotifyPlaylists(): Promise<SpotifyPlaylistOption[]> {
+  const userId = await getSessionUserId();
+  const accessToken = await credentials.getValidAccessToken(userId);
+  if (!accessToken) throw new Error('Spotify not connected');
+  return api.getUserPlaylists(accessToken, 50);
+}
+
+export interface PlaylistTrackRow {
+  track_id: string;
+  name: string;
+  artists: Array<{ id: string; name: string }>;
+  album_image_url: string | null;
+  external_url: string | null;
+}
+
+export async function getSpotifyPlaylistTracks(playlistId: string, limit = 100): Promise<PlaylistTrackRow[]> {
+  const userId = await getSessionUserId();
+  const accessToken = await credentials.getValidAccessToken(userId);
+  if (!accessToken) throw new Error('Spotify not connected');
+  const items = await api.getPlaylistTracks(accessToken, playlistId, limit);
+  return items.map(({ track }) => ({
+    track_id: track.id,
+    name: track.name,
+    artists: track.artists,
+    album_image_url: track.albumImageUrl,
+    external_url: track.externalUrl,
+  }));
+}
+
+export interface CreatedPlaylistResult {
+  id: string;
+  name: string;
+  externalUrl: string | null;
+}
+
+export async function createSpotifyPlaylist(name: string, trackId?: string): Promise<CreatedPlaylistResult> {
+  const userId = await getSessionUserId();
+  const accessToken = await credentials.getValidAccessToken(userId);
+  if (!accessToken) throw new Error('Spotify not connected');
+
+  const playlist = await api.createPlaylist(accessToken, name);
+  if (trackId) {
+    await api.addTracksToPlaylist(accessToken, playlist.id, [trackId]);
+  }
+  return playlist;
+}
+
+export async function addTrackToSpotifyPlaylist(playlistId: string, trackId: string): Promise<{ success: true }> {
+  const userId = await getSessionUserId();
+  const accessToken = await credentials.getValidAccessToken(userId);
+  if (!accessToken) throw new Error('Spotify not connected');
+  await api.addTracksToPlaylist(accessToken, playlistId, [trackId]);
+  return { success: true };
 }
 
 export interface RecommendationRow {

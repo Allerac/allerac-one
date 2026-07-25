@@ -1,0 +1,15 @@
+meta {
+  name: Get Recommendations
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/music/recommendations?limit=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

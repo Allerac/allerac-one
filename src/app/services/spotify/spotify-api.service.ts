@@ -11,6 +11,8 @@ const SCOPES = [
   'user-library-read',
   'playlist-read-private',
   'playlist-read-collaborative',
+  'playlist-modify-public',
+  'playlist-modify-private',
 ].join(' ');
 
 export interface SpotifyTokenResponse {
@@ -58,6 +60,15 @@ export interface SavedTrackItem {
 export interface PlaylistSummary {
   id: string;
   name: string;
+  imageUrl: string | null;
+  trackCount: number;
+  externalUrl: string | null;
+}
+
+export interface CreatedPlaylist {
+  id: string;
+  name: string;
+  externalUrl: string | null;
 }
 
 export interface PlaylistTrackItem {
@@ -250,8 +261,70 @@ export class SpotifyApiService {
       `${SPOTIFY_API_URL}/me/playlists?limit=${Math.min(limit, 50)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
-    const body = await parseResponse<{ items: Array<{ id: string; name: string }> }>(response, 'playlists request');
-    return (body.items || []).filter((p) => p?.id).map((p) => ({ id: p.id, name: p.name }));
+    const body = await parseResponse<{
+      items: Array<{
+        id: string;
+        name: string;
+        images?: Array<{ url: string }>;
+        // Spotify's Feb 2026 migration renamed the playlist's item-count field
+        // from "tracks" to "items" — read the new one, fall back to the old.
+        items?: { total: number };
+        tracks?: { total: number };
+        external_urls?: { spotify?: string };
+      }>;
+    }>(response, 'playlists request');
+    return (body.items || []).filter((p) => p?.id).map((p) => ({
+      id: p.id,
+      name: p.name,
+      imageUrl: p.images?.[0]?.url ?? null,
+      trackCount: p.items?.total ?? p.tracks?.total ?? 0,
+      externalUrl: p.external_urls?.spotify ?? null,
+    }));
+  }
+
+  async searchTrack(accessToken: string, query: string, limit = 5): Promise<SpotifyTrack[]> {
+    const response = await fetch(
+      `${SPOTIFY_API_URL}/search?q=${encodeURIComponent(query)}&type=track&limit=${Math.min(limit, 50)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const body = await parseResponse<{ tracks?: { items: any[] } }>(response, 'search request');
+    return (body.tracks?.items || []).map(mapTrack);
+  }
+
+  async createPlaylist(accessToken: string, name: string, description = ''): Promise<CreatedPlaylist> {
+    // Spotify retired POST /users/{user_id}/playlists in its Feb 2026 Web API
+    // migration (403 for every caller past the Mar 9 2026 deadline) — /me/playlists
+    // is the replacement and no longer needs the caller's Spotify user id.
+    const response = await fetch(`${SPOTIFY_API_URL}/me/playlists`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, description, public: false }),
+    });
+    const body = await parseResponse<{ id: string; name: string; external_urls?: { spotify?: string } }>(
+      response,
+      'create playlist request',
+    );
+    return { id: body.id, name: body.name, externalUrl: body.external_urls?.spotify ?? null };
+  }
+
+  async addTracksToPlaylist(accessToken: string, playlistId: string, trackIds: string[]): Promise<void> {
+    // Spotify retired POST /playlists/{id}/tracks in its Feb 2026 Web API
+    // migration — /items is the replacement (request body shape is unchanged).
+    for (let i = 0; i < trackIds.length; i += 100) {
+      const batch = trackIds.slice(i, i + 100);
+      const response = await fetch(`${SPOTIFY_API_URL}/playlists/${playlistId}/items`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uris: batch.map((id) => `spotify:track:${id}`) }),
+      });
+      await parseResponse(response, 'add tracks to playlist request');
+    }
   }
 
   async getPlaylistTracks(accessToken: string, playlistId: string, maxItems = 50): Promise<PlaylistTrackItem[]> {
@@ -259,18 +332,20 @@ export class SpotifyApiService {
     let offset = 0;
     const pageSize = 50;
     while (results.length < maxItems) {
+      // GET /playlists/{id}/tracks was retired in the same migration — /items is
+      // the replacement, and the per-entry "track" field is now "item".
       const response = await fetch(
-        `${SPOTIFY_API_URL}/playlists/${playlistId}/tracks?limit=${pageSize}&offset=${offset}&fields=items(added_at,track(id,name,artists,album,popularity,preview_url,external_urls)),next`,
+        `${SPOTIFY_API_URL}/playlists/${playlistId}/items?limit=${pageSize}&offset=${offset}&fields=items(added_at,item(id,name,artists,album,popularity,preview_url,external_urls)),next`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
-      const body = await parseResponse<{ items: Array<{ track: any; added_at: string }>; next: string | null }>(
+      const body = await parseResponse<{ items: Array<{ item: any; added_at: string }>; next: string | null }>(
         response,
         'playlist tracks request',
       );
       const items = body.items || [];
       for (const item of items) {
-        if (!item.track?.id) continue; // local files / unavailable tracks have no id
-        results.push({ track: mapTrack(item.track), addedAt: item.added_at || new Date().toISOString() });
+        if (!item.item?.id) continue; // local files / unavailable tracks have no id
+        results.push({ track: mapTrack(item.item), addedAt: item.added_at || new Date().toISOString() });
       }
       if (!body.next || items.length === 0) break;
       offset += pageSize;
