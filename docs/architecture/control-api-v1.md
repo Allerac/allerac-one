@@ -2,11 +2,12 @@
 
 ## Status
 
-Beta baseline complete. As of 2026-07-19 the `/api/v1` surface covers system
+Beta baseline complete. As of 2026-07-25 the `/api/v1` surface covers system
 (`version`, `me`, `domains`, `capabilities`), API keys, conversations (including synchronous message
 execution), memories, tickets, agent runs, documents, notes, scheduled jobs
-(including manual run), skills, health, search, speech, robot settings, email, and
-finance. Browser session auth and scoped bearer API keys are both supported.
+(including manual run), skills, health, search, speech, robot settings, email,
+finance, and music. Browser session auth and scoped bearer API keys are both
+supported.
 
 Of the initial target resources below, only standalone `tools` execution
 (`POST /api/v1/tools/:name/run`) remains unimplemented and is deliberately deferred
@@ -15,7 +16,9 @@ in the dedicated `agent-worker` container); Phase 5 (headless mode) is a later
 architectural evolution, not a beta Control API blocker. The full implemented
 contract is tracked in
 `docs/api/openapi/control-api-v1.yaml` and audited in
-`docs/roadmap/control-api-v1-gap-audit-2026-06-29.md`.
+`docs/roadmap/control-api-v1-gap-audit-2026-06-29.md` (contract coverage) and
+`docs/roadmap/control-api-v1-duplication-audit-2026-07-25.md` (Server Action vs
+route-handler duplication).
 
 ## Purpose
 
@@ -155,6 +158,8 @@ browser sessions and scoped API keys across:
 - Robot: speech synthesis, get/update robot settings
 - Email: list messages, get message, send
 - Finance: quotes, symbol search, candles, watchlist list/add/remove
+- Music: status, recommendations, top tracks, recently played, playlists
+  list/create, playlist tracks list/add, sync
 
 The authoritative contract is `docs/api/openapi/control-api-v1.yaml`. Of the target
 route shape above, only `POST /api/v1/tools/:name/run` remains unimplemented; it is
@@ -224,6 +229,7 @@ Suggested first scopes:
 | `search:read` | Run configured web search |
 | `email:read` / `email:write` | Read/send through owned email accounts |
 | `finance:read` / `finance:write` | Read market data and manage watchlist |
+| `music:read` / `music:write` | Read recommendations/history/playlists and manage Spotify playlists |
 
 Admin and system-level scopes should wait until there is a concrete use case.
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import pool from '@/app/clients/db';
 import { requireApiUser } from '../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../_lib/responses';
+import { queryDailyMetricsSnapshot } from '@/app/services/health/health-query.service';
 
 const querySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD').optional(),
@@ -16,12 +16,11 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const date = parsed.data.date ?? new Date().toISOString().split('T')[0];
-    const res = await pool.query(
-      'SELECT * FROM health_daily_metrics WHERE user_id = $1 AND date = $2',
-      [user.id, date],
-    );
+    // Cache-only read — does not trigger a live Garmin fetch on a miss (unlike
+    // the web UI's getDailyHealth). See health-query.service.ts.
+    const daily = await queryDailyMetricsSnapshot(user.id, date);
 
-    return apiData({ daily: res.rows[0] ?? null });
+    return apiData({ daily });
   } catch (error: unknown) {
     const authError = apiAuthError(error);
     if (authError) return authError;

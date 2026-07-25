@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import pool from '@/app/clients/db';
 import { requireApiUser } from '../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../_lib/responses';
+import { addWatchlistSymbol, queryWatchlist } from '@/app/services/finance/watchlist-query.service';
 
 const addSymbolSchema = z.object({
   symbol: z.string().trim().min(1),
@@ -10,11 +10,8 @@ const addSymbolSchema = z.object({
 export async function GET(request: Request): Promise<Response> {
   try {
     const user = await requireApiUser('finance:read', request);
-    const res = await pool.query(
-      'SELECT symbol FROM user_watchlist WHERE user_id = $1 ORDER BY added_at ASC',
-      [user.id],
-    );
-    return apiData({ symbols: res.rows.map((r: { symbol: string }) => r.symbol) });
+    const symbols = await queryWatchlist(user.id);
+    return apiData({ symbols });
   } catch (error: unknown) {
     const authError = apiAuthError(error);
     if (authError) return authError;
@@ -31,10 +28,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const symbol = parsed.data.symbol.toUpperCase().trim();
-    await pool.query(
-      'INSERT INTO user_watchlist (user_id, symbol) VALUES ($1, $2) ON CONFLICT (user_id, symbol) DO NOTHING',
-      [user.id, symbol],
-    );
+    await addWatchlistSymbol(user.id, symbol);
 
     return apiData({ added: true, symbol }, { status: 201 });
   } catch (error: unknown) {
