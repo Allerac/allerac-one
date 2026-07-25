@@ -3,6 +3,7 @@ import { LLMService } from '@/app/services/llm/llm.service';
 import type { Skill } from '@/app/services/skills/skills.service';
 import { executeChatTool } from './chat-tool-runner';
 import type { ChatProvider } from './chat-request-parser';
+import { MODELS } from '@/app/services/llm/models';
 
 export interface ChatPipelineMessage {
   role: string;
@@ -15,6 +16,9 @@ export interface RunChatPipelineInput {
   provider: ChatProvider;
   modelBaseUrl: string;
   modelId: string;
+  temperature?: number;
+  maxTokens?: number;
+  fallbackModelId?: string | null;
   githubToken: string;
   googleApiKey: string;
   anthropicApiKey: string;
@@ -41,11 +45,40 @@ function parseToolArguments(rawArguments: unknown): Record<string, any> {
 }
 
 export async function runChatPipeline(input: RunChatPipelineInput): Promise<string> {
-  const llmService = new LLMService(input.provider, input.modelBaseUrl, {
+  let activeModelId = input.modelId;
+  let llmService = new LLMService(input.provider, input.modelBaseUrl, {
     githubToken: input.githubToken,
     geminiToken: input.googleApiKey,
     anthropicToken: input.anthropicApiKey,
   });
+  let fallbackActivated = false;
+  const activateFallback = () => {
+    const fallback = input.fallbackModelId
+      ? MODELS.find(model => model.id === input.fallbackModelId)
+      : null;
+    if (!fallback || fallbackActivated) return false;
+    fallbackActivated = true;
+    activeModelId = fallback.id;
+    llmService = new LLMService(
+      fallback.provider as ChatProvider,
+      fallback.baseUrl ?? '',
+      {
+        githubToken: input.githubToken,
+        geminiToken: input.googleApiKey,
+        anthropicToken: input.anthropicApiKey,
+      },
+    );
+    input.emit({ type: 'model_fallback', model: fallback.id, provider: fallback.provider });
+    return true;
+  };
+  const complete = async (request: Parameters<LLMService['chatCompletion']>[0]) => {
+    try {
+      return await llmService.chatCompletion({ ...request, model: activeModelId });
+    } catch (error) {
+      if (!activateFallback()) throw error;
+      return llmService.chatCompletion({ ...request, model: activeModelId });
+    }
+  };
   const forceTool = input.activeSkill?.force_tool ?? null;
   const initialToolChoice = forceTool
     ? { type: 'function', function: { name: forceTool } }
@@ -54,11 +87,11 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
   const keepaliveInterval = setInterval(input.keepalive, 15_000);
   let data;
   try {
-    data = await llmService.chatCompletion({
+    data = await complete({
       messages: input.messages,
-      model: input.modelId,
-      temperature: 0.7,
-      max_tokens: 2000,
+      model: activeModelId,
+      temperature: input.temperature ?? 0.7,
+      max_tokens: input.maxTokens ?? 2000,
       tools: input.activeTools,
       ...(initialToolChoice !== undefined && { tool_choice: initialToolChoice }),
       userId: input.user.id,
@@ -109,11 +142,11 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       }
     }
 
-    data = await llmService.chatCompletion({
+    data = await complete({
       messages: input.messages,
-      model: input.modelId,
-      temperature: 0.7,
-      max_tokens: 2000,
+      model: activeModelId,
+      temperature: input.temperature ?? 0.7,
+      max_tokens: input.maxTokens ?? 2000,
       tools: input.activeTools,
       tool_choice: 'auto',
       userId: input.user.id,
@@ -123,16 +156,23 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
   }
 
   let fullContent = '';
-  for await (const token of llmService.streamChatCompletion({
-    messages: input.messages,
-    model: input.modelId,
-    temperature: 0.7,
-    max_tokens: 2000,
-    userId: input.user.id,
-    conversationId: input.conversationId,
-  })) {
-    fullContent += token;
-    input.emit({ type: 'token', content: token });
+  while (true) {
+    try {
+      for await (const token of llmService.streamChatCompletion({
+        messages: input.messages,
+        model: activeModelId,
+        temperature: input.temperature ?? 0.7,
+        max_tokens: input.maxTokens ?? 2000,
+        userId: input.user.id,
+        conversationId: input.conversationId,
+      })) {
+        fullContent += token;
+        input.emit({ type: 'token', content: token });
+      }
+      break;
+    } catch (error) {
+      if (fullContent || !activateFallback()) throw error;
+    }
   }
 
   return fullContent;

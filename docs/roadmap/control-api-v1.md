@@ -2,18 +2,21 @@
 
 ## Status
 
-Beta baseline complete. As of 2026-07-19 the `/api/v1` contract covers `version`, `me`,
+Beta baseline complete. As of 2026-07-25 the `/api/v1` contract covers `version`, `me`,
 `domains`, `capabilities`, API keys, conversations (including synchronous message
 send), memories, tickets, agent runs, documents, notes, scheduled jobs (including
-manual run), skills, health, search, speech, robot settings, email, and finance —
-44 route paths and 61 operations, in sync with
+manual run), skills, health, search, speech, robot settings, email, finance, and
+music — 51 route paths and 70 operations, in sync with
 `docs/api/openapi/control-api-v1.yaml`. Browser session auth and scoped bearer API
 keys are both implemented.
 
 The remaining items are post-baseline evolution rather than blockers for the beta
 Control API: standalone `tools:run`, streaming/async chat, and incremental migration
 of legacy UI surfaces. Worker separation was completed in Phase 8. See
-`control-api-v1-gap-audit-2026-06-29.md` for the historical gap analysis.
+`control-api-v1-gap-audit-2026-06-29.md` for the historical gap analysis and
+`control-api-v1-duplication-audit-2026-07-25.md` for a service-boundary audit of
+Server Actions vs `/api/v1` route duplication (found and fixed for Music this
+session; Health, Finance, and Domains still have small duplicated spots).
 
 ## How To Use This Document
 
@@ -38,6 +41,8 @@ This file is the implementation trail.
 - [ADR 0002: Keep Control API in the app container initially](../architecture/decisions/0002-keep-control-api-in-app-container-initially.md)
 - [Agent Background Execution Architecture](../agents/architecture.md)
 - [Tickets Architecture](../tickets/architecture.md)
+- [Control API v1 Gap Audit — 2026-06-29](control-api-v1-gap-audit-2026-06-29.md) (contract coverage)
+- [Control API v1 Duplication Audit — 2026-07-25](control-api-v1-duplication-audit-2026-07-25.md) (Server Action vs `/api/v1` duplication)
 
 ## Goal
 
@@ -690,24 +695,51 @@ integration work.
 - [x] The current UI remains available alongside `/api/v1`.
 - [x] The API reference includes command examples.
 
-## Phase 6: UI Migration Candidates (Post-Baseline)
+## Phase 6: Shared Service Extraction (Post-Baseline)
 
-Purpose: reduce duplicate surfaces after the API has proven itself.
+Purpose: eliminate duplicate business logic between Server Actions (the web UI's
+call path) and `/api/v1` route handlers (the external API-key call path).
 
-Status: deferred. UI migration is an incremental cleanup and is not required for the
-Control API v1 beta baseline. Existing UI routes remain supported.
+Status: complete for all four domains found to have duplication. Reframed
+2026-07-25 — see
+[Control API v1 Duplication Audit — 2026-07-25](control-api-v1-duplication-audit-2026-07-25.md)
+for the full analysis and rationale.
 
-Candidates:
+This phase was originally framed as "migrate the UI to call `/api/v1` instead
+of Server Actions." That framing was wrong for the actual problem: Server
+Actions and `/api/v1` routes exist for different reasons (in-process UI calls
+vs. externally-authenticated API-key calls), and having the UI call its own
+API over HTTP would trade a code-duplication problem for a same-process
+runtime-inefficiency problem, without removing the duplication. What actually
+removes duplication — already proven by Tickets (`TicketService`), Notes
+(`notesService`), Documents (`docService`), Memory
+(`ConversationMemoryService`), Scheduled Jobs (`scheduledJobsService`),
+Skills (`skillsService`), Chat (`ChatService`), and Benchmark
+(`benchmark-query.service.ts`) — is a shared plain service or query module
+that both call paths use. The UI keeps its fast, in-process Server Actions;
+`/api/v1` keeps serving external clients; neither duplicates the other.
 
-- Tickets UI can use `/api/v1/tickets`.
-- Agent run polling can use `/api/v1/agent-runs`.
-- Domain discovery can use `/api/v1/domains`.
+Fixed domains (2026-07-25):
 
-The synchronous chat API contract now exists, but chat UI migration should still be
-handled as a separate product change with regression testing.
+- **Music** — `spotify-query.service.ts` (recommendations, top tracks,
+  recently played).
+- **Health** — `health-query.service.ts` (Garmin status, summary, daily
+  snapshot). The daily-snapshot live-fetch-fallback question was resolved
+  explicitly: `/api/v1/health/daily` stays cache-only, since a GET request
+  should not have the side effect of calling the Garmin worker.
+- **Finance** — `watchlist-query.service.ts` (get/add/remove watchlist
+  symbol).
+- **Domains** — `actions/domains.ts` now calls the existing
+  `domainService.listAccessible()` directly; no new service file needed.
 
-Migration rule: migrate one UI surface at a time and keep the old `/api/*` route until
-the replacement is tested in production-like Docker.
+Still open, tracked separately (not a duplication fix, a product decision):
+`StockPanel.tsx` calls the legacy Yahoo-backed `/api/finance/quote` route
+directly instead of the `MarketDataService`-backed path `/api/v1/finance/quote`
+already uses. See the duplication audit's "Still open" section.
+
+Migration rule (kept from the original framing, still applies to any future
+UI-facing route work): migrate one surface at a time and keep the old
+`/api/*` route until the replacement is tested in production-like Docker.
 
 ## Phase 7: App Decoupling Preparation
 
@@ -887,3 +919,31 @@ Use this section to append discoveries while building.
   claim path (`SKIP LOCKED` in autocommit) leaves a small double-execution window if
   two runners ever run simultaneously; optional follow-up hardening is an atomic
   claim UPDATE.
+
+### 2026-07-25
+
+- Music domain added to `/api/v1`: `status`, `recommendations`, `top-tracks`,
+  `recently-played`, `playlists` (list/create), `playlists/:id/tracks`
+  (list/add), `sync` — 7 new paths, 9 new operations (44→51 paths, 61→70
+  operations). Scopes `music:read`/`music:write` added to the API key UI and
+  the architecture doc's scope table. Docs, OpenAPI, and a Bruno smoke folder
+  were added in the same change per the contract maintenance rule.
+- The Music Server Action (`actions/music.ts`) and the new `/api/v1/music/*`
+  routes initially duplicated three raw SQL queries (recommendations,
+  top-tracks, recently-played) — the same anti-pattern the "Working
+  Invariants" section already prohibits. Fixed by extracting
+  `spotify-query.service.ts`, a framework-free service both call.
+- That fix prompted a full duplication audit across every domain with both a
+  Server Action and a `/api/v1` route: see
+  [Control API v1 Duplication Audit — 2026-07-25](control-api-v1-duplication-audit-2026-07-25.md).
+  10 of 13 comparable domains were already clean via a shared service
+  (Tickets, Notes, Documents, Memory, Jobs, Skills, Chat, Benchmark, Email,
+  Music). Health (3 queries), Finance (watchlist query, plus an unrelated
+  third quote implementation in `StockPanel.tsx`), and Domains (1 query) still
+  have duplicated spots — small, mechanical fixes matching the Music pattern.
+- The audit's recommendation for Phase 6: reframe it from "migrate the UI to
+  call `/api/v1`" to "finish extracting the remaining domains into shared
+  services," since the UI-as-API-client approach trades duplicated code for a
+  same-process HTTP round-trip without actually removing the duplication.
+  Phase 6's text was left unchanged pending the Health/Finance/Domains fixes
+  landing, per the audit doc's own recommendation.

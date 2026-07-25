@@ -8,11 +8,17 @@
  */
 
 import { NextRequest } from 'next/server';
-import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import {
+  assertDomainAccess,
+  authenticationErrorResponse,
+  requireCurrentUser,
+  UnauthorizedError,
+} from '@/app/lib/auth-session';
 import { ChatService } from '@/app/services/database/chat.service';
 import { WorkerRunRepository } from '@/app/services/agents/worker-run.repository';
 import pool from '@/app/clients/db';
 import { v4 as uuid } from 'uuid';
+import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
 
 const chatService = new ChatService();
 const repo = new WorkerRunRepository();
@@ -21,12 +27,17 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const user = await requireCurrentUser();
     const body = await request.json();
-    const { message, conversationId: inputConversationId, model, provider, skillName }: {
+    const {
+      message, conversationId: inputConversationId, model, provider, skillName,
+      domain = 'chat', parentRunId,
+    }: {
       message: string;
       conversationId: string | null;
       model: string;
       provider: string;
       skillName?: string;
+      domain?: string;
+      parentRunId?: string;
     } = body;
 
     if (!message) {
@@ -34,14 +45,37 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const userId = user.id;
-    const llmModel = model || 'qwen2.5:3b';
-    const llmProvider = provider || 'ollama';
+    await assertDomainAccess(user, domain);
+    const resolvedModel = await domainModelSettingsService.resolve({
+      userId,
+      domainSlug: domain,
+      globalModelId: model || 'qwen2.5:3b',
+      globalProvider: (provider || 'ollama') as 'github' | 'ollama' | 'gemini' | 'anthropic',
+    });
+    const llmModel = resolvedModel.modelId;
+    const llmProvider = resolvedModel.provider;
+
+    const parentRun = parentRunId
+      ? await repo.getRunForUser(parentRunId, userId)
+      : null;
+    if (parentRunId && !parentRun) {
+      return Response.json({ error: 'Parent run not found' }, { status: 404 });
+    }
+    const effectiveMessage = parentRun
+      ? [
+          'Continue the previous agent run. Do not restart the task from scratch.',
+          `Original task:\n${parentRun.prompt}`,
+          parentRun.result ? `Previous agent response:\n${parentRun.result}` : '',
+          `User follow-up:\n${message}`,
+          'Resume the work using the available tools. Complete the implementation when possible.',
+        ].filter(Boolean).join('\n\n')
+      : message;
 
     // Create or find conversation
-    let convId = inputConversationId ?? null;
+    let convId = parentRun?.conversation_id ?? inputConversationId ?? null;
     if (!convId) {
       const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
-      convId = await chatService.createConversation(userId, title);
+      convId = await chatService.createConversation(userId, title, domain);
       if (!convId) {
         return Response.json({ error: 'Failed to create conversation' }, { status: 500 });
       }
@@ -53,7 +87,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     // Resolve skill name → skill_id if provided
-    let skillId: string | null = null;
+    let skillId: string | null = parentRun?.skill_id ?? null;
     if (skillName) {
       const skillResult = await pool.query(
         `SELECT id FROM skills
@@ -70,9 +104,12 @@ export async function POST(request: Request): Promise<Response> {
     // Create agent_run with pending status (worker picks it up)
     const runId = uuid();
     await pool.query(
-      `INSERT INTO agent_runs (id, conversation_id, user_id, status, prompt, llm_model, llm_provider, skill_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [runId, convId, userId, 'pending', message, llmModel, llmProvider, skillId]
+      `INSERT INTO agent_runs
+         (id, conversation_id, user_id, status, prompt, llm_model, llm_provider,
+          skill_id, parent_run_id, domain_slug)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [runId, convId, userId, 'pending', effectiveMessage, llmModel, llmProvider,
+        skillId, parentRun?.id ?? null, domain]
     );
 
     // Save user message to conversation
@@ -87,8 +124,16 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ error: 'Failed to save assistant message' }, { status: 500 });
     }
 
-    console.log('[AgentRoute] Created pending run:', runId);
-    return Response.json({ runId });
+    console.log(
+      `[AgentRoute] Created pending run: ${runId} · ${llmProvider}/${llmModel}`
+      + ` · domain=${domain}${parentRun ? ` · parent=${parentRun.id}` : ''}`,
+    );
+    return Response.json({
+      runId,
+      model: llmModel,
+      provider: llmProvider,
+      parentRunId: parentRun?.id ?? null,
+    });
   } catch (error: unknown) {
     const authError = authenticationErrorResponse(error);
     if (authError) return authError;
@@ -123,6 +168,9 @@ export async function GET(request: NextRequest): Promise<Response> {
         startedAt: run.started_at,
         completedAt: run.completed_at,
         cancelledAt: run.cancelled_at,
+        model: run.llm_model,
+        provider: run.llm_provider,
+        parentRunId: run.parent_run_id,
         workers: workers.map(w => ({
           id: w.id,
           name: w.name,

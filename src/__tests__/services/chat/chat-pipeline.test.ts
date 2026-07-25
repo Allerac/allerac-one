@@ -111,4 +111,48 @@ describe('runChatPipeline', () => {
       tool_call_id: 'call-1',
     }));
   });
+
+  test('switches to the configured fallback before emitting content', async () => {
+    const primaryCompletion = jest.fn().mockRejectedValue(new Error('provider unavailable'));
+    const fallbackCompletion = jest.fn().mockResolvedValue({
+      choices: [{ message: { role: 'assistant', content: '' } }],
+    });
+    const fallbackStream = jest.fn().mockReturnValue(asyncTokens(['fallback']));
+    (LLMService as jest.Mock)
+      .mockImplementationOnce(() => ({
+        chatCompletion: primaryCompletion,
+        streamChatCompletion: jest.fn(),
+      }))
+      .mockImplementationOnce(() => ({
+        chatCompletion: fallbackCompletion,
+        streamChatCompletion: fallbackStream,
+      }));
+    const emit = jest.fn();
+
+    const result = await runChatPipeline({
+      provider: 'github',
+      modelBaseUrl: 'https://models',
+      modelId: 'gpt-4o',
+      fallbackModelId: 'qwen2.5:3b',
+      githubToken: 'token',
+      googleApiKey: '',
+      anthropicApiKey: '',
+      user,
+      conversationId: 'conv-1',
+      message: 'hi',
+      locale: 'en',
+      activeSkill: null,
+      activeTools: [],
+      messages: [{ role: 'user', content: 'hi' }],
+      emit,
+      keepalive: jest.fn(),
+    });
+
+    expect(result).toBe('fallback');
+    expect(emit).toHaveBeenCalledWith({
+      type: 'model_fallback',
+      model: 'qwen2.5:3b',
+      provider: 'ollama',
+    });
+  });
 });

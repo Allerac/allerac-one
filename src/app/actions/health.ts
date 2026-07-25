@@ -4,6 +4,8 @@ import pool from '@/app/clients/db';
 import { requireCurrentUser } from '@/app/lib/auth-session';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { submitLog } from '@/lib/submit-log';
+import { applyActivityCorrection } from '@/app/services/health/activity-corrections';
+import { queryDailyMetricsSnapshot, queryGarminStatus, queryHealthSummary } from '@/app/services/health/health-query.service';
 
 const WORKER_URL = (process.env.HEALTH_WORKER_URL || 'http://health-worker:8001').replace(/\/$/, '');
 const WORKER_SECRET = process.env.HEALTH_WORKER_SECRET || '';
@@ -39,23 +41,16 @@ async function workerFetch(method: string, path: string, body?: object) {
 export async function getGarminStatus() {
   const userId = await getSessionUserId();
   try {
-    const res = await pool.query(
-      'SELECT is_connected, mfa_pending, last_sync_at, last_error, sync_enabled FROM garmin_credentials WHERE user_id = $1',
-      [userId]
-    );
-    if (res.rows.length === 0) {
-      return { is_connected: false, mfa_pending: false, sync_enabled: false };
-    }
-    const row = res.rows[0];
-    return {
-      is_connected: row.is_connected,
-      mfa_pending: row.mfa_pending,
-      last_sync_at: row.last_sync_at,
-      last_error: row.last_error,
-      sync_enabled: row.sync_enabled,
-    };
+    return await queryGarminStatus(userId);
   } catch (e: any) {
-    return { is_connected: false, error: e.message };
+    return {
+      is_connected: false,
+      mfa_pending: false,
+      sync_enabled: false,
+      last_sync_at: null,
+      last_error: null,
+      error: e.message,
+    };
   }
 }
 
@@ -251,8 +246,13 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
     if (allActivities.length > 0) {
       await _upsertActivities(userId, allActivities);
     }
+    const retriedCorrections = await _retryGarminExerciseCorrections(userId, sessionDump);
 
-    await submitLog('Health', `Sync complete: ${data.metrics.length} days + ${allActivities.length} activities synced`);
+    await submitLog(
+      'Health',
+      `Sync complete: ${data.metrics.length} days + ${allActivities.length} activities synced`
+      + `; ${retriedCorrections} exercise correction(s) retried`,
+    );
 
     await pool.query(
       `UPDATE health_sync_jobs SET status='completed', completed_at=NOW(), records_fetched=$2 WHERE id=$1`,
@@ -329,25 +329,8 @@ export async function getHealthMetrics(startDate: string, endDate: string) {
 
 export async function getHealthSummary(period: 'day' | '3days' | 'week' | 'month' | 'year') {
   const userId = await getSessionUserId();
-  const days = { day: 1, '3days': 3, week: 7, month: 30, year: 365 }[period];
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-  const res = await pool.query(
-    `SELECT
-       ROUND(AVG(steps))                              AS avg_steps,
-       ROUND(AVG(calories))                           AS avg_calories,
-       ROUND(AVG(resting_hr))                         AS avg_resting_hr,
-       ROUND(AVG(sleep_duration_minutes) / 60.0, 1)  AS avg_sleep_hours,
-       SUM(steps)                                     AS total_steps,
-       SUM(calories)                                  AS total_calories,
-       MAX(steps)                                     AS max_steps,
-       COUNT(*)                                       AS days_with_data
-     FROM health_daily_metrics
-     WHERE user_id = $1 AND date >= $2`,
-    [userId, since]
-  );
-
-  return { period, ...res.rows[0] };
+  const summary = await queryHealthSummary(userId, period);
+  return { period, ...summary };
 }
 
 export async function getDailySnapshot(date: string) {
@@ -356,11 +339,7 @@ export async function getDailySnapshot(date: string) {
 }
 
 async function getDailySnapshotForUser(userId: string, date: string) {
-  const res = await pool.query(
-    'SELECT * FROM health_daily_metrics WHERE user_id = $1 AND date = $2',
-    [userId, date]
-  );
-  return res.rows[0] ?? null;
+  return queryDailyMetricsSnapshot(userId, date);
 }
 
 async function getActivitiesFromDB(userId: string, startDate: string, endDate: string) {
@@ -372,7 +351,7 @@ async function getActivitiesFromDB(userId: string, startDate: string, endDate: s
   );
   return res.rows.map((row: any) => {
     // Start with raw_data which has all the original fields
-    const rawData = row.raw_data ? (typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data) : {};
+    const rawData = applyActivityCorrection(row);
     return {
       // Spread raw data to get all original fields (including summarizedExerciseSets, etc)
       ...rawData,
@@ -605,6 +584,48 @@ async function _upsertActivities(userId: string, activities: any[]) {
       ]
     );
   }
+}
+
+async function _retryGarminExerciseCorrections(userId: string, sessionDump: string): Promise<number> {
+  const pending = await pool.query(
+    `SELECT activity_id, corrected_exercise_sets
+     FROM health_activities
+     WHERE user_id = $1
+       AND garmin_sync_status IN ('pending', 'garmin_sync_failed')
+       AND garmin_sync_attempts < 3
+     ORDER BY correction_updated_at ASC
+     LIMIT 10`,
+    [userId],
+  );
+
+  for (const row of pending.rows) {
+    try {
+      await workerFetch('PUT', '/activities/exercise-sets', {
+        session_dump: sessionDump,
+        activity_id: row.activity_id,
+        exercise_sets: row.corrected_exercise_sets,
+      });
+      await pool.query(
+        `UPDATE health_activities
+         SET garmin_sync_status = 'synced',
+             garmin_sync_error = NULL,
+             garmin_sync_attempts = garmin_sync_attempts + 1,
+             updated_at = NOW()
+         WHERE user_id = $1 AND activity_id = $2`,
+        [userId, row.activity_id],
+      );
+    } catch (error: any) {
+      await pool.query(
+        `UPDATE health_activities
+         SET garmin_sync_error = $3,
+             garmin_sync_attempts = garmin_sync_attempts + 1,
+             updated_at = NOW()
+         WHERE user_id = $1 AND activity_id = $2`,
+        [userId, row.activity_id, String(error?.message ?? error).slice(0, 2000)],
+      );
+    }
+  }
+  return pending.rows.length;
 }
 
 async function _upsertMetrics(userId: string, metrics: any[]) {

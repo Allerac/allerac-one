@@ -6,6 +6,7 @@ import { GET as getHealthStatus } from '@/app/api/v1/health/status/route';
 import { GET as getHealthSummary } from '@/app/api/v1/health/summary/route';
 import { GET as getDailyHealth } from '@/app/api/v1/health/daily/route';
 import { GET as listActivities } from '@/app/api/v1/health/activities/route';
+import { PUT as correctExerciseSets } from '@/app/api/v1/health/activities/[activityId]/exercise-sets/route';
 
 jest.mock('@/app/lib/auth-session', () => {
   class MockUnauthorizedError extends Error {}
@@ -23,6 +24,10 @@ jest.mock('@/app/clients/db', () => ({
   default: { query: jest.fn() },
 }));
 
+jest.mock('@/app/services/crypto/encryption.service', () => ({
+  safeDecrypt: jest.fn(() => 'session-dump'),
+}));
+
 const mockRequireCurrentUser = jest.mocked(requireCurrentUser);
 const mockPool = pool as jest.Mocked<typeof pool>;
 
@@ -35,9 +40,19 @@ const user = {
 };
 
 describe('Control API v1 health', () => {
+  const originalHealthWorkerSecret = process.env.HEALTH_WORKER_SECRET;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockRequireCurrentUser.mockResolvedValue(user);
+    // Set explicitly rather than relying on whatever .env happens to be
+    // loaded — the Garmin-sync tests below need this truthy to reach the
+    // mocked fetch() instead of short-circuiting on "not configured".
+    process.env.HEALTH_WORKER_SECRET = 'test-secret';
+  });
+
+  afterAll(() => {
+    process.env.HEALTH_WORKER_SECRET = originalHealthWorkerSecret;
   });
 
   it('returns 401 when unauthenticated', async () => {
@@ -185,6 +200,80 @@ describe('Control API v1 health', () => {
     expect(mockPool.query).toHaveBeenCalledWith(
       expect.stringContaining('date = $2'),
       [user.id, '2026-06-25', 10],
+    );
+  });
+
+  it('keeps the local exercise correction when Garmin accepts it', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ activity_id: '123' }] } as any)
+      .mockResolvedValueOnce({ rows: [{ oauth1_token_encrypted: 'encrypted-session' }] } as any)
+      .mockResolvedValueOnce({ rows: [] } as any);
+    global.fetch = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ exercise_sets: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const response = await correctExerciseSets(
+      new Request('http://localhost/api/v1/health/activities/123/exercise-sets', {
+        method: 'PUT',
+        body: JSON.stringify({
+          exerciseSets: [{
+            setType: 'ACTIVE',
+            repetitionCount: 10,
+            weight: 20000,
+            exercises: [{ category: 'BENCH_PRESS', name: 'BARBELL_BENCH_PRESS' }],
+          }],
+        }),
+      }),
+      { params: Promise.resolve({ activityId: '123' }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data).toMatchObject({
+      localSaved: true,
+      garminSyncStatus: 'synced',
+    });
+    expect(mockPool.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("garmin_sync_status = 'pending'"),
+      [user.id, '123', expect.any(String)],
+    );
+  });
+
+  it('keeps the local exercise correction when Garmin rejects it', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ activity_id: '123' }] } as any)
+      .mockResolvedValueOnce({ rows: [{ oauth1_token_encrypted: 'encrypted-session' }] } as any)
+      .mockResolvedValueOnce({ rows: [] } as any);
+    global.fetch = jest.fn().mockResolvedValue(
+      new Response('invalid exercise', { status: 400 }),
+    );
+
+    const response = await correctExerciseSets(
+      new Request('http://localhost/api/v1/health/activities/123/exercise-sets', {
+        method: 'PUT',
+        body: JSON.stringify({
+          exerciseSets: [{
+            setType: 'ACTIVE',
+            repetitionCount: 8,
+            exercises: [{ category: 'SQUAT', name: 'BACK_SQUAT' }],
+          }],
+        }),
+      }),
+      { params: Promise.resolve({ activityId: '123' }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data).toMatchObject({
+      localSaved: true,
+      garminSyncStatus: 'garmin_sync_failed',
+    });
+    expect(mockPool.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("garmin_sync_status = 'garmin_sync_failed'"),
+      [user.id, '123', expect.stringContaining('Garmin update failed')],
     );
   });
 });

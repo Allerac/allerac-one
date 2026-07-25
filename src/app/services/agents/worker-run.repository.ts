@@ -21,6 +21,8 @@ export interface AgentRunRecord {
   llm_model: string | null;
   llm_provider: string | null;
   skill_id: string | null;
+  parent_run_id: string | null;
+  domain_slug: string | null;
 }
 
 export interface AgentWorkerRecord {

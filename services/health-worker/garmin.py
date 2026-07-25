@@ -575,3 +575,66 @@ def fetch_recent_activities(session_dump: str, limit: int = 10, date: str = None
     except Exception as e:
         logger.error(f"fetch_recent_activities FAILED at unknown step: {e}", exc_info=True)
         raise
+
+
+def update_activity_exercise_sets(
+    session_dump: str,
+    activity_id: str,
+    exercise_sets: list[dict],
+) -> dict:
+    """Replace the exercise sets of an existing Garmin strength activity."""
+    if not activity_id or not str(activity_id).isdigit():
+        raise ValueError("activity_id must be a positive numeric Garmin activity id")
+    if not isinstance(exercise_sets, list) or not exercise_sets:
+        raise ValueError("exercise_sets must be a non-empty list")
+
+    garmin = _garmin_from_session(session_dump)
+    activity_id = str(activity_id)
+    path = f"/activity-service/activity/{activity_id}/exerciseSets"
+    payload = {
+        "activityId": int(activity_id),
+        "exerciseSets": exercise_sets,
+    }
+
+    logger.info("Updating exercise sets for Garmin activity %s", activity_id)
+    response = garmin.garth.request(
+        "PUT",
+        "connectapi",
+        path,
+        api=True,
+        json=payload,
+    )
+    if hasattr(response, "raise_for_status"):
+        response.raise_for_status()
+
+    # Read-after-write is intentional: a 2xx alone does not guarantee that
+    # Garmin accepted every exercise/category combination.
+    verified = garmin.get_activity_exercise_sets(activity_id)
+    verified_sets = (
+        verified.get("exerciseSets", [])
+        if isinstance(verified, dict)
+        else []
+    )
+
+    def comparable(items: list[dict]) -> list[tuple]:
+        return [
+            (
+                item.get("setType"),
+                item.get("repetitionCount"),
+                item.get("weight"),
+                tuple(
+                    (exercise.get("category"), exercise.get("name"))
+                    for exercise in (item.get("exercises") or [])
+                ),
+            )
+            for item in items
+        ]
+
+    if comparable(verified_sets) != comparable(exercise_sets):
+        raise RuntimeError(
+            "Garmin returned exercise sets different from the requested correction"
+        )
+    return {
+        "activity_id": activity_id,
+        "exercise_sets": verified,
+    }

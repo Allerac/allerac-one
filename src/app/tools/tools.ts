@@ -22,6 +22,14 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'get_daily_snapshot',         label: 'Daily Snapshot',      description: 'All health metrics for a single day',            group: 'Health'    },
   { name: 'get_garmin_status',          label: 'Garmin Status',       description: 'Check Garmin device connection',                 group: 'Health'    },
   { name: 'get_recent_activities',      label: 'Recent Activities',   description: 'Recent workouts from Garmin',                    group: 'Health'    },
+  { name: 'get_music_recommendations',  label: 'Music Recommendations', description: 'Personalized track recommendations',           group: 'Music'     },
+  { name: 'get_top_tracks',             label: 'Top Tracks',          description: 'Most-listened tracks for a time window',        group: 'Music'     },
+  { name: 'get_listening_stats',        label: 'Listening Stats',     description: 'Listening totals and top genres',                group: 'Music'     },
+  { name: 'get_spotify_status',         label: 'Spotify Status',      description: 'Check Spotify connection status',                group: 'Music'     },
+  { name: 'get_playlists',              label: 'Playlists',           description: 'List the user\'s Spotify playlists',             group: 'Music'     },
+  { name: 'get_playlist_tracks',        label: 'Playlist Tracks',     description: 'List tracks inside a specific playlist',         group: 'Music'     },
+  { name: 'create_playlist',            label: 'Create Playlist',     description: 'Create a new Spotify playlist, optionally with tracks', group: 'Music' },
+  { name: 'add_tracks_to_playlist',     label: 'Add Tracks',          description: 'Add tracks to an existing Spotify playlist',     group: 'Music'     },
   { name: 'update_social_form',         label: 'Update Post Form',    description: 'Update the social post draft form',              group: 'Social' },
   { name: 'instagram_publish_post',     label: 'Publish Post',        description: 'Publish a post to Instagram',                    group: 'Instagram' },
   { name: 'instagram_get_profile',      label: 'Get Profile',         description: 'Fetch Instagram account profile info',           group: 'Instagram' },
@@ -152,6 +160,152 @@ const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
   },
 ] : [];
 
+// Music tools are conditionally included based on SPOTIFY_CLIENT_ID being set.
+const MUSIC_TOOLS = process.env.SPOTIFY_CLIENT_ID ? [
+  {
+    type: 'function',
+    function: {
+      name: 'get_music_recommendations',
+      description: 'Get personalized music track recommendations based on the user\'s Spotify listening history. Use this when the user asks what to listen to, for song suggestions, or discovery.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Number of recommendations to return (default 10, max 50).',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_top_tracks',
+      description: 'Get the user\'s most-listened tracks for a time window. Use this when the user asks about their favorite songs or listening habits.',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: {
+            type: 'string',
+            enum: ['short', 'medium', 'long'],
+            description: '"short" ≈ last 4 weeks, "medium" ≈ last 6 months, "long" ≈ all time. Default to "medium" when unsure.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_listening_stats',
+      description: 'Get aggregate listening stats (play count, unique tracks, top genres) for a period. Use this for questions about listening trends or genre preferences.',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: {
+            type: 'string',
+            enum: ['week', 'month', 'year'],
+            description: 'The time period to summarize. Default to "month" when unsure.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_spotify_status',
+      description: 'Check whether the user has Spotify connected and when data was last synced. Use this before other music tools if unsure whether Spotify is configured.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_playlists',
+      description: 'List the user\'s Spotify playlists with their track counts. Use this when the user asks about their playlists, wants to know what playlists they have, or wants to pick one to look inside.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_playlist_tracks',
+      description: 'List the tracks inside a specific Spotify playlist by name (fuzzy match — doesn\'t need to be exact). Use this when the user asks what\'s inside a specific playlist.',
+      parameters: {
+        type: 'object',
+        properties: {
+          playlist_name: {
+            type: 'string',
+            description: 'The name (or partial name) of the playlist to look up.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Max number of tracks to return (default 50, max 100).',
+          },
+        },
+        required: ['playlist_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_playlist',
+      description: 'Create a new Spotify playlist for the user, optionally adding tracks to it right away. Use this when the user asks to make/create a new playlist.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Name for the new playlist.',
+          },
+          tracks: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional tracks to add immediately. Each entry is either a track_id already known from a prior get_music_recommendations/get_top_tracks/get_playlist_tracks call, or free text like "Song Name - Artist" to search for.',
+          },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_tracks_to_playlist',
+      description: 'Add one or more tracks to an existing Spotify playlist, found by name (fuzzy match). Use this when the user asks to add a song to a playlist they already have.',
+      parameters: {
+        type: 'object',
+        properties: {
+          playlist_name: {
+            type: 'string',
+            description: 'The name (or partial name) of the existing playlist to add tracks to.',
+          },
+          tracks: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Tracks to add. Each entry is either a track_id already known from a prior get_music_recommendations/get_top_tracks/get_playlist_tracks call, or free text like "Song Name - Artist" to search for.',
+          },
+        },
+        required: ['playlist_name', 'tracks'],
+      },
+    },
+  },
+] : [];
+
 export const TOOLS = [
   {
     type: 'function',
@@ -225,6 +379,7 @@ export const TOOLS = [
     },
   },
   ...HEALTH_TOOLS,
+  ...MUSIC_TOOLS,
   ...NOTES_TOOL_DEFINITIONS,
   ...EMAIL_TOOL_DEFINITIONS,
   {

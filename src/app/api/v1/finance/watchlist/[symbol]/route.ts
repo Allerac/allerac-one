@@ -1,6 +1,6 @@
-import pool from '@/app/clients/db';
 import { requireApiUser } from '../../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../../_lib/responses';
+import { removeWatchlistSymbol } from '@/app/services/finance/watchlist-query.service';
 
 interface RouteContext {
   params: Promise<{ symbol: string }>;
@@ -15,12 +15,8 @@ export async function DELETE(
     const { symbol: rawSymbol } = await params;
     const symbol = rawSymbol.toUpperCase();
 
-    const res = await pool.query(
-      'DELETE FROM user_watchlist WHERE user_id = $1 AND symbol = $2',
-      [user.id, symbol],
-    );
-
-    if ((res.rowCount ?? 0) === 0) {
+    const deleted = await removeWatchlistSymbol(user.id, symbol);
+    if (!deleted) {
       return apiError('not_found', 'Symbol not found in watchlist', 404);
     }
 

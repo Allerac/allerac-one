@@ -2,6 +2,7 @@ import path from 'path';
 import * as instagramActions from '@/app/actions/instagram';
 import type { User } from '@/app/services/auth/auth.service';
 import { HealthTool } from '@/app/tools/health.tool';
+import { MusicTool } from '@/app/tools/music.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import { buildEmailTools } from '@/app/tools/email.tool';
 import { buildGithubTools } from '@/app/tools/github.tool';
@@ -145,6 +146,36 @@ export async function executeChatTool(
       );
     }
     return healthTool.getGarminStatus(healthUser);
+  }
+
+  if ([
+    'get_music_recommendations', 'get_top_tracks', 'get_listening_stats', 'get_spotify_status',
+    'get_playlists', 'get_playlist_tracks', 'create_playlist', 'add_tracks_to_playlist',
+  ].includes(toolName)) {
+    const musicTool = new MusicTool();
+    const musicUser = { id: userId, email: user.email, name: user.name || user.email };
+    if (toolName === 'get_music_recommendations') {
+      return musicTool.getRecommendations(musicUser, toolArgs.limit || 10);
+    }
+    if (toolName === 'get_top_tracks') {
+      return musicTool.getTopTracks(musicUser, toolArgs.period || 'medium');
+    }
+    if (toolName === 'get_listening_stats') {
+      return musicTool.getListeningStats(musicUser, toolArgs.period || 'month');
+    }
+    if (toolName === 'get_playlists') {
+      return musicTool.getPlaylists(musicUser);
+    }
+    if (toolName === 'get_playlist_tracks') {
+      return musicTool.getPlaylistTracks(musicUser, toolArgs.playlist_name, toolArgs.limit || 50);
+    }
+    if (toolName === 'create_playlist') {
+      return musicTool.createPlaylist(musicUser, toolArgs.name, toolArgs.tracks);
+    }
+    if (toolName === 'add_tracks_to_playlist') {
+      return musicTool.addTracksToPlaylist(musicUser, toolArgs.playlist_name, toolArgs.tracks || []);
+    }
+    return musicTool.getSpotifyStatus(musicUser);
   }
 
   if (toolName === 'draw_canvas') {

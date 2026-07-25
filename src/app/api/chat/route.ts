@@ -47,6 +47,7 @@ import {
   acquireOperationLimit,
   operationLimitResponse,
 } from '@/app/lib/operation-limiter';
+import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
 
 const chatService = new ChatService();
 export async function POST(request: Request): Promise<Response> {
@@ -88,6 +89,19 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Failed to verify domain access' }, { status: 500 });
   }
 
+  let resolvedModel;
+  try {
+    resolvedModel = await domainModelSettingsService.resolve({
+      userId: user.id,
+      domainSlug: effectiveDomain,
+      globalModelId: modelId,
+      globalProvider: provider,
+    });
+  } catch (error) {
+    console.error('[ChatRoute] Failed to resolve domain model:', error);
+    return Response.json({ error: 'Failed to resolve domain model' }, { status: 500 });
+  }
+
   const userId = user.id;
   const limitResult = acquireOperationLimit('chat', userId);
   if (!limitResult.allowed) {
@@ -105,13 +119,15 @@ export async function POST(request: Request): Promise<Response> {
 
       try {
         // Log domain entry — visible in System Monitor
-        const providerLabel = provider === 'ollama' ? `● LOCAL · ${modelId}` : `◌ ${provider} · ${modelId}`;
+        const providerLabel = resolvedModel.provider === 'ollama'
+          ? `● LOCAL · ${resolvedModel.modelId}`
+          : `◌ ${resolvedModel.provider} · ${resolvedModel.modelId}`;
         console.log(`[ChatRoute] ► ${effectiveDomain} — ${providerLabel}`);
 
         const processedImages = await processChatImages(imageAttachments);
         let runtimeContext;
         try {
-          runtimeContext = await loadChatRuntimeContext(userId, effectiveDomain, provider);
+          runtimeContext = await loadChatRuntimeContext(userId, effectiveDomain, resolvedModel.provider);
         } catch (error) {
           if (error instanceof ChatProviderConfigurationError) {
             writer.event({ type: 'error', message: error.message });
@@ -255,9 +271,12 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         const fullContent = await runChatPipeline({
-          provider,
+          provider: resolvedModel.provider,
           modelBaseUrl,
-          modelId,
+          modelId: resolvedModel.modelId,
+          temperature: resolvedModel.temperature,
+          maxTokens: resolvedModel.maxTokens,
+          fallbackModelId: resolvedModel.fallbackModelId,
           githubToken,
           googleApiKey,
           anthropicApiKey,

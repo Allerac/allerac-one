@@ -13,6 +13,7 @@ return `503 Service Unavailable`.
 | `GET /api/v1/health/summary` | `health:read` |
 | `GET /api/v1/health/daily` | `health:read` |
 | `GET /api/v1/health/activities` | `health:read` |
+| `PUT /api/v1/health/activities/{activityId}/exercise-sets` | `health:write` |
 
 Browser sessions can call these endpoints without API key scopes.
 
@@ -136,6 +137,37 @@ curl -s \
   -H "Authorization: Bearer $ALLERAC_API_KEY" \
   "http://localhost:8080/api/v1/health/activities?limit=5"
 ```
+
+## `PUT /api/v1/health/activities/{activityId}/exercise-sets`
+
+Corrects the exercise sets of a strength activity. Allerac saves the correction
+locally first and then attempts to update Garmin Connect. A Garmin failure does
+not roll back the local correction; the response reports
+`garmin_sync_failed`, and later health synchronizations retry it up to three
+times.
+
+```json
+{
+  "exerciseSets": [
+    {
+      "setType": "ACTIVE",
+      "repetitionCount": 10,
+      "weight": 20000,
+      "exercises": [
+        {
+          "category": "BENCH_PRESS",
+          "name": "BARBELL_BENCH_PRESS"
+        }
+      ]
+    }
+  ]
+}
+```
+
+`weight` uses Garmin's exercise-set representation (grams). Successful
+responses have `garminSyncStatus: "synced"`; fallback responses have
+`garminSyncStatus: "garmin_sync_failed"` while still returning
+`localSaved: true`.
 
 Response:
 

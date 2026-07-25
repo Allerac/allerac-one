@@ -59,13 +59,18 @@ const SCOPE_GROUPS = [
     label: 'Personal data',
     scopes: [
       ['health:read', 'Health: read'],
+      ['health:write', 'Health: write'],
       ['email:read', 'Email: read'],
       ['email:write', 'Email: write'],
       ['finance:read', 'Finance: read'],
       ['finance:write', 'Finance: write'],
+      ['music:read', 'Music: read'],
+      ['music:write', 'Music: write'],
     ],
   },
 ] as const;
+
+const ALL_SCOPES = SCOPE_GROUPS.flatMap(group => group.scopes.map(([scope]) => scope));
 
 const PRESETS = {
   robot: {
@@ -90,6 +95,7 @@ const PRESETS = {
       'health:read',
       'email:read',
       'finance:read',
+      'music:read',
     ],
   },
   automation: {
@@ -109,6 +115,10 @@ const PRESETS = {
       'benchmark:read',
       'benchmark:write',
     ],
+  },
+  full: {
+    label: 'Full access (all scopes)',
+    scopes: ALL_SCOPES,
   },
   custom: {
     label: 'Custom',

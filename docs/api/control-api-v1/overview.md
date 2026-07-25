@@ -2,7 +2,7 @@
 
 ## Status
 
-Beta baseline complete. The implemented v1 surface contains 44 route paths and 61
+Beta baseline complete. The implemented v1 surface contains 51 route paths and 70
 operations, supports browser session authentication and scoped Control API bearer
 keys, and is deployed as a production client surface. Standalone tool execution,
 streaming chat, and legacy UI migration are deferred evolutions rather than beta
@@ -105,6 +105,7 @@ Common error codes:
 | [Robot](robot.md) | speech synthesis, get/update robot settings |
 | [Email](email.md) | list messages, get message, send |
 | [Finance](finance.md) | quotes, symbol search, candles, watchlist list, add, remove |
+| [Music](music.md) | status, recommendations, top tracks, recently played, playlists list/create, playlist tracks list/add, sync |
 | [Benchmark](benchmark.md) | model availability, run via SSE, history, clear history |
 
 ## Bruno Collection
@@ -127,6 +128,7 @@ Use the `Local` environment:
 | `memoryId` | Set automatically by `Memories / Create Conversation Memory` |
 | `emailAccountId` | Email account id to test IMAP/SMTP endpoints |
 | `emailMessageUid` | IMAP UID to test `Email / Get Message` |
+| `playlistId` | Set automatically by `Music / Create Playlist` |
 
 Recommended smoke order:
 
@@ -191,13 +193,24 @@ the authenticated resource flow:
 56. `Finance / Get Watchlist`
 57. `Finance / Add to Watchlist`
 58. `Finance / Remove from Watchlist`
+59. `Music / Get Status`
+60. `Music / Get Recommendations`
+61. `Music / Get Top Tracks`
+62. `Music / Get Recently Played`
+63. `Music / List Playlists`
+64. `Music / Create Playlist`
+65. `Music / List Playlist Tracks`
+66. `Music / Add Tracks to Playlist`
 
 Memory creation requires `conversationId` to point to an owned conversation with
 enough messages to summarize. A newly created empty conversation should return
 `not_enough_content`.
 
 Document upload requires setting the file path in `Upload Document` before running.
-Health endpoints return empty/default data if Garmin is not connected.
+Health endpoints return empty/default data if Garmin is not connected. Music
+endpoints (other than `Get Status`) return `422 spotify_not_connected` if Spotify
+is not connected; `Music / Sync` is intentionally excluded from the smoke order
+since it's a slow synchronous call best run manually.
 
 ## OpenAPI
 

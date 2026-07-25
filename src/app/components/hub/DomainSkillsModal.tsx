@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import * as skillActions from '@/app/actions/skills';
+import * as domainActions from '@/app/actions/domains';
 import { TOOL_REGISTRY } from '@/app/tools/tools';
+import { MODELS } from '@/app/services/llm/models';
 
 interface DomainBinding {
   domain_slug: string;
@@ -23,6 +25,14 @@ interface EditingState {
   skillId: string | null;
   content: string;
   tools: string[];
+  modelSettings: {
+    inheritGlobal: boolean;
+    modelId: string | null;
+    fallbackModelId: string | null;
+    temperature: number | null;
+    maxTokens: number | null;
+    localOnly: boolean;
+  };
 }
 
 const DOMAINS = [
@@ -31,6 +41,7 @@ const DOMAINS = [
   { slug: 'recipes', label: 'Recipes', icon: '🍳' },
   { slug: 'finance', label: 'Finance', icon: '💰' },
   { slug: 'health',  label: 'Health',  icon: '❤️' },
+  { slug: 'music',   label: 'Music',   icon: '🎵' },
   { slug: 'write',   label: 'Content', icon: '✍️' },
   { slug: 'social',  label: 'Social',  icon: '📸' },
   { slug: 'tickets', label: 'Tickets', icon: '🎫' },
@@ -67,6 +78,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(false);
+  const [globalModelId, setGlobalModelId] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
   const toolGroups = TOOL_REGISTRY.reduce<Record<string, typeof TOOL_REGISTRY>>((acc, tool) => {
@@ -75,7 +87,10 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
   }, {});
 
   useEffect(() => {
-    if (isOpen) load();
+    if (isOpen) {
+      setGlobalModelId(localStorage.getItem('selected_model'));
+      load();
+    }
   }, [isOpen]);
 
   const load = async () => {
@@ -100,8 +115,11 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
     const skillId = binding?.skill_id ?? null;
     setLoadingEdit(true);
     const skill = skills.find(s => s.id === skillId);
-    const tools = skillId ? await skillActions.getSkillTools(skillId) : [];
-    setEditing({ domain, skillId, content: skill?.content || '', tools });
+    const [tools, modelSettings] = await Promise.all([
+      skillId ? skillActions.getSkillTools(skillId) : Promise.resolve([]),
+      domainActions.getDomainModelSettings(domain.slug),
+    ]);
+    setEditing({ domain, skillId, content: skill?.content || '', tools, modelSettings });
     setLoadingEdit(false);
   };
 
@@ -116,6 +134,10 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
     if (!editing) return;
     setEditSaving(true);
     await skillActions.setDomainSkillDefault(editing.domain.slug, editing.skillId);
+    await domainActions.saveDomainModelSettings({
+      domainSlug: editing.domain.slug,
+      ...editing.modelSettings,
+    });
     if (editing.skillId) {
       await Promise.all([
         skillActions.updateSkill(editing.skillId, { systemPrompt: editing.content }),
@@ -236,7 +258,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ color: '#818cf8', fontSize: '0.75rem' }}>▸</span>
                 <span style={{ color: '#e6edf3', fontSize: '0.82rem', fontWeight: 700, letterSpacing: '0.06em' }}>
-                  {editing ? `${editing.domain.icon} ${editing.domain.label}` : 'Domain Skills'}
+                  {editing ? `${editing.domain.icon} ${editing.domain.label}` : 'Domain Configuration'}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -267,7 +289,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
                 </div>
                 <div>
                   <h2 className={`text-base sm:text-lg font-semibold ${d ? 'text-gray-100' : 'text-gray-900'}`}>
-                    {editing ? editing.domain.label : 'Domain Skills'}
+                    {editing ? editing.domain.label : 'Domain Configuration'}
                   </h2>
                   {editing && (
                     <p className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -309,6 +331,125 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
               </div>
             ) : editing ? (
               <div className="flex flex-col gap-5">
+                {/* Model strategy */}
+                <div className="flex flex-col gap-3 p-3 rounded-lg border border-gray-700">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <label className={`text-xs font-semibold uppercase tracking-wide ${d ? 'text-gray-400' : 'text-gray-500'}`}>AI Model</label>
+                      <p className={`text-xs mt-1 ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {editing.modelSettings.inheritGlobal
+                          ? `Effective: ${MODELS.find(m => m.id === globalModelId)?.name ?? 'global model'}`
+                          : `Effective: ${MODELS.find(m => m.id === editing.modelSettings.modelId)?.name ?? 'Select a model'}`}
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editing.modelSettings.inheritGlobal}
+                        onChange={e => setEditing({
+                          ...editing,
+                          modelSettings: {
+                            ...editing.modelSettings,
+                            inheritGlobal: e.target.checked,
+                            modelId: e.target.checked
+                              ? editing.modelSettings.modelId
+                              : (editing.modelSettings.modelId ?? MODELS[0]?.id ?? null),
+                          },
+                        })}
+                        className="accent-indigo-600"
+                      />
+                      <span className={`text-xs ${d ? 'text-gray-300' : 'text-gray-600'}`}>Inherit global</span>
+                    </label>
+                  </div>
+
+                  {!editing.modelSettings.inheritGlobal && (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label>Primary model</label>
+                          <select
+                            value={editing.modelSettings.modelId ?? ''}
+                            onChange={e => setEditing({
+                              ...editing,
+                              modelSettings: { ...editing.modelSettings, modelId: e.target.value || null },
+                            })}
+                            className="w-full px-3 py-2 mt-1"
+                          >
+                            {MODELS.filter(model => !editing.modelSettings.localOnly || model.provider === 'ollama')
+                              .map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label>Fallback model</label>
+                          <select
+                            value={editing.modelSettings.fallbackModelId ?? ''}
+                            onChange={e => setEditing({
+                              ...editing,
+                              modelSettings: { ...editing.modelSettings, fallbackModelId: e.target.value || null },
+                            })}
+                            className="w-full px-3 py-2 mt-1"
+                          >
+                            <option value="">No fallback</option>
+                            {MODELS.filter(model => !editing.modelSettings.localOnly || model.provider === 'ollama')
+                              .map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label>Temperature</label>
+                          <input
+                            type="number" min="0" max="2" step="0.1"
+                            value={editing.modelSettings.temperature ?? 0.7}
+                            onChange={e => setEditing({
+                              ...editing,
+                              modelSettings: { ...editing.modelSettings, temperature: Number(e.target.value) },
+                            })}
+                            className="w-full px-3 py-2 mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label>Max tokens</label>
+                          <input
+                            type="number" min="128" max="32768" step="128"
+                            value={editing.modelSettings.maxTokens ?? 2000}
+                            onChange={e => setEditing({
+                              ...editing,
+                              modelSettings: { ...editing.modelSettings, maxTokens: Number(e.target.value) },
+                            })}
+                            className="w-full px-3 py-2 mt-1"
+                          />
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editing.modelSettings.localOnly}
+                          onChange={e => {
+                            const localOnly = e.target.checked;
+                            const primary = MODELS.find(m => m.id === editing.modelSettings.modelId);
+                            setEditing({
+                              ...editing,
+                              modelSettings: {
+                                ...editing.modelSettings,
+                                localOnly,
+                                modelId: localOnly && primary?.provider !== 'ollama'
+                                  ? (MODELS.find(m => m.provider === 'ollama')?.id ?? null)
+                                  : editing.modelSettings.modelId,
+                                fallbackModelId: localOnly ? null : editing.modelSettings.fallbackModelId,
+                              },
+                            });
+                          }}
+                          className="accent-indigo-600"
+                        />
+                        <span className={`text-xs ${d ? 'text-gray-300' : 'text-gray-600'}`}>
+                          Local models only (privacy)
+                        </span>
+                      </label>
+                    </>
+                  )}
+                </div>
+
                 {/* Skill selector */}
                 <div className="flex flex-col gap-2">
                   <label className={`text-xs font-semibold uppercase tracking-wide ${d ? 'text-gray-400' : 'text-gray-500'}`}>Skill</label>
@@ -396,7 +537,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
             ) : (
               <div className="space-y-2">
                 <p className={`text-sm mb-4 ${d ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Edit the skill and tools for each domain.
+                  Configure the model, privacy, skill, prompt, and tools for each domain.
                 </p>
                 {DOMAINS.map(domain => {
                   const binding = getBinding(domain.slug);

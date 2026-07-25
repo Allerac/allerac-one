@@ -1,0 +1,22 @@
+meta {
+  name: Add Tracks to Playlist
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/music/playlists/{{playlistId}}/tracks
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "trackIds": ["3n3Ppam7vgaVa1iaRUc9Lp"]
+  }
+}

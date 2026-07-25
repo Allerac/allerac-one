@@ -29,6 +29,7 @@ tags:
   - name: Robot
   - name: Email
   - name: Finance
+  - name: Music
   - name: Benchmark
 paths:
   /api/v1/version:
@@ -1382,6 +1383,238 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/music/status:
+    get:
+      tags: [Music]
+      summary: Get Spotify connection status
+      operationId: getMusicStatus
+      responses:
+        "200":
+          description: Spotify connection status for the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/music/recommendations:
+    get:
+      tags: [Music]
+      summary: Get personalized track recommendations
+      operationId: getMusicRecommendations
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: Recommendations from the local content-based recommender
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicRecommendationsResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/music/top-tracks:
+    get:
+      tags: [Music]
+      summary: Get most-listened tracks for a time window
+      operationId: getMusicTopTracks
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [top_short, top_medium, top_long]
+            default: top_medium
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Top tracks for the requested window
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicTopTracksResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/music/recently-played:
+    get:
+      tags: [Music]
+      summary: Get recently played tracks
+      operationId: getMusicRecentlyPlayed
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Most recently played tracks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicRecentlyPlayedResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/music/playlists:
+    get:
+      tags: [Music]
+      summary: List the user's Spotify playlists
+      operationId: listMusicPlaylists
+      responses:
+        "200":
+          description: Live playlist list from the Spotify Web API
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicPlaylistsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    post:
+      tags: [Music]
+      summary: Create a Spotify playlist
+      operationId: createMusicPlaylist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMusicPlaylistRequest"
+      responses:
+        "201":
+          description: Playlist created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateMusicPlaylistResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /api/v1/music/playlists/{id}/tracks:
+    get:
+      tags: [Music]
+      summary: List tracks inside a playlist
+      operationId: listMusicPlaylistTracks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist id
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        "200":
+          description: Tracks inside the requested playlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicPlaylistTracksResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    post:
+      tags: [Music]
+      summary: Add tracks to a playlist
+      operationId: addMusicPlaylistTracks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMusicPlaylistTracksRequest"
+      responses:
+        "201":
+          description: Tracks added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddMusicPlaylistTracksResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /api/v1/music/sync:
+    post:
+      tags: [Music]
+      summary: Trigger a full Spotify sync
+      operationId: syncMusic
+      responses:
+        "200":
+          description: Sync completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicSyncResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
   /api/v1/benchmark/models:
     get:
       tags: [Benchmark]
@@ -3285,6 +3518,295 @@ components:
         symbol:
           type: string
           minLength: 1
+    MusicStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: object
+              required: [configured, is_connected]
+              properties:
+                configured:
+                  type: boolean
+                is_connected:
+                  type: boolean
+                display_name:
+                  type: string
+                  nullable: true
+                avatar_url:
+                  type: string
+                  nullable: true
+                scopes:
+                  type: string
+                  nullable: true
+                access_expires_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+                last_sync_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+                last_error:
+                  type: string
+                  nullable: true
+    MusicArtist:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    MusicRecommendation:
+      type: object
+      required: [trackId, score, name, artists]
+      properties:
+        trackId:
+          type: string
+        score:
+          type: number
+        reason:
+          type: string
+          nullable: true
+        name:
+          type: string
+        artists:
+          type: array
+          items:
+            $ref: "#/components/schemas/MusicArtist"
+        albumName:
+          type: string
+          nullable: true
+        albumImageUrl:
+          type: string
+          nullable: true
+        externalUrl:
+          type: string
+          nullable: true
+        previewUrl:
+          type: string
+          nullable: true
+    MusicRecommendationsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [recommendations]
+          properties:
+            recommendations:
+              type: array
+              items:
+                $ref: "#/components/schemas/MusicRecommendation"
+    MusicTopTrack:
+      type: object
+      required: [trackId, name, artists]
+      properties:
+        trackId:
+          type: string
+        name:
+          type: string
+        artists:
+          type: array
+          items:
+            $ref: "#/components/schemas/MusicArtist"
+        albumImageUrl:
+          type: string
+          nullable: true
+        externalUrl:
+          type: string
+          nullable: true
+        rank:
+          type: integer
+          nullable: true
+    MusicTopTracksResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [period, tracks]
+          properties:
+            period:
+              type: string
+              enum: [top_short, top_medium, top_long]
+            tracks:
+              type: array
+              items:
+                $ref: "#/components/schemas/MusicTopTrack"
+    MusicRecentlyPlayedTrack:
+      type: object
+      required: [trackId, name, artists]
+      properties:
+        trackId:
+          type: string
+        name:
+          type: string
+        artists:
+          type: array
+          items:
+            $ref: "#/components/schemas/MusicArtist"
+        albumImageUrl:
+          type: string
+          nullable: true
+        externalUrl:
+          type: string
+          nullable: true
+        playedAt:
+          type: string
+          format: date-time
+          nullable: true
+    MusicRecentlyPlayedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [tracks]
+          properties:
+            tracks:
+              type: array
+              items:
+                $ref: "#/components/schemas/MusicRecentlyPlayedTrack"
+    MusicPlaylist:
+      type: object
+      required: [id, name, trackCount]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        imageUrl:
+          type: string
+          nullable: true
+        trackCount:
+          type: integer
+        externalUrl:
+          type: string
+          nullable: true
+    MusicPlaylistsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [playlists]
+          properties:
+            playlists:
+              type: array
+              items:
+                $ref: "#/components/schemas/MusicPlaylist"
+    CreateMusicPlaylistRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        trackIds:
+          type: array
+          items:
+            type: string
+          maxItems: 100
+    CreateMusicPlaylistResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [playlist]
+          properties:
+            playlist:
+              type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                externalUrl:
+                  type: string
+                  nullable: true
+    MusicPlaylistTrack:
+      type: object
+      required: [trackId, name, artists]
+      properties:
+        trackId:
+          type: string
+        name:
+          type: string
+        artists:
+          type: array
+          items:
+            $ref: "#/components/schemas/MusicArtist"
+        albumImageUrl:
+          type: string
+          nullable: true
+        externalUrl:
+          type: string
+          nullable: true
+        addedAt:
+          type: string
+          format: date-time
+          nullable: true
+    MusicPlaylistTracksResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [tracks]
+          properties:
+            tracks:
+              type: array
+              items:
+                $ref: "#/components/schemas/MusicPlaylistTrack"
+    AddMusicPlaylistTracksRequest:
+      type: object
+      required: [trackIds]
+      properties:
+        trackIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 100
+    AddMusicPlaylistTracksResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [added]
+          properties:
+            added:
+              type: integer
+    MusicSyncResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [result]
+          properties:
+            result:
+              type: object
+              required: [tracksUpserted, historyInserted, candidatesDiscovered, recommendationsGenerated]
+              properties:
+                tracksUpserted:
+                  type: integer
+                historyInserted:
+                  type: integer
+                candidatesDiscovered:
+                  type: integer
+                recommendationsGenerated:
+                  type: integer
     SpeechRequest:
       type: object
       required: [text]

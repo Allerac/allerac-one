@@ -1,0 +1,15 @@
+meta {
+  name: Get Recently Played
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/music/recently-played?limit=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import pool from '@/app/clients/db';
 import { requireApiUser } from '../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../_lib/responses';
+import { applyActivityCorrection } from '@/app/services/health/activity-corrections';
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
@@ -29,7 +30,12 @@ export async function GET(request: Request): Promise<Response> {
           [user.id, limit],
         );
 
-    return apiData({ activities: res.rows });
+    return apiData({
+      activities: res.rows.map((row: Record<string, unknown>) => ({
+        ...row,
+        ...applyActivityCorrection(row),
+      })),
+    });
   } catch (error: unknown) {
     const authError = apiAuthError(error);
     if (authError) return authError;

@@ -147,6 +147,11 @@ export class WorkerRunnerService {
 
       const modelProvider = (run.llm_provider as any) || 'ollama';
       const modelName = run.llm_model || 'qwen2.5:3b';
+      console.log(
+        `[WorkerRunner] ${tag} Model: ${modelProvider}/${modelName}`
+        + ` · domain=${run.domain_slug || 'unknown'}`
+        + (run.parent_run_id ? ` · continuation=${run.parent_run_id.substring(0, 8)}` : ''),
+      );
 
       const modelBaseUrl =
         modelProvider === 'ollama'
@@ -303,7 +308,9 @@ export class WorkerRunnerService {
       isAdmin: settings.is_admin,
     };
 
-    await this.repository.updateWorkerStatus(workerId, 'running', { progress_log: 'Starting skill run...' });
+    await this.repository.updateWorkerStatus(workerId, 'running', {
+      progress_log: `model:${modelProvider}/${modelName}\n\nStarting skill run...`,
+    });
 
     try {
       const result = await this.withTimeout(
@@ -357,7 +364,9 @@ export class WorkerRunnerService {
     isCancelled: () => Promise<boolean>
   ): Promise<Array<{ workerId: string; name: string; task: string; result: string; success: boolean }>> {
     const promises = workerSpecs.map(async (spec) => {
-      await this.repository.updateWorkerStatus(spec.id, 'running', { progress_log: 'Starting...' });
+      await this.repository.updateWorkerStatus(spec.id, 'running', {
+        progress_log: `model:${modelProvider}/${modelName}\n\nStarting...`,
+      });
 
       const workerHeartbeat = setInterval(() => {
         this.repository.appendWorkerProgress(spec.id, 'heartbeat').catch(() => {});

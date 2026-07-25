@@ -1,0 +1,29 @@
+meta {
+  name: Create Playlist
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/music/playlists
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "name": "Control API smoke test"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.playlist?.id) {
+    bru.setEnvVar("playlistId", body.data.playlist.id);
+  }
+}

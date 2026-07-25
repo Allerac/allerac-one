@@ -15,6 +15,7 @@ const DOMAINS_ALL = [
   { id: 'recipes', label: 'Recipes', icon: '🍳', path: '/recipes',  desc: 'Chef & nutrition' },
   { id: 'finance', label: 'Finance', icon: '💰', path: '/finance',  desc: 'Financial advisor' },
   { id: 'health',  label: 'Health',  icon: '❤️', path: '/health',   desc: 'Health & wellness' },
+  { id: 'music',   label: 'Music',   icon: '🎵', path: '/music',    desc: 'Spotify-based music recommendations' },
   { id: 'write',   label: 'Content', icon: '✍️', path: '/write',    desc: 'Content creator' },
   { id: 'social',  label: 'Social',  icon: '📸', path: '/social',   desc: 'Instagram manager' },
   { id: 'tickets', label: 'Tickets', icon: '🎫', path: '/tickets',  desc: 'Bug tracker & tasks' },

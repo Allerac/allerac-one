@@ -24,6 +24,8 @@ interface AgentRunStatus {
   result: string | null;
   error: string | null;
   progressLog: string | null;
+  model: string | null;
+  provider: string | null;
 }
 
 // ─── theme ───────────────────────────────────────────────────────────────────
@@ -234,6 +236,7 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
   const [form, setForm] = useState<NewTicketForm>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [agentFollowUp, setAgentFollowUp] = useState('');
   const [isDark, setIsDark] = useState(true);
   const [agentRuns, setAgentRuns] = useState<Map<string, AgentRunStatus>>(new Map());
   const [prStatuses, setPrStatuses] = useState<Map<number, { status: 'open'|'merged'|'closed'; title?: string }>> (new Map());
@@ -317,10 +320,12 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
           : null;
         const run: AgentRunStatus = {
           runId,
-          status: data.cancelled_at ? 'cancelled' : data.status,
+          status: data.cancelledAt ? 'cancelled' : data.status,
           result: data.result ?? null,
           error: data.error ?? null,
           progressLog: workerLog,
+          model: data.model ?? null,
+          provider: data.provider ?? null,
         };
         setAgentRuns(prev => new Map(prev).set(ticketId, run));
         if (workerLog) {
@@ -403,6 +408,7 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
           model: selectedModel,
           provider,
           skillName,
+          domain: 'tickets',
         }),
       });
       const { runId } = await agentRes.json();
@@ -423,7 +429,10 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
 
       // 3. Start polling
       if (runId) {
-        setAgentRuns(prev => new Map(prev).set(ticket.id, { runId, status: 'pending', result: null, error: null, progressLog: null }));
+        setAgentRuns(prev => new Map(prev).set(ticket.id, {
+          runId, status: 'pending', result: null, error: null, progressLog: null,
+          model: null, provider: null,
+        }));
         pollAgentRun(ticket.id, runId);
       }
     } finally {
@@ -453,6 +462,7 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
           model: selectedModel,
           provider,
           skillName,
+          domain: 'tickets',
         }),
       });
       const { runId } = await agentRes.json();
@@ -471,9 +481,61 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
       setSelected(data.ticket);
 
       if (runId) {
-        setAgentRuns(prev => new Map(prev).set(ticket.id, { runId, status: 'pending', result: null, error: null, progressLog: null }));
+        setAgentRuns(prev => new Map(prev).set(ticket.id, {
+          runId, status: 'pending', result: null, error: null, progressLog: null,
+          model: null, provider: null,
+        }));
         pollAgentRun(ticket.id, runId);
       }
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function continueTicketAgent(ticket: Ticket) {
+    const previous = agentRuns.get(ticket.id);
+    const followUp = agentFollowUp.trim();
+    if (!previous || !followUp) return;
+    setActionLoading(true);
+    try {
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: followUp,
+          conversationId: null,
+          model: selectedModel,
+          provider: MODELS.find(m => m.id === selectedModel)?.provider || 'ollama',
+          domain: 'tickets',
+          parentRunId: previous.runId,
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to continue agent run');
+      const { runId, model, provider } = await response.json();
+
+      const patchRes = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'in_progress',
+          assignedToType: 'agent',
+          contextPatch: { agentRunId: runId, previousAgentRunId: previous.runId },
+        }),
+      });
+      const data = await patchRes.json();
+      setTickets(prev => prev.map(tk => tk.id === ticket.id ? data.ticket : tk));
+      setSelected(data.ticket);
+      setAgentFollowUp('');
+      setAgentRuns(prev => new Map(prev).set(ticket.id, {
+        runId,
+        status: 'pending',
+        result: null,
+        error: null,
+        progressLog: null,
+        model: model ?? null,
+        provider: provider ?? null,
+      }));
+      pollAgentRun(ticket.id, runId);
     } finally {
       setActionLoading(false);
     }
@@ -853,7 +915,14 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
                 })()}
                 <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, color: t.textFaint, textTransform: 'uppercase', letterSpacing: 1 }}>Agent Run</span>
+                    <div>
+                      <div style={{ fontSize: 11, color: t.textFaint, textTransform: 'uppercase', letterSpacing: 1 }}>Agent Run</div>
+                      {(run.provider || run.model) && (
+                        <div style={{ fontSize: 10, color: t.textGhost, marginTop: 3, fontFamily: 'monospace' }}>
+                          {run.provider}/{run.model}
+                        </div>
+                      )}
+                    </div>
                     <span style={{ fontSize: 11, color: statusColors[run.status] ?? t.textMuted, fontWeight: 600 }}>
                       {!isDone && '⟳ '}{run.status.toUpperCase()}
                     </span>
@@ -901,6 +970,33 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
 
                   {run.error && (
                     <div style={{ fontSize: 11, color: '#ff5555', marginBottom: 8 }}>{run.error}</div>
+                  )}
+                  {isDone && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
+                      <textarea
+                        value={agentFollowUp}
+                        onChange={event => setAgentFollowUp(event.target.value)}
+                        placeholder="Tell the agent what to clarify or continue..."
+                        rows={3}
+                        style={{
+                          width: '100%', resize: 'vertical', boxSizing: 'border-box',
+                          background: t.bg, color: t.text, border: `1px solid ${t.borderLight}`,
+                          borderRadius: 6, padding: '8px 10px', fontSize: 11, marginBottom: 8,
+                        }}
+                      />
+                      <button
+                        disabled={actionLoading || !agentFollowUp.trim()}
+                        onClick={() => continueTicketAgent(selected)}
+                        style={{
+                          width: '100%', padding: '7px 0', borderRadius: 6, border: 'none',
+                          background: t.btnStart, color: '#fff',
+                          cursor: actionLoading || !agentFollowUp.trim() ? 'not-allowed' : 'pointer',
+                          opacity: actionLoading || !agentFollowUp.trim() ? 0.5 : 1, fontSize: 12,
+                        }}
+                      >
+                        Continue with agent
+                      </button>
+                    </div>
                   )}
                   <a href="/logs" style={{ fontSize: 11, color: t.selectedBorder, textDecoration: 'none' }}>
                     Ver logs completos →

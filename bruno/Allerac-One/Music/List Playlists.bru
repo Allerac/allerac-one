@@ -1,0 +1,15 @@
+meta {
+  name: List Playlists
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/music/playlists
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
