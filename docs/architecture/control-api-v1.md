@@ -220,6 +220,7 @@ Suggested first scopes:
 | `jobs:read` / `jobs:write` | List/manage/run scheduled jobs |
 | `skills:read` / `skills:write` | List/manage skills |
 | `health:read` | Read Garmin-backed health data |
+| `health:write` | Correct activity exercises locally and in Garmin Connect |
 | `search:read` | Run configured web search |
 | `email:read` / `email:write` | Read/send through owned email accounts |
 | `finance:read` / `finance:write` | Read market data and manage watchlist |

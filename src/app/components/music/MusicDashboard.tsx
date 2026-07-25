@@ -43,9 +43,9 @@ export default function MusicDashboard({ isDarkMode: d, onViewChange }: Props) {
 
   const loadData = useCallback(async () => {
     const [recs, top, recent] = await Promise.all([
-      musicActions.getRecommendations(30),
-      musicActions.getTopTracks('top_medium', 20),
-      musicActions.getRecentlyPlayed(20),
+      musicActions.getRecommendations(100),
+      musicActions.getTopTracks('top_medium', 100),
+      musicActions.getRecentlyPlayed(50),
     ]);
     setRecommendations(recs);
     setTopTracks(top);
@@ -154,7 +154,44 @@ export default function MusicDashboard({ isDarkMode: d, onViewChange }: Props) {
           </p>
         )}
         {!status?.configured ? (
-          <span className={`text-sm ${d ? 'text-gray-500' : 'text-gray-400'}`}>Spotify integration not configured.</span>
+          <div className={`w-full max-w-md rounded-lg border p-4 text-left text-sm ${d ? 'border-gray-700 bg-gray-800/50 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
+            <p className={`font-semibold mb-3 ${d ? 'text-gray-100' : 'text-gray-900'}`}>Spotify isn&apos;t configured on this server yet</p>
+            <ol className="list-decimal list-inside space-y-2.5">
+              <li>
+                Create an app at{' '}
+                <a
+                  href="https://developer.spotify.com/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#1DB954] hover:underline"
+                >
+                  developer.spotify.com/dashboard
+                </a>.
+              </li>
+              <li>
+                In the app&apos;s settings, add this exact Redirect URI:
+                <code className={`block mt-1 px-2 py-1 rounded text-xs break-all ${d ? 'bg-gray-900 text-gray-200' : 'bg-white text-gray-800'}`}>
+                  https://your-domain/api/spotify/callback
+                </code>
+              </li>
+              <li>Copy the app&apos;s Client ID and Client Secret from its settings.</li>
+              <li>
+                Add these to the server&apos;s <code className="text-xs">.env</code> file:
+                <code className={`block mt-1 px-2 py-1 rounded text-xs whitespace-pre-wrap break-all ${d ? 'bg-gray-900 text-gray-200' : 'bg-white text-gray-800'}`}>
+{`SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+SPOTIFY_REDIRECT_URI=https://your-domain/api/spotify/callback`}
+                </code>
+              </li>
+              <li>
+                Recreate the app container so it picks up the new variables:
+                <code className={`block mt-1 px-2 py-1 rounded text-xs ${d ? 'bg-gray-900 text-gray-200' : 'bg-white text-gray-800'}`}>
+                  docker compose up -d app
+                </code>
+              </li>
+            </ol>
+            <p className={`text-xs mt-3 ${d ? 'text-gray-500' : 'text-gray-500'}`}>Then refresh this page.</p>
+          </div>
         ) : (
           <a
             href="/api/spotify/auth"
@@ -237,7 +274,7 @@ export default function MusicDashboard({ isDarkMode: d, onViewChange }: Props) {
             <EmptyState dark={d} message="No recommendations yet — click Sync Now to generate them." />
           ) : (
             <div className="space-y-2">
-              {recommendations.map((r) => (
+              {recommendations.map((r, i) => (
                 <TrackRow
                   key={r.track_id}
                   dark={d}
@@ -247,6 +284,7 @@ export default function MusicDashboard({ isDarkMode: d, onViewChange }: Props) {
                   externalUrl={r.external_url}
                   subtitle={r.reason || undefined}
                   score={r.score}
+                  rank={i + 1}
                   trackId={r.track_id}
                   canAddToPlaylist={hasPlaylistWriteScope}
                   playlists={playlists}
@@ -271,7 +309,7 @@ export default function MusicDashboard({ isDarkMode: d, onViewChange }: Props) {
                   image={t.album_image_url}
                   name={t.name}
                   artists={t.artists}
-                  rank={t.rank ?? i + 1}
+                  rank={typeof t.rank === 'number' ? t.rank + 1 : i + 1}
                   externalUrl={t.external_url}
                   trackId={t.track_id}
                   canAddToPlaylist={hasPlaylistWriteScope}
@@ -299,6 +337,7 @@ export default function MusicDashboard({ isDarkMode: d, onViewChange }: Props) {
                   artists={t.artists}
                   subtitle={t.played_at ? new Date(t.played_at).toLocaleString() : undefined}
                   externalUrl={t.external_url}
+                  rank={i + 1}
                   trackId={t.track_id}
                   canAddToPlaylist={hasPlaylistWriteScope}
                   playlists={playlists}
@@ -367,9 +406,9 @@ function TrackRow({
     <div className="flex items-center gap-3 min-w-0 flex-1">
       {image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
+        <img src={image} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />
       ) : (
-        <div className={`w-10 h-10 rounded flex-shrink-0 flex items-center justify-center text-lg ${d ? 'bg-gray-800' : 'bg-gray-100'}`}>🎵</div>
+        <div className={`w-12 h-12 rounded flex-shrink-0 flex items-center justify-center text-2xl ${d ? 'bg-gray-800' : 'bg-gray-100'}`}>🎵</div>
       )}
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium truncate ${d ? 'text-gray-100' : 'text-gray-900'}`}>{name}</p>
@@ -384,7 +423,7 @@ function TrackRow({
   return (
     <div className={`flex items-center gap-3 p-2 rounded-lg ${d ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
       {typeof rank === 'number' && (
-        <span className={`w-5 text-right text-sm font-medium flex-shrink-0 ${d ? 'text-gray-500' : 'text-gray-400'}`}>{rank}</span>
+        <span className={`w-6 text-right text-sm font-medium flex-shrink-0 ${d ? 'text-gray-500' : 'text-gray-400'}`}>{rank}</span>
       )}
       {externalUrl ? (
         <a href={externalUrl} target="_blank" rel="noopener noreferrer" className="flex items-center min-w-0 flex-1">
@@ -464,9 +503,9 @@ function PlaylistRow({
         <span className={`flex-shrink-0 text-xs w-3 transition-transform ${expanded ? 'rotate-90' : ''} ${d ? 'text-gray-500' : 'text-gray-400'}`}>▸</span>
         {playlist.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={playlist.imageUrl} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
+          <img src={playlist.imageUrl} alt="" className="w-14 h-14 rounded object-cover flex-shrink-0" />
         ) : (
-          <div className={`w-10 h-10 rounded flex-shrink-0 flex items-center justify-center text-lg ${d ? 'bg-gray-800' : 'bg-gray-100'}`}>🎵</div>
+          <div className={`w-14 h-14 rounded flex-shrink-0 flex items-center justify-center text-3xl ${d ? 'bg-gray-800' : 'bg-gray-100'}`}>🎵</div>
         )}
         <div className="min-w-0 flex-1">
           <p className={`text-sm font-medium truncate ${d ? 'text-gray-100' : 'text-gray-900'}`}>{playlist.name}</p>

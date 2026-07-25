@@ -2,6 +2,7 @@
 // Used by the AI in conversations to surface Garmin health data.
 
 import pool from '@/app/clients/db';
+import { applyActivityCorrection } from '@/app/services/health/activity-corrections';
 
 export interface HealthUser {
   id: string;
@@ -131,9 +132,7 @@ async function getActivitiesFromDatabase(
   );
 
   return result.rows.map((row: any) => ({
-    ...(row.raw_data
-      ? (typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data)
-      : {}),
+    ...applyActivityCorrection(row),
     activityId: row.activity_id,
     activityName: row.activity_name,
     activityType: row.activity_type,

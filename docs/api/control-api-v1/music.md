@@ -102,7 +102,7 @@ Query parameters:
 | Field | Type | Required | Notes |
 |---|---|---:|---|
 | `period` | `top_short`, `top_medium`, `top_long` | No | Defaults to `top_medium` |
-| `limit` | number | No | Default 20, max 50 |
+| `limit` | number | No | Default 20, max 100 |
 
 ```bash
 curl -s \

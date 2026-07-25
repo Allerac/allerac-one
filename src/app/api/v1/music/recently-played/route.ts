@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import pool from '@/app/clients/db';
 import { requireApiUser } from '../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../_lib/responses';
+import { queryRecentlyPlayed } from '@/app/services/spotify/spotify-query.service';
 
 const querySchema = z.object({
   limit: z.coerce.number().int().positive().max(50).optional(),
@@ -14,20 +14,11 @@ export async function GET(request: Request): Promise<Response> {
     if (!parsed.success) {
       return apiError('validation_error', 'Invalid query', 400, parsed.error.flatten());
     }
-    const limit = Math.min(parsed.data.limit ?? 20, 50);
 
-    const res = await pool.query(
-      `SELECT lh.track_id, st.name, st.artists, st.album_image_url, st.external_url, lh.played_at
-       FROM spotify_listening_history lh
-       JOIN spotify_tracks st ON st.id = lh.track_id
-       WHERE lh.user_id = $1 AND lh.source = 'recently_played'
-       ORDER BY lh.played_at DESC NULLS LAST
-       LIMIT $2`,
-      [user.id, limit],
-    );
+    const rows = await queryRecentlyPlayed(user.id, parsed.data.limit ?? 20);
 
     return apiData({
-      tracks: res.rows.map((r) => ({
+      tracks: rows.map((r) => ({
         trackId: r.track_id,
         name: r.name,
         artists: r.artists,

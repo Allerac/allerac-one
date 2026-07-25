@@ -54,12 +54,15 @@ function makePendingRun(overrides?: Partial<AgentRunRecord>): AgentRunRecord {
     llm_model: null,
     llm_provider: null,
     skill_id: null,
+    parent_run_id: null,
+    domain_slug: 'tickets',
     ...overrides,
   };
 }
 
 const defaultSettings = {
   github_token: 'gh_token',
+  github_repo_token: 'repo_token',
   tavily_api_key: 'tv_key',
   google_api_key: 'g_key',
   anthropic_api_key: 'anth_key',
@@ -143,6 +146,25 @@ describe('WorkerRunnerService', () => {
       await service.start();
       expect(service.isRunning()).toBe(true);
     });
+  });
+
+  it('logs the effective provider and model for a run', async () => {
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    repo.claimPendingRun
+      .mockResolvedValueOnce(makePendingRun({
+        llm_provider: 'ollama',
+        llm_model: 'qwen2.5:3b',
+      }))
+      .mockResolvedValue(null);
+
+    await service.start();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    service.stop();
+
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining('Model: ollama/qwen2.5:3b · domain=tickets'),
+    );
+    log.mockRestore();
   });
 
   describe('getActiveRunCount()', () => {

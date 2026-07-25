@@ -124,12 +124,24 @@ interface HistoryEntry {
 async function insertHistory(userId: string, entries: HistoryEntry[]): Promise<number> {
   let inserted = 0;
   for (const entry of entries) {
-    const res = await pool.query(
-      `INSERT INTO spotify_listening_history (user_id, track_id, played_at, source, rank, playlist_name)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (user_id, track_id, source, played_at) DO NOTHING`,
-      [userId, entry.trackId, entry.playedAt, entry.source, entry.rank, entry.playlistName ?? null],
-    );
+    // Top-tracks windows (top_short/top_medium/top_long) have no played_at —
+    // they're a ranked snapshot, not a timestamped event — so re-syncing
+    // must update the existing row's rank in place rather than insert a new
+    // one (NULL played_at never matches itself under the general unique key).
+    const res = entry.playedAt === null
+      ? await pool.query(
+          `INSERT INTO spotify_listening_history (user_id, track_id, played_at, source, rank, playlist_name)
+           VALUES ($1, $2, NULL, $3, $4, NULL)
+           ON CONFLICT (user_id, track_id, source) WHERE played_at IS NULL
+           DO UPDATE SET rank = EXCLUDED.rank`,
+          [userId, entry.trackId, entry.source, entry.rank],
+        )
+      : await pool.query(
+          `INSERT INTO spotify_listening_history (user_id, track_id, played_at, source, rank, playlist_name)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (user_id, track_id, source, played_at) DO NOTHING`,
+          [userId, entry.trackId, entry.playedAt, entry.source, entry.rank, entry.playlistName ?? null],
+        );
     inserted += res.rowCount ?? 0;
   }
   return inserted;
@@ -153,7 +165,11 @@ async function discoverCandidates(
         for (const track of tracks) {
           if (seen.has(track.id)) continue;
           seen.add(track.id);
-          candidates.push({ ...track, albumName: track.albumName ?? album.name });
+          candidates.push({
+            ...track,
+            albumName: track.albumName ?? album.name,
+            albumImageUrl: track.albumImageUrl ?? album.imageUrl,
+          });
         }
       }
     } catch (error) {
@@ -170,7 +186,7 @@ export async function runSpotifySync(userId: string): Promise<SpotifySyncResult>
 
   const [recentlyPlayed, topTracksByWindow, topArtistsByWindow] = await Promise.all([
     api.getRecentlyPlayed(accessToken, 50),
-    Promise.all(TOP_WINDOWS.map((w) => api.getTopTracks(accessToken, w.range, 50))),
+    Promise.all(TOP_WINDOWS.map((w) => api.getTopTracks(accessToken, w.range, 100))),
     Promise.all(TOP_WINDOWS.map((w) => api.getTopArtists(accessToken, w.range, 20))),
   ]);
 

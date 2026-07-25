@@ -5,6 +5,7 @@
 import pool from '@/app/clients/db';
 import { SpotifyApiService } from '@/app/services/spotify/spotify-api.service';
 import { SpotifyCredentialsService } from '@/app/services/spotify/spotify-credentials.service';
+import { queryRecommendations, queryTopTracks, TopTracksPeriod } from '@/app/services/spotify/spotify-query.service';
 
 const api = new SpotifyApiService();
 const credentials = new SpotifyCredentialsService(api);
@@ -109,23 +110,15 @@ export class MusicTool {
       const connected = await this._isConnected(user.id);
       if (!connected) return { spotify_connected: false };
 
-      const res = await pool.query(
-        `SELECT sr.track_id, sr.score, sr.reason, st.name, st.artists, st.album_name, st.external_url
-         FROM spotify_recommendations sr
-         JOIN spotify_tracks st ON st.id = sr.track_id
-         WHERE sr.user_id = $1
-         ORDER BY sr.score DESC
-         LIMIT $2`,
-        [user.id, Math.min(limit, 50)],
-      );
+      const rows = await queryRecommendations(user.id, limit);
       return {
         spotify_connected: true,
-        recommendations: res.rows.map((r) => ({
+        recommendations: rows.map((r) => ({
           track_id: r.track_id,
           track_name: r.name,
           artists: formatArtists(r.artists),
           album: r.album_name,
-          score: Number(r.score),
+          score: r.score,
           reason: r.reason,
           spotify_url: r.external_url,
         })),
@@ -136,20 +129,12 @@ export class MusicTool {
   }
 
   async getTopTracks(user: MusicUser, period: string = 'medium'): Promise<TopTracksResult> {
-    const source = period === 'short' ? 'top_short' : period === 'long' ? 'top_long' : 'top_medium';
+    const source: TopTracksPeriod = period === 'short' ? 'top_short' : period === 'long' ? 'top_long' : 'top_medium';
     try {
-      const res = await pool.query(
-        `SELECT lh.track_id, lh.rank, st.name, st.artists
-         FROM spotify_listening_history lh
-         JOIN spotify_tracks st ON st.id = lh.track_id
-         WHERE lh.user_id = $1 AND lh.source = $2
-         ORDER BY lh.rank ASC NULLS LAST
-         LIMIT 20`,
-        [user.id, source],
-      );
+      const rows = await queryTopTracks(user.id, source, 20);
       return {
         period,
-        tracks: res.rows.map((r) => ({ track_id: r.track_id, rank: r.rank, track_name: r.name, artists: formatArtists(r.artists) })),
+        tracks: rows.map((r) => ({ track_id: r.track_id, rank: r.rank, track_name: r.name, artists: formatArtists(r.artists) })),
       };
     } catch (e: any) {
       return { period, error: e.message };

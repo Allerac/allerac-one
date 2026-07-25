@@ -4,6 +4,7 @@ import pool from '@/app/clients/db';
 import { requireCurrentUser } from '@/app/lib/auth-session';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { submitLog } from '@/lib/submit-log';
+import { applyActivityCorrection } from '@/app/services/health/activity-corrections';
 
 const WORKER_URL = (process.env.HEALTH_WORKER_URL || 'http://health-worker:8001').replace(/\/$/, '');
 const WORKER_SECRET = process.env.HEALTH_WORKER_SECRET || '';
@@ -251,8 +252,13 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
     if (allActivities.length > 0) {
       await _upsertActivities(userId, allActivities);
     }
+    const retriedCorrections = await _retryGarminExerciseCorrections(userId, sessionDump);
 
-    await submitLog('Health', `Sync complete: ${data.metrics.length} days + ${allActivities.length} activities synced`);
+    await submitLog(
+      'Health',
+      `Sync complete: ${data.metrics.length} days + ${allActivities.length} activities synced`
+      + `; ${retriedCorrections} exercise correction(s) retried`,
+    );
 
     await pool.query(
       `UPDATE health_sync_jobs SET status='completed', completed_at=NOW(), records_fetched=$2 WHERE id=$1`,
@@ -372,7 +378,7 @@ async function getActivitiesFromDB(userId: string, startDate: string, endDate: s
   );
   return res.rows.map((row: any) => {
     // Start with raw_data which has all the original fields
-    const rawData = row.raw_data ? (typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data) : {};
+    const rawData = applyActivityCorrection(row);
     return {
       // Spread raw data to get all original fields (including summarizedExerciseSets, etc)
       ...rawData,
@@ -605,6 +611,48 @@ async function _upsertActivities(userId: string, activities: any[]) {
       ]
     );
   }
+}
+
+async function _retryGarminExerciseCorrections(userId: string, sessionDump: string): Promise<number> {
+  const pending = await pool.query(
+    `SELECT activity_id, corrected_exercise_sets
+     FROM health_activities
+     WHERE user_id = $1
+       AND garmin_sync_status IN ('pending', 'garmin_sync_failed')
+       AND garmin_sync_attempts < 3
+     ORDER BY correction_updated_at ASC
+     LIMIT 10`,
+    [userId],
+  );
+
+  for (const row of pending.rows) {
+    try {
+      await workerFetch('PUT', '/activities/exercise-sets', {
+        session_dump: sessionDump,
+        activity_id: row.activity_id,
+        exercise_sets: row.corrected_exercise_sets,
+      });
+      await pool.query(
+        `UPDATE health_activities
+         SET garmin_sync_status = 'synced',
+             garmin_sync_error = NULL,
+             garmin_sync_attempts = garmin_sync_attempts + 1,
+             updated_at = NOW()
+         WHERE user_id = $1 AND activity_id = $2`,
+        [userId, row.activity_id],
+      );
+    } catch (error: any) {
+      await pool.query(
+        `UPDATE health_activities
+         SET garmin_sync_error = $3,
+             garmin_sync_attempts = garmin_sync_attempts + 1,
+             updated_at = NOW()
+         WHERE user_id = $1 AND activity_id = $2`,
+        [userId, row.activity_id, String(error?.message ?? error).slice(0, 2000)],
+      );
+    }
+  }
+  return pending.rows.length;
 }
 
 async function _upsertMetrics(userId: string, metrics: any[]) {

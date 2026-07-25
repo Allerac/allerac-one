@@ -1,7 +1,11 @@
 'use server';
 
 import pool from '@/app/clients/db';
-import { requireCurrentUser } from '@/app/lib/auth-session';
+import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
+import {
+  domainModelSettingsService,
+  type DomainModelSettings,
+} from '@/app/services/domains/domain-model-settings.service';
 
 export async function getUserAccessibleDomains(): Promise<string[]> {
   try {
@@ -23,4 +27,17 @@ export async function getUserAccessibleDomains(): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+export async function getDomainModelSettings(domainSlug: string) {
+  const user = await requireCurrentUser();
+  await assertDomainAccess(user, domainSlug);
+  return domainModelSettingsService.get(user.id, domainSlug);
+}
+
+export async function saveDomainModelSettings(settings: DomainModelSettings) {
+  const user = await requireCurrentUser();
+  await assertDomainAccess(user, settings.domainSlug);
+  await domainModelSettingsService.set(user.id, settings);
+  return { success: true };
 }

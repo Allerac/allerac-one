@@ -64,6 +64,12 @@ class DailyHealthRequest(BaseModel):
     date: str  # YYYY-MM-DD format
 
 
+class UpdateExerciseSetsRequest(BaseModel):
+    session_dump: str
+    activity_id: str
+    exercise_sets: list[dict]
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -162,6 +168,24 @@ def daily_health(req: DailyHealthRequest, x_worker_secret: str = Header(...)):
     except Exception as e:
         logger.error(f"daily_health error: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@app.put("/activities/exercise-sets")
+def update_exercise_sets(
+    req: UpdateExerciseSetsRequest,
+    x_worker_secret: str = Header(...),
+):
+    """Updates a Garmin activity; persistence/fallback remains with allerac-one."""
+    _auth(x_worker_secret)
+    try:
+        return garmin_service.update_activity_exercise_sets(
+            req.session_dump,
+            req.activity_id,
+            req.exercise_sets,
+        )
+    except Exception as e:
+        logger.error(f"update exercise sets error: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
 
 @app.post("/debug-activities")

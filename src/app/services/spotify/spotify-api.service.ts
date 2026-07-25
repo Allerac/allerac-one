@@ -209,13 +209,24 @@ export class SpotifyApiService {
     }));
   }
 
-  async getTopTracks(accessToken: string, timeRange: TopTimeRange, limit = 50): Promise<SpotifyTrack[]> {
-    const response = await fetch(
-      `${SPOTIFY_API_URL}/me/top/tracks?time_range=${timeRange}&limit=${Math.min(limit, 50)}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    const body = await parseResponse<{ items: any[] }>(response, 'top tracks request');
-    return (body.items || []).map(mapTrack);
+  async getTopTracks(accessToken: string, timeRange: TopTimeRange, maxItems = 50): Promise<SpotifyTrack[]> {
+    // Spotify caps a single page at 50 but exposes deeper affinity data via
+    // offset pagination — page through it to support maxItems > 50.
+    const results: SpotifyTrack[] = [];
+    let offset = 0;
+    const pageSize = 50;
+    while (results.length < maxItems) {
+      const response = await fetch(
+        `${SPOTIFY_API_URL}/me/top/tracks?time_range=${timeRange}&limit=${pageSize}&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      const body = await parseResponse<{ items: any[]; next: string | null }>(response, 'top tracks request');
+      const items = body.items || [];
+      results.push(...items.map(mapTrack));
+      if (!body.next || items.length === 0) break;
+      offset += pageSize;
+    }
+    return results.slice(0, maxItems);
   }
 
   async getTopArtists(accessToken: string, timeRange: TopTimeRange, limit = 20): Promise<SpotifyArtist[]> {
@@ -370,13 +381,16 @@ export class SpotifyApiService {
     return results;
   }
 
-  async getArtistAlbums(accessToken: string, artistId: string, limit = 10): Promise<Array<{ id: string; name: string }>> {
+  async getArtistAlbums(accessToken: string, artistId: string, limit = 10): Promise<Array<{ id: string; name: string; imageUrl: string | null }>> {
     const response = await fetch(
       `${SPOTIFY_API_URL}/artists/${artistId}/albums?include_groups=album,single&limit=${Math.min(limit, 50)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
-    const body = await parseResponse<{ items: Array<{ id: string; name: string }> }>(response, 'artist albums request');
-    return body.items || [];
+    const body = await parseResponse<{ items: Array<{ id: string; name: string; images?: Array<{ url: string }> }> }>(
+      response,
+      'artist albums request',
+    );
+    return (body.items || []).map((a) => ({ id: a.id, name: a.name, imageUrl: a.images?.[0]?.url ?? null }));
   }
 
   async getAlbumTracks(accessToken: string, albumId: string, limit = 20): Promise<SpotifyTrack[]> {

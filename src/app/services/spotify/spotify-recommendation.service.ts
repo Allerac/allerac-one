@@ -8,7 +8,7 @@ import pool from '@/app/clients/db';
 
 const EMBEDDING_DIMENSION = 1536;
 const CANDIDATE_POOL_SIZE = 150;
-const RECOMMENDATION_COUNT = 30;
+const RECOMMENDATION_COUNT = 100;
 
 function parseVector(value: string | number[]): number[] {
   if (Array.isArray(value)) return value;
