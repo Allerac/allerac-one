@@ -40,9 +40,19 @@ const user = {
 };
 
 describe('Control API v1 health', () => {
+  const originalHealthWorkerSecret = process.env.HEALTH_WORKER_SECRET;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockRequireCurrentUser.mockResolvedValue(user);
+    // Set explicitly rather than relying on whatever .env happens to be
+    // loaded — the Garmin-sync tests below need this truthy to reach the
+    // mocked fetch() instead of short-circuiting on "not configured".
+    process.env.HEALTH_WORKER_SECRET = 'test-secret';
+  });
+
+  afterAll(() => {
+    process.env.HEALTH_WORKER_SECRET = originalHealthWorkerSecret;
   });
 
   it('returns 401 when unauthenticated', async () => {

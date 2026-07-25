@@ -4,9 +4,6 @@ import { safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { requireApiUser } from '../../../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../../../_lib/responses';
 
-const WORKER_URL = (process.env.HEALTH_WORKER_URL || 'http://health-worker:8001').replace(/\/$/, '');
-const WORKER_SECRET = process.env.HEALTH_WORKER_SECRET || '';
-
 const exerciseSchema = z.object({
   category: z.string().trim().min(1),
   name: z.string().trim().min(1).nullable().optional(),
@@ -28,12 +25,18 @@ const bodySchema = z.object({
 });
 
 async function updateGarmin(sessionDump: string, activityId: string, exerciseSets: unknown[]) {
-  if (!WORKER_SECRET) throw new Error('Health worker not configured');
-  const response = await fetch(`${WORKER_URL}/activities/exercise-sets`, {
+  // Read env vars at call time, not at module load — a module-level const
+  // freezes whatever value was present when this module first loaded, which
+  // made tests fragile (pass/fail depending on ambient .env state instead of
+  // what the test itself configures).
+  const workerUrl = (process.env.HEALTH_WORKER_URL || 'http://health-worker:8001').replace(/\/$/, '');
+  const workerSecret = process.env.HEALTH_WORKER_SECRET || '';
+  if (!workerSecret) throw new Error('Health worker not configured');
+  const response = await fetch(`${workerUrl}/activities/exercise-sets`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
-      'X-Worker-Secret': WORKER_SECRET,
+      'X-Worker-Secret': workerSecret,
     },
     body: JSON.stringify({
       session_dump: sessionDump,
