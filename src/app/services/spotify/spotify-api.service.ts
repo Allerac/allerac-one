@@ -2,6 +2,14 @@ const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 
+function assertValidSpotifyPlaylistId(playlistId: string): string {
+  const trimmed = playlistId.trim();
+  if (!trimmed || trimmed.length > 128 || !/^[A-Za-z0-9]+$/.test(trimmed)) {
+    throw new Error('Invalid Spotify playlist id');
+  }
+  return trimmed;
+}
+
 const SCOPES = [
   'user-read-email',
   'user-read-private',
@@ -322,11 +330,12 @@ export class SpotifyApiService {
   }
 
   async addTracksToPlaylist(accessToken: string, playlistId: string, trackIds: string[]): Promise<void> {
+    const validatedPlaylistId = assertValidSpotifyPlaylistId(playlistId);
     // Spotify retired POST /playlists/{id}/tracks in its Feb 2026 Web API
     // migration — /items is the replacement (request body shape is unchanged).
     for (let i = 0; i < trackIds.length; i += 100) {
       const batch = trackIds.slice(i, i + 100);
-      const response = await fetch(`${SPOTIFY_API_URL}/playlists/${playlistId}/items`, {
+      const response = await fetch(`${SPOTIFY_API_URL}/playlists/${validatedPlaylistId}/items`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -339,6 +348,7 @@ export class SpotifyApiService {
   }
 
   async getPlaylistTracks(accessToken: string, playlistId: string, maxItems = 50): Promise<PlaylistTrackItem[]> {
+    const validatedPlaylistId = assertValidSpotifyPlaylistId(playlistId);
     const results: PlaylistTrackItem[] = [];
     let offset = 0;
     const pageSize = 50;
@@ -346,7 +356,7 @@ export class SpotifyApiService {
       // GET /playlists/{id}/tracks was retired in the same migration — /items is
       // the replacement, and the per-entry "track" field is now "item".
       const response = await fetch(
-        `${SPOTIFY_API_URL}/playlists/${playlistId}/items?limit=${pageSize}&offset=${offset}&fields=items(added_at,item(id,name,artists,album,popularity,preview_url,external_urls)),next`,
+        `${SPOTIFY_API_URL}/playlists/${validatedPlaylistId}/items?limit=${pageSize}&offset=${offset}&fields=items(added_at,item(id,name,artists,album,popularity,preview_url,external_urls)),next`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       const body = await parseResponse<{ items: Array<{ item: any; added_at: string }>; next: string | null }>(
