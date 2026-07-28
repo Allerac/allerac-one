@@ -132,7 +132,7 @@ export default function EmailClient({ userId, userName, userEmail, isAdmin, defa
                         handleSendMessage={send} isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
-                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
+                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop} />
                     </div>
@@ -151,7 +151,7 @@ export default function EmailClient({ userId, userName, userEmail, isAdmin, defa
                         handleSendMessage={send} isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
-                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
+                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop} />
                     </div>

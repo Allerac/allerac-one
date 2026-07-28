@@ -8,7 +8,6 @@ import { useTheme } from '@/app/context/ThemeContext';
 import { updateLanguage } from '@/app/actions/user';
 import { getMyCreditBalance } from '@/app/actions/credits';
 import type { CreditBalance } from '@/app/services/credits/credit.service';
-import DomainSkillsModal from '@/app/components/hub/DomainSkillsModal';
 import { MODELS } from '@/app/services/llm/models';
 
 const LANGUAGES = [
@@ -37,7 +36,7 @@ const RAISED  = '#ffffff #808080 #808080 #ffffff';
 const SUNKEN  = '#808080 #ffffff #ffffff #808080';
 const TRAY_BG = '#c0c0c0';
 
-export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName, userEmail, isAdmin, allowedDomains, onLogout }: Props) {
+export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEmail, isAdmin, allowedDomains, onLogout }: Props) {
   const router = useRouter();
   const { isDark, toggleDark } = useTheme();
   const locale = useLocale();
@@ -50,7 +49,6 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
   const [creditLoading, setCreditLoading] = useState(false);
   const [creditLoadFailed, setCreditLoadFailed] = useState(false);
   const [openDomains, setOpenDomains] = useState<string[]>([]);
-  const [domainsModalOpen, setDomainsModalOpen] = useState(false);
   const [windowsOpen, setWindowsOpen]           = useState(false);
   const [isMobile, setIsMobile]                 = useState(false);
   const [currentModelId, setCurrentModelId]     = useState<string>('gemini-2.5-flash');
@@ -222,9 +220,9 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
                   <>
                     <div style={{ height: 1, background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
                     <StartMenuItem icon="📡" label="Monitor" onClick={() => { setStartOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
-                    <StartMenuItem icon="⚙️" label="Configuration" onClick={() => navigate('/config')} />
-                    <StartMenuItem icon="🌐" label="Domains" onClick={() => { setStartOpen(false); setDomainsModalOpen(true); }} />
-                    <StartMenuItem icon="🔧" label="Admin" onClick={() => navigate('/admin')} />
+                    <StartMenuItem icon="⚙️" label="Configuration" onClick={() => { setStartOpen(false); window.open('/config', 'allerac-config', 'width=900,height=700,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
+                    <StartMenuItem icon="🌐" label="Domains" onClick={() => { setStartOpen(false); window.open('/domains', 'allerac-domains', 'width=800,height=680,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
+                    <StartMenuItem icon="🔧" label="Admin" onClick={() => { setStartOpen(false); window.open('/admin', 'allerac-admin', 'width=1100,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
                     <div style={{ height: 1, background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
                     <StartMenuItem icon="🖥️" label="Desktop" onClick={() => navigate('/')} />
                   </>
@@ -470,13 +468,6 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userId, userName
         </div>
 
       </div>
-
-      <DomainSkillsModal
-        isOpen={domainsModalOpen}
-        onClose={() => setDomainsModalOpen(false)}
-        userId={userId}
-        isDarkMode={isDark}
-      />
 
     </>
   );

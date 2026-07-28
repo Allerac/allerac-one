@@ -76,7 +76,7 @@ Datasources provisioned automatically:
 
 ### Known operational issues
 
-- [Grafana SQLite I/O saturation incident](grafana-sqlite-io-incident.md) — open incident in which the Grafana process repeatedly locks and rereads its SQLite database, causing severe host disk contention. The document contains diagnosis commands, the temporary workaround, and the remaining investigation.
+- [Grafana SQLite I/O saturation incident](../../docs/monitoring/grafana-sqlite-io-incident.md) — root cause confirmed 2026-07-25: Grafana's SQLite backend contends with itself under the newer unified-storage subsystems, on a VM disk that can't sustain the read volume regardless. Recommended fix: migrate Grafana's metadata store to Postgres and pin the image version.
 
 ## Dashboards
 

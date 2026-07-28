@@ -413,7 +413,7 @@ services:
       - loki
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.1.1
     container_name: allerac-grafana
     restart: unless-stopped
     environment:
@@ -424,6 +424,17 @@ services:
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
       - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
       - GF_PLUGINS_PREINSTALL_DISABLED=true
+      # Moved off the bundled SQLite store: its background subsystems
+      # (secure-values cleanup, k8s-style dashboard resource cleanup, bleve
+      # search indexing) serialize through SQLite's single-writer lock and
+      # drove sustained 200-280 MB/s reads, saturating the host disk and
+      # blowing past CI deploy timeouts. See docs/monitoring/grafana-sqlite-io-incident.md.
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=db:5432
+      - GF_DATABASE_NAME=grafana
+      - GF_DATABASE_USER=${POSTGRES_USER:-postgres}
+      - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - GF_DATABASE_SSL_MODE=disable
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/monitoring/grafana/provisioning/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml
@@ -432,8 +443,12 @@ services:
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      db:
+        condition: service_healthy
     deploy:
       resources:
         limits:

@@ -1119,7 +1119,7 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
                 selectedModel={selectedModel}
                 setSelectedModel={setSelectedModel}
                 MODELS={MODELS}
-                githubConfigured={true} googleConfigured={true} ollamaConnected={true}
+                githubConfigured={true} googleConfigured={true} anthropicConfigured={true} ollamaConnected={true}
                 isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                 onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
               />
@@ -1148,7 +1148,7 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
                 selectedModel={selectedModel}
                 setSelectedModel={setSelectedModel}
                 MODELS={MODELS}
-                githubConfigured={true} googleConfigured={true} ollamaConnected={true}
+                githubConfigured={true} googleConfigured={true} anthropicConfigured={true} ollamaConnected={true}
                 isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                 onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
               />

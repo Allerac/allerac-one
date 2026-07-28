@@ -97,7 +97,7 @@ export default function ChannelsClient({ userId, userName, userEmail, isAdmin, d
           isSending={sending} githubToken={githubToken} isDarkMode={d}
           setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
           setSelectedModel={setSelectedModel} MODELS={MODELS}
-          githubConfigured googleConfigured ollamaConnected
+          githubConfigured googleConfigured anthropicConfigured ollamaConnected
           isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
           onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
         />
@@ -123,7 +123,7 @@ export default function ChannelsClient({ userId, userName, userEmail, isAdmin, d
           isSending={sending} githubToken={githubToken} isDarkMode={d}
           setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
           setSelectedModel={setSelectedModel} MODELS={MODELS}
-          githubConfigured googleConfigured ollamaConnected
+          githubConfigured googleConfigured anthropicConfigured ollamaConnected
           isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
           onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
         />

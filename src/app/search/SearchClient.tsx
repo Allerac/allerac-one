@@ -319,7 +319,7 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
                         handleSendMessage={send} isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
-                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
+                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} />
                     </div>
@@ -338,7 +338,7 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
                         handleSendMessage={send} isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
-                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
+                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} />
                     </div>
