@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { ExpenseInvoice, ExpenseStatus } from '@/app/actions/expenses';
+import type { ExpenseInvoice, ExpenseStatus, RecurrenceInterval } from '@/app/actions/expenses';
 
 interface Props {
   expenses: ExpenseInvoice[];
@@ -29,6 +29,17 @@ interface PredictedEntry {
   day: number;
 }
 
+/** Steps a date forward by one billing cycle, clamping the day so e.g. a Jan 31
+ * monthly invoice lands on Feb 28/29 instead of silently overflowing into March. */
+function addInterval(date: Date, interval: RecurrenceInterval): Date {
+  if (interval === 'weekly') return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7);
+  const monthsToAdd = interval === 'monthly' ? 1 : interval === 'quarterly' ? 3 : 12;
+  const targetYear = date.getFullYear();
+  const targetMonth = date.getMonth() + monthsToAdd;
+  const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  return new Date(targetYear, targetMonth, Math.min(date.getDate(), daysInTargetMonth));
+}
+
 export default function ExpenseCalendar({ expenses, isDarkMode: d }: Props) {
   const today = new Date();
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -51,23 +62,37 @@ export default function ExpenseCalendar({ expenses, isDarkMode: d }: Props) {
 
   const predictedByDay = new Map<number, PredictedEntry[]>();
   if (isCurrentOrFutureMonth) {
-    const lastInvoiceByProvider = new Map<string, string>(); // provider -> latest invoice_date
+    // A provider can have more than one recurring charge landing on different
+    // days (e.g. two separate subscriptions under the same name) — group by
+    // provider + day-of-month so each charge gets tracked and predicted on its own.
+    interface StreamInfo { provider: string; date: string; interval: RecurrenceInterval }
+    const streams = new Map<string, StreamInfo>();
     for (const expense of expenses) {
-      const current = lastInvoiceByProvider.get(expense.provider);
-      if (!current || expense.invoice_date > current) lastInvoiceByProvider.set(expense.provider, expense.invoice_date);
+      if (!expense.is_recurring || !expense.recurrence_interval) continue;
+      const day = Number(expense.invoice_date.slice(8, 10));
+      const key = `${expense.provider}__${day}`;
+      const current = streams.get(key);
+      if (!current || expense.invoice_date > current.date) {
+        streams.set(key, { provider: expense.provider, date: expense.invoice_date, interval: expense.recurrence_interval });
+      }
     }
 
-    for (const [provider, lastDateStr] of lastInvoiceByProvider) {
-      const [lastY, lastM, lastD] = lastDateStr.split('-').map(Number);
-      const isAfterLastInvoiceMonth = year > lastY || (year === lastY && month + 1 > lastM);
-      if (!isAfterLastInvoiceMonth) continue;
-
-      const alreadyHasInvoiceThisMonth = expenses.some(e => e.provider === provider && e.invoice_date.slice(0, 7) === `${year}-${String(month + 1).padStart(2, '0')}`);
-      if (alreadyHasInvoiceThisMonth) continue;
-
-      const day = Math.min(lastD, daysInMonth);
-      if (!predictedByDay.has(day)) predictedByDay.set(day, []);
-      predictedByDay.get(day)!.push({ provider, day });
+    for (const info of streams.values()) {
+      const [lastY, lastM, lastD] = info.date.split('-').map(Number);
+      let candidate = new Date(lastY, lastM - 1, lastD);
+      for (let step = 0; step < 60; step++) {
+        candidate = addInterval(candidate, info.interval);
+        if (candidate.getFullYear() > year || (candidate.getFullYear() === year && candidate.getMonth() > month)) break;
+        if (candidate.getFullYear() === year && candidate.getMonth() === month) {
+          const day = candidate.getDate();
+          const hasActualThisDay = (actualByDay.get(day) ?? []).some(e => e.provider === info.provider);
+          if (!hasActualThisDay) {
+            if (!predictedByDay.has(day)) predictedByDay.set(day, []);
+            predictedByDay.get(day)!.push({ provider: info.provider, day });
+          }
+          break;
+        }
+      }
     }
   }
 
@@ -79,8 +104,23 @@ export default function ExpenseCalendar({ expenses, isDarkMode: d }: Props) {
 
   const isToday = (day: number) => year === today.getFullYear() && month === today.getMonth() && day === today.getDate();
 
+  const monthInvoices = expenses
+    .filter(e => {
+      const [y, m] = e.invoice_date.split('-').map(Number);
+      return y === year && m === month + 1;
+    })
+    .sort((a, b) => a.invoice_date.localeCompare(b.invoice_date));
+
+  const monthTotalsByCurrency = new Map<string, number>();
+  for (const e of monthInvoices) monthTotalsByCurrency.set(e.currency, (monthTotalsByCurrency.get(e.currency) ?? 0) + Number(e.amount));
+
+  const textMuted = d ? 'text-gray-400' : 'text-gray-500';
+  const text = d ? 'text-gray-100' : 'text-gray-900';
+  const cardCls = `border rounded-lg p-4 ${d ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`;
+
   return (
-    <div className={`border rounded-lg p-4 ${d ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] items-start">
+    <div className={cardCls}>
       <div className="flex items-center justify-between mb-3">
         <p className={`text-sm font-semibold ${d ? 'text-gray-200' : 'text-gray-800'}`}>
           {cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
@@ -134,9 +174,9 @@ export default function ExpenseCalendar({ expenses, isDarkMode: d }: Props) {
                 {actual.length > 2 && (
                   <p className={`text-[9px] ${d ? 'text-gray-500' : 'text-gray-400'}`}>+{actual.length - 2} more</p>
                 )}
-                {predicted.map(p => (
+                {predicted.map((p, i) => (
                   <div
-                    key={p.provider}
+                    key={`${p.provider}-${i}`}
                     className={`flex items-center gap-1 rounded px-1 py-0.5 border border-dashed ${d ? 'border-gray-600 text-gray-500' : 'border-gray-300 text-gray-400'}`}
                     title={`Expected: ${p.provider} (based on past invoices)`}
                   >
@@ -155,6 +195,38 @@ export default function ExpenseCalendar({ expenses, isDarkMode: d }: Props) {
         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Overdue</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded border border-dashed border-gray-400" /> Expected</span>
       </div>
+    </div>
+
+    <div className={cardCls}>
+      <p className={`text-sm font-semibold mb-3 ${text}`}>
+        {cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+      </p>
+      {monthInvoices.length === 0 ? (
+        <p className={`text-sm ${textMuted}`}>No invoices this month.</p>
+      ) : (
+        <>
+          <div className="space-y-1.5">
+            {monthInvoices.map(expense => (
+              <div key={expense.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className={`font-mono text-xs shrink-0 ${textMuted}`}>{expense.invoice_date.slice(8, 10)}</span>
+                  <span className={`truncate ${text}`}>{expense.provider}</span>
+                </span>
+                <span className={`font-medium shrink-0 text-xs ${text}`}>{expense.currency} {Number(expense.amount).toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+          <div className={`mt-3 pt-3 border-t space-y-1 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+            {Array.from(monthTotalsByCurrency.entries()).map(([currency, total]) => (
+              <div key={currency} className="flex items-center justify-between text-sm font-semibold">
+                <span className={textMuted}>Total {currency}</span>
+                <span className={text}>{currency} {total.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
     </div>
   );
 }
