@@ -82,6 +82,8 @@ const STATUS_LABEL: Record<ExpenseStatus, string> = {
   cancelled: 'Cancelled',
 };
 
+const UNTAGGED_FILTER = '__untagged__';
+
 export default function ExpensesClient({ initialExpenses }: ExpensesClientProps) {
   const { isDark: isDarkMode, toggleDark } = useTheme();
   const d = isDarkMode;
@@ -98,6 +100,32 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
     () => Array.from(new Set(expenses.map(e => e.tag).filter((t): t is string => !!t))).sort(),
     [expenses]
   );
+  const monthOptions = useMemo(() => {
+    const months = Array.from(new Set(expenses.map(e => e.invoice_date.slice(0, 7)))).sort().reverse();
+    return months.map(monthKey => {
+      const [year, month] = monthKey.split('-').map(Number);
+      const label = new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      return { value: monthKey, label };
+    });
+  }, [expenses]);
+
+  const [filterProvider, setFilterProvider] = useState('');
+  const [filterTag, setFilterTag] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterStatus, setFilterStatus] = useState<ExpenseStatus | ''>('');
+  const hasActiveFilters = !!(filterProvider || filterTag || filterMonth || filterStatus);
+  const clearFilters = () => {
+    setFilterProvider('');
+    setFilterTag('');
+    setFilterMonth('');
+    setFilterStatus('');
+  };
+  const filteredExpenses = expenses.filter(e => (
+    (!filterProvider || e.provider === filterProvider)
+    && (!filterTag || (filterTag === UNTAGGED_FILTER ? !e.tag : e.tag === filterTag))
+    && (!filterMonth || e.invoice_date.slice(0, 7) === filterMonth)
+    && (!filterStatus || e.status === filterStatus)
+  ));
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createValues, setCreateValues] = useState<FormValues>(EMPTY_FORM);
@@ -295,12 +323,75 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
               </button>
             </div>
 
+            {/* Filters */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              <div>
+                <label className={labelCls}>Provider</label>
+                <select
+                  value={filterProvider}
+                  onChange={e => setFilterProvider(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">All providers</option>
+                  {providerSuggestions.map(provider => <option key={provider} value={provider}>{provider}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Tag</label>
+                <select
+                  value={filterTag}
+                  onChange={e => setFilterTag(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">All tags</option>
+                  <option value={UNTAGGED_FILTER}>Untagged</option>
+                  {tagSuggestions.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Month</label>
+                <select
+                  value={filterMonth}
+                  onChange={e => setFilterMonth(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">All months</option>
+                  {monthOptions.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Status</label>
+                <select
+                  value={filterStatus}
+                  onChange={e => setFilterStatus(e.target.value as ExpenseStatus | '')}
+                  className={inputCls}
+                >
+                  <option value="">All statuses</option>
+                  {(Object.keys(STATUS_LABEL) as ExpenseStatus[]).map(status => (
+                    <option key={status} value={status}>{STATUS_LABEL[status]}</option>
+                  ))}
+                </select>
+              </div>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className={`col-span-2 sm:col-span-4 text-xs text-left hover:underline ${textMuted}`}
+                >
+                  Clear filters ({filteredExpenses.length} of {expenses.length})
+                </button>
+              )}
+            </div>
+
             {/* Mobile: compact card list */}
             <div className="space-y-2 md:hidden">
-              {expenses.length === 0 && (
-                <p className={`text-sm text-center py-6 ${textMuted}`}>No invoices registered yet.</p>
+              {filteredExpenses.length === 0 && (
+                <p className={`text-sm text-center py-6 ${textMuted}`}>
+                  {hasActiveFilters ? 'No invoices match these filters.' : 'No invoices registered yet.'}
+                </p>
               )}
-              {expenses.map(expense => (
+              {filteredExpenses.map(expense => (
                 <div
                   key={expense.id}
                   onClick={() => openDetailModal(expense)}
@@ -346,14 +437,14 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                   </tr>
                 </thead>
                 <tbody>
-                  {expenses.length === 0 && (
+                  {filteredExpenses.length === 0 && (
                     <tr>
                       <td colSpan={7} className={`px-4 py-6 text-center text-sm ${textMuted}`}>
-                        No invoices registered yet.
+                        {hasActiveFilters ? 'No invoices match these filters.' : 'No invoices registered yet.'}
                       </td>
                     </tr>
                   )}
-                  {expenses.map((expense, i) => (
+                  {filteredExpenses.map((expense, i) => (
                     <tr
                       key={expense.id}
                       onClick={() => openDetailModal(expense)}
