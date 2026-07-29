@@ -89,11 +89,21 @@ governance decision.
 
 ### Grafana SQLite I/O saturation
 
-**Status:** Open; intentionally deferred
+**Status:** Root cause confirmed 2026-07-25; permanent fix not yet implemented.
+`allerac-grafana` stopped on the production VM as an active workaround.
 
-The `allerac-grafana` container repeatedly reads approximately 220-280 MB/s while
-reporting SQLite locks. Stopping the container returns host I/O wait to normal.
-Continue from the
+Caused the production deploy (run `30171696936`) to be cancelled by GitHub Actions'
+30-minute timeout on 2026-07-25 — same failure mode as the earlier `v0.0.13`
+incident. Confirmed live on the production VM: Grafana reads 246-254 MB/s
+continuously (not just during builds), pinning the single 64 GB Premium SSD (P6,
+~50 MB/s baseline throughput) at 86-91% utilization with 280-393ms read latency;
+stopping Grafana dropped VM load average from 6.43 to 0.41 immediately. Root cause
+is two-part: Grafana's newer unified-storage background subsystems (secure-values
+cleanup, k8s-style dashboard resource cleanup, bleve search indexing) contend on
+SQLite's single-writer lock, and the VM's disk can't sustain the resulting read
+volume regardless. Recommended fix: migrate Grafana's metadata store to the
+existing `allerac-db` Postgres instance and pin the Grafana image version (currently
+floating `:latest`). Full detail, live measurements, and log evidence in the
 [Grafana SQLite I/O saturation incident](../monitoring/grafana-sqlite-io-incident.md).
 
 Do not delete `allerac_grafana_data` or `grafana.db`. The database integrity check

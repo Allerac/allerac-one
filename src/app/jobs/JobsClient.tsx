@@ -138,7 +138,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
                         isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
-                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
+                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />
@@ -162,7 +162,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
                         isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
-                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
+                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />

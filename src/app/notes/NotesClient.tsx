@@ -188,7 +188,7 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
                         selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS}
-                        githubConfigured={true} googleConfigured={true} ollamaConnected={true}
+                        githubConfigured={true} googleConfigured={true} anthropicConfigured={true} ollamaConnected={true}
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />
@@ -214,7 +214,7 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
                         selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS}
-                        githubConfigured={true} googleConfigured={true} ollamaConnected={true}
+                        githubConfigured={true} googleConfigured={true} anthropicConfigured={true} ollamaConnected={true}
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                       />

@@ -190,7 +190,8 @@ export async function deleteUser(
   if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   if (currentUser.id === userId) return { success: false, error: 'Cannot delete your own account' };
 
-  await pool.query('DELETE FROM users WHERE id = $1 AND is_admin = false', [userId]);
+  const result = await pool.query('DELETE FROM users WHERE id = $1 AND is_admin = false', [userId]);
+  if (result.rowCount === 0) return { success: false, error: 'User not found or is an admin' };
   return { success: true };
 }
 

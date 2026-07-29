@@ -143,6 +143,7 @@ nav:
       - Health Sync: health/README.md
       - Monitoring: monitoring/README.md
       - Grafana SQLite I/O Incident: monitoring/grafana-sqlite-io-incident.md
+      - Grafana Postgres Migration Plan: monitoring/grafana-postgres-migration-plan.md
       - Metrics: monitoring/metrics.md
       - Logging:
           - Overview: logging/README.md

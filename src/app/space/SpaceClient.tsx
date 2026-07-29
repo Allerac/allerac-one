@@ -1488,7 +1488,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   isSending={sending} githubToken={githubToken} isDarkMode={d}
                   setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
-                  githubConfigured ollamaConnected googleConfigured
+                  githubConfigured ollamaConnected googleConfigured anthropicConfigured
                   isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                   onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                 />
@@ -1511,7 +1511,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   isSending={sending} githubToken={githubToken} isDarkMode={d}
                   setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
-                  githubConfigured ollamaConnected googleConfigured
+                  githubConfigured ollamaConnected googleConfigured anthropicConfigured
                   isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                   onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                 />
@@ -1556,7 +1556,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   isSending={sending} githubToken={githubToken} isDarkMode={d}
                   setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
-                  githubConfigured ollamaConnected googleConfigured
+                  githubConfigured ollamaConnected googleConfigured anthropicConfigured
                   isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                   onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                 />
@@ -1579,7 +1579,7 @@ export default function SpaceClient({ userId, userName, userEmail, isAdmin, allo
                   isSending={sending} githubToken={githubToken} isDarkMode={d}
                   setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                   setSelectedModel={setSelectedModel} MODELS={MODELS}
-                  githubConfigured ollamaConnected googleConfigured
+                  githubConfigured ollamaConnected googleConfigured anthropicConfigured
                   isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                   onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
                 />

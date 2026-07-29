@@ -107,7 +107,7 @@ export default function AdminClient({
 
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState('');
+  const [userActionError, setUserActionError] = useState('');
 
   // Role toggle state
   const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
@@ -116,12 +116,18 @@ export default function AdminClient({
   const [activeChangingId, setActiveChangingId] = useState<string | null>(null);
 
   // Domain editor state
-  const [domainEditId, setDomainEditId] = useState<string | null>(null);
   const [domainEditSelection, setDomainEditSelection] = useState<string[]>([]);
   const [domainSavePending, setDomainSavePending] = useState(false);
+  const [domainError, setDomainError] = useState('');
+
+  // Add user modals
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // User detail modal
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   // Reset password state
-  const [resetOpenId, setResetOpenId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState('');
   const [resetPending, setResetPending] = useState(false);
   const [resetMsg, setResetMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null);
@@ -212,23 +218,29 @@ export default function AdminClient({
     });
   };
 
-  const openDomainEditor = (user: AdminUser) => {
-    setDomainEditId(user.id);
-    // Convert slugs back to domain ids for the selection
+  const openUserModal = (user: AdminUser) => {
+    setSelectedUserId(user.id);
     setDomainEditSelection(
       domains.filter(d => user.domains.includes(d.slug)).map(d => d.id)
     );
+    setDomainError('');
+    setUserActionError('');
+    setResetPassword('');
+    setResetMsg(null);
+    setCreditMessage(null);
   };
+
+  const closeUserModal = () => setSelectedUserId(null);
 
   const handleSaveDomains = async (userId: string) => {
     setDomainSavePending(true);
+    setDomainError('');
     const result = await adminActions.updateUserDomains(userId, domainEditSelection);
     setDomainSavePending(false);
     if (result.success) {
-      setDomainEditId(null);
       refreshUsers();
     } else {
-      setDeleteError(result.error);
+      setDomainError(result.error);
     }
   };
 
@@ -237,7 +249,7 @@ export default function AdminClient({
     const result = await adminActions.toggleUserActive(userId, isActive);
     setActiveChangingId(null);
     if (result.success) refreshUsers();
-    else setDeleteError(result.error);
+    else setUserActionError(result.error);
   };
 
   const handleRoleChange = async (userId: string, makeAdmin: boolean) => {
@@ -245,7 +257,7 @@ export default function AdminClient({
     const result = await adminActions.updateUserRole(userId, makeAdmin);
     setRoleChangingId(null);
     if (result.success) refreshUsers();
-    else setDeleteError(result.error);
+    else setUserActionError(result.error);
   };
 
   const handleResetPassword = async (userId: string) => {
@@ -256,7 +268,6 @@ export default function AdminClient({
     if (result.success) {
       setResetMsg({ id: userId, ok: true, text: 'Password updated.' });
       setResetPassword('');
-      setResetOpenId(null);
     } else {
       setResetMsg({ id: userId, ok: false, text: result.error });
     }
@@ -350,14 +361,15 @@ export default function AdminClient({
   };
 
   const handleDelete = async (userId: string) => {
-    setDeleteError('');
+    setUserActionError('');
     setDeletingId(userId);
     const result = await adminActions.deleteUser(userId);
     setDeletingId(null);
     if (result.success) {
       setUsers(prev => prev.filter(u => u.id !== userId));
+      closeUserModal();
     } else {
-      setDeleteError(result.error);
+      setUserActionError(result.error);
     }
   };
 
@@ -429,6 +441,8 @@ export default function AdminClient({
     }
   };
 
+  const selectedUser = users.find(u => u.id === selectedUserId) ?? null;
+
   const tabs = [
     { id: 'users' as const, label: 'Users', count: users.length },
     { id: 'credits' as const, label: 'Credits' },
@@ -494,11 +508,26 @@ export default function AdminClient({
 
         {/* ── Users tab ── */}
         {activeTab === 'users' && <section>
-          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Users</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className={`text-sm font-semibold uppercase tracking-wider ${textMuted}`}>Users</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setInviteMsg(null); setShowInviteModal(true); }}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${d ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Invite
+              </button>
+              <button
+                onClick={() => { setFormError(''); setFormSuccess(''); setShowCreateModal(true); }}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Create user
+              </button>
+            </div>
+          </div>
           <div className={`md:border md:rounded-lg md:overflow-hidden ${cardBg}`}>
-            {deleteError && (
-              <div className="px-4 py-2 bg-red-900/30 text-red-400 text-sm border-b border-red-900/40">{deleteError}</div>
-            )}
             <table className="block md:table w-full text-sm">
               <thead className="hidden md:table-header-group">
                 <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
@@ -506,14 +535,14 @@ export default function AdminClient({
                   <th className="px-4 py-3 text-left font-medium">Type</th>
                   <th className="px-4 py-3 text-left font-medium">Domains</th>
                   <th className="px-4 py-3 text-left font-medium">Created</th>
-                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="block md:table-row-group space-y-3 md:space-y-0">
                 {users.map((user, i) => (
                   <tr
                     key={user.id}
-                    className={`block md:table-row border rounded-lg md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:last:border-b-0 ${d ? 'border-gray-700' : 'border-gray-200 md:border-gray-100'} ${
+                    onClick={() => openUserModal(user)}
+                    className={`block md:table-row cursor-pointer border rounded-lg md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:last:border-b-0 transition-colors ${d ? 'border-gray-700 hover:bg-gray-700/40' : 'border-gray-200 md:border-gray-100 hover:bg-gray-100/70'} ${
                       i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'
                     }`}
                   >
@@ -537,150 +566,19 @@ export default function AdminClient({
                       </div>
                     </td>
                     <td className="block md:table-cell px-4 py-2 md:py-3">
-                      {!user.is_admin && domainEditId === user.id ? (
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-wrap gap-1">
-                            {domains.map(domain => {
-                              const selected = domainEditSelection.includes(domain.id);
-                              return (
-                                <button
-                                  key={domain.id}
-                                  type="button"
-                                  onClick={() => setDomainEditSelection(prev =>
-                                    selected ? prev.filter(id => id !== domain.id) : [...prev, domain.id]
-                                  )}
-                                  disabled={domainSavePending}
-                                  className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors ${
-                                    selected
-                                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                                      : d ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-                                  }`}
-                                >
-                                  {domain.slug}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleSaveDomains(user.id)}
-                              disabled={domainSavePending}
-                              className="px-2 py-0.5 rounded text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
-                            >
-                              {domainSavePending ? '...' : 'Save'}
-                            </button>
-                            <button
-                              onClick={() => setDomainEditId(null)}
-                              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-1 items-center">
-                          {user.domains.length > 0 ? user.domains.map(slug => (
-                            <span key={slug} className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
-                              d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                            }`}>{slug}</span>
-                          )) : (
-                            <span className={textMuted}>—</span>
-                          )}
-                          {!user.is_admin && (
-                            <button
-                              onClick={() => openDomainEditor(user)}
-                              className={`ml-1 px-2 py-0.5 rounded text-xs transition-colors ${d ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
-                            >
-                              Edit
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {user.domains.length > 0 ? user.domains.map(slug => (
+                          <span key={slug} className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
+                            d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                          }`}>{slug}</span>
+                        )) : (
+                          <span className={textMuted}>—</span>
+                        )}
+                      </div>
                     </td>
-                    <td className={`block md:table-cell px-4 py-2 md:py-3 text-xs ${textMuted}`}>
+                    <td className={`block md:table-cell px-4 pt-2 pb-4 md:py-3 text-xs ${textMuted}`}>
                       <span className="md:hidden font-medium mr-1">Created:</span>
                       {new Date(user.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="block md:table-cell px-4 pt-2 pb-4 md:py-3">
-                      {user.id !== undefined && (
-                        <div className="flex flex-col gap-2 items-stretch md:items-end">
-                          <div className="flex gap-2 flex-wrap justify-start md:justify-end">
-                            <button
-                              onClick={() => handleActiveToggle(user.id, !user.is_active)}
-                              disabled={activeChangingId === user.id}
-                              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                user.is_active
-                                  ? d ? 'bg-yellow-900/40 text-yellow-400 hover:bg-yellow-900/60' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
-                                  : d ? 'bg-green-900/40 text-green-400 hover:bg-green-900/60' : 'bg-green-50 text-green-700 hover:bg-green-100'
-                              }`}
-                            >
-                              {activeChangingId === user.id ? '...' : user.is_active ? 'Disable' : 'Enable'}
-                            </button>
-                            <button
-                              onClick={() => handleRoleChange(user.id, !user.is_admin)}
-                              disabled={roleChangingId === user.id}
-                              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                user.is_admin
-                                  ? d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                  : d ? 'bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/60' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                              }`}
-                            >
-                              {roleChangingId === user.id ? '...' : user.is_admin ? 'Make domain' : 'Make admin'}
-                            </button>
-                            {!user.is_admin && (
-                              <button
-                                onClick={() => {
-                                  setResetOpenId(resetOpenId === user.id ? null : user.id);
-                                  setResetPassword('');
-                                  setResetMsg(null);
-                                }}
-                                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                  d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                              >
-                                Reset password
-                              </button>
-                            )}
-                            {!user.is_admin && (
-                              <button
-                                onClick={() => handleDelete(user.id)}
-                                disabled={deletingId === user.id}
-                                className={btnDanger}
-                              >
-                                {deletingId === user.id ? 'Deleting...' : 'Delete'}
-                              </button>
-                            )}
-                          </div>
-
-                          {resetOpenId === user.id && (
-                            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-                              <input
-                                type="password"
-                                value={resetPassword}
-                                onChange={e => setResetPassword(e.target.value)}
-                                placeholder="New password"
-                                disabled={resetPending}
-                                className={`px-2 py-1 rounded border text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                                  d ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900'
-                                }`}
-                              />
-                              <button
-                                onClick={() => handleResetPassword(user.id)}
-                                disabled={resetPending || resetPassword.length < 8}
-                                className="px-2 py-1 rounded text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
-                              >
-                                {resetPending ? '...' : 'Save'}
-                              </button>
-                            </div>
-                          )}
-
-                          {resetMsg?.id === user.id && (
-                            <p className={`text-xs ${resetMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-                              {resetMsg.text}
-                            </p>
-                          )}
-                        </div>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -695,9 +593,9 @@ export default function AdminClient({
         {activeTab === 'credits' && <section>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-1 ${textMuted}`}>Credits</h2>
           <p className={`text-xs mb-4 ${textMuted}`}>
-            Plans are the primary allowance control. Manual adjustments are reserved for support, bonuses, refunds, and corrections.
+            Per-user plans, balances, and manual adjustments are managed from each user&apos;s profile in the Users tab.
           </p>
-          <div className={`border rounded-lg p-4 mb-6 ${cardBg}`}>
+          <div className={`border rounded-lg p-4 ${cardBg}`}>
             <h3 className="text-sm font-semibold mb-1">Operation pricing</h3>
             <p className={`text-xs mb-4 ${textMuted}`}>
               Changes apply to new operations only. Existing ledger entries keep their original pricing version.
@@ -787,102 +685,6 @@ export default function AdminClient({
                 {pricingMessage.text}
               </p>
             )}
-          </div>
-          <div className="space-y-3">
-            {users.map(user => (
-              <div key={user.id} className={`border rounded-lg p-4 ${cardBg}`}>
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,1fr)_auto] lg:items-end">
-                  <div className="min-w-0">
-                    <p className="font-mono text-xs truncate">{user.email}</p>
-                    <p className={`text-xs mt-1 ${textMuted}`}>
-                      {user.is_admin ? 'Administrator' : 'Domain user'}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className={`text-[11px] uppercase tracking-wide ${textMuted}`}>Balance</p>
-                      <p className="text-lg font-semibold">
-                        {user.credit_unlimited ? '∞' : user.credit_balance.toLocaleString()}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={`text-[11px] uppercase tracking-wide ${textMuted}`}>Reserved</p>
-                      <p className="text-lg font-semibold">{user.credit_reserved.toLocaleString()}</p>
-                    </div>
-                  </div>
-
-                  <label className="min-w-0">
-                    <span className={labelCls}>Plan</span>
-                    <select
-                      value={user.credit_plan_slug ?? ''}
-                      onChange={event => handlePlanChange(user.id, event.target.value)}
-                      disabled={creditPendingId === user.id || user.credit_unlimited}
-                      className={inputCls}
-                    >
-                      {!user.credit_plan_slug && <option value="">No plan</option>}
-                      {creditPlans.map(plan => (
-                        <option key={plan.id} value={plan.slug}>
-                          {plan.name} · {plan.monthlyCredits.toLocaleString()} credits
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <button
-                    onClick={() => handleUnlimitedToggle(user.id, !user.credit_unlimited)}
-                    disabled={creditPendingId === user.id}
-                    className={`w-full lg:w-auto px-3 py-2 rounded text-xs font-medium transition-colors ${
-                      user.credit_unlimited
-                        ? d ? 'bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900/70' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                        : d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {user.credit_unlimited ? 'Unlimited exception' : 'Plan limits'}
-                  </button>
-                </div>
-
-                <div className={`mt-4 pt-4 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-                  <p className={`text-[11px] uppercase tracking-wide mb-2 ${textMuted}`}>Manual adjustment</p>
-                  <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_auto]">
-                    <input
-                      type="number"
-                      step="1"
-                      value={creditAmounts[user.id] ?? ''}
-                      onChange={event => setCreditAmounts(prev => ({ ...prev, [user.id]: event.target.value }))}
-                      placeholder="+100 / -25"
-                      disabled={creditPendingId === user.id}
-                      className={inputCls}
-                    />
-                    <input
-                      type="text"
-                      value={creditReasons[user.id] ?? ''}
-                      onChange={event => setCreditReasons(prev => ({ ...prev, [user.id]: event.target.value }))}
-                      placeholder="Reason for the adjustment"
-                      maxLength={500}
-                      disabled={creditPendingId === user.id}
-                      className={inputCls}
-                    />
-                    <button
-                      onClick={() => handleCreditAdjustment(user.id)}
-                      disabled={
-                        creditPendingId === user.id
-                        || !Number(creditAmounts[user.id])
-                        || !(creditReasons[user.id] ?? '').trim()
-                      }
-                      className={`${btnPrimary} w-full sm:w-auto`}
-                    >
-                      {creditPendingId === user.id ? '...' : 'Apply'}
-                    </button>
-                  </div>
-                  {creditMessage?.id === user.id && (
-                    <p className={`text-xs mt-2 ${creditMessage.ok ? 'text-green-400' : 'text-red-400'}`}>
-                      {creditMessage.text}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
           </div>
         </section>}
 
@@ -1330,54 +1132,9 @@ export default function AdminClient({
         }
 
         {/* ── Invites (Users tab) ── */}
-        {activeTab === 'users' && <section>
-          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Invite a User</h2>
-          <div className={`border rounded-lg p-4 sm:p-6 ${cardBg} mb-4`}>
-            <form onSubmit={handleSendInvite} className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_auto] items-end">
-              <div>
-                <label className={labelCls}>Email</label>
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="user@example.com"
-                  required
-                  disabled={invitePending}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Domain</label>
-                <select
-                  value={inviteDomain}
-                  onChange={e => setInviteDomain(e.target.value)}
-                  required
-                  disabled={invitePending}
-                  className={`${inputCls} max-w-full`}
-                >
-                  <option value="">Select domain…</option>
-                  {domains.map(d => (
-                    <option key={d.id} value={d.slug}>{d.display_name}</option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="submit"
-                disabled={invitePending || !inviteEmail || !inviteDomain}
-                className={`${btnPrimary} w-full sm:w-auto`}
-              >
-                {invitePending ? 'Sending…' : 'Send invite'}
-              </button>
-            </form>
-            {inviteMsg && (
-              <p className={`text-sm mt-3 ${inviteMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-                {inviteMsg.text}
-              </p>
-            )}
-          </div>
-
-          {invites.length > 0 && (
-            <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
+        {activeTab === 'users' && invites.length > 0 && <section>
+          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Invites</h2>
+          <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
@@ -1431,95 +1188,7 @@ export default function AdminClient({
                 </tbody>
               </table>
             </div>
-          )}
         </section>}
-
-        {/* ── Create user (Users tab) ── */}
-        {activeTab === 'users' && <section>
-          <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Create Domain User</h2>
-          <div className={`border rounded-lg p-4 sm:p-6 ${cardBg}`}>
-            <form onSubmit={handleCreate} className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="user@example.com"
-                    required
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Password</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Min 8 characters"
-                    required
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={`flex items-center gap-2 cursor-pointer select-none ${d ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <input
-                    type="checkbox"
-                    checked={makeAdmin}
-                    onChange={e => { setMakeAdmin(e.target.checked); setSelectedDomains([]); }}
-                    disabled={isPending}
-                    className="w-4 h-4 rounded accent-indigo-600"
-                  />
-                  <span className="text-sm">Admin user</span>
-                </label>
-              </div>
-
-              {!makeAdmin && (
-                <div>
-                  <label className={labelCls}>Domains</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {domains.map(domain => {
-                      const selected = selectedDomains.includes(domain.id);
-                      return (
-                        <button
-                          key={domain.id}
-                          type="button"
-                          onClick={() => toggleDomain(domain.id)}
-                          disabled={isPending}
-                          className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-                            selected
-                              ? 'bg-indigo-600 border-indigo-600 text-white'
-                              : d
-                                ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
-                                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          {domain.display_name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {formError && <p className="text-sm text-red-400">{formError}</p>}
-              {formSuccess && <p className="text-sm text-green-400">{formSuccess}</p>}
-
-              <div>
-                <button type="submit" disabled={isPending} className={`${btnPrimary} w-full sm:w-auto`}>
-                  {isPending ? 'Creating...' : 'Create User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </section>
-
-        }
 
         {/* ── Audit Log (API Keys tab) ── */}
         {activeTab === 'apikeys' && <section>
@@ -1578,6 +1247,390 @@ export default function AdminClient({
         }
 
       </div>
+
+      {/* ── Invite user modal ── */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowInviteModal(false)} />
+          <div className={`relative w-full max-w-md rounded-2xl border shadow-2xl overflow-y-auto max-h-[90vh] ${cardBg}`}>
+            <div className={`sticky top-0 flex items-center justify-between px-6 py-4 border-b ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+              <h2 className={`font-semibold text-sm ${text}`}>Invite a User</h2>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className={`p-1.5 rounded-lg transition-colors ${d ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleSendInvite} className="px-6 py-5 space-y-4">
+              <div>
+                <label className={labelCls}>Email</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  required
+                  autoFocus
+                  disabled={invitePending}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Domain</label>
+                <select
+                  value={inviteDomain}
+                  onChange={e => setInviteDomain(e.target.value)}
+                  required
+                  disabled={invitePending}
+                  className={`${inputCls} max-w-full`}
+                >
+                  <option value="">Select domain…</option>
+                  {domains.map(dm => (
+                    <option key={dm.id} value={dm.slug}>{dm.display_name}</option>
+                  ))}
+                </select>
+              </div>
+              {inviteMsg && (
+                <p className={`text-sm ${inviteMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                  {inviteMsg.text}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={invitePending || !inviteEmail || !inviteDomain}
+                className={`${btnPrimary} w-full`}
+              >
+                {invitePending ? 'Sending…' : 'Send invite'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create user modal ── */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} />
+          <div className={`relative w-full max-w-md rounded-2xl border shadow-2xl overflow-y-auto max-h-[90vh] ${cardBg}`}>
+            <div className={`sticky top-0 flex items-center justify-between px-6 py-4 border-b ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+              <h2 className={`font-semibold text-sm ${text}`}>Create Domain User</h2>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className={`p-1.5 rounded-lg transition-colors ${d ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleCreate} className="px-6 py-5 space-y-5">
+              <div>
+                <label className={labelCls}>Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  required
+                  autoFocus
+                  disabled={isPending}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Min 8 characters"
+                  required
+                  disabled={isPending}
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className={`flex items-center gap-2 cursor-pointer select-none ${d ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <input
+                    type="checkbox"
+                    checked={makeAdmin}
+                    onChange={e => { setMakeAdmin(e.target.checked); setSelectedDomains([]); }}
+                    disabled={isPending}
+                    className="w-4 h-4 rounded accent-indigo-600"
+                  />
+                  <span className="text-sm">Admin user</span>
+                </label>
+              </div>
+
+              {!makeAdmin && (
+                <div>
+                  <label className={labelCls}>Domains</label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {domains.map(domain => {
+                      const selected = selectedDomains.includes(domain.id);
+                      return (
+                        <button
+                          key={domain.id}
+                          type="button"
+                          onClick={() => toggleDomain(domain.id)}
+                          disabled={isPending}
+                          className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                            selected
+                              ? 'bg-indigo-600 border-indigo-600 text-white'
+                              : d
+                                ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {domain.display_name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {formError && <p className="text-sm text-red-400">{formError}</p>}
+              {formSuccess && <p className="text-sm text-green-400">{formSuccess}</p>}
+
+              <button type="submit" disabled={isPending} className={`${btnPrimary} w-full`}>
+                {isPending ? 'Creating...' : 'Create User'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── User detail modal ── */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={closeUserModal} />
+          <div className={`relative w-full max-w-lg rounded-2xl border shadow-2xl overflow-y-auto max-h-[90vh] ${cardBg}`}>
+            <div className={`sticky top-0 flex items-center justify-between px-6 py-4 border-b ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+              <div className="min-w-0">
+                <h2 className={`font-semibold text-sm truncate ${text}`}>{selectedUser.email}</h2>
+                <p className={`text-xs mt-0.5 ${textMuted}`}>{selectedUser.is_admin ? 'Administrator' : 'Domain user'}</p>
+              </div>
+              <button
+                onClick={closeUserModal}
+                className={`p-1.5 rounded-lg transition-colors shrink-0 ml-3 ${d ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-6">
+              {userActionError && (
+                <p className="text-sm text-red-400">{userActionError}</p>
+              )}
+
+              {/* Status & role */}
+              <div>
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${textMuted}`}>Status & role</p>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleActiveToggle(selectedUser.id, !selectedUser.is_active)}
+                    disabled={activeChangingId === selectedUser.id}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      selectedUser.is_active
+                        ? d ? 'bg-yellow-900/40 text-yellow-400 hover:bg-yellow-900/60' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                        : d ? 'bg-green-900/40 text-green-400 hover:bg-green-900/60' : 'bg-green-50 text-green-700 hover:bg-green-100'
+                    }`}
+                  >
+                    {activeChangingId === selectedUser.id ? '...' : selectedUser.is_active ? 'Disable' : 'Enable'}
+                  </button>
+                  <button
+                    onClick={() => handleRoleChange(selectedUser.id, !selectedUser.is_admin)}
+                    disabled={roleChangingId === selectedUser.id}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      selectedUser.is_admin
+                        ? d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : d ? 'bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/60' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                    }`}
+                  >
+                    {roleChangingId === selectedUser.id ? '...' : selectedUser.is_admin ? 'Make domain' : 'Make admin'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Domains */}
+              {!selectedUser.is_admin && (
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${textMuted}`}>Domains</p>
+                  <div className="flex flex-wrap gap-2">
+                    {domains.map(domain => {
+                      const selected = domainEditSelection.includes(domain.id);
+                      return (
+                        <button
+                          key={domain.id}
+                          type="button"
+                          onClick={() => setDomainEditSelection(prev =>
+                            selected ? prev.filter(id => id !== domain.id) : [...prev, domain.id]
+                          )}
+                          disabled={domainSavePending}
+                          className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                            selected
+                              ? 'bg-indigo-600 border-indigo-600 text-white'
+                              : d ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {domain.display_name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
+                    <button
+                      onClick={() => handleSaveDomains(selectedUser.id)}
+                      disabled={domainSavePending}
+                      className={`${btnPrimary} px-3 py-1.5 text-xs`}
+                    >
+                      {domainSavePending ? 'Saving...' : 'Save domains'}
+                    </button>
+                    {domainError && <p className="text-xs text-red-400">{domainError}</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* Credits */}
+              <div className={`pt-5 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${textMuted}`}>Credits</p>
+                <div className="grid gap-4 sm:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_auto] sm:items-end">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className={`text-[11px] uppercase tracking-wide ${textMuted}`}>Balance</p>
+                      <p className="text-lg font-semibold">
+                        {selectedUser.credit_unlimited ? '∞' : selectedUser.credit_balance.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-[11px] uppercase tracking-wide ${textMuted}`}>Reserved</p>
+                      <p className="text-lg font-semibold">{selectedUser.credit_reserved.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <label className="min-w-0">
+                    <span className={labelCls}>Plan</span>
+                    <select
+                      value={selectedUser.credit_plan_slug ?? ''}
+                      onChange={event => handlePlanChange(selectedUser.id, event.target.value)}
+                      disabled={creditPendingId === selectedUser.id || selectedUser.credit_unlimited}
+                      className={inputCls}
+                    >
+                      {!selectedUser.credit_plan_slug && <option value="">No plan</option>}
+                      {creditPlans.map(plan => (
+                        <option key={plan.id} value={plan.slug}>
+                          {plan.name} · {plan.monthlyCredits.toLocaleString()} credits
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    onClick={() => handleUnlimitedToggle(selectedUser.id, !selectedUser.credit_unlimited)}
+                    disabled={creditPendingId === selectedUser.id}
+                    className={`w-full sm:w-auto px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                      selectedUser.credit_unlimited
+                        ? d ? 'bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900/70' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                        : d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {selectedUser.credit_unlimited ? 'Unlimited exception' : 'Plan limits'}
+                  </button>
+                </div>
+
+                <div className="mt-4">
+                  <p className={`text-[11px] uppercase tracking-wide mb-2 ${textMuted}`}>Manual adjustment</p>
+                  <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_auto]">
+                    <input
+                      type="number"
+                      step="1"
+                      value={creditAmounts[selectedUser.id] ?? ''}
+                      onChange={event => setCreditAmounts(prev => ({ ...prev, [selectedUser.id]: event.target.value }))}
+                      placeholder="+100 / -25"
+                      disabled={creditPendingId === selectedUser.id}
+                      className={inputCls}
+                    />
+                    <input
+                      type="text"
+                      value={creditReasons[selectedUser.id] ?? ''}
+                      onChange={event => setCreditReasons(prev => ({ ...prev, [selectedUser.id]: event.target.value }))}
+                      placeholder="Reason for the adjustment"
+                      maxLength={500}
+                      disabled={creditPendingId === selectedUser.id}
+                      className={inputCls}
+                    />
+                    <button
+                      onClick={() => handleCreditAdjustment(selectedUser.id)}
+                      disabled={
+                        creditPendingId === selectedUser.id
+                        || !Number(creditAmounts[selectedUser.id])
+                        || !(creditReasons[selectedUser.id] ?? '').trim()
+                      }
+                      className={`${btnPrimary} w-full sm:w-auto`}
+                    >
+                      {creditPendingId === selectedUser.id ? '...' : 'Apply'}
+                    </button>
+                  </div>
+                  {creditMessage?.id === selectedUser.id && (
+                    <p className={`text-xs mt-2 ${creditMessage.ok ? 'text-green-400' : 'text-red-400'}`}>
+                      {creditMessage.text}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Reset password */}
+              {!selectedUser.is_admin && (
+                <div className={`pt-5 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${textMuted}`}>Reset password</p>
+                  <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                    <input
+                      type="password"
+                      value={resetPassword}
+                      onChange={e => setResetPassword(e.target.value)}
+                      placeholder="New password"
+                      disabled={resetPending}
+                      className={inputCls}
+                    />
+                    <button
+                      onClick={() => handleResetPassword(selectedUser.id)}
+                      disabled={resetPending || resetPassword.length < 8}
+                      className={`${btnPrimary} shrink-0`}
+                    >
+                      {resetPending ? '...' : 'Save'}
+                    </button>
+                  </div>
+                  {resetMsg?.id === selectedUser.id && (
+                    <p className={`text-xs mt-2 ${resetMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                      {resetMsg.text}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Delete */}
+              {!selectedUser.is_admin && (
+                <div className={`pt-5 border-t flex justify-end ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <button
+                    onClick={() => handleDelete(selectedUser.id)}
+                    disabled={deletingId === selectedUser.id}
+                    className={btnDanger}
+                  >
+                    {deletingId === selectedUser.id ? 'Deleting...' : 'Delete user'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

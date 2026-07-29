@@ -141,7 +141,7 @@ export default function FinanceClient({ userId, userName, userEmail, isAdmin, de
                         handleSendMessage={send} isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
-                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
+                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop} />
                     </div>
@@ -160,7 +160,7 @@ export default function FinanceClient({ userId, userName, userEmail, isAdmin, de
                         handleSendMessage={send} isSending={sending} githubToken={githubToken} isDarkMode={d}
                         setIsDocumentModalOpen={() => {}} selectedModel={selectedModel}
                         setSelectedModel={setSelectedModel}
-                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured
+                        MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
                         onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop} />
                     </div>

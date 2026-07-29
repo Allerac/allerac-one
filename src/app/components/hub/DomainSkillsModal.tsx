@@ -56,11 +56,13 @@ const DOMAINS = [
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  displayMode?: 'modal' | 'page';
   userId: string;
   isDarkMode?: boolean;
 }
 
-export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode = false }: Props) {
+export default function DomainSkillsModal({ isOpen, onClose, displayMode = 'modal', userId, isDarkMode = false }: Props) {
+  const isPage = displayMode === 'page';
   const [retroMode, setRetroMode] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('cfg-retro') !== 'off' : true
   );
@@ -105,7 +107,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === backdropRef.current) onClose();
+    if (!isPage && e.target === backdropRef.current) onClose();
   };
 
   const getBinding = (slug: string) => bindings.find(b => b.domain_slug === slug);
@@ -236,16 +238,18 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
 
       <div
         ref={backdropRef}
-        className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 sm:p-4"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
+        className={isPage
+          ? `h-[100dvh] min-h-0 flex overflow-hidden ${d ? 'bg-gray-950' : 'bg-gray-100'}`
+          : 'fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 sm:p-4'}
+        style={isPage ? undefined : { paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
         onClick={handleBackdropClick}
       >
         <div
-          className={`${retroMode ? 'allerac-cfg' : `backdrop-blur-md shadow-xl ${d ? 'bg-gray-800/95 border-t sm:border border-gray-700' : 'bg-white/95 border-t sm:border border-gray-200'}`} w-full sm:max-w-2xl rounded-t-sm sm:rounded max-h-[95dvh] sm:max-h-[85dvh] overflow-hidden flex flex-col`}
-          style={retroMode ? { background: '#0d0d0d', border: '1px solid #30363d' } : undefined}
+          className={`${retroMode ? 'allerac-cfg' : `backdrop-blur-md shadow-xl ${d ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-200'}`} w-full overflow-hidden flex flex-col ${isPage ? 'h-full min-h-0' : 'sm:max-w-2xl rounded-t-sm sm:rounded max-h-[95dvh] sm:max-h-[85dvh] border-t sm:border'}`}
+          style={retroMode ? { background: '#0d0d0d', border: isPage ? 'none' : '1px solid #30363d' } : undefined}
         >
           {/* Mobile drag indicator */}
-          <div className="flex justify-center pt-2 sm:hidden">
+          <div className={`justify-center pt-2 sm:hidden ${isPage ? 'hidden' : 'flex'}`}>
             {retroMode
               ? <div style={{ width: 32, height: 3, background: '#30363d', borderRadius: 2 }} />
               : <div className={`w-10 h-1 rounded-full ${d ? 'bg-gray-600' : 'bg-gray-300'}`} />
@@ -254,7 +258,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
 
           {/* Header */}
           {retroMode ? (
-            <div style={{ borderBottom: '1px solid #21262d', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+            <div className={isPage ? 'w-full max-w-2xl mx-auto' : undefined} style={{ borderBottom: '1px solid #21262d', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ color: '#818cf8', fontSize: '0.75rem' }}>▸</span>
                 <span style={{ color: '#e6edf3', fontSize: '0.82rem', fontWeight: 700, letterSpacing: '0.06em' }}>
@@ -282,7 +286,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
               </div>
             </div>
           ) : (
-            <div className={`px-4 py-3 sm:p-4 border-b flex items-center justify-between flex-shrink-0 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`px-4 py-3 sm:p-4 border-b flex items-center justify-between flex-shrink-0 ${isPage ? 'w-full max-w-2xl mx-auto' : ''} ${d ? 'border-gray-700' : 'border-gray-200'}`}>
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-indigo-400 to-indigo-700 flex items-center justify-center flex-shrink-0">
                   <span className="text-lg">{editing ? editing.domain.icon : '🌐'}</span>
@@ -324,7 +328,7 @@ export default function DomainSkillsModal({ isOpen, onClose, userId, isDarkMode 
           )}
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className={`flex-1 overflow-y-auto p-4 sm:p-5 ${isPage ? 'w-full max-w-2xl mx-auto' : ''}`}>
             {loading ? (
               <div className="flex justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />

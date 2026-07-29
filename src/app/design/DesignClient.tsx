@@ -176,6 +176,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
                         MODELS={MODELS}
                         githubConfigured={true}
                         googleConfigured={true}
+                        anthropicConfigured={true}
                         ollamaConnected={true}
                         isAgentMode={isAgentMode}
                         onToggleAgentMode={toggleAgentMode}
@@ -214,6 +215,7 @@ export default function DesignClient({ userId, userName, userEmail, isAdmin, def
                         MODELS={MODELS}
                         githubConfigured={true}
                         googleConfigured={true}
+                        anthropicConfigured={true}
                         ollamaConnected={true}
                         isAgentMode={isAgentMode}
                         onToggleAgentMode={toggleAgentMode}

@@ -293,6 +293,7 @@ export default function DomainChatPanel({
               MODELS={MODELS}
               githubConfigured={true}
               googleConfigured={true}
+              anthropicConfigured={true}
               ollamaConnected={true}
               isAgentMode={isAgentMode}
               onToggleAgentMode={() => setIsAgentMode(v => !v)}
@@ -334,6 +335,7 @@ export default function DomainChatPanel({
                 MODELS={MODELS}
                 githubConfigured={true}
                 googleConfigured={true}
+                anthropicConfigured={true}
                 ollamaConnected={true}
                 isAgentMode={isAgentMode}
                 onToggleAgentMode={() => setIsAgentMode(v => !v)}
