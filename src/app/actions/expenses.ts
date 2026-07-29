@@ -9,10 +9,12 @@ async function assertAdmin() {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUSES = ['pending', 'paid', 'overdue', 'cancelled'] as const;
+const RECURRENCE_INTERVALS = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
 export type ExpenseStatus = typeof STATUSES[number];
+export type RecurrenceInterval = typeof RECURRENCE_INTERVALS[number];
 
 export interface ExpenseInvoice {
   id: string;
@@ -25,6 +27,8 @@ export interface ExpenseInvoice {
   amount: number;
   status: ExpenseStatus;
   tag: string | null;
+  is_recurring: boolean;
+  recurrence_interval: RecurrenceInterval | null;
   file_name: string | null;
   has_file: boolean;
 }
@@ -43,6 +47,8 @@ interface ParsedFields {
   amount: number;
   status: ExpenseStatus;
   tag: string | null;
+  is_recurring: boolean;
+  recurrence_interval: RecurrenceInterval | null;
 }
 
 function parseDate(value: FormDataEntryValue | null): string | null {
@@ -60,6 +66,8 @@ function parseFields(formData: FormData): { ok: true; fields: ParsedFields } | {
   const billingStart = parseDate(formData.get('billing_period_start'));
   const billingEnd = parseDate(formData.get('billing_period_end'));
   const tagRaw = String(formData.get('tag') ?? '').trim();
+  const isRecurring = String(formData.get('is_recurring') ?? '') === 'true';
+  const recurrenceIntervalRaw = String(formData.get('recurrence_interval') ?? '').trim();
 
   if (!provider || provider.length > 200) return { ok: false, error: 'Invalid provider' };
   if (!invoiceNumber || invoiceNumber.length > 100) return { ok: false, error: 'Invalid invoice number' };
@@ -67,6 +75,9 @@ function parseFields(formData: FormData): { ok: true; fields: ParsedFields } | {
   if (!STATUSES.includes(status)) return { ok: false, error: 'Invalid status' };
   if (!invoiceDate) return { ok: false, error: 'Invalid invoice date' };
   if (tagRaw.length > 50) return { ok: false, error: 'Tag is too long (max 50 characters)' };
+  if (isRecurring && !RECURRENCE_INTERVALS.includes(recurrenceIntervalRaw as RecurrenceInterval)) {
+    return { ok: false, error: 'Select a recurrence periodicity' };
+  }
   if ((formData.get('billing_period_start') || formData.get('billing_period_end')) && (!billingStart || !billingEnd)) {
     return { ok: false, error: 'Billing period needs both a start and end date' };
   }
@@ -89,6 +100,8 @@ function parseFields(formData: FormData): { ok: true; fields: ParsedFields } | {
       amount,
       status,
       tag: tagRaw || null,
+      is_recurring: isRecurring,
+      recurrence_interval: isRecurring ? (recurrenceIntervalRaw as RecurrenceInterval) : null,
     },
   };
 }
@@ -111,7 +124,8 @@ export async function listExpenses(): Promise<ExpenseInvoice[]> {
            TO_CHAR(billing_period_start, 'YYYY-MM-DD') AS billing_period_start,
            TO_CHAR(billing_period_end, 'YYYY-MM-DD') AS billing_period_end,
            TO_CHAR(invoice_date, 'YYYY-MM-DD') AS invoice_date,
-           currency, amount::float8 AS amount, status, tag, file_name,
+           currency, amount::float8 AS amount, status, tag,
+           is_recurring, recurrence_interval, file_name,
            (file_data IS NOT NULL) AS has_file
     FROM expense_invoices
     ORDER BY invoice_date DESC, created_at DESC
@@ -134,12 +148,13 @@ export async function createExpense(
   const result = await pool.query(
     `INSERT INTO expense_invoices (
        provider, invoice_number, billing_period_start, billing_period_end,
-       invoice_date, currency, amount, status, tag, file_name, file_type, file_data, created_by
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       invoice_date, currency, amount, status, tag, is_recurring, recurrence_interval,
+       file_name, file_type, file_data, created_by
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING id`,
     [
       f.provider, f.invoice_number, f.billing_period_start, f.billing_period_end,
-      f.invoice_date, f.currency, f.amount, f.status, f.tag,
+      f.invoice_date, f.currency, f.amount, f.status, f.tag, f.is_recurring, f.recurrence_interval,
       file?.name ?? null, file?.type ?? null, file?.buffer ?? null,
       admin.id,
     ]
@@ -167,11 +182,12 @@ export async function updateExpense(
       `UPDATE expense_invoices SET
          provider = $1, invoice_number = $2, billing_period_start = $3, billing_period_end = $4,
          invoice_date = $5, currency = $6, amount = $7, status = $8, tag = $9,
-         file_name = $10, file_type = $11, file_data = $12, updated_at = NOW()
-       WHERE id = $13`,
+         is_recurring = $10, recurrence_interval = $11,
+         file_name = $12, file_type = $13, file_data = $14, updated_at = NOW()
+       WHERE id = $15`,
       [
         f.provider, f.invoice_number, f.billing_period_start, f.billing_period_end,
-        f.invoice_date, f.currency, f.amount, f.status, f.tag,
+        f.invoice_date, f.currency, f.amount, f.status, f.tag, f.is_recurring, f.recurrence_interval,
         file.name, file.type, file.buffer, id,
       ]
     );
@@ -179,11 +195,12 @@ export async function updateExpense(
     await pool.query(
       `UPDATE expense_invoices SET
          provider = $1, invoice_number = $2, billing_period_start = $3, billing_period_end = $4,
-         invoice_date = $5, currency = $6, amount = $7, status = $8, tag = $9, updated_at = NOW()
-       WHERE id = $10`,
+         invoice_date = $5, currency = $6, amount = $7, status = $8, tag = $9,
+         is_recurring = $10, recurrence_interval = $11, updated_at = NOW()
+       WHERE id = $12`,
       [
         f.provider, f.invoice_number, f.billing_period_start, f.billing_period_end,
-        f.invoice_date, f.currency, f.amount, f.status, f.tag, id,
+        f.invoice_date, f.currency, f.amount, f.status, f.tag, f.is_recurring, f.recurrence_interval, id,
       ]
     );
   }

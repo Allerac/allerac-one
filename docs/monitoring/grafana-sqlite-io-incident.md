@@ -2,10 +2,16 @@
 
 ## Status
 
-Root cause identified 2026-07-25. Confirmed to be Grafana's SQLite-backed metadata
-store contending with itself and with the production VM's disk throughput ceiling.
-Workaround (stop Grafana) remains in effect; permanent fix not yet implemented — see
-[Recommended fix](#recommended-fix).
+**Resolved 2026-07-29.** Root cause identified 2026-07-25 (Grafana's SQLite-backed
+metadata store contending with itself and with the production VM's disk throughput
+ceiling); fix implemented per the
+[Grafana Postgres Migration Plan](grafana-postgres-migration-plan.md) and deployed to
+production via the normal release pipeline. Verified on the production VM
+post-deploy: zero `database is locked` / `context deadline exceeded` log lines in a
+20-minute window (previously continuous), disk utilization at 0% (previously
+86-91%), load average 0.05 (previously 6.43). Grafana now runs pinned to
+`grafana/grafana:13.1.1` with its metadata store on the existing `allerac-db`
+Postgres instance instead of the bundled SQLite file.
 
 ## Summary
 

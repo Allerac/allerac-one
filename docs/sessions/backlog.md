@@ -87,29 +87,23 @@ pin third-party Actions, audit dependency and asset licenses, and define private
 vulnerability reporting. Formal license selection remains a separate legal and
 governance decision.
 
-### Grafana SQLite I/O saturation
-
-**Status:** Root cause confirmed 2026-07-25; permanent fix not yet implemented.
-`allerac-grafana` stopped on the production VM as an active workaround.
-
-Caused the production deploy (run `30171696936`) to be cancelled by GitHub Actions'
-30-minute timeout on 2026-07-25 — same failure mode as the earlier `v0.0.13`
-incident. Confirmed live on the production VM: Grafana reads 246-254 MB/s
-continuously (not just during builds), pinning the single 64 GB Premium SSD (P6,
-~50 MB/s baseline throughput) at 86-91% utilization with 280-393ms read latency;
-stopping Grafana dropped VM load average from 6.43 to 0.41 immediately. Root cause
-is two-part: Grafana's newer unified-storage background subsystems (secure-values
-cleanup, k8s-style dashboard resource cleanup, bleve search indexing) contend on
-SQLite's single-writer lock, and the VM's disk can't sustain the resulting read
-volume regardless. Recommended fix: migrate Grafana's metadata store to the
-existing `allerac-db` Postgres instance and pin the Grafana image version (currently
-floating `:latest`). Full detail, live measurements, and log evidence in the
-[Grafana SQLite I/O saturation incident](../monitoring/grafana-sqlite-io-incident.md).
-
-Do not delete `allerac_grafana_data` or `grafana.db`. The database integrity check
-returned `ok`.
-
 ## Completed context
+
+- **Grafana SQLite I/O saturation — resolved 2026-07-29.** Root cause (confirmed
+  2026-07-25): Grafana's newer unified-storage background subsystems (secure-values
+  cleanup, k8s-style dashboard resource cleanup, bleve search indexing) contended on
+  SQLite's single-writer lock, driving 246-254 MB/s of continuous reads that pinned
+  the production VM's single 64 GB Premium SSD (P6, ~50 MB/s baseline throughput) at
+  86-91% utilization — this had cancelled a production deploy via GitHub Actions'
+  30-minute timeout (run `30171696936`) and, earlier, the `v0.0.13` deploy. Fixed by
+  migrating Grafana's metadata store to the existing `allerac-db` Postgres instance
+  and pinning the image to `grafana/grafana:13.1.1` (was floating `:latest`); shipped
+  through the normal release pipeline. Verified on the production VM post-deploy:
+  zero `database is locked` log lines in 20 minutes (previously continuous), disk
+  utilization 0% (previously 86-91%), load average 0.05 (previously 6.43). Full
+  incident record and the implemented plan:
+  [Grafana SQLite I/O saturation incident](../monitoring/grafana-sqlite-io-incident.md),
+  [Grafana Postgres Migration Plan](../monitoring/grafana-postgres-migration-plan.md).
 
 - Production baseline `v0.0.15` was reported released and validated on 2026-07-21.
   Its tag and commit were not present in the local clone during this backlog update;

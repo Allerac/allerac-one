@@ -4,7 +4,7 @@ import { useTheme } from '@/app/context/ThemeContext';
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import * as expensesActions from '@/app/actions/expenses';
-import type { ExpenseInvoice, ExpenseStatus } from '@/app/actions/expenses';
+import type { ExpenseInvoice, ExpenseStatus, RecurrenceInterval } from '@/app/actions/expenses';
 import ExpenseDashboard from './ExpenseDashboard';
 import ExpenseCalendar from './ExpenseCalendar';
 import ExpenseAnalytics from './ExpenseAnalytics';
@@ -22,6 +22,8 @@ interface FormValues {
   amount: string;
   status: ExpenseStatus;
   tag: string;
+  is_recurring: boolean;
+  recurrence_interval: RecurrenceInterval | '';
 }
 
 const EMPTY_FORM: FormValues = {
@@ -33,6 +35,15 @@ const EMPTY_FORM: FormValues = {
   amount: '',
   status: 'pending',
   tag: '',
+  is_recurring: false,
+  recurrence_interval: '',
+};
+
+const RECURRENCE_LABEL: Record<RecurrenceInterval, string> = {
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  yearly: 'Yearly',
 };
 
 /** Expands a 'YYYY-MM' month value into its first and last calendar day. */
@@ -58,6 +69,8 @@ function buildFormData(values: FormValues, file: File | null): FormData {
   fd.append('amount', values.amount);
   fd.append('status', values.status);
   fd.append('tag', values.tag);
+  fd.append('is_recurring', String(values.is_recurring));
+  fd.append('recurrence_interval', values.recurrence_interval);
   if (file) fd.append('file', file);
   return fd;
 }
@@ -90,15 +103,17 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
   const [createValues, setCreateValues] = useState<FormValues>(EMPTY_FORM);
   const [createPending, setCreatePending] = useState(false);
   const [createError, setCreateError] = useState('');
-  const [createFileName, setCreateFileName] = useState('');
+  const [createFile, setCreateFile] = useState<File | null>(null);
   const createFileRef = useRef<HTMLInputElement>(null);
+  const createCameraRef = useRef<HTMLInputElement>(null);
 
   const [editValues, setEditValues] = useState<FormValues>(EMPTY_FORM);
   const [editPending, setEditPending] = useState(false);
   const [editError, setEditError] = useState('');
   const [deletePending, setDeletePending] = useState(false);
-  const [editFileName, setEditFileName] = useState('');
+  const [editFile, setEditFile] = useState<File | null>(null);
   const editFileRef = useRef<HTMLInputElement>(null);
+  const editCameraRef = useRef<HTMLInputElement>(null);
 
   const bg = d ? 'bg-gray-900' : 'bg-gray-50';
   const cardBg = d ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
@@ -123,7 +138,7 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
   const openCreateModal = () => {
     setCreateValues(EMPTY_FORM);
     setCreateError('');
-    setCreateFileName('');
+    setCreateFile(null);
     setShowCreateModal(true);
   };
 
@@ -138,9 +153,11 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
       amount: String(expense.amount),
       status: expense.status,
       tag: expense.tag ?? '',
+      is_recurring: expense.is_recurring,
+      recurrence_interval: expense.recurrence_interval ?? '',
     });
     setEditError('');
-    setEditFileName('');
+    setEditFile(null);
   };
 
   const closeDetailModal = () => setSelectedId(null);
@@ -149,7 +166,7 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
     e.preventDefault();
     setCreatePending(true);
     setCreateError('');
-    const fd = buildFormData(createValues, createFileRef.current?.files?.[0] ?? null);
+    const fd = buildFormData(createValues, createFile);
     const result = await expensesActions.createExpense(fd);
     setCreatePending(false);
     if (result.success) {
@@ -165,7 +182,7 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
     if (!selectedId) return;
     setEditPending(true);
     setEditError('');
-    const fd = buildFormData(editValues, editFileRef.current?.files?.[0] ?? null);
+    const fd = buildFormData(editValues, editFile);
     const result = await expensesActions.updateExpense(selectedId, fd);
     setEditPending(false);
     if (result.success) {
@@ -229,18 +246,26 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-0.5 -mb-px">
+          <div className="grid grid-cols-4 sm:flex gap-0.5 -mb-px">
             {(['dashboard', 'invoices', 'calendar', 'analytics'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex items-center justify-center sm:justify-start gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab
                     ? d ? 'border-indigo-400 text-indigo-300' : 'border-indigo-600 text-indigo-600'
                     : d ? 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {tab === 'dashboard' ? 'Dashboard' : tab === 'invoices' ? 'Invoices' : tab === 'calendar' ? 'Calendar' : 'Analytics'}
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {tab === 'dashboard' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />}
+                  {tab === 'invoices' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />}
+                  {tab === 'calendar' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />}
+                  {tab === 'analytics' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 20V10M12 20V4M6 20v-6" />}
+                </svg>
+                <span className="hidden sm:inline">
+                  {tab === 'dashboard' ? 'Dashboard' : tab === 'invoices' ? 'Invoices' : tab === 'calendar' ? 'Calendar' : 'Analytics'}
+                </span>
               </button>
             ))}
           </div>
@@ -270,9 +295,46 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
               </button>
             </div>
 
-            <div className={`md:border md:rounded-lg md:overflow-hidden ${cardBg}`}>
-              <table className="block md:table w-full text-sm">
-                <thead className="hidden md:table-header-group">
+            {/* Mobile: compact card list */}
+            <div className="space-y-2 md:hidden">
+              {expenses.length === 0 && (
+                <p className={`text-sm text-center py-6 ${textMuted}`}>No invoices registered yet.</p>
+              )}
+              {expenses.map(expense => (
+                <div
+                  key={expense.id}
+                  onClick={() => openDetailModal(expense)}
+                  className={`border rounded-lg p-3 cursor-pointer transition-colors ${cardBg} ${d ? 'hover:bg-gray-700/40' : 'hover:bg-gray-100/70'}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium truncate min-w-0">{expense.provider}</p>
+                    <p className="font-semibold shrink-0">{expense.currency} {Number(expense.amount).toFixed(2)}</p>
+                  </div>
+                  <div className={`flex items-center gap-1.5 mt-1 text-xs ${textMuted}`}>
+                    <span className="font-mono truncate">{expense.invoice_number}</span>
+                    {formatBillingPeriod(expense) && <span className="shrink-0">· {formatBillingPeriod(expense)}</span>}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    <span className={`text-xs ${textMuted}`}>{expense.invoice_date.slice(0, 10)}</span>
+                    <div className="flex items-center gap-1.5">
+                      {expense.tag && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                          {expense.tag}
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusBadgeCls(expense.status)}`}>
+                        {STATUS_LABEL[expense.status]}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop: table */}
+            <div className={`hidden md:block border rounded-lg overflow-hidden ${cardBg}`}>
+              <table className="w-full text-sm">
+                <thead>
                   <tr className={`border-b text-xs ${d ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}`}>
                     <th className="px-4 py-3 text-left font-medium">Provider</th>
                     <th className="px-4 py-3 text-left font-medium">Invoice #</th>
@@ -283,10 +345,10 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                     <th className="px-4 py-3 text-left font-medium">Status</th>
                   </tr>
                 </thead>
-                <tbody className="block md:table-row-group space-y-3 md:space-y-0">
+                <tbody>
                   {expenses.length === 0 && (
-                    <tr className="block md:table-row">
-                      <td colSpan={7} className={`block md:table-cell px-4 py-6 text-center text-sm ${textMuted}`}>
+                    <tr>
+                      <td colSpan={7} className={`px-4 py-6 text-center text-sm ${textMuted}`}>
                         No invoices registered yet.
                       </td>
                     </tr>
@@ -295,13 +357,13 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                     <tr
                       key={expense.id}
                       onClick={() => openDetailModal(expense)}
-                      className={`block md:table-row cursor-pointer border rounded-lg md:rounded-none md:border-x-0 md:border-t-0 md:border-b md:last:border-b-0 transition-colors ${d ? 'border-gray-700 hover:bg-gray-700/40' : 'border-gray-200 md:border-gray-100 hover:bg-gray-100/70'} ${
+                      className={`cursor-pointer border-b last:border-0 transition-colors ${d ? 'border-gray-700 hover:bg-gray-700/40' : 'border-gray-100 hover:bg-gray-100/70'} ${
                         i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'
                       }`}
                     >
-                      <td className="block md:table-cell px-4 pt-4 pb-2 md:py-3 font-medium">{expense.provider}</td>
-                      <td className="block md:table-cell px-4 py-2 md:py-3 font-mono text-xs">{expense.invoice_number}</td>
-                      <td className="block md:table-cell px-4 py-2 md:py-3">
+                      <td className="px-4 py-3 font-medium">{expense.provider}</td>
+                      <td className="px-4 py-3 font-mono text-xs">{expense.invoice_number}</td>
+                      <td className="px-4 py-3">
                         {expense.tag ? (
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${d ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
                             {expense.tag}
@@ -310,16 +372,16 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                           <span className={textMuted}>—</span>
                         )}
                       </td>
-                      <td className={`block md:table-cell px-4 py-2 md:py-3 text-xs ${textMuted}`}>
+                      <td className={`px-4 py-3 text-xs ${textMuted}`}>
                         {formatBillingPeriod(expense) ?? '—'}
                       </td>
-                      <td className={`block md:table-cell px-4 py-2 md:py-3 text-xs ${textMuted}`}>
+                      <td className={`px-4 py-3 text-xs ${textMuted}`}>
                         {expense.invoice_date.slice(0, 10)}
                       </td>
-                      <td className="block md:table-cell px-4 py-2 md:py-3 font-medium">
+                      <td className="px-4 py-3 font-medium">
                         {expense.currency} {Number(expense.amount).toFixed(2)}
                       </td>
-                      <td className="block md:table-cell px-4 pt-2 pb-4 md:py-3">
+                      <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusBadgeCls(expense.status)}`}>
                           {STATUS_LABEL[expense.status]}
                         </span>
@@ -447,27 +509,78 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                     className={inputCls}
                   />
                 </div>
+                <div className="col-span-2 flex items-end gap-3">
+                  <label className={`flex items-center gap-2 cursor-pointer select-none ${d ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <input
+                      type="checkbox"
+                      checked={createValues.is_recurring}
+                      onChange={e => setCreateValues(prev => ({ ...prev, is_recurring: e.target.checked, recurrence_interval: e.target.checked ? prev.recurrence_interval : '' }))}
+                      disabled={createPending}
+                      className="w-4 h-4 rounded accent-indigo-600"
+                    />
+                    <span className="text-sm">Recurring</span>
+                  </label>
+                  {createValues.is_recurring && (
+                    <select
+                      value={createValues.recurrence_interval}
+                      onChange={e => setCreateValues(prev => ({ ...prev, recurrence_interval: e.target.value as RecurrenceInterval }))}
+                      disabled={createPending}
+                      className={`${inputCls} flex-1`}
+                    >
+                      <option value="">Select periodicity…</option>
+                      {(Object.keys(RECURRENCE_LABEL) as RecurrenceInterval[]).map(interval => (
+                        <option key={interval} value={interval}>{RECURRENCE_LABEL[interval]}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
                 <div className="col-span-2">
                   <label className={labelCls}>Invoice file <span className={`font-normal ${textMuted}`}>(PDF, JPEG or PNG, optional)</span></label>
-                  <button
-                    type="button"
-                    onClick={() => createFileRef.current?.click()}
-                    disabled={createPending}
-                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm transition-colors disabled:opacity-50 ${
-                      d ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                    {createFileName || 'Attach invoice file'}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => createFileRef.current?.click()}
+                      disabled={createPending}
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm transition-colors disabled:opacity-50 ${
+                        d ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      Attach file
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => createCameraRef.current?.click()}
+                      disabled={createPending}
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm transition-colors disabled:opacity-50 ${
+                        d ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 17a4 4 0 100-8 4 4 0 000 8z" />
+                      </svg>
+                      Take photo
+                    </button>
+                  </div>
+                  {createFile && <p className={`text-xs mt-1.5 truncate ${textMuted}`}>{createFile.name}</p>}
                   <input
                     ref={createFileRef}
                     type="file"
                     accept="application/pdf,image/jpeg,image/png"
                     disabled={createPending}
-                    onChange={e => setCreateFileName(e.target.files?.[0]?.name ?? '')}
+                    onChange={e => setCreateFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                  <input
+                    ref={createCameraRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={createPending}
+                    onChange={e => setCreateFile(e.target.files?.[0] ?? null)}
                     className="hidden"
                   />
                 </div>
@@ -591,6 +704,31 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                     className={inputCls}
                   />
                 </div>
+                <div className="col-span-2 flex items-end gap-3">
+                  <label className={`flex items-center gap-2 cursor-pointer select-none ${d ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <input
+                      type="checkbox"
+                      checked={editValues.is_recurring}
+                      onChange={e => setEditValues(prev => ({ ...prev, is_recurring: e.target.checked, recurrence_interval: e.target.checked ? prev.recurrence_interval : '' }))}
+                      disabled={editPending}
+                      className="w-4 h-4 rounded accent-indigo-600"
+                    />
+                    <span className="text-sm">Recurring</span>
+                  </label>
+                  {editValues.is_recurring && (
+                    <select
+                      value={editValues.recurrence_interval}
+                      onChange={e => setEditValues(prev => ({ ...prev, recurrence_interval: e.target.value as RecurrenceInterval }))}
+                      disabled={editPending}
+                      className={`${inputCls} flex-1`}
+                    >
+                      <option value="">Select periodicity…</option>
+                      {(Object.keys(RECURRENCE_LABEL) as RecurrenceInterval[]).map(interval => (
+                        <option key={interval} value={interval}>{RECURRENCE_LABEL[interval]}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
                 <div className="col-span-2">
                   <label className={labelCls}>
                     Invoice file <span className={`font-normal ${textMuted}`}>(PDF, JPEG or PNG — leave empty to keep current)</span>
@@ -605,7 +743,7 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                       View current file: {selectedExpense.file_name ?? 'invoice'}
                     </a>
                   )}
-                  <div>
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => editFileRef.current?.click()}
@@ -617,15 +755,39 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                       <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                       </svg>
-                      {editFileName || (selectedExpense.has_file ? 'Replace file' : 'Attach invoice file')}
+                      {selectedExpense.has_file ? 'Replace file' : 'Attach file'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => editCameraRef.current?.click()}
+                      disabled={editPending}
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm transition-colors disabled:opacity-50 ${
+                        d ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 17a4 4 0 100-8 4 4 0 000 8z" />
+                      </svg>
+                      Take photo
                     </button>
                   </div>
+                  {editFile && <p className={`text-xs mt-1.5 truncate ${textMuted}`}>{editFile.name}</p>}
                   <input
                     ref={editFileRef}
                     type="file"
                     accept="application/pdf,image/jpeg,image/png"
                     disabled={editPending}
-                    onChange={e => setEditFileName(e.target.files?.[0]?.name ?? '')}
+                    onChange={e => setEditFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                  <input
+                    ref={editCameraRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={editPending}
+                    onChange={e => setEditFile(e.target.files?.[0] ?? null)}
                     className="hidden"
                   />
                 </div>

@@ -1,6 +1,6 @@
 # Grafana Postgres Migration Plan
 
-**Status:** Proposed — not yet implemented
+**Status:** Implemented and verified in production 2026-07-29
 
 **Depends on:** [Grafana SQLite I/O Saturation Incident](grafana-sqlite-io-incident.md) (root cause confirmed 2026-07-25)
 
