@@ -63,6 +63,11 @@ Labels attached to each log stream:
 | `project` | `com.docker.compose.project` label |
 
 ### Grafana
+**Status: disabled** as of 2026-07-30 (service commented out in
+`docker-compose.yml`, not deleted) — see Known operational issues below.
+Prometheus, Loki, and Promtail are unaffected and keep running normally;
+metrics/logs keep being collected even with the Grafana UI disabled.
+
 **Port:** `3001` (mapped from container port 3000)
 
 **Default credentials:** `admin` / `admin` (override with `GRAFANA_PASSWORD` env var)
@@ -76,7 +81,8 @@ Datasources provisioned automatically:
 
 ### Known operational issues
 
-- [Grafana SQLite I/O saturation incident](../../docs/monitoring/grafana-sqlite-io-incident.md) — root cause confirmed 2026-07-25: Grafana's SQLite backend contends with itself under the newer unified-storage subsystems, on a VM disk that can't sustain the read volume regardless. Recommended fix: migrate Grafana's metadata store to Postgres and pin the image version.
+- [Grafana SQLite I/O saturation incident](../../docs/monitoring/grafana-sqlite-io-incident.md) — root cause confirmed 2026-07-25: Grafana's SQLite backend contends with itself under the newer unified-storage subsystems, on a VM disk that can't sustain the read volume regardless. Fixed by migrating Grafana's metadata store to Postgres and pinning the image version.
+- [Grafana Unified Storage Disk I/O Report](../../docs/monitoring/grafana-unified-storage-disk-io-report.md) — a second, distinct disk-saturation cause (Grafana's "unified storage" subsystem) surfaced after the above fix shipped, with the same severity. The documented upstream mitigation proved insufficient (recurred after ~2.5 hours). Likely an upstream Grafana bug. **Decision: Grafana disabled in production** rather than continuing to work around it.
 
 ## Dashboards
 

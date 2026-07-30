@@ -8,16 +8,20 @@ import type { ExpenseInvoice, ExpenseStatus, RecurrenceInterval } from '@/app/ac
 import ExpenseDashboard from './ExpenseDashboard';
 import ExpenseCalendar from './ExpenseCalendar';
 import ExpenseAnalytics from './ExpenseAnalytics';
+import TaxFilings from './TaxFilings';
+import type { TaxFiling } from '@/app/actions/taxFilings';
 
 interface ExpensesClientProps {
   initialExpenses: ExpenseInvoice[];
+  initialTaxFilings: TaxFiling[];
 }
 
 interface FormValues {
   provider: string;
   invoice_number: string;
   invoice_date: string;
-  billing_period: string; // 'YYYY-MM', or '' if not set
+  billing_period_month: string; // '01'-'12', or '' if not set
+  billing_period_year: string; // e.g. '2026', or '' if not set
   currency: string;
   amount: string;
   status: ExpenseStatus;
@@ -30,7 +34,8 @@ const EMPTY_FORM: FormValues = {
   provider: '',
   invoice_number: '',
   invoice_date: '',
-  billing_period: '',
+  billing_period_month: '',
+  billing_period_year: '',
   currency: 'EUR',
   amount: '',
   status: 'pending',
@@ -46,19 +51,27 @@ const RECURRENCE_LABEL: Record<RecurrenceInterval, string> = {
   yearly: 'Yearly',
 };
 
-/** Expands a 'YYYY-MM' month value into its first and last calendar day. */
-function monthToRange(monthValue: string): { start: string; end: string } {
-  if (!/^\d{4}-\d{2}$/.test(monthValue)) return { start: '', end: '' };
-  const [year, month] = monthValue.split('-').map(Number);
-  const lastDay = new Date(year, month, 0).getDate();
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** Expands a month + year pair into the first and last calendar day. Takes
+ * separate select/number inputs (not <input type="month">) since that input
+ * type isn't natively supported in Firefox — it silently falls back to a
+ * freeform text field there, so an unrecognized value gets dropped instead
+ * of parsed. */
+function monthToRange(year: string, month: string): { start: string; end: string } {
+  if (!/^\d{4}$/.test(year) || !/^\d{2}$/.test(month)) return { start: '', end: '' };
+  const y = Number(year);
+  const m = Number(month);
+  if (m < 1 || m > 12) return { start: '', end: '' };
+  const lastDay = new Date(y, m, 0).getDate();
   return {
-    start: `${monthValue}-01`,
-    end: `${monthValue}-${String(lastDay).padStart(2, '0')}`,
+    start: `${year}-${month}-01`,
+    end: `${year}-${month}-${String(lastDay).padStart(2, '0')}`,
   };
 }
 
 function buildFormData(values: FormValues, file: File | null): FormData {
-  const { start, end } = monthToRange(values.billing_period);
+  const { start, end } = monthToRange(values.billing_period_year, values.billing_period_month);
   const fd = new FormData();
   fd.append('provider', values.provider);
   fd.append('invoice_number', values.invoice_number);
@@ -84,13 +97,13 @@ const STATUS_LABEL: Record<ExpenseStatus, string> = {
 
 const UNTAGGED_FILTER = '__untagged__';
 
-export default function ExpensesClient({ initialExpenses }: ExpensesClientProps) {
+export default function ExpensesClient({ initialExpenses, initialTaxFilings }: ExpensesClientProps) {
   const { isDark: isDarkMode, toggleDark } = useTheme();
   const d = isDarkMode;
 
   const [expenses, setExpenses] = useState<ExpenseInvoice[]>(initialExpenses);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'invoices' | 'calendar' | 'analytics'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'invoices' | 'calendar' | 'analytics' | 'taxes'>('dashboard');
 
   const providerSuggestions = useMemo(
     () => Array.from(new Set(expenses.map(e => e.provider))).sort(),
@@ -186,7 +199,8 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
       provider: expense.provider,
       invoice_number: expense.invoice_number,
       invoice_date: expense.invoice_date.slice(0, 10),
-      billing_period: expense.billing_period_start?.slice(0, 7) ?? '',
+      billing_period_year: expense.billing_period_start?.slice(0, 4) ?? '',
+      billing_period_month: expense.billing_period_start?.slice(5, 7) ?? '',
       currency: expense.currency,
       amount: String(expense.amount),
       status: expense.status,
@@ -284,8 +298,8 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
           </div>
 
           {/* Tabs */}
-          <div className="grid grid-cols-4 sm:flex gap-0.5 -mb-px">
-            {(['dashboard', 'invoices', 'calendar', 'analytics'] as const).map(tab => (
+          <div className="grid grid-cols-5 sm:flex gap-0.5 -mb-px">
+            {(['dashboard', 'invoices', 'calendar', 'analytics', 'taxes'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -300,9 +314,10 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                   {tab === 'invoices' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />}
                   {tab === 'calendar' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />}
                   {tab === 'analytics' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 20V10M12 20V4M6 20v-6" />}
+                  {tab === 'taxes' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />}
                 </svg>
                 <span className="hidden sm:inline">
-                  {tab === 'dashboard' ? 'Dashboard' : tab === 'invoices' ? 'Invoices' : tab === 'calendar' ? 'Calendar' : 'Analytics'}
+                  {tab === 'dashboard' ? 'Dashboard' : tab === 'invoices' ? 'Invoices' : tab === 'calendar' ? 'Calendar' : tab === 'analytics' ? 'Analytics' : 'Taxes'}
                 </span>
               </button>
             ))}
@@ -417,7 +432,12 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                   className={`border rounded-lg p-3 cursor-pointer transition-colors ${cardBg} ${d ? 'hover:bg-gray-700/40' : 'hover:bg-gray-100/70'}`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium truncate min-w-0">{expense.provider}</p>
+                    <span className="flex items-center gap-1 min-w-0">
+                      <p className="font-medium truncate">{expense.provider}</p>
+                      {expense.has_file && (
+                        <svg className={`w-3 h-3 shrink-0 ${textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Has attached file"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                      )}
+                    </span>
                     <p className="font-semibold shrink-0">{expense.currency} {Number(expense.amount).toFixed(2)}</p>
                   </div>
                   <div className={`flex items-center gap-1.5 mt-1 text-xs ${textMuted}`}>
@@ -471,7 +491,14 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                         i % 2 === 0 ? '' : d ? 'bg-gray-800/50' : 'bg-gray-50/50'
                       }`}
                     >
-                      <td className="px-4 py-3 font-medium">{expense.provider}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <span className="flex items-center gap-1.5">
+                          {expense.provider}
+                          {expense.has_file && (
+                            <svg className={`w-3 h-3 shrink-0 ${textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Has attached file"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                          )}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs">{expense.invoice_number}</td>
                       <td className="px-4 py-3">
                         {expense.tag ? (
@@ -503,9 +530,11 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
             </div>
           </>
         ) : activeTab === 'calendar' ? (
-          <ExpenseCalendar expenses={expenses} isDarkMode={d} />
-        ) : (
+          <ExpenseCalendar expenses={expenses} isDarkMode={d} onSelectExpense={openDetailModal} />
+        ) : activeTab === 'analytics' ? (
           <ExpenseAnalytics expenses={expenses} isDarkMode={d} />
+        ) : (
+          <TaxFilings initialFilings={initialTaxFilings} isDarkMode={d} />
         )}
       </div>
 
@@ -561,15 +590,32 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                     className={inputCls}
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelCls}>Billing period <span className={`font-normal ${textMuted}`}>(optional)</span></label>
-                  <input
-                    type="month"
-                    value={createValues.billing_period}
-                    onChange={e => setCreateValues(prev => ({ ...prev, billing_period: e.target.value }))}
-                    disabled={createPending}
-                    className={inputCls}
-                  />
+                <div className="col-span-2 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Billing period month <span className={`font-normal ${textMuted}`}>(optional)</span></label>
+                    <select
+                      value={createValues.billing_period_month}
+                      onChange={e => setCreateValues(prev => ({ ...prev, billing_period_month: e.target.value }))}
+                      disabled={createPending}
+                      className={inputCls}
+                    >
+                      <option value="">—</option>
+                      {MONTH_NAMES.map((name, i) => (
+                        <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Billing period year</label>
+                    <input
+                      type="number"
+                      placeholder="2026"
+                      value={createValues.billing_period_year}
+                      onChange={e => setCreateValues(prev => ({ ...prev, billing_period_year: e.target.value }))}
+                      disabled={createPending}
+                      className={inputCls}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className={labelCls}>Currency</label>
@@ -756,15 +802,32 @@ export default function ExpensesClient({ initialExpenses }: ExpensesClientProps)
                     className={inputCls}
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelCls}>Billing period <span className={`font-normal ${textMuted}`}>(optional)</span></label>
-                  <input
-                    type="month"
-                    value={editValues.billing_period}
-                    onChange={e => setEditValues(prev => ({ ...prev, billing_period: e.target.value }))}
-                    disabled={editPending}
-                    className={inputCls}
-                  />
+                <div className="col-span-2 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Billing period month <span className={`font-normal ${textMuted}`}>(optional)</span></label>
+                    <select
+                      value={editValues.billing_period_month}
+                      onChange={e => setEditValues(prev => ({ ...prev, billing_period_month: e.target.value }))}
+                      disabled={editPending}
+                      className={inputCls}
+                    >
+                      <option value="">—</option>
+                      {MONTH_NAMES.map((name, i) => (
+                        <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Billing period year</label>
+                    <input
+                      type="number"
+                      placeholder="2026"
+                      value={editValues.billing_period_year}
+                      onChange={e => setEditValues(prev => ({ ...prev, billing_period_year: e.target.value }))}
+                      disabled={editPending}
+                      className={inputCls}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className={labelCls}>Currency</label>
