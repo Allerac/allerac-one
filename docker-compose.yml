@@ -412,54 +412,57 @@ services:
     depends_on:
       - loki
 
-  grafana:
-    image: grafana/grafana:13.1.1
-    container_name: allerac-grafana
-    restart: unless-stopped
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_ANALYTICS_REPORTING_ENABLED=false
-      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
-      - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
-      - GF_PLUGINS_PREINSTALL_DISABLED=true
-      # Moved off the bundled SQLite store: its background subsystems
-      # (secure-values cleanup, k8s-style dashboard resource cleanup, bleve
-      # search indexing) serialize through SQLite's single-writer lock and
-      # drove sustained 200-280 MB/s reads, saturating the host disk and
-      # blowing past CI deploy timeouts. See docs/monitoring/grafana-sqlite-io-incident.md.
-      - GF_DATABASE_TYPE=postgres
-      - GF_DATABASE_HOST=db:5432
-      - GF_DATABASE_NAME=grafana
-      - GF_DATABASE_USER=${POSTGRES_USER:-postgres}
-      - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - GF_DATABASE_SSL_MODE=disable
-      # Unified storage (mandatory dashboard/folder auto-migration on small
-      # instances, Grafana v12.4+) kept generating sustained ~250 MB/s reads
-      # even after the fix above, independent of GF_DATABASE_TYPE. This is
-      # Grafana's own documented mitigation for that subsystem; effectiveness
-      # unconfirmed as of 2026-07-30. See
-      # docs/monitoring/grafana-unified-storage-disk-io-report.md.
-      - GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./infra/monitoring/grafana/provisioning/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml
-      - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
-    ports:
-      - "${GRAFANA_PORT:-3001}:3000"
-    depends_on:
-      prometheus:
-        condition: service_started
-      loki:
-        condition: service_started
-      db:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 256M
+  # grafana: disabled 2026-07-30. Its "unified storage" subsystem (mandatory
+  # dashboard/folder auto-migration on small instances, Grafana v12.4+) drives
+  # sustained ~250 MB/s host disk reads independent of GF_DATABASE_TYPE, which
+  # has repeatedly saturated the production VM's single disk and caused
+  # production deploys to blow past GitHub Actions' 30-minute timeout
+  # (2026-07-25, and twice more on 2026-07-30). The documented upstream
+  # mitigation (GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true) only delayed
+  # recurrence by ~2.5 hours rather than fixing it. Likely an upstream
+  # Grafana bug — see docs/monitoring/grafana-unified-storage-disk-io-report.md
+  # for the full investigation before re-enabling. Prometheus/Loki/Promtail
+  # are unaffected and keep running; only Grafana (the consumer/UI for them)
+  # is disabled. The `grafana_data` volume below is left in place
+  # (unreferenced) so re-enabling doesn't require restoring from backup.
+  #
+  # grafana:
+  #   image: grafana/grafana:13.1.1
+  #   container_name: allerac-grafana
+  #   restart: unless-stopped
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #     - GF_ANALYTICS_REPORTING_ENABLED=false
+  #     - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+  #     - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
+  #     - GF_PLUGINS_PREINSTALL_DISABLED=true
+  #     - GF_DATABASE_TYPE=postgres
+  #     - GF_DATABASE_HOST=db:5432
+  #     - GF_DATABASE_NAME=grafana
+  #     - GF_DATABASE_USER=${POSTGRES_USER:-postgres}
+  #     - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+  #     - GF_DATABASE_SSL_MODE=disable
+  #     - GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #     - ./infra/monitoring/grafana/provisioning/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml
+  #     - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+  #     - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+  #   ports:
+  #     - "${GRAFANA_PORT:-3001}:3000"
+  #   depends_on:
+  #     prometheus:
+  #       condition: service_started
+  #     loki:
+  #       condition: service_started
+  #     db:
+  #       condition: service_healthy
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 256M
 
   # ============================================
   # Notifications

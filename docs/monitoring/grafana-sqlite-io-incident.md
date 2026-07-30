@@ -12,8 +12,11 @@ more hours, this time from Grafana's separate "unified storage" subsystem,
 which appears to retain a local-storage dependency independent of
 `GF_DATABASE_TYPE`. See the
 [Unified Storage Disk I/O Report](grafana-unified-storage-disk-io-report.md)
-for the full follow-up investigation. **Current state: Grafana is stopped in
-production** (as of 2026-07-30) pending a fix or a decision to leave it off.
+for the full follow-up investigation, including the final decision:
+**Grafana is disabled in production** (service commented out in
+`docker-compose.yml`, not deleted; local edit prepared 2026-07-30, pending
+commit/release) after the officially documented mitigation for the second
+issue proved insufficient.
 
 Root cause of the classic-database portion identified 2026-07-25 (Grafana's
 SQLite-backed metadata store contending with itself and with the production

@@ -89,35 +89,53 @@ governance decision.
 
 ## Next session
 
-### Grafana disk I/O — recurred from a second, distinct cause
+### Grafana disabled in production — commit and deploy the compose change
 
-**Status:** Open. Grafana stopped in production as of 2026-07-30.
+**Status:** Decision made and local edit prepared 2026-07-30; awaiting the
+user's review, commit, and release (per the working agreement above — the
+assistant does not commit/push/deploy).
 
-The classic-database fix (SQLite → Postgres, `grafana/grafana:13.1.1` pinned,
-2026-07-29) did eliminate the original `database is locked` errors and was
-verified clean for 20 minutes post-deploy — that part of the fix is confirmed
-working and not in question. However, the same magnitude of disk saturation
-(~250 MB/s sustained reads, 86-93% disk utilization) recurred within hours and
-continued for at least 18 more hours, this time traced to Grafana's separate
-"unified storage" subsystem (mandatory auto-migration for small instances
-since v12.4), which appears to retain a local-storage dependency independent
-of `GF_DATABASE_TYPE=postgres`. Confirmed via `/proc/<pid>/io`: ~9.73 TiB of
-cumulative reads in 18 hours; ruled out dashboard content, migration retries
-(migration completed successfully in under a second, confirmed in
-`unifiedstorage_migration_log`), and local file/volume size (53 MB total) as
-causes. Likely an upstream Grafana bug/regression — full evidence, upstream
-references, and next-step options in the
-[Unified Storage Disk I/O Report](../monitoring/grafana-unified-storage-disk-io-report.md).
+`docker-compose.yml`'s `grafana:` service block is commented out locally
+(not deleted; `grafana_data` volume left in place). This has **not** been
+committed, pushed, or released yet — production's `docker-compose.yml` still
+has Grafana active as of this writing, but the running `allerac-grafana`
+container itself is stopped (manual workaround, will need to be
+stopped again after any deploy that runs before this change ships, since a
+plain `docker compose up -d` on the *current* committed compose file would
+restart it). Once this change is committed and released through the normal
+pipeline, no further manual stopping will be needed — `docker compose up -d`
+will simply stop managing/recreating Grafana.
 
-Next step in progress: testing `GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true`
-locally before considering it for production (Grafana Labs' documented
-mitigation for this problem class, though a related public report found it
-insufficient for a similar-but-not-identical SQLite-backed case).
-
-Related, resolved: [Grafana SQLite I/O saturation incident](../monitoring/grafana-sqlite-io-incident.md),
-[Grafana Postgres Migration Plan](../monitoring/grafana-postgres-migration-plan.md).
+Reason: see next entry.
 
 ## Completed context
+
+- **Grafana disk I/O — root cause found to be a second, distinct issue beyond
+  the classic-database fix; decision made to disable.** The classic-database
+  fix (SQLite → Postgres, `grafana/grafana:13.1.1` pinned, 2026-07-29)
+  eliminated the original `database is locked` errors and remains correct —
+  not in question. However, the same magnitude of disk saturation
+  (~250-280 MB/s sustained reads, 86-93% disk utilization) recurred within
+  hours and continued for at least 18 more hours, traced to Grafana's separate
+  "unified storage" subsystem (mandatory auto-migration for small instances
+  since v12.4), which retains a local-storage dependency independent of
+  `GF_DATABASE_TYPE=postgres`. Confirmed via `/proc/<pid>/io`: ~9.73 TiB
+  cumulative reads in 18 hours; ruled out dashboard content, migration retries
+  (completed successfully in under a second per `unifiedstorage_migration_log`),
+  and local file/volume size (53 MB total) as causes. Tested Grafana Labs'
+  own documented mitigation (`GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true`)
+  live in production: looked clean for ~6 minutes, then the same storm
+  recurred after ~2.5 hours, disrupting two more production deploys the same
+  day (2026-07-30) on top of the original 2026-07-25 incident. Decision:
+  disable Grafana in production (comment out the service, keep the volume)
+  rather than continue investing in workarounds for what looks like an
+  unresolved upstream bug in a ~3-month-old Grafana feature — Prometheus,
+  Loki, and Promtail are unaffected and keep running. Full evidence, upstream
+  references (including a related-but-not-identical public report where the
+  same mitigation also failed), and re-enabling criteria in the
+  [Unified Storage Disk I/O Report](../monitoring/grafana-unified-storage-disk-io-report.md).
+  Related, resolved: [Grafana SQLite I/O saturation incident](../monitoring/grafana-sqlite-io-incident.md),
+  [Grafana Postgres Migration Plan](../monitoring/grafana-postgres-migration-plan.md).
 
 - Production baseline `v0.0.15` was reported released and validated on 2026-07-21.
   Its tag and commit were not present in the local clone during this backlog update;

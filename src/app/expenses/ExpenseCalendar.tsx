@@ -6,6 +6,7 @@ import type { ExpenseInvoice, ExpenseStatus, RecurrenceInterval } from '@/app/ac
 interface Props {
   expenses: ExpenseInvoice[];
   isDarkMode: boolean;
+  onSelectExpense: (expense: ExpenseInvoice) => void;
 }
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -40,7 +41,7 @@ function addInterval(date: Date, interval: RecurrenceInterval): Date {
   return new Date(targetYear, targetMonth, Math.min(date.getDate(), daysInTargetMonth));
 }
 
-export default function ExpenseCalendar({ expenses, isDarkMode: d }: Props) {
+export default function ExpenseCalendar({ expenses, isDarkMode: d, onSelectExpense }: Props) {
   const today = new Date();
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const year = cursor.getFullYear();
@@ -166,7 +167,12 @@ export default function ExpenseCalendar({ expenses, isDarkMode: d }: Props) {
               <p className={`text-[10px] mb-0.5 ${d ? 'text-gray-500' : 'text-gray-400'}`}>{day}</p>
               <div className="flex flex-col gap-0.5">
                 {actual.slice(0, 2).map(expense => (
-                  <div key={expense.id} className={`flex items-center gap-1 rounded px-1 py-0.5 ${statusPillCls(expense.status, d)}`} title={`${expense.provider} — ${expense.currency} ${Number(expense.amount).toFixed(2)}`}>
+                  <div
+                    key={expense.id}
+                    onClick={e => { e.stopPropagation(); onSelectExpense(expense); }}
+                    className={`flex items-center gap-1 rounded px-1 py-0.5 cursor-pointer hover:opacity-75 transition-opacity ${statusPillCls(expense.status, d)}`}
+                    title={`${expense.provider} — ${expense.currency} ${Number(expense.amount).toFixed(2)}`}
+                  >
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDotCls(expense.status, d)}`} />
                     <span className="text-[9px] truncate">{expense.provider}</span>
                   </div>
@@ -207,7 +213,11 @@ export default function ExpenseCalendar({ expenses, isDarkMode: d }: Props) {
         <>
           <div className="space-y-1.5">
             {monthInvoices.map(expense => (
-              <div key={expense.id} className="flex items-center justify-between gap-2 text-sm">
+              <div
+                key={expense.id}
+                onClick={() => onSelectExpense(expense)}
+                className={`flex items-center justify-between gap-2 text-sm rounded px-1.5 py-1 -mx-1.5 cursor-pointer transition-colors ${d ? 'hover:bg-gray-700/50' : 'hover:bg-gray-100'}`}
+              >
                 <span className="flex items-center gap-2 min-w-0">
                   <span className={`font-mono text-xs shrink-0 ${textMuted}`}>{expense.invoice_date.slice(8, 10)}</span>
                   <span className={`truncate ${text}`}>{expense.provider}</span>

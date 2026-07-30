@@ -6,7 +6,11 @@ saturation of the same magnitude recurred hours later from a distinct cause —
 see the
 [Unified Storage Disk I/O Report](grafana-unified-storage-disk-io-report.md).
 This plan's fix is not being reverted; it remains correct and necessary, just
-not sufficient on its own.
+not sufficient on its own. Grafana itself was subsequently disabled in
+production (2026-07-30) once the second issue's documented mitigation also
+proved insufficient — this migration's Postgres configuration is left in
+place in the (currently commented-out) service definition, so it's ready to
+go if/when Grafana is re-enabled.
 
 **Depends on:** [Grafana SQLite I/O Saturation Incident](grafana-sqlite-io-incident.md) (root cause confirmed 2026-07-25)
 

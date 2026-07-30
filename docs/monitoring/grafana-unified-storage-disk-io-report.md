@@ -1,9 +1,39 @@
 # Grafana Unified Storage — Sustained Disk I/O Report
 
-**Status:** Open. Suspected upstream bug/regression in Grafana's "unified storage"
-subsystem (introduced v12.4, mandatory v13+), distinct from and discovered after
-the [SQLite classic-database incident](grafana-sqlite-io-incident.md) that this
+**Status:** Grafana disabled in production 2026-07-30 (commented out in
+`docker-compose.yml`, not removed). Suspected upstream bug/regression in
+Grafana's "unified storage" subsystem (introduced v12.4, mandatory v13+),
+distinct from and discovered after the
+[SQLite classic-database incident](grafana-sqlite-io-incident.md) that this
 same investigation originally set out to fix.
+
+## Decision: disabled, not worked around further
+
+The documented upstream mitigation (`GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true`,
+see "Next steps" below) was tested live in production on 2026-07-30. It looked
+very promising initially — zero disk read growth for the first ~6 minutes
+after restart, versus the previous behavior of immediate, continuous
+saturation — but the same ~250-280 MB/s read storm recurred after
+approximately 2.5 hours of clean operation. This directly disrupted two
+separate production deploys the same day (both exceeded, or nearly exceeded,
+GitHub Actions' 30-minute job timeout), on top of the original 2026-07-25
+incident.
+
+Given: (a) the officially documented mitigation proved insufficient, matching
+a similar report already filed upstream
+([grafana/grafana#122993](https://github.com/grafana/grafana/issues/122993));
+(b) this has now disrupted production deploys three times; (c) Grafana is an
+observability nicety here, not core to the Allerac product, with no alert
+rules or automation depending on it; and (d) the production VM's disk is a
+shared, size-constrained resource (also hosting the primary application
+database) — the decision was to disable Grafana in production rather than
+continue investing in workarounds for what increasingly looks like an
+unresolved upstream bug. The `grafana` service block was commented out (not
+deleted) in `docker-compose.yml`, and the `grafana_data` volume was left in
+place, so re-enabling later (e.g., once Grafana Labs addresses this, or if a
+working configuration is found) doesn't require restoring from backup.
+Prometheus, Loki, and Promtail are unaffected and continue running normally —
+only Grafana itself (the dashboard/alerting UI consuming them) is disabled.
 
 **Environment:**
 - Grafana image: `grafana/grafana:13.1.1` (pinned; previously floating `:latest`)
@@ -156,18 +186,25 @@ found during this investigation.
 
 ## Next steps
 
-1. Test `GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true` in a local/dev
-   environment first (not production directly, given today's history), and
-   observe `/proc/<pid>/io` `read_bytes` growth rate over a comparable window
-   before deciding whether to apply it to production.
-2. If that doesn't resolve it, the pragmatic near-term stance is to keep
-   Grafana stopped in production and treat this as a known, tracked
-   limitation of self-hosting current Grafana versions on constrained-disk
-   infrastructure, rather than spend further effort configuring around an
-   apparent upstream bug in a ~3-month-old feature (GA'd 2026-04-14).
+1. ~~Test `GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true`.~~ Done
+   2026-07-30. Local testing was inconclusive (the dev machine's disk is fast
+   enough that the read storm never visibly saturates it — 0 measurable
+   growth over 5 minutes even without the fix, so there was no local signal to
+   compare against). Tested live in production instead: promising for ~6
+   minutes, then the same storm recurred after ~2.5 hours. Not a fix — see
+   "Decision" above.
+2. **Done: Grafana disabled in production** (2026-07-30), per the decision
+   above, rather than continuing to invest in workarounds for an apparent
+   upstream bug in a ~3-month-old feature (GA'd 2026-04-14).
 3. Consider filing this as a new upstream issue against `grafana/grafana` —
    the evidence in this report (successful one-time migration, ruled-out local
    storage sources, sustained multi-terabyte cumulative reads against a
-   Postgres-backed classic database) is more complete than the existing
-   related issue and specifically implicates the Postgres-backed
-   configuration, which does not appear to be covered by existing reports.
+   Postgres-backed classic database, and confirmed-insufficient documented
+   mitigation) is more complete than the existing related issue and
+   specifically implicates the Postgres-backed configuration, which does not
+   appear to be covered by existing reports. Not yet filed.
+4. Re-enabling later: uncomment the `grafana:` service block in
+   `docker-compose.yml` (left in place, not deleted) once either an upstream
+   fix ships, or the production VM moves to a disk with enough throughput
+   headroom to absorb this workload without visible impact (a mitigation, not
+   a fix — would mask rather than resolve the underlying inefficiency).
