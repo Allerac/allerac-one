@@ -435,6 +435,13 @@ services:
       - GF_DATABASE_USER=${POSTGRES_USER:-postgres}
       - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - GF_DATABASE_SSL_MODE=disable
+      # Unified storage (mandatory dashboard/folder auto-migration on small
+      # instances, Grafana v12.4+) kept generating sustained ~250 MB/s reads
+      # even after the fix above, independent of GF_DATABASE_TYPE. This is
+      # Grafana's own documented mitigation for that subsystem; effectiveness
+      # unconfirmed as of 2026-07-30. See
+      # docs/monitoring/grafana-unified-storage-disk-io-report.md.
+      - GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/monitoring/grafana/provisioning/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml

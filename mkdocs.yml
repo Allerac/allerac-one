@@ -144,6 +144,7 @@ nav:
       - Monitoring: monitoring/README.md
       - Grafana SQLite I/O Incident: monitoring/grafana-sqlite-io-incident.md
       - Grafana Postgres Migration Plan: monitoring/grafana-postgres-migration-plan.md
+      - Grafana Unified Storage Disk I/O Report: monitoring/grafana-unified-storage-disk-io-report.md
       - Metrics: monitoring/metrics.md
       - Logging:
           - Overview: logging/README.md
