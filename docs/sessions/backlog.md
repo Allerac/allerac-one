@@ -87,23 +87,37 @@ pin third-party Actions, audit dependency and asset licenses, and define private
 vulnerability reporting. Formal license selection remains a separate legal and
 governance decision.
 
-## Completed context
+## Next session
 
-- **Grafana SQLite I/O saturation — resolved 2026-07-29.** Root cause (confirmed
-  2026-07-25): Grafana's newer unified-storage background subsystems (secure-values
-  cleanup, k8s-style dashboard resource cleanup, bleve search indexing) contended on
-  SQLite's single-writer lock, driving 246-254 MB/s of continuous reads that pinned
-  the production VM's single 64 GB Premium SSD (P6, ~50 MB/s baseline throughput) at
-  86-91% utilization — this had cancelled a production deploy via GitHub Actions'
-  30-minute timeout (run `30171696936`) and, earlier, the `v0.0.13` deploy. Fixed by
-  migrating Grafana's metadata store to the existing `allerac-db` Postgres instance
-  and pinning the image to `grafana/grafana:13.1.1` (was floating `:latest`); shipped
-  through the normal release pipeline. Verified on the production VM post-deploy:
-  zero `database is locked` log lines in 20 minutes (previously continuous), disk
-  utilization 0% (previously 86-91%), load average 0.05 (previously 6.43). Full
-  incident record and the implemented plan:
-  [Grafana SQLite I/O saturation incident](../monitoring/grafana-sqlite-io-incident.md),
-  [Grafana Postgres Migration Plan](../monitoring/grafana-postgres-migration-plan.md).
+### Grafana disk I/O — recurred from a second, distinct cause
+
+**Status:** Open. Grafana stopped in production as of 2026-07-30.
+
+The classic-database fix (SQLite → Postgres, `grafana/grafana:13.1.1` pinned,
+2026-07-29) did eliminate the original `database is locked` errors and was
+verified clean for 20 minutes post-deploy — that part of the fix is confirmed
+working and not in question. However, the same magnitude of disk saturation
+(~250 MB/s sustained reads, 86-93% disk utilization) recurred within hours and
+continued for at least 18 more hours, this time traced to Grafana's separate
+"unified storage" subsystem (mandatory auto-migration for small instances
+since v12.4), which appears to retain a local-storage dependency independent
+of `GF_DATABASE_TYPE=postgres`. Confirmed via `/proc/<pid>/io`: ~9.73 TiB of
+cumulative reads in 18 hours; ruled out dashboard content, migration retries
+(migration completed successfully in under a second, confirmed in
+`unifiedstorage_migration_log`), and local file/volume size (53 MB total) as
+causes. Likely an upstream Grafana bug/regression — full evidence, upstream
+references, and next-step options in the
+[Unified Storage Disk I/O Report](../monitoring/grafana-unified-storage-disk-io-report.md).
+
+Next step in progress: testing `GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true`
+locally before considering it for production (Grafana Labs' documented
+mitigation for this problem class, though a related public report found it
+insufficient for a similar-but-not-identical SQLite-backed case).
+
+Related, resolved: [Grafana SQLite I/O saturation incident](../monitoring/grafana-sqlite-io-incident.md),
+[Grafana Postgres Migration Plan](../monitoring/grafana-postgres-migration-plan.md).
+
+## Completed context
 
 - Production baseline `v0.0.15` was reported released and validated on 2026-07-21.
   Its tag and commit were not present in the local clone during this backlog update;

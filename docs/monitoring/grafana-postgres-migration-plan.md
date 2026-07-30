@@ -1,6 +1,12 @@
 # Grafana Postgres Migration Plan
 
-**Status:** Implemented and verified in production 2026-07-29
+**Status:** Implemented 2026-07-29. Fixed the classic-database lock contention
+this plan targeted (confirmed clean for 20 minutes post-deploy), but disk
+saturation of the same magnitude recurred hours later from a distinct cause —
+see the
+[Unified Storage Disk I/O Report](grafana-unified-storage-disk-io-report.md).
+This plan's fix is not being reverted; it remains correct and necessary, just
+not sufficient on its own.
 
 **Depends on:** [Grafana SQLite I/O Saturation Incident](grafana-sqlite-io-incident.md) (root cause confirmed 2026-07-25)
 

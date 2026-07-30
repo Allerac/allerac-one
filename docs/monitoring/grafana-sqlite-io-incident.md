@@ -2,16 +2,27 @@
 
 ## Status
 
-**Resolved 2026-07-29.** Root cause identified 2026-07-25 (Grafana's SQLite-backed
-metadata store contending with itself and with the production VM's disk throughput
-ceiling); fix implemented per the
+**Partially resolved 2026-07-29; disk saturation recurred 2026-07-29/30 from a
+distinct cause.** The classic-database fix below (SQLite → Postgres) did
+eliminate the original `database is locked` errors on Grafana's classic
+`sqlstore` tables, confirmed clean for a 20-minute post-deploy verification
+window. However, the underlying symptom — sustained ~250 MB/s disk reads
+saturating the host disk — returned within hours and continued for at least 18
+more hours, this time from Grafana's separate "unified storage" subsystem,
+which appears to retain a local-storage dependency independent of
+`GF_DATABASE_TYPE`. See the
+[Unified Storage Disk I/O Report](grafana-unified-storage-disk-io-report.md)
+for the full follow-up investigation. **Current state: Grafana is stopped in
+production** (as of 2026-07-30) pending a fix or a decision to leave it off.
+
+Root cause of the classic-database portion identified 2026-07-25 (Grafana's
+SQLite-backed metadata store contending with itself and with the production
+VM's disk throughput ceiling); fix implemented per the
 [Grafana Postgres Migration Plan](grafana-postgres-migration-plan.md) and deployed to
-production via the normal release pipeline. Verified on the production VM
-post-deploy: zero `database is locked` / `context deadline exceeded` log lines in a
-20-minute window (previously continuous), disk utilization at 0% (previously
-86-91%), load average 0.05 (previously 6.43). Grafana now runs pinned to
-`grafana/grafana:13.1.1` with its metadata store on the existing `allerac-db`
-Postgres instance instead of the bundled SQLite file.
+production via the normal release pipeline. Grafana now runs pinned to
+`grafana/grafana:13.1.1` with its classic metadata store on the existing
+`allerac-db` Postgres instance instead of the bundled SQLite file — this part
+of the fix is confirmed working and is not itself in question.
 
 ## Summary
 
