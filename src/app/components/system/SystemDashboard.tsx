@@ -38,6 +38,7 @@ interface SystemDashboardProps {
   onSaveToken: () => Promise<void>;
   userName?: string;
   userEmail?: string;
+  isAdmin?: boolean;
 }
 
 const TABS = [
@@ -77,9 +78,16 @@ export default function SystemDashboardModal({
   setSelectedModel,
   userName,
   userEmail,
+  isAdmin = false,
 }: SystemDashboardProps) {
   const t = useTranslations('system');
-  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'apiAccess' | 'preferences'>(initialTab ?? 'preferences');
+  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'apiAccess' | 'preferences'>(
+    initialTab === 'apiAccess' && !isAdmin ? 'preferences' : (initialTab ?? 'preferences'),
+  );
+  // "Allerac API" exposes scopes across every domain — only admins get the
+  // full picker. Domain-restricted users get a narrower, scope-locked panel
+  // elsewhere (e.g. the Health dashboard's own agent-access panel).
+  const visibleTabs = TABS.filter(tab => tab.id !== 'apiAccess' || isAdmin);
   const [retroMode, setRetroMode] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('cfg-retro') !== 'off' : true
   );
@@ -93,7 +101,7 @@ export default function SystemDashboardModal({
   });
 
   useEffect(() => {
-    if (isOpen) setActiveTab(initialTab ?? 'preferences');
+    if (isOpen) setActiveTab(initialTab === 'apiAccess' && !isAdmin ? 'preferences' : (initialTab ?? 'preferences'));
   }, [isOpen]);
 
   useEffect(() => {
@@ -298,7 +306,7 @@ export default function SystemDashboardModal({
           {/* Tabs */}
           {retroMode ? (
             <div className={isPage ? 'w-full max-w-5xl mx-auto' : undefined} style={{ borderBottom: '1px solid #21262d', padding: '0 20px', display: 'flex', overflowX: 'auto' }}>
-              {TABS.map(tab => {
+              {visibleTabs.map(tab => {
                 const active = activeTab === tab.id;
                 return (
                   <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -319,7 +327,7 @@ export default function SystemDashboardModal({
             </div>
           ) : (
             <div className={`flex overflow-x-auto border-b ${isPage ? 'w-full max-w-5xl mx-auto' : ''} ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-              {TABS.map(tab => (
+              {visibleTabs.map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                   className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
                     activeTab === tab.id
@@ -361,7 +369,7 @@ export default function SystemDashboardModal({
               />
             )}
 
-            {activeTab === 'apiAccess' && (
+            {activeTab === 'apiAccess' && isAdmin && (
               <ControlApiAccessTab isDarkMode={retroMode || isDarkMode} />
             )}
 

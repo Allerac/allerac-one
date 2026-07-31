@@ -9,6 +9,7 @@ export default async function ConfigPage() {
       userId={user.id}
       userName={user.name}
       userEmail={user.email}
+      isAdmin={user.is_admin}
     />
   );
 }

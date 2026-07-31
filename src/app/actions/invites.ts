@@ -22,6 +22,7 @@ export interface InviteRecord {
 export async function createInvite(
   email: string,
   domainSlug: string,
+  issueApiKey: boolean = false,
 ): Promise<{ success: true; token: string } | { success: false; error: string }> {
   const admin = await requireCurrentAdmin();
 
@@ -45,9 +46,9 @@ export async function createInvite(
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     await pool.query(
-      `INSERT INTO invite_tokens (token, email, domain_slug, expires_at, created_by)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [token, email.toLowerCase(), domainSlug, expiresAt, admin.id],
+      `INSERT INTO invite_tokens (token, email, domain_slug, expires_at, created_by, issue_api_key)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [token, email.toLowerCase(), domainSlug, expiresAt, admin.id, issueApiKey && domainSlug === 'health'],
     );
 
     const settings = await sysSettings.loadAll();

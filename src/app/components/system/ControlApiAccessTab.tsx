@@ -60,6 +60,7 @@ const SCOPE_GROUPS = [
     scopes: [
       ['health:read', 'Health: read'],
       ['health:write', 'Health: write'],
+      ['health:proxy:read', 'Health: proxy (live, not stored)'],
       ['email:read', 'Email: read'],
       ['email:write', 'Email: write'],
       ['finance:read', 'Finance: read'],
@@ -93,10 +94,15 @@ const PRESETS = {
       'skills:read',
       'benchmark:read',
       'health:read',
+      'health:proxy:read',
       'email:read',
       'finance:read',
       'music:read',
     ],
+  },
+  garminAgent: {
+    label: 'Garmin agent (proxy only, nothing stored)',
+    scopes: ['profile:read', 'health:proxy:read'],
   },
   automation: {
     label: 'Automation',

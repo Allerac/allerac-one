@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { apiKeyService } from '@/app/services/api-keys/api-key.service';
 import { requireSessionApiUser } from '../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../_lib/responses';
-import { apiKeyDto } from './_lib';
+import { apiKeyDto, SELF_SERVICE_SCOPES } from './_lib';
 
 const createApiKeySchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -28,6 +28,13 @@ export async function POST(request: Request): Promise<Response> {
     const parsed = createApiKeySchema.safeParse(await request.json());
     if (!parsed.success) {
       return apiError('validation_error', 'Invalid API key payload', 400, parsed.error.flatten());
+    }
+
+    if (!user.isAdmin) {
+      const disallowed = (parsed.data.scopes ?? []).filter(scope => !SELF_SERVICE_SCOPES.includes(scope));
+      if (disallowed.length > 0) {
+        return apiError('forbidden_scope', `Scope(s) not available for self-service: ${disallowed.join(', ')}`, 403);
+      }
     }
 
     const created = await apiKeyService.create({

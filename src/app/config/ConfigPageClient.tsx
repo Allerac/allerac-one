@@ -8,9 +8,10 @@ interface ConfigPageClientProps {
   userId: string;
   userName: string | null;
   userEmail: string;
+  isAdmin: boolean;
 }
 
-export default function ConfigPageClient({ userId, userName, userEmail }: ConfigPageClientProps) {
+export default function ConfigPageClient({ userId, userName, userEmail, isAdmin }: ConfigPageClientProps) {
   const router = useRouter();
   const { isDark } = useTheme();
 
@@ -31,6 +32,7 @@ export default function ConfigPageClient({ userId, userName, userEmail }: Config
       userName={userName}
       userEmail={userEmail}
       isDarkMode={isDark}
+      isAdmin={isAdmin}
     />
   );
 }

@@ -3,6 +3,7 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import pool from '@/app/clients/db';
+import { apiKeyService } from '@/app/services/api-keys/api-key.service';
 
 const BCRYPT_COST_FACTOR = 12;
 const SESSION_EXPIRY_DAYS = 7;
@@ -77,7 +78,8 @@ export class AuthService {
   async register(
     email: string,
     password: string,
-    name?: string
+    name?: string,
+    skipDefaultDomain: boolean = false,
   ): Promise<{ success: true; user: User; session: { token: string; expiresAt: Date } } | { success: false; error: string }> {
     try {
       // Check if user already exists
@@ -107,8 +109,11 @@ export class AuthService {
 
       const user = result.rows[0] as User;
 
-      // Non-admin users get 'chat' domain access by default
-      if (!isFirstUser) {
+      // Non-admin users get 'chat' domain access by default, unless the
+      // caller is about to grant a specific invite domain instead (e.g.
+      // registerWithInvite) — an invite for "health" should not also leave
+      // the user with "chat" access.
+      if (!isFirstUser && !skipDefaultDomain) {
         await pool.query(
           `INSERT INTO user_domain_access (user_id, domain_id)
            SELECT $1, id FROM domains WHERE slug = 'chat' AND is_active = true
@@ -322,7 +327,12 @@ export class AuthService {
    * - No google_id but same email → link google_id to existing account
    * - New user → create account (no password), grant default domain access
    */
-  async loginWithGoogle(googleId: string, email: string, name: string | null): Promise<
+  async loginWithGoogle(
+    googleId: string,
+    email: string,
+    name: string | null,
+    skipDefaultDomain: boolean = false,
+  ): Promise<
     { success: true; user: User; session: { token: string; expiresAt: Date } } |
     { success: false; error: string }
   > {
@@ -362,7 +372,9 @@ export class AuthService {
           );
           row = created.rows[0];
 
-          if (!isFirstUser) {
+          // Skipped when a pending invite is about to grant a specific
+          // domain instead — see the google/callback route.
+          if (!isFirstUser && !skipDefaultDomain) {
             await pool.query(
               `INSERT INTO user_domain_access (user_id, domain_id)
                SELECT $1, id FROM domains WHERE slug = 'chat' AND is_active = true
@@ -393,12 +405,17 @@ export class AuthService {
    * Validates an invite token against the given email, grants domain access to userId,
    * and marks the token as used. Call this after the user is authenticated.
    */
-  async consumeInviteToken(token: string, userId: string, email: string): Promise<
-    { success: true; domainSlug: string } | { success: false; error: string }
+  async consumeInviteToken(
+    token: string,
+    userId: string,
+    email: string,
+    issueApiKey: boolean = true,
+  ): Promise<
+    { success: true; domainSlug: string; apiKeySecret?: string } | { success: false; error: string }
   > {
     try {
       const res = await pool.query(
-        `SELECT email, domain_slug, used_at, expires_at
+        `SELECT email, domain_slug, used_at, expires_at, issue_api_key
          FROM invite_tokens WHERE token = $1`,
         [token],
       );
@@ -422,7 +439,17 @@ export class AuthService {
         [token],
       );
 
-      return { success: true, domainSlug: row.domain_slug };
+      let apiKeySecret: string | undefined;
+      if (row.issue_api_key && issueApiKey) {
+        const created = await apiKeyService.create({
+          userId,
+          name: 'Issued at signup',
+          scopes: ['health:proxy:read'],
+        });
+        apiKeySecret = created.secret;
+      }
+
+      return { success: true, domainSlug: row.domain_slug, apiKeySecret };
     } catch (error) {
       console.error('consumeInviteToken error:', error);
       return { success: false, error: 'Failed to consume invite token' };

@@ -7,6 +7,30 @@
 
 import pool from '@/app/clients/db';
 
+// Calls the Python health-worker container, which holds the actual Garmin
+// Connect client. Shared by the Server Actions (cached reads/writes) and the
+// Control API v1 proxy routes (live reads, never persisted).
+export async function callHealthWorker(method: string, path: string, body?: object) {
+  // Read env vars at call time, not at module load — see the same note on
+  // updateGarmin() in the exercise-sets route.
+  const workerUrl = (process.env.HEALTH_WORKER_URL || 'http://health-worker:8001').replace(/\/$/, '');
+  const workerSecret = process.env.HEALTH_WORKER_SECRET || '';
+  if (!workerSecret) throw new Error('Health worker not configured (HEALTH_WORKER_SECRET missing)');
+  const res = await fetch(`${workerUrl}${path}`, {
+    method,
+    headers: {
+      'X-Worker-Secret': workerSecret,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Worker ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
 export interface GarminStatusRow {
   is_connected: boolean;
   mfa_pending: boolean;

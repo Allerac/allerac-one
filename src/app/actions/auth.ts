@@ -59,7 +59,10 @@ export async function registerWithInvite(
   email: string,
   password: string,
   name?: string,
-): Promise<{ success: true; redirectTo: string } | { success: false; error: string }> {
+): Promise<
+  | { success: true; redirectTo: string; apiKeySecret?: string }
+  | { success: false; error: string }
+> {
   if (!email || !email.includes('@')) {
     return { success: false, error: 'Invalid email address' };
   }
@@ -76,8 +79,9 @@ export async function registerWithInvite(
     return { success: false, error: 'Email does not match the invite' };
   }
 
-  // Register (this grants 'chat' by default, but we'll override with the invite domain)
-  const result = await authService.register(email, password, name);
+  // Register without the default 'chat' grant — consumeInviteToken below
+  // grants exactly the domain the admin invited this user to.
+  const result = await authService.register(email, password, name, true);
   if (!result.success) {
     return { success: false, error: result.error };
   }
@@ -99,7 +103,11 @@ export async function registerWithInvite(
   });
 
   const redirectTo = consumed.success ? `/${consumed.domainSlug}` : '/';
-  return { success: true, redirectTo };
+  return {
+    success: true,
+    redirectTo,
+    apiKeySecret: consumed.success ? consumed.apiKeySecret : undefined,
+  };
 }
 
 /**
