@@ -1,0 +1,22 @@
+meta {
+  name: Proxy Activities
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/proxy/activities?date=2026-06-25&limit=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Live read from Garmin via the health-worker — never written to
+  health_activities, never logged with payload content. `date` is required
+  (YYYY-MM-DD). Returns 409 `garmin_not_connected` if the user hasn't
+  connected Garmin yet.
+}

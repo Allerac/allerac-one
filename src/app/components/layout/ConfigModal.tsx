@@ -13,9 +13,10 @@ interface Props {
   userName?: string | null;
   userEmail?: string;
   isDarkMode: boolean;
+  isAdmin?: boolean;
 }
 
-export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', userId, userName, userEmail, isDarkMode }: Props) {
+export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', userId, userName, userEmail, isDarkMode, isAdmin = false }: Props) {
   const [githubToken, setGithubToken]     = useState('');
   const [tavilyApiKey, setTavilyApiKey]   = useState('');
   const [googleApiKey, setGoogleApiKey]   = useState('');
@@ -94,6 +95,7 @@ export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', us
       userId={userId}
       userName={userName ?? undefined}
       userEmail={userEmail}
+      isAdmin={isAdmin}
       MODELS={MODELS}
       selectedModel={selectedModel}
       setSelectedModel={setSelectedModel}

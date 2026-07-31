@@ -1,0 +1,22 @@
+meta {
+  name: Proxy Daily
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/proxy/daily?date=2026-06-25
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Live read from Garmin via the health-worker — never written to
+  health_daily_metrics, never logged with payload content. `date` is
+  required (YYYY-MM-DD). Returns 409 `garmin_not_connected` if the user
+  hasn't connected Garmin yet.
+}

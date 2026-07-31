@@ -109,6 +109,63 @@ describe('Control API v1 API keys', () => {
     });
   });
 
+  it('rejects self-service key creation for scopes outside the safe allowlist', async () => {
+    const response = await createApiKey(jsonRequest(
+      'http://localhost/api/v1/api-keys',
+      'POST',
+      { name: 'Bruno', scopes: ['health:proxy:read', 'documents:write'] },
+    ));
+
+    expect(response.status).toBe(403);
+    expect(mockApiKeyService.create).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({
+      error: { code: 'forbidden_scope' },
+    });
+  });
+
+  it('allows self-service key creation for the health:proxy:read scope', async () => {
+    mockApiKeyService.create.mockResolvedValueOnce({
+      apiKey: { ...apiKey, scopes: ['health:proxy:read'] },
+      secret: 'alr_live_full_secret',
+    });
+
+    const response = await createApiKey(jsonRequest(
+      'http://localhost/api/v1/api-keys',
+      'POST',
+      { name: 'Health agent', scopes: ['health:proxy:read'] },
+    ));
+
+    expect(response.status).toBe(201);
+    expect(mockApiKeyService.create).toHaveBeenCalledWith({
+      userId: user.id,
+      name: 'Health agent',
+      scopes: ['health:proxy:read'],
+      expiresAt: null,
+    });
+  });
+
+  it('allows an admin to create a key with any scope', async () => {
+    mockRequireCurrentUser.mockResolvedValueOnce({ ...user, is_admin: true });
+    mockApiKeyService.create.mockResolvedValueOnce({
+      apiKey: { ...apiKey, scopes: ['documents:write'] },
+      secret: 'alr_live_full_secret',
+    });
+
+    const response = await createApiKey(jsonRequest(
+      'http://localhost/api/v1/api-keys',
+      'POST',
+      { name: 'Admin key', scopes: ['documents:write'] },
+    ));
+
+    expect(response.status).toBe(201);
+    expect(mockApiKeyService.create).toHaveBeenCalledWith({
+      userId: user.id,
+      name: 'Admin key',
+      scopes: ['documents:write'],
+      expiresAt: null,
+    });
+  });
+
   it('lists API keys without returning secrets', async () => {
     mockApiKeyService.list.mockResolvedValueOnce([apiKey]);
 

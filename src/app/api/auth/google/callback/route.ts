@@ -49,8 +49,14 @@ export async function GET(req: NextRequest) {
 
   if (!profile.id || !profile.email) redirect('/login?error=google_no_email');
 
+  // Read the pending invite before creating the user, so a brand-new
+  // account skips the default 'chat' domain grant when an invite is about
+  // to grant a specific domain instead.
+  const pendingInvite = cookieStore.get('pending_invite')?.value;
+  cookieStore.delete('pending_invite');
+
   // Find or create user
-  const result = await authService.loginWithGoogle(profile.id, profile.email, profile.name ?? null);
+  const result = await authService.loginWithGoogle(profile.id, profile.email, profile.name ?? null, Boolean(pendingInvite));
   if (!result.success) redirect('/login?error=google_login_failed');
 
   cookieStore.set(SESSION_COOKIE_NAME, result.session.token, {
@@ -61,11 +67,12 @@ export async function GET(req: NextRequest) {
     path: '/',
   });
 
-  // Consume invite token if one was set before the OAuth redirect
-  const pendingInvite = cookieStore.get('pending_invite')?.value;
-  cookieStore.delete('pending_invite');
   if (pendingInvite) {
-    await authService.consumeInviteToken(pendingInvite, result.user.id, profile.email).catch(() => {});
+    // issueApiKey=false: this redirect-only flow has nowhere safe to reveal
+    // a one-time secret. The user can self-issue one from the Health agent
+    // access panel once they land on their domain.
+    await authService.consumeInviteToken(pendingInvite, result.user.id, profile.email, false)
+      .catch(error => console.error('[google/callback] consumeInviteToken failed:', error));
   }
 
   // Redirect based on role

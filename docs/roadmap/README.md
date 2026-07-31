@@ -20,6 +20,7 @@ sequence of implementation.
 | [Control API v1](control-api-v1.md) | Beta baseline complete | Stable `/api/v1` control plane delivered; deferred contracts and UI migrations remain evolutionary work |
 | [Portable Allerac Backup and Restore](portable-backup-restore.md) | Proposed — high priority for beta | Reconstruct application state on a clean, provider-independent Docker host |
 | [Multi-Cloud Environment Provisioning](multi-cloud-environment-provisioning.md) | Proposed | Provision, restore, validate, and safely cut over Allerac environments across supported clouds |
+| [Ambient Instructions, Memory, and Tasks](ambient-instructions-memory-tasks.md) | Proposed | Retire manual Instructions/Memory/Tasks management; Memory and Jobs become cross-domain tools the agent uses on its own |
 
 ## Long-Term Architecture
 

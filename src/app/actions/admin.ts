@@ -11,6 +11,7 @@ import {
   type CreditPlan,
   type OperationPricing,
 } from '@/app/services/credits/credit.service';
+import { apiKeyService } from '@/app/services/api-keys/api-key.service';
 
 const authService = new AuthService();
 const systemSettingsService = new SystemSettingsService();
@@ -122,8 +123,12 @@ export async function createDomainUser(
   email: string,
   password: string,
   domainIds: string[],
-  isAdmin: boolean = false
-): Promise<{ success: true } | { success: false; error: string }> {
+  isAdmin: boolean = false,
+  issueApiKeyScopes?: string[],
+): Promise<
+  | { success: true; apiKeySecret?: string }
+  | { success: false; error: string }
+> {
   await assertAdmin();
 
   if (!email || email.length > 254 || !email.includes('@')) return { success: false, error: 'Invalid email' };
@@ -173,6 +178,16 @@ export async function createDomainUser(
     }
 
     await client.query('COMMIT');
+
+    if (issueApiKeyScopes && issueApiKeyScopes.length > 0) {
+      const { secret } = await apiKeyService.create({
+        userId,
+        name: 'Issued at signup',
+        scopes: issueApiKeyScopes,
+      });
+      return { success: true, apiKeySecret: secret };
+    }
+
     return { success: true };
   } catch (error) {
     await client.query('ROLLBACK');

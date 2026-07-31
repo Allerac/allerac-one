@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import * as healthActions from '@/app/actions/health';
 import GarminSettings from '../settings/GarminSettings';
+import HealthAgentAccess from '../settings/HealthAgentAccess';
 import RecentActivity from './RecentActivity';
 import DailyHealthMetrics from './DailyHealthMetrics';
 import HealthTodayCharts from './HealthTodayCharts';
@@ -428,8 +429,9 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                   </svg>
                 </button>
               </div>
-              <div className="max-h-[calc(90dvh-60px)] overflow-y-auto p-4">
+              <div className="max-h-[calc(90dvh-60px)] overflow-y-auto p-4 space-y-4">
                 <GarminSettings userId={userId} isDarkMode={isDarkMode} />
+                <HealthAgentAccess isDarkMode={isDarkMode} />
               </div>
             </div>
           </div>

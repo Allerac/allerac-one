@@ -5,13 +5,10 @@ import { requireCurrentUser } from '@/app/lib/auth-session';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { submitLog } from '@/lib/submit-log';
 import { applyActivityCorrection } from '@/app/services/health/activity-corrections';
-import { queryDailyMetricsSnapshot, queryGarminStatus, queryHealthSummary } from '@/app/services/health/health-query.service';
-
-const WORKER_URL = (process.env.HEALTH_WORKER_URL || 'http://health-worker:8001').replace(/\/$/, '');
-const WORKER_SECRET = process.env.HEALTH_WORKER_SECRET || '';
+import { callHealthWorker, queryDailyMetricsSnapshot, queryGarminStatus, queryHealthSummary } from '@/app/services/health/health-query.service';
 
 export async function isHealthConfigured(): Promise<boolean> {
-  return Boolean(WORKER_SECRET);
+  return Boolean(process.env.HEALTH_WORKER_SECRET);
 }
 
 async function getSessionUserId(): Promise<string> {
@@ -19,22 +16,7 @@ async function getSessionUserId(): Promise<string> {
   return user.id;
 }
 
-async function workerFetch(method: string, path: string, body?: object) {
-  if (!WORKER_SECRET) throw new Error('Health worker not configured (HEALTH_WORKER_SECRET missing)');
-  const res = await fetch(`${WORKER_URL}${path}`, {
-    method,
-    headers: {
-      'X-Worker-Secret': WORKER_SECRET,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`Worker ${res.status}: ${text}`);
-  }
-  return res.json();
-}
+const workerFetch = callHealthWorker;
 
 // ─── Garmin status ─────────────────────────────────────────────────────────────
 

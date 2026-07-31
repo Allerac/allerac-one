@@ -93,6 +93,8 @@ export default function AdminClient({
   const [password, setPassword] = useState('');
   const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
   const [makeAdmin, setMakeAdmin] = useState(false);
+  const [issueHealthApiKey, setIssueHealthApiKey] = useState(false);
+  const [createdApiKeySecret, setCreatedApiKeySecret] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -101,9 +103,11 @@ export default function AdminClient({
   const [invites, setInvites] = useState<InviteRecord[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteDomain, setInviteDomain] = useState('');
+  const [inviteIssueApiKey, setInviteIssueApiKey] = useState(false);
   const [invitePending, setInvitePending] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [inviteRevokingToken, setInviteRevokingToken] = useState<string | null>(null);
+  const [copiedInviteToken, setCopiedInviteToken] = useState<string | null>(null);
 
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -155,6 +159,9 @@ export default function AdminClient({
   const btnDanger = `px-3 py-1 rounded text-xs font-medium transition-colors ${
     d ? 'bg-red-900/40 text-red-400 hover:bg-red-900/60' : 'bg-red-50 text-red-600 hover:bg-red-100'
   }`;
+  const btnLinkSmall = `px-3 py-1 rounded text-xs font-medium transition-colors ${
+    d ? 'bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/60' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+  }`;
 
   const refreshInvites = async () => {
     const list = await inviteActions.listInvites().catch(() => [] as InviteRecord[]);
@@ -167,12 +174,13 @@ export default function AdminClient({
     e.preventDefault();
     setInviteMsg(null);
     setInvitePending(true);
-    const result = await inviteActions.createInvite(inviteEmail, inviteDomain);
+    const result = await inviteActions.createInvite(inviteEmail, inviteDomain, inviteIssueApiKey);
     setInvitePending(false);
     if (result.success) {
       setInviteMsg({ ok: true, text: 'Invite sent!' });
       setInviteEmail('');
       setInviteDomain('');
+      setInviteIssueApiKey(false);
       refreshInvites();
     } else {
       setInviteMsg({ ok: false, text: result.error });
@@ -184,6 +192,13 @@ export default function AdminClient({
     await inviteActions.revokeInvite(token);
     setInviteRevokingToken(null);
     refreshInvites();
+  };
+
+  const handleCopyInviteLink = async (token: string) => {
+    const url = `${window.location.origin}/join?token=${token}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedInviteToken(token);
+    setTimeout(() => setCopiedInviteToken(null), 2000);
   };
 
   const refreshUsers = () => {
@@ -199,18 +214,25 @@ export default function AdminClient({
     );
   };
 
+  const healthDomainId = domains.find(d => d.slug === 'health')?.id;
+  const canIssueHealthApiKey = !makeAdmin && !!healthDomainId && selectedDomains.includes(healthDomainId);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
     setFormSuccess('');
+    setCreatedApiKeySecret(null);
     startTransition(async () => {
-      const result = await adminActions.createDomainUser(email, password, selectedDomains, makeAdmin);
+      const scopes = canIssueHealthApiKey && issueHealthApiKey ? ['health:proxy:read'] : undefined;
+      const result = await adminActions.createDomainUser(email, password, selectedDomains, makeAdmin, scopes);
       if (result.success) {
         setFormSuccess('User created successfully.');
         setEmail('');
         setPassword('');
         setSelectedDomains([]);
         setMakeAdmin(false);
+        setIssueHealthApiKey(false);
+        if (result.apiKeySecret) setCreatedApiKeySecret(result.apiKeySecret);
         refreshUsers();
       } else {
         setFormError(result.error);
@@ -519,7 +541,7 @@ export default function AdminClient({
                 Invite
               </button>
               <button
-                onClick={() => { setFormError(''); setFormSuccess(''); setShowCreateModal(true); }}
+                onClick={() => { setFormError(''); setFormSuccess(''); setCreatedApiKeySecret(null); setShowCreateModal(true); }}
                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -1171,15 +1193,23 @@ export default function AdminClient({
                         <td className={`px-4 py-3 text-xs ${textMuted}`}>
                           {new Date(inv.expires_at).toLocaleDateString()}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
                           {status === 'pending' && (
-                            <button
-                              onClick={() => handleRevokeInvite(inv.token)}
-                              disabled={inviteRevokingToken === inv.token}
-                              className={btnDanger}
-                            >
-                              {inviteRevokingToken === inv.token ? '…' : 'Revoke'}
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleCopyInviteLink(inv.token)}
+                                className={`${btnLinkSmall} mr-2`}
+                              >
+                                {copiedInviteToken === inv.token ? 'Copied' : 'Copy link'}
+                              </button>
+                              <button
+                                onClick={() => handleRevokeInvite(inv.token)}
+                                disabled={inviteRevokingToken === inv.token}
+                                className={btnDanger}
+                              >
+                                {inviteRevokingToken === inv.token ? '…' : 'Revoke'}
+                              </button>
+                            </>
                           )}
                         </td>
                       </tr>
@@ -1293,6 +1323,23 @@ export default function AdminClient({
                   ))}
                 </select>
               </div>
+              {inviteDomain === 'health' && (
+                <div>
+                  <label className={`flex items-center gap-2 cursor-pointer select-none ${d ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <input
+                      type="checkbox"
+                      checked={inviteIssueApiKey}
+                      onChange={e => setInviteIssueApiKey(e.target.checked)}
+                      disabled={invitePending}
+                      className="w-4 h-4 rounded accent-indigo-600"
+                    />
+                    <span className="text-sm">Also issue a Garmin proxy API key (health:proxy:read)</span>
+                  </label>
+                  <p className={`text-xs mt-1 ${textMuted}`}>
+                    Shown once to the user right after they accept the invite — never emailed.
+                  </p>
+                </div>
+              )}
               {inviteMsg && (
                 <p className={`text-sm ${inviteMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
                   {inviteMsg.text}
@@ -1394,8 +1441,49 @@ export default function AdminClient({
                 </div>
               )}
 
+              {canIssueHealthApiKey && (
+                <div>
+                  <label className={`flex items-center gap-2 cursor-pointer select-none ${d ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <input
+                      type="checkbox"
+                      checked={issueHealthApiKey}
+                      onChange={e => setIssueHealthApiKey(e.target.checked)}
+                      disabled={isPending}
+                      className="w-4 h-4 rounded accent-indigo-600"
+                    />
+                    <span className="text-sm">Also issue a Garmin proxy API key (health:proxy:read)</span>
+                  </label>
+                  <p className={`text-xs mt-1 ${textMuted}`}>
+                    Live reads only — nothing is written to Allerac. The secret is shown once below after creation.
+                  </p>
+                </div>
+              )}
+
               {formError && <p className="text-sm text-red-400">{formError}</p>}
               {formSuccess && <p className="text-sm text-green-400">{formSuccess}</p>}
+
+              {createdApiKeySecret && (
+                <div className={`rounded-md border p-3 space-y-2 ${d ? 'border-amber-500/50 bg-amber-500/10' : 'border-amber-300 bg-amber-50'}`}>
+                  <p className={`text-xs font-semibold ${d ? 'text-amber-300' : 'text-amber-800'}`}>
+                    Copy this key now — it won&apos;t be shown again
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={createdApiKeySecret}
+                      onFocus={e => e.currentTarget.select()}
+                      className={`min-w-0 flex-1 rounded-md border px-2 py-1.5 font-mono text-xs ${inputCls}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(createdApiKeySecret)}
+                      className={`${btnPrimary} px-3 py-1.5 text-xs`}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <button type="submit" disabled={isPending} className={`${btnPrimary} w-full`}>
                 {isPending ? 'Creating...' : 'Create User'}
