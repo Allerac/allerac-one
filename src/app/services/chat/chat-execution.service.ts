@@ -114,7 +114,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
 
   let relevantContext = '';
   try {
-    const embeddingService = new EmbeddingService(githubToken);
+    const embeddingService = new EmbeddingService();
     const vectorService = new VectorSearchService(embeddingService);
     relevantContext = await vectorService.getRelevantContext(input.message, input.user.id, { domainSlug: input.domain });
   } catch (error) {

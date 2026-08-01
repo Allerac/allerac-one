@@ -1,6 +1,6 @@
 # Provider-Independent Local Embeddings
 
-**Status:** Proposed — implementation deferred
+**Status:** In progress — local baseline implemented 2026-08-01
 
 **Priority:** High — semantic features are currently degraded
 
@@ -11,7 +11,7 @@ track embeddings and recommendations
 
 ## Context
 
-Allerac One currently generates embeddings through GitHub Models using the
+Allerac One previously generated embeddings through GitHub Models using the
 hardcoded endpoint `https://models.inference.ai.azure.com`, model
 `text-embedding-3-small`, and 1536-dimensional vectors.
 
@@ -42,9 +42,47 @@ Do not couple semantic features directly to Ollama or to one model. Introduce a
 provider-neutral embedding contract so the runtime, model, endpoint, and dimensions
 can change without rewriting RAG, notes, search cache, or music features.
 
-The final local model is deliberately not selected in this document. It must be
-chosen from measurements on the target mini PC and retrieval quality in the
-languages Allerac uses.
+The initial local default is `embeddinggemma` at 768 dimensions, selected from
+measurements on the target mini PC. The provider contract keeps this choice
+replaceable.
+
+## Initial benchmark result
+
+The first benchmark on 2026-08-01 compared `embeddinggemma` and
+`nomic-embed-text-v2-moe` through the deployment's Ollama container.
+
+| Model | Dimensions | Cold | Warm | 100 inputs | Small multilingual retrieval set |
+|---|---:|---:|---:|---:|---:|
+| embeddinggemma | 768 | 4697 ms | 115 ms | 3106 ms | 6/6 |
+| nomic-embed-text-v2-moe | 768 | 11269 ms | 324 ms | 5156 ms | 6/6 |
+
+The evaluation set is intentionally small and must grow with real Allerac examples,
+but `embeddinggemma` provided the better initial latency/resource tradeoff without an
+observed retrieval-quality loss.
+
+## Implementation progress
+
+Completed locally on 2026-08-01:
+
+- provider-neutral contract and Ollama adapter;
+- configurable model, endpoint, dimensions, timeout, keep-alive, and version;
+- strict response-count and dimension validation;
+- local-first RAG, notes, semantic web cache, and Spotify consumers;
+- keyword fallback for note search when embeddings are unavailable;
+- migration from 1536 to 768 dimensions with versioned runtime state;
+- resumable document/Spotify reindex script;
+- all 804 Spotify vectors regenerated with `embeddinggemma`;
+- benchmark harness and focused unit/API tests.
+- protected `/benchmark/embeddings` UI for selecting installed models, running the
+  comparison, viewing first/warm/batch/retrieval results, and keeping recent
+  browser-local history.
+
+Still required before calling the roadmap complete:
+
+- expand the retrieval evaluation set with real user-approved examples;
+- expose embedding health/model identity in the operational Health/Admin UI or API;
+- add explicit interactive/background prioritization for larger indexing workloads;
+- validate the rebuilt application through the normal release workflow.
 
 ## Principles
 

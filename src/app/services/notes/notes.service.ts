@@ -40,30 +40,29 @@ export interface UpdateNoteInput {
 }
 
 export class NotesService {
-  async createNote(userId: string, input: CreateNoteInput, githubToken?: string | null): Promise<Note> {
+  async createNote(userId: string, input: CreateNoteInput, legacyGithubToken?: string | null): Promise<Note> {
+    void legacyGithubToken;
     const { content, title = null, tags = [], source = 'chat', due_date = null } = input;
 
     let documentId: string | null = null;
 
-    if (githubToken) {
-      try {
-        const embeddingService = new EmbeddingService(githubToken);
-        const documentService = new DocumentService(embeddingService);
+    try {
+      const embeddingService = new EmbeddingService();
+      const documentService = new DocumentService(embeddingService);
 
-        const fakeFile = {
-          name: title || content.slice(0, 60).replace(/\n/g, ' '),
-          type: 'text/plain',
-          size: content.length,
-        } as File;
+      const fakeFile = {
+        name: title || content.slice(0, 60).replace(/\n/g, ' '),
+        type: 'text/plain',
+        size: content.length,
+      } as File;
 
-        const docId = await documentService.createDocumentRecord(fakeFile, userId, 'notes');
-        documentId = docId;
-        documentService.processDocumentContent(docId, content).catch(err => {
-          console.error('[Notes] Background embedding failed:', err);
-        });
-      } catch (err) {
-        console.error('[Notes] Failed to create document for note (proceeding without embedding):', err);
-      }
+      const docId = await documentService.createDocumentRecord(fakeFile, userId, 'notes');
+      documentId = docId;
+      documentService.processDocumentContent(docId, content).catch(err => {
+        console.error('[Notes] Background embedding failed:', err);
+      });
+    } catch (err) {
+      console.error('[Notes] Failed to create document for note (proceeding without embedding):', err);
     }
 
     const res = await pool.query(
@@ -113,8 +112,8 @@ export class NotesService {
     return res.rows as Note[];
   }
 
-  async searchNotes(userId: string, query: string, githubToken: string, limit = 5): Promise<NoteSearchResult[]> {
-    const embeddingService = new EmbeddingService(githubToken);
+  async searchNotes(userId: string, query: string, _legacyGithubToken?: string | null, limit = 5): Promise<NoteSearchResult[]> {
+    const embeddingService = new EmbeddingService();
     const { embedding } = await embeddingService.generateEmbedding(query);
     const embeddingStr = `[${embedding.join(',')}]`;
 

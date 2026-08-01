@@ -850,7 +850,7 @@ export default function AdminClient({
                   value={sysSettings.github_token ?? ''}
                   onChange={v => setSysSettings(prev => ({ ...prev, github_token: v }))}
                   isDarkMode={isDarkMode}
-                  helpText="Used for GitHub Models API (GPT-4o, embeddings)."
+                  helpText="Used for GitHub API and legacy GitHub-hosted chat models. Embeddings run locally."
                 />
                 <ApiKeyField
                   label="Anthropic API Key"

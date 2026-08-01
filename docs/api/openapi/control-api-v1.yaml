@@ -1631,6 +1631,47 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /api/v1/benchmark/embeddings:
+    get:
+      tags: [Benchmark]
+      summary: List embedding benchmark models and installation state
+      operationId: listEmbeddingBenchmarkModels
+      responses:
+        "200":
+          description: Embedding model candidates and their Ollama installation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingBenchmarkModelListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Benchmark]
+      summary: Compare local embedding models
+      operationId: runEmbeddingBenchmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmbeddingBenchmarkRunRequest"
+      responses:
+        "200":
+          description: Embedding benchmark measurements for each selected model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingBenchmarkRunResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          description: Benchmark concurrency limit reached
   /api/v1/benchmark/runs:
     get:
       tags: [Benchmark]
@@ -2919,6 +2960,84 @@ components:
         provider:
           type: string
           enum: [github, ollama, gemini, anthropic]
+    EmbeddingBenchmarkRunRequest:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+    EmbeddingBenchmarkModelListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [models]
+          properties:
+            models:
+              type: array
+              items:
+                type: object
+                required: [id, installed]
+                properties:
+                  id: { type: string }
+                  installed: { type: boolean }
+    EmbeddingBenchmarkRunResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [run]
+          properties:
+            run:
+              type: object
+              required: [id, createdAt, results]
+              properties:
+                id: { type: string, format: uuid }
+                createdAt: { type: string, format: date-time }
+                results:
+                  type: array
+                  items:
+                    oneOf:
+                      - $ref: "#/components/schemas/EmbeddingBenchmarkSuccess"
+                      - $ref: "#/components/schemas/EmbeddingBenchmarkFailure"
+    EmbeddingBenchmarkSuccess:
+      type: object
+      required:
+        - model
+        - dimensions
+        - firstRequestMs
+        - warmMs
+        - retrievalCorrect
+        - retrievalTotal
+        - retrievalMs
+        - batchCount
+        - batchMs
+        - batchPerItemMs
+      properties:
+        model: { type: string }
+        dimensions: { type: integer, minimum: 1 }
+        firstRequestMs: { type: number, minimum: 0 }
+        warmMs: { type: number, minimum: 0 }
+        retrievalCorrect: { type: integer, minimum: 0 }
+        retrievalTotal: { type: integer, minimum: 1 }
+        retrievalMs: { type: number, minimum: 0 }
+        batchCount: { type: integer, minimum: 1 }
+        batchMs: { type: number, minimum: 0 }
+        batchPerItemMs: { type: number, minimum: 0 }
+    EmbeddingBenchmarkFailure:
+      type: object
+      required: [model, error]
+      properties:
+        model: { type: string }
+        error: { type: string }
     BenchmarkModelListResponse:
       type: object
       required: [data]

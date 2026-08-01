@@ -100,20 +100,20 @@ function JobRow({ job, selected, onSelect, onToggle, d }: {
 // ── JobEditor ────────────────────────────────────────────────────────────────
 
 interface FormState {
-  name: string; prompt: string; channels: string[]; enabled: boolean;
+  name: string; prompt: string; channels: string[]; webhookUrl: string; enabled: boolean;
   modelSelection: string;
   preset: Preset; hour: string; minute: string; weekday: string; monthDay: string;
   cMin: string; cHour: string; cDom: string; cMonth: string; cDow: string; cronExpr: string;
 }
 
 const emptyForm: FormState = {
-  name: '', prompt: '', channels: ['telegram'], enabled: true, modelSelection: 'automatic',
+  name: '', prompt: '', channels: ['telegram'], webhookUrl: '', enabled: true, modelSelection: 'automatic',
   preset: 'daily', hour: '8', minute: '0', weekday: '1', monthDay: '1',
   cMin: '0', cHour: '8', cDom: '*', cMonth: '*', cDow: '*', cronExpr: '',
 };
 
 function jobToForm(job: ScheduledJob): FormState {
-  return { ...emptyForm, name: job.name, prompt: job.prompt, channels: job.channels, enabled: job.enabled, modelSelection: job.llmModel ?? 'automatic', preset: 'custom', cronExpr: job.cronExpr };
+  return { ...emptyForm, name: job.name, prompt: job.prompt, channels: job.channels, webhookUrl: job.webhookUrl ?? '', enabled: job.enabled, modelSelection: job.llmModel ?? 'automatic', preset: 'custom', cronExpr: job.cronExpr };
 }
 
 function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted, onClose }: {
@@ -155,6 +155,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
     if (!form.name.trim()) { setError(t('errors.nameRequired')); return; }
     if (!form.prompt.trim()) { setError(t('errors.promptRequired')); return; }
     if (form.channels.length === 0) { setError(t('errors.channelRequired')); return; }
+    if (form.channels.includes('webhook') && !form.webhookUrl.trim()) { setError(t('errors.webhookUrlRequired')); return; }
     setSaving(true); setError('');
     const selectedModel = MODELS.find(model => model.id === form.modelSelection);
     const data = {
@@ -162,6 +163,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
       cronExpr: derivedCron.trim(),
       prompt: form.prompt,
       channels: form.channels,
+      webhookUrl: form.channels.includes('webhook') ? form.webhookUrl.trim() : null,
       enabled: form.enabled,
       domainSlug: domainSlug ?? null,
       llmModel: selectedModel?.id ?? null,
@@ -243,7 +245,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
         <div>
           <label className={labelCls}>{t('fields.channels')}</label>
           <div className="flex gap-4">
-            {['telegram'].map(ch => (
+            {['telegram', 'webhook'].map(ch => (
               <label key={ch} className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.channels.includes(ch)}
                   onChange={() => s({ channels: form.channels.includes(ch) ? form.channels.filter(c => c !== ch) : [...form.channels, ch] })}
@@ -252,6 +254,10 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
               </label>
             ))}
           </div>
+          {form.channels.includes('webhook') && (
+            <input value={form.webhookUrl} onChange={e => s({ webhookUrl: e.target.value })}
+              className={`${inputCls} mt-2`} placeholder={t('placeholderWebhookUrl')} />
+          )}
         </div>
 
         {/* Enabled */}

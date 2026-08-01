@@ -29,7 +29,7 @@ export async function getScheduledJobs(): Promise<{ success: boolean; data?: Sch
 }
 
 export async function createScheduledJob(
-  data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null } & JobModelSelection
+  data: { name: string; cronExpr: string; prompt: string; channels: string[]; webhookUrl?: string | null; enabled: boolean; domainSlug?: string | null } & JobModelSelection
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (!data.name?.trim()) {
     return { success: false, error: 'Name is required' };
@@ -39,6 +39,9 @@ export async function createScheduledJob(
   }
   if (!data.channels || data.channels.length === 0) {
     return { success: false, error: 'At least one channel is required' };
+  }
+  if (data.channels.includes('webhook') && !data.webhookUrl?.trim()) {
+    return { success: false, error: 'Webhook URL is required when the webhook channel is enabled' };
   }
   const cronError = validateCron(data.cronExpr);
   if (cronError) {
@@ -65,13 +68,16 @@ export async function createScheduledJob(
 
 export async function updateScheduledJob(
   jobId: string,
-  data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; enabled?: boolean } & JobModelSelection
+  data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; webhookUrl?: string | null; enabled?: boolean } & JobModelSelection
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (data.cronExpr !== undefined) {
     const cronError = validateCron(data.cronExpr);
     if (cronError) {
       return { success: false, error: cronError };
     }
+  }
+  if (data.channels?.includes('webhook') && !data.webhookUrl?.trim()) {
+    return { success: false, error: 'Webhook URL is required when the webhook channel is enabled' };
   }
   const modelError = validateJobModelSelection(data.llmModel, data.llmProvider);
   if (modelError) return { success: false, error: modelError };

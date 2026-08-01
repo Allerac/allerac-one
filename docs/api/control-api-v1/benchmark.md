@@ -6,8 +6,8 @@ Benchmark endpoints expose the same standard performance suite used by the Aller
 
 | Scope | Operations |
 |---|---|
-| `benchmark:read` | List models, availability, and run history |
-| `benchmark:write` | Start runs and clear history |
+| `benchmark:read` | List LLM and embedding models, availability, and LLM run history |
+| `benchmark:write` | Start LLM or embedding runs and clear LLM history |
 
 ## List models
 
@@ -53,3 +53,39 @@ Authorization: Bearer alr_live_...
 ```
 
 This permanently deletes all benchmark result rows owned by the authenticated user. It does not affect other users.
+
+## List embedding models
+
+```http
+GET /api/v1/benchmark/embeddings
+Authorization: Bearer alr_live_...
+```
+
+The response lists the configured embedding benchmark candidates and whether each model is currently installed in Ollama:
+
+```json
+{
+  "data": {
+    "models": [
+      { "id": "embeddinggemma", "installed": true },
+      { "id": "nomic-embed-text-v2-moe", "installed": false }
+    ]
+  }
+}
+```
+
+## Run embedding benchmark
+
+```http
+POST /api/v1/benchmark/embeddings
+Authorization: Bearer alr_live_...
+Content-Type: application/json
+
+{
+  "models": ["embeddinggemma", "nomic-embed-text-v2-moe"]
+}
+```
+
+One to three models can be compared per request. The JSON response reports cold and warm request latency, retrieval correctness and latency, vector dimensions, and batch throughput for each model. A model-level failure is returned inside `results` without discarding successful results from the other selected models.
+
+Embedding benchmark runs are synchronous and are not stored in the server-side LLM benchmark history. The admin UI keeps its embedding benchmark history in the current browser. The endpoint returns `429` while the benchmark concurrency limit is occupied.

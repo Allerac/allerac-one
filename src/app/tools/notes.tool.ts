@@ -23,9 +23,11 @@ export function buildNotesTools(user: NotesUser) {
 
     query_vault: async (args: { query: string; limit?: number }) => {
       const limit = args.limit ?? 5;
-      if (user.githubToken) {
-        const results = await notesService.searchNotes(user.id, args.query, user.githubToken, limit);
+      try {
+        const results = await notesService.searchNotes(user.id, args.query, null, limit);
         if (results.length > 0) return { results };
+      } catch (embeddingError) {
+        console.warn('[Notes] Semantic vault search unavailable, using keyword fallback:', embeddingError);
       }
       const notes = await notesService.keywordSearchNotes(user.id, args.query, limit);
       return { results: notes.map(n => ({ note_id: n.id, title: n.title, content: n.content, tags: n.tags, created_at: n.created_at, similarity: 0 })) };

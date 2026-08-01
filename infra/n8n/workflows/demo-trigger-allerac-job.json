@@ -1,0 +1,51 @@
+{
+  "id": "b1a55c47-4b1e-4a4a-8e30-2a1a6a9f0a11",
+  "name": "Demo: Trigger Allerac Job",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d68654c9-5f2e-4eb0-9b50-eeb3d522aa53",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://app:8080/api/v1/jobs/9c96efe7-3aaf-41fd-9e4b-ff3d1d433cd3/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "3474c316-1fe5-475c-bd63-740ab452156b",
+      "name": "Run Allerac Job (Hour Reminder)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Allerac API Key"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Allerac Job (Hour Reminder)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

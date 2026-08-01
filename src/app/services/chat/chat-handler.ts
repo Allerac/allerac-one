@@ -150,7 +150,7 @@ export async function handleChatMessage(
   // 3. Load RAG context
   let relevantContext = '';
   try {
-    const embeddingService = new EmbeddingService(githubToken);
+    const embeddingService = new EmbeddingService();
     const vectorService = new VectorSearchService(embeddingService);
     relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: domainSlug ?? null });
   } catch (error) {

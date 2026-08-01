@@ -1,139 +1,140 @@
 /**
- * EmbeddingService
- * 
- * Responsible for generating vector embeddings from text using GitHub Models API.
- * Embeddings are numerical representations of text that capture semantic meaning,
- * enabling similarity search and retrieval of relevant information.
+ * Provider-neutral embedding facade.
+ *
+ * Semantic feature code depends on this service rather than a provider-specific
+ * API. The default provider is the local Ollama deployment.
  */
 
-const GITHUB_MODELS_ENDPOINT = 'https://models.inference.ai.azure.com';
-const EMBEDDING_MODEL = 'text-embedding-3-small'; // GitHub Models compatible embedding model
-const EMBEDDING_DIMENSION = 1536; // Dimension of the embedding vectors
+import type {
+  EmbeddingProvider,
+  EmbeddingProviderMetadata,
+  EmbeddingPurpose,
+} from './embedding-provider';
+import {
+  OllamaEmbeddingProvider,
+  type OllamaEmbeddingProviderConfig,
+} from './ollama-embedding.provider';
+
+const DEFAULT_MODEL = 'embeddinggemma';
+const DEFAULT_DIMENSIONS = 768;
+const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_KEEP_ALIVE = '10m';
 
 export interface EmbeddingResult {
   embedding: number[];
   tokenCount: number;
 }
 
-export class EmbeddingService {
-  private githubToken: string;
+export interface EmbeddingServiceConfig {
+  provider?: EmbeddingProvider;
+  ollama?: Partial<OllamaEmbeddingProviderConfig>;
+}
 
-  constructor(githubToken: string) {
-    if (!githubToken) {
-      throw new Error('GitHub token is required for EmbeddingService');
-    }
-    this.githubToken = githubToken;
-  }
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function createDefaultProvider(
+  overrides: Partial<OllamaEmbeddingProviderConfig> = {},
+): EmbeddingProvider {
+  const model = overrides.model
+    ?? process.env.EMBEDDING_MODEL
+    ?? DEFAULT_MODEL;
+  const dimensions = overrides.dimensions
+    ?? positiveInteger(process.env.EMBEDDING_DIMENSIONS, DEFAULT_DIMENSIONS);
+
+  return new OllamaEmbeddingProvider({
+    baseUrl: overrides.baseUrl
+      ?? process.env.EMBEDDING_BASE_URL
+      ?? process.env.OLLAMA_BASE_URL
+      ?? 'http://host.docker.internal:11434',
+    model,
+    dimensions,
+    timeoutMs: overrides.timeoutMs
+      ?? positiveInteger(process.env.EMBEDDING_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
+    keepAlive: overrides.keepAlive
+      ?? process.env.EMBEDDING_KEEP_ALIVE
+      ?? DEFAULT_KEEP_ALIVE,
+    version: overrides.version
+      ?? process.env.EMBEDDING_VERSION
+      ?? `ollama:${model}:v1`,
+  });
+}
+
+export class EmbeddingService {
+  private readonly provider: EmbeddingProvider;
 
   /**
-   * Generates an embedding vector for the given text.
-   * 
-   * @param text - The text to generate an embedding for
-   * @returns Promise with the embedding vector and token count
-   * @throws Error if the API request fails
+   * String arguments are accepted temporarily for compatibility with callers that
+   * previously passed a GitHub token. The value is intentionally ignored.
    */
-  async generateEmbedding(text: string): Promise<EmbeddingResult> {
+  constructor(config: EmbeddingServiceConfig | string = {}) {
+    const resolvedConfig = typeof config === 'string' ? {} : config;
+    this.provider = resolvedConfig.provider
+      ?? createDefaultProvider(resolvedConfig.ollama);
+  }
+
+  async generateEmbedding(
+    text: string,
+    purpose: EmbeddingPurpose = 'query',
+  ): Promise<EmbeddingResult> {
     if (!text || text.trim().length === 0) {
       throw new Error('Text cannot be empty');
     }
 
     try {
-      const response = await fetch(`${GITHUB_MODELS_ENDPOINT}/embeddings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.githubToken}`,
-        },
-        body: JSON.stringify({
-          model: EMBEDDING_MODEL,
-          input: text,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to generate embedding: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      
-      // GitHub Models API returns embeddings in OpenAI format
-      const embedding = data.data[0].embedding;
-      const tokenCount = data.usage.total_tokens;
-
+      const result = await this.provider.embed([text], purpose);
       return {
-        embedding,
-        tokenCount,
+        embedding: result.embeddings[0],
+        tokenCount: result.tokenCount,
       };
     } catch (error) {
-      console.error('Error generating embedding:', error instanceof Error ? error.message : error);
+      console.error(
+        '[RAG] Error generating embedding:',
+        error instanceof Error ? error.message : error,
+      );
       throw error;
     }
   }
 
-  /**
-   * Generates embeddings for multiple texts in a single batch request.
-   * More efficient than calling generateEmbedding multiple times.
-   * 
-   * @param texts - Array of texts to generate embeddings for
-   * @returns Promise with array of embedding results
-   * @throws Error if the API request fails
-   */
-  async generateEmbeddingsBatch(texts: string[]): Promise<EmbeddingResult[]> {
+  async generateEmbeddingsBatch(
+    texts: string[],
+    purpose: EmbeddingPurpose = 'document',
+  ): Promise<EmbeddingResult[]> {
     if (!texts || texts.length === 0) {
       throw new Error('Texts array cannot be empty');
     }
 
-    // Filter out empty texts
-    const validTexts = texts.filter(text => text && text.trim().length > 0);
-    
+    const validTexts = texts.filter((text) => text && text.trim().length > 0);
     if (validTexts.length === 0) {
       throw new Error('No valid texts to process');
     }
 
     try {
-      const response = await fetch(`${GITHUB_MODELS_ENDPOINT}/embeddings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.githubToken}`,
-        },
-        body: JSON.stringify({
-          model: EMBEDDING_MODEL,
-          input: validTexts,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to generate embeddings: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      
-      // Map the response to our result format
-      return data.data.map((item: any) => ({
-        embedding: item.embedding,
-        tokenCount: data.usage.total_tokens / validTexts.length, // Approximate tokens per text
-      }));
+      const result = await this.provider.embed(validTexts, purpose);
+      const tokenCount = result.tokenCount > 0
+        ? result.tokenCount / validTexts.length
+        : 0;
+      return result.embeddings.map((embedding) => ({ embedding, tokenCount }));
     } catch (error) {
-      console.error('Error generating embeddings batch:', error instanceof Error ? error.message : error);
+      console.error(
+        '[RAG] Error generating embedding batch:',
+        error instanceof Error ? error.message : error,
+      );
       throw error;
     }
   }
 
-  /**
-   * Returns the dimension of embeddings produced by this service.
-   * Useful for validation and database schema setup.
-   */
   getEmbeddingDimension(): number {
-    return EMBEDDING_DIMENSION;
+    return this.provider.metadata.dimensions;
   }
 
-  /**
-   * Returns the model name used for embeddings.
-   */
   getModelName(): string {
-    return EMBEDDING_MODEL;
+    return this.provider.metadata.model;
+  }
+
+  getMetadata(): EmbeddingProviderMetadata {
+    return { ...this.provider.metadata };
   }
 }

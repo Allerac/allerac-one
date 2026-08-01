@@ -74,7 +74,7 @@ durable work contracts.
 | Database | PostgreSQL 16 + pgvector | Data storage + vector similarity search |
 | Local LLM | Ollama | Run LLMs locally (llama3.2, qwen2.5, deepseek-r1) |
 | Cloud LLM | GitHub Models API | GPT-4o, Mistral Large via Azure inference |
-| Embeddings | text-embedding-3-small | 1536-dim vectors for RAG |
+| Embeddings | embeddinggemma via Ollama | 768-dim local vectors for RAG |
 | Search | Tavily API | Web search tool (optional) |
 | i18n | next-intl | Multi-language support |
 | Container | Docker + Docker Compose | Deployment and orchestration |
@@ -235,7 +235,7 @@ AI has awareness of past conversations
 | Table | Purpose |
 |-------|---------|
 | `documents` | Uploaded document metadata |
-| `document_chunks` | Text chunks with vector embeddings (1536-dim) |
+| `document_chunks` | Text chunks with local vector embeddings (768-dim) |
 | `conversation_summaries` | AI-generated summaries with topics and importance |
 | `tavily_cache` | Cached web search results (7-day TTL) |
 
@@ -430,7 +430,7 @@ Organized by feature in `src/app/components/`:
 | Database | PostgreSQL + pgvector | Vector search without external service |
 | Local LLM | Ollama | De facto standard, easy model management |
 | Cloud LLM | GitHub Models | Free tier, multiple models, Azure infrastructure |
-| Embeddings | text-embedding-3-small | Good quality at 1536 dims, fast |
+| Embeddings | embeddinggemma via Ollama | Multilingual local retrieval without a hosted embedding dependency |
 | Auth | Custom (bcrypt + sessions) | Simple, no external auth dependency |
 | Styling | Tailwind CSS | Utility-first, consistent, fast iteration |
 | Deployment | Docker Compose | Single-command deploy, works everywhere |

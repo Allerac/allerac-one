@@ -305,6 +305,7 @@
       "name": "Name *",
       "prompt": "Prompt *",
       "channels": "Channels *",
+      "webhookUrl": "Webhook URL *",
       "enabled": "Enabled",
       "frequency": "Frequency"
     },
@@ -330,6 +331,7 @@
     "never": "Never",
     "placeholderName": "Daily digest",
     "placeholderPrompt": "Summarise the latest AI news and send it to me.",
+    "placeholderWebhookUrl": "http://n8n:5678/webhook/...",
     "saving": "Saving…",
     "createJob": "Create Job",
     "saveChanges": "Save Changes",
@@ -361,6 +363,7 @@
       "nameRequired": "Name is required",
       "promptRequired": "Prompt is required",
       "channelRequired": "At least one channel is required",
+      "webhookUrlRequired": "Webhook URL is required when the webhook channel is enabled",
       "loadFailed": "Failed to load jobs",
       "deleteFailed": "Failed to delete",
       "createFailed": "Failed to create job",

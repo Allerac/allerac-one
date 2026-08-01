@@ -1,8 +1,8 @@
 # Notes API
 
 Notes endpoints expose the user's note collection through the Control API.
-Notes are optionally embedded for semantic search when a GitHub/embedding token
-is configured.
+Notes are embedded locally through Ollama for semantic search. Keyword search remains
+available when the local embedding service is unavailable.
 
 ## Scopes
 

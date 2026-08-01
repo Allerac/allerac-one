@@ -6,7 +6,7 @@
 
 import pool from '@/app/clients/db';
 
-const EMBEDDING_DIMENSION = 1536;
+const EMBEDDING_DIMENSION = 768;
 const CANDIDATE_POOL_SIZE = 150;
 const RECOMMENDATION_COUNT = 100;
 

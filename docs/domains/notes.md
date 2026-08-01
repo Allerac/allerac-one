@@ -43,7 +43,9 @@ CREATE TABLE user_notes (
 );
 ```
 
-The `document_id` FK links to the RAG `documents` table — when a GitHub token is present, notes are embedded via `text-embedding-3-small` for semantic search. Without a token, keyword search (`ILIKE`) is used as fallback.
+The `document_id` FK links to the RAG `documents` table. Notes are embedded locally
+with `embeddinggemma` through Ollama for semantic search; keyword search (`ILIKE`)
+is used when local embeddings are unavailable.
 
 Relevant migrations:
 - `054_notes.sql` — creates `user_notes` table

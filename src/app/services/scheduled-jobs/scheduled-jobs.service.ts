@@ -13,6 +13,7 @@ interface DBScheduledJob {
   cron_expr: string;
   prompt: string;
   channels: string[];
+  webhook_url: string | null;
   domain_slug: string | null;
   llm_model: string | null;
   llm_provider: JobModelProvider | null;
@@ -39,6 +40,7 @@ function mapJob(row: DBScheduledJob): ScheduledJob {
     cronExpr: row.cron_expr,
     prompt: row.prompt,
     channels: row.channels,
+    webhookUrl: row.webhook_url ?? null,
     domainSlug: row.domain_slug ?? null,
     llmModel: row.llm_model ?? null,
     llmProvider: row.llm_provider ?? null,
@@ -74,13 +76,13 @@ export class ScheduledJobsService {
 
   async createScheduledJob(
     userId: string,
-    data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null; llmModel?: string | null; llmProvider?: JobModelProvider | null }
+    data: { name: string; cronExpr: string; prompt: string; channels: string[]; webhookUrl?: string | null; enabled: boolean; domainSlug?: string | null; llmModel?: string | null; llmProvider?: JobModelProvider | null }
   ): Promise<ScheduledJob> {
     const result = await pool.query<DBScheduledJob>(
-      `INSERT INTO scheduled_jobs (user_id, name, cron_expr, prompt, channels, enabled, domain_slug, llm_model, llm_provider)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO scheduled_jobs (user_id, name, cron_expr, prompt, channels, webhook_url, enabled, domain_slug, llm_model, llm_provider)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [userId, data.name, data.cronExpr, data.prompt, data.channels, data.enabled, data.domainSlug ?? null, data.llmModel ?? null, data.llmProvider ?? null]
+      [userId, data.name, data.cronExpr, data.prompt, data.channels, data.webhookUrl ?? null, data.enabled, data.domainSlug ?? null, data.llmModel ?? null, data.llmProvider ?? null]
     );
     return mapJob(result.rows[0]);
   }
@@ -88,7 +90,7 @@ export class ScheduledJobsService {
   async updateScheduledJob(
     jobId: string,
     userId: string,
-    data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; enabled?: boolean; llmModel?: string | null; llmProvider?: JobModelProvider | null }
+    data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; webhookUrl?: string | null; enabled?: boolean; llmModel?: string | null; llmProvider?: JobModelProvider | null }
   ): Promise<ScheduledJob | null> {
     const result = await pool.query<DBScheduledJob>(
       `UPDATE scheduled_jobs
@@ -96,9 +98,10 @@ export class ScheduledJobsService {
            cron_expr  = COALESCE($4, cron_expr),
            prompt     = COALESCE($5, prompt),
            channels   = COALESCE($6, channels),
-           enabled    = COALESCE($7, enabled),
-           llm_model  = CASE WHEN $8::boolean THEN $9 ELSE llm_model END,
-           llm_provider = CASE WHEN $8::boolean THEN $10 ELSE llm_provider END
+           webhook_url = CASE WHEN $7::boolean THEN $8 ELSE webhook_url END,
+           enabled    = COALESCE($9, enabled),
+           llm_model  = CASE WHEN $10::boolean THEN $11 ELSE llm_model END,
+           llm_provider = CASE WHEN $10::boolean THEN $12 ELSE llm_provider END
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
       [
@@ -108,6 +111,8 @@ export class ScheduledJobsService {
         data.cronExpr ?? null,
         data.prompt ?? null,
         data.channels ?? null,
+        data.webhookUrl !== undefined,
+        data.webhookUrl ?? null,
         data.enabled ?? null,
         data.llmModel !== undefined || data.llmProvider !== undefined,
         data.llmModel ?? null,

@@ -16,7 +16,8 @@ The assistant must not commit, push, merge, tag, release, or deploy changes.
 
 ### Design and benchmark provider-independent local embeddings
 
-**Status:** Documented; implementation not started
+**Status:** Local baseline implemented 2026-08-01; release validation and operational
+health surface remain
 
 **Priority:** High — semantic features are degraded after GitHub Models retirement
 
@@ -27,19 +28,19 @@ vector space is not required.
 
 Continue from
 [Provider-Independent Local Embeddings](../roadmap/provider-independent-local-embeddings.md).
-Start with inventory and benchmarks on the actual mini PC; do not choose a model
-only from its dimension count, change pgvector schemas, or delete existing vectors
-before the benchmark and migration contract are reviewed. The agreed direction is
-local-first embeddings, initially through Ollama, behind a provider-neutral contract.
-Anthropic and other remote chat providers remain independent.
+The local baseline now uses `embeddinggemma` through Ollama at 768 dimensions behind
+a provider-neutral contract. The migration was applied locally and all 804 Spotify
+vectors were reindexed; no document chunks existed. Focused tests pass.
 
-The first implementation session should:
+The Benchmark domain now includes `/benchmark/embeddings`, with server-side execution,
+installed-model selection, multilingual retrieval scoring, latency/batch measurements,
+and browser-local recent history.
 
-1. inventory all embedding consumers and fixed dimensions;
-2. define the multilingual retrieval evaluation set;
-3. shortlist compact local models;
-4. benchmark cold/warm latency, RAM, throughput, contention, and recall;
-5. return with evidence and a model recommendation before changing the schema.
+Next, expand the retrieval set with real examples, expose embedding health and active
+model identity in Health/Admin, add workload prioritization before large-scale
+indexing, and validate the rebuilt app through the normal review/release workflow.
+Anthropic and other remote chat providers remain independent. Do not mix vectors from
+another model/version or change dimensions without running the guarded reindex process.
 
 ### Start portable backup and recovery inventory
 

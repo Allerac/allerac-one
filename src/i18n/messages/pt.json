@@ -305,6 +305,7 @@
       "name": "Nome *",
       "prompt": "Prompt *",
       "channels": "Canais *",
+      "webhookUrl": "URL do webhook *",
       "enabled": "Ativo",
       "frequency": "Frequência"
     },
@@ -330,6 +331,7 @@
     "never": "Nunca",
     "placeholderName": "Resumo diário",
     "placeholderPrompt": "Resuma as últimas notícias de IA e me envie.",
+    "placeholderWebhookUrl": "http://n8n:5678/webhook/...",
     "saving": "Salvando…",
     "createJob": "Criar Job",
     "saveChanges": "Salvar Alterações",
@@ -361,6 +363,7 @@
       "nameRequired": "Nome é obrigatório",
       "promptRequired": "Prompt é obrigatório",
       "channelRequired": "Pelo menos um canal é obrigatório",
+      "webhookUrlRequired": "A URL do webhook é obrigatória quando o canal webhook está ativado",
       "loadFailed": "Falha ao carregar jobs",
       "deleteFailed": "Falha ao excluir",
       "createFailed": "Falha ao criar job",

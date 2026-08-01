@@ -10,6 +10,7 @@ import (
 
 	"github.com/allerac/notifier/internal/config"
 	telegram "github.com/allerac/notifier/internal/consumers/telegram"
+	webhook "github.com/allerac/notifier/internal/consumers/webhook"
 	"github.com/allerac/notifier/internal/db"
 	"github.com/allerac/notifier/internal/publisher"
 	"github.com/allerac/notifier/internal/runner"
@@ -64,6 +65,16 @@ func main() {
 	}
 	if err := tgConsumer.Start(ctx); err != nil {
 		log.Fatalf("[notifier] Failed to start Telegram consumer: %v", err)
+	}
+
+	// Webhook consumer: reads stream and delivers messages to each job's webhook_url
+	// (e.g. an n8n Webhook Trigger). See docs/roadmap/n8n-workflow-integration.md.
+	whConsumer, err := webhook.New(cfg.RedisURL, pool)
+	if err != nil {
+		log.Fatalf("[notifier] Failed to create webhook consumer: %v", err)
+	}
+	if err := whConsumer.Start(ctx); err != nil {
+		log.Fatalf("[notifier] Failed to start webhook consumer: %v", err)
 	}
 
 	// Minimal health endpoint

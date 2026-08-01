@@ -2,21 +2,9 @@
 
 import { DocumentService } from '@/app/services/rag/document.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
-import { UserSettingsService } from '@/app/services/user/user-settings.service';
-import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 
-const userSettingsService = new UserSettingsService();
-const systemSettingsService = new SystemSettingsService();
 const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024;
-
-async function getEmbeddingToken(userId: string): Promise<string> {
-    const [settings, systemSettings] = await Promise.all([
-        userSettingsService.loadUserSettings(userId),
-        systemSettingsService.loadAll(),
-    ]);
-    return settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN || '';
-}
 
 function requireValidDocument(file: File | null): File {
     if (!file) throw new Error('No file provided');
@@ -37,7 +25,7 @@ export async function uploadDocument(formData: FormData, domainSlug?: string | n
 
     const file = requireValidDocument(formData.get('file') as File | null);
 
-    const embeddingService = new EmbeddingService(await getEmbeddingToken(user.id));
+    const embeddingService = new EmbeddingService();
     const docService = new DocumentService(embeddingService);
 
     // Step 1: Create document record
@@ -65,7 +53,7 @@ export async function processDocument(formData: FormData) {
 
     const file = requireValidDocument(formData.get('file') as File | null);
 
-    const embeddingService = new EmbeddingService(await getEmbeddingToken(user.id));
+    const embeddingService = new EmbeddingService();
     const docService = new DocumentService(embeddingService);
     return await docService.processDocument(file, user.id);
 }
@@ -74,7 +62,7 @@ export async function getAllDocuments(domainSlug?: string | null) {
     const user = await requireCurrentUser();
     if (domainSlug) await assertDomainAccess(user, domainSlug);
 
-    const embeddingService = new EmbeddingService(await getEmbeddingToken(user.id));
+    const embeddingService = new EmbeddingService();
     const docService = new DocumentService(embeddingService);
     return await docService.getAllDocuments(user.id, domainSlug);
 }
@@ -82,7 +70,7 @@ export async function getAllDocuments(domainSlug?: string | null) {
 export async function deleteDocument(documentId: string) {
     const user = await requireCurrentUser();
 
-    const embeddingService = new EmbeddingService(await getEmbeddingToken(user.id));
+    const embeddingService = new EmbeddingService();
     const docService = new DocumentService(embeddingService);
     return await docService.deleteDocument(documentId, user.id);
 }

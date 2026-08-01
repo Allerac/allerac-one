@@ -2,7 +2,7 @@
 
 ## Status
 
-Beta baseline complete. The implemented v1 surface contains 51 route paths and 70
+Beta baseline complete. The implemented v1 surface contains 54 route paths and 76
 operations, supports browser session authentication and scoped Control API bearer
 keys, and is deployed as a production client surface. Standalone tool execution,
 streaming chat, and legacy UI migration are deferred evolutions rather than beta
@@ -106,7 +106,7 @@ Common error codes:
 | [Email](email.md) | list messages, get message, send |
 | [Finance](finance.md) | quotes, symbol search, candles, watchlist list, add, remove |
 | [Music](music.md) | status, recommendations, top tracks, recently played, playlists list/create, playlist tracks list/add, sync |
-| [Benchmark](benchmark.md) | model availability, run via SSE, history, clear history |
+| [Benchmark](benchmark.md) | LLM and embedding model availability, execution, and LLM run history |
 
 ## Bruno Collection
 

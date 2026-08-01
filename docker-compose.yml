@@ -8,9 +8,10 @@
 #   OLLAMA_RUNTIME=nvidia docker compose up -d
 #
 # With optional profiles (set COMPOSE_PROFILES in .env):
-#   COMPOSE_PROFILES=local   - Caddy reverse proxy (local HTTPS, e.g. home.allerac)
-#   COMPOSE_PROFILES=cloud   - Cloudflare Tunnel (VM/cloud access, no open ports)
-#   COMPOSE_PROFILES=webhook - Auto-deploy on git push
+#   COMPOSE_PROFILES=local      - Caddy reverse proxy (local HTTPS, e.g. home.allerac)
+#   COMPOSE_PROFILES=cloud      - Cloudflare Tunnel (VM/cloud access, no open ports)
+#   COMPOSE_PROFILES=webhook    - Auto-deploy on git push
+#   COMPOSE_PROFILES=automation - n8n workflow automation (see docs/roadmap/n8n-workflow-integration.md)
 #
 # Required environment variables:
 #   ENCRYPTION_KEY                   - AES key for token encryption
@@ -21,7 +22,7 @@
 #   GRAFANA_PASSWORD                 - Grafana admin password (defaults to 'admin')
 #   WEBHOOK_SECRET                   - Webhook secret (for auto-deploy)
 #   DEPLOY_BRANCH                    - Branch accepted by deploy webhook (default: main)
-#   GITHUB_TOKEN                     - GitHub Models API token
+#   GITHUB_TOKEN                     - GitHub API token (not used for embeddings)
 #   TAVILY_API_KEY                   - Web search API key
 #   OLLAMA_MODELS                    - Comma-separated models to download
 #   OLLAMA_RUNTIME                   - Docker runtime for Ollama (runc or nvidia; default: runc)
@@ -157,6 +158,12 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL:-http://ollama:11434}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-embeddinggemma}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-768}
+      - EMBEDDING_TIMEOUT_MS=${EMBEDDING_TIMEOUT_MS:-10000}
+      - EMBEDDING_KEEP_ALIVE=${EMBEDDING_KEEP_ALIVE:-10m}
+      - EMBEDDING_VERSION=${EMBEDDING_VERSION:-ollama:embeddinggemma:v1}
       - SKILL_ROUTER_ENABLED=${SKILL_ROUTER_ENABLED:-false}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
       - NEXT_PUBLIC_VISIBLE_DOMAINS=${NEXT_PUBLIC_VISIBLE_DOMAINS:-}
@@ -325,12 +332,13 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=ollama:11434
-      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen2.5:3b}
+      - OLLAMA_MODELS=${OLLAMA_MODELS:-qwen2.5:3b,embeddinggemma}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-embeddinggemma}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Pulling models: ${OLLAMA_MODELS:-qwen2.5:3b}"
-        echo "${OLLAMA_MODELS:-qwen2.5:3b}" | tr ',' '\n' | while read model; do
+        echo "Pulling models: ${OLLAMA_MODELS:-qwen2.5:3b},${EMBEDDING_MODEL:-embeddinggemma}"
+        echo "${OLLAMA_MODELS:-qwen2.5:3b},${EMBEDDING_MODEL:-embeddinggemma}" | tr ',' '\n' | while read model; do
           model=$$(echo "$$model" | tr -d ' ')
           [ -z "$$model" ] && continue
           if ollama list | grep -q "^$$model"; then
@@ -552,6 +560,37 @@ services:
           memory: 256M
 
   # ============================================
+  # Automation (optional, COMPOSE_PROFILES=automation)
+  # See docs/roadmap/n8n-workflow-integration.md. Runs self-hosted on the same
+  # Docker network as the rest of the stack — reachable from other containers
+  # as http://n8n:5678, and it can reach the app as http://app:8080. Uses its
+  # own SQLite store (n8n_data volume), independent of the Allerac database.
+  # ============================================
+
+  n8n:
+    image: n8nio/n8n:latest
+    pull_policy: if_not_present
+    container_name: allerac-n8n
+    restart: unless-stopped
+    environment:
+      - N8N_PROTOCOL=http
+      - N8N_PORT=5678
+      - N8N_SECURE_COOKIE=false
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY is required}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    profiles:
+      - automation
+
+  # ============================================
   # Management & Optional
   # ============================================
 
@@ -665,3 +704,5 @@ volumes:
     name: allerac_loki_data
   portainer_data:
     name: allerac_portainer_data
+  n8n_data:
+    name: allerac_n8n_data

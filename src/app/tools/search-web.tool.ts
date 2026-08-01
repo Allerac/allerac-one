@@ -19,10 +19,11 @@ export class SearchWebTool {
 
   constructor(
     private tavilyApiKey: string,
-    githubToken?: string,
+    _githubToken?: string,
   ) {
+    void _githubToken;
     this.metricsService = new MetricsService();
-    this.embeddingService = githubToken ? new EmbeddingService(githubToken) : null;
+    this.embeddingService = new EmbeddingService();
   }
 
   async execute(query: string): Promise<SearchWebResult> {

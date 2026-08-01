@@ -205,7 +205,7 @@ export async function POST(request: Request): Promise<Response> {
         // 8. Load RAG context (domain-scoped)
         let relevantContext = '';
         try {
-          const embeddingService = new EmbeddingService(githubToken);
+          const embeddingService = new EmbeddingService();
           const vectorService = new VectorSearchService(embeddingService);
           relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: effectiveDomain });
         } catch (e) {

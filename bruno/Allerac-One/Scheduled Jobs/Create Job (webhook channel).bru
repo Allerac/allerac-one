@@ -1,0 +1,34 @@
+meta {
+  name: Create Job (webhook channel)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/jobs
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "name": "n8n webhook smoke test",
+    "cronExpr": "0 8 * * *",
+    "prompt": "Say hello to n8n in one short sentence.",
+    "channels": ["webhook"],
+    "webhookUrl": "http://n8n:5678/webhook/allerac-job",
+    "enabled": false
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.job?.id) {
+    bru.setEnvVar("webhookJobId", body.data.job.id);
+  }
+}

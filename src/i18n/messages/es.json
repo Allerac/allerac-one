@@ -536,6 +536,7 @@
       "name": "Nombre *",
       "prompt": "Prompt *",
       "channels": "Canales *",
+      "webhookUrl": "URL del webhook *",
       "enabled": "Activo",
       "frequency": "Frecuencia"
     },
@@ -561,6 +562,7 @@
     "never": "Nunca",
     "placeholderName": "Resumen diario",
     "placeholderPrompt": "Resume las últimas noticias de IA y envíamelas.",
+    "placeholderWebhookUrl": "http://n8n:5678/webhook/...",
     "saving": "Guardando…",
     "createJob": "Crear tarea",
     "saveChanges": "Guardar cambios",
@@ -592,6 +594,7 @@
       "nameRequired": "El nombre es obligatorio",
       "promptRequired": "El prompt es obligatorio",
       "channelRequired": "Se requiere al menos un canal",
+      "webhookUrlRequired": "Se requiere la URL del webhook cuando el canal webhook está activado",
       "loadFailed": "Error al cargar las tareas",
       "deleteFailed": "Error al eliminar",
       "createFailed": "Error al crear la tarea",

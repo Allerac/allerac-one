@@ -522,6 +522,7 @@
       "name": "Nom *",
       "prompt": "Prompt *",
       "channels": "Canals *",
+      "webhookUrl": "URL del webhook *",
       "enabled": "Activat",
       "frequency": "Freqüència"
     },
@@ -547,6 +548,7 @@
     "never": "Mai",
     "placeholderName": "Resum diari",
     "placeholderPrompt": "Resumeix les últimes notícies d'IA i envia-m'ho.",
+    "placeholderWebhookUrl": "http://n8n:5678/webhook/...",
     "saving": "Desant…",
     "createJob": "Crear tasca",
     "saveChanges": "Desar canvis",
@@ -578,6 +580,7 @@
       "nameRequired": "El nom és obligatori",
       "promptRequired": "El prompt és obligatori",
       "channelRequired": "Cal almenys un canal",
+      "webhookUrlRequired": "Cal la URL del webhook quan el canal webhook està activat",
       "loadFailed": "Error en carregar les tasques",
       "deleteFailed": "Error en eliminar",
       "createFailed": "Error en crear la tasca",
