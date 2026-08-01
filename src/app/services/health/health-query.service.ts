@@ -37,6 +37,7 @@ export interface GarminStatusRow {
   sync_enabled: boolean;
   last_sync_at: string | Date | null;
   last_error: string | null;
+  data_mode: 'cached' | 'proxy';
 }
 
 const DISCONNECTED_STATUS: GarminStatusRow = {
@@ -45,21 +46,27 @@ const DISCONNECTED_STATUS: GarminStatusRow = {
   sync_enabled: false,
   last_sync_at: null,
   last_error: null,
+  data_mode: 'cached',
 };
 
 export async function queryGarminStatus(userId: string): Promise<GarminStatusRow> {
-  const res = await pool.query(
-    'SELECT is_connected, mfa_pending, last_sync_at, last_error, sync_enabled FROM garmin_credentials WHERE user_id = $1',
-    [userId],
-  );
-  if (res.rows.length === 0) return { ...DISCONNECTED_STATUS };
-  const row = res.rows[0];
+  const [credRes, connRes] = await Promise.all([
+    pool.query('SELECT mfa_pending FROM garmin_credentials WHERE user_id = $1', [userId]),
+    pool.query(
+      'SELECT is_connected, sync_enabled, last_sync_at, last_error, data_mode FROM integration_connections WHERE user_id = $1 AND provider = $2',
+      [userId, 'garmin'],
+    ),
+  ]);
+  if (credRes.rows.length === 0 && connRes.rows.length === 0) return { ...DISCONNECTED_STATUS };
+
+  const conn = connRes.rows[0] ?? {};
   return {
-    is_connected: row.is_connected,
-    mfa_pending: row.mfa_pending,
-    sync_enabled: row.sync_enabled,
-    last_sync_at: row.last_sync_at,
-    last_error: row.last_error,
+    is_connected: conn.is_connected ?? false,
+    mfa_pending: credRes.rows[0]?.mfa_pending ?? false,
+    sync_enabled: conn.sync_enabled ?? true,
+    last_sync_at: conn.last_sync_at ?? null,
+    last_error: conn.last_error ?? null,
+    data_mode: conn.data_mode ?? 'cached',
   };
 }
 

@@ -48,7 +48,7 @@ export async function createInvite(
     await pool.query(
       `INSERT INTO invite_tokens (token, email, domain_slug, expires_at, created_by, issue_api_key)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [token, email.toLowerCase(), domainSlug, expiresAt, admin.id, issueApiKey && domainSlug === 'health'],
+      [token, email.toLowerCase(), domainSlug, expiresAt, admin.id, issueApiKey && domainSlug === 'bridge'],
     );
 
     const settings = await sysSettings.loadAll();

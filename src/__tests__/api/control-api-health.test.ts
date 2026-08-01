@@ -65,7 +65,9 @@ describe('Control API v1 health', () => {
   });
 
   it('returns disconnected status when no garmin row found', async () => {
-    mockPool.query.mockResolvedValueOnce({ rows: [] } as any);
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [] } as any) // garmin_credentials
+      .mockResolvedValueOnce({ rows: [] } as any); // integration_connections
 
     const response = await getHealthStatus(new Request('http://localhost/api/v1/health/status'));
 
@@ -81,15 +83,17 @@ describe('Control API v1 health', () => {
   });
 
   it('returns garmin connection status', async () => {
-    mockPool.query.mockResolvedValueOnce({
-      rows: [{
-        is_connected: true,
-        mfa_pending: false,
-        sync_enabled: true,
-        last_sync_at: '2026-06-25T06:00:00.000Z',
-        last_error: null,
-      }],
-    } as any);
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ mfa_pending: false }] } as any) // garmin_credentials
+      .mockResolvedValueOnce({
+        rows: [{
+          is_connected: true,
+          sync_enabled: true,
+          last_sync_at: '2026-06-25T06:00:00.000Z',
+          last_error: null,
+          data_mode: 'cached',
+        }],
+      } as any); // integration_connections
 
     const response = await getHealthStatus(new Request('http://localhost/api/v1/health/status'));
 
@@ -205,9 +209,10 @@ describe('Control API v1 health', () => {
 
   it('keeps the local exercise correction when Garmin accepts it', async () => {
     mockPool.query
-      .mockResolvedValueOnce({ rows: [{ activity_id: '123' }] } as any)
-      .mockResolvedValueOnce({ rows: [{ oauth1_token_encrypted: 'encrypted-session' }] } as any)
-      .mockResolvedValueOnce({ rows: [] } as any);
+      .mockResolvedValueOnce({ rows: [{ activity_id: '123' }] } as any) // health_activities: save pending
+      .mockResolvedValueOnce({ rows: [{ is_connected: true }] } as any) // integration_connections
+      .mockResolvedValueOnce({ rows: [{ oauth1_token_encrypted: 'encrypted-session' }] } as any) // garmin_credentials
+      .mockResolvedValueOnce({ rows: [] } as any); // health_activities: mark synced
     global.fetch = jest.fn().mockResolvedValue(
       new Response(JSON.stringify({ exercise_sets: [] }), {
         status: 200,
@@ -244,9 +249,10 @@ describe('Control API v1 health', () => {
 
   it('keeps the local exercise correction when Garmin rejects it', async () => {
     mockPool.query
-      .mockResolvedValueOnce({ rows: [{ activity_id: '123' }] } as any)
-      .mockResolvedValueOnce({ rows: [{ oauth1_token_encrypted: 'encrypted-session' }] } as any)
-      .mockResolvedValueOnce({ rows: [] } as any);
+      .mockResolvedValueOnce({ rows: [{ activity_id: '123' }] } as any) // health_activities: save pending
+      .mockResolvedValueOnce({ rows: [{ is_connected: true }] } as any) // integration_connections
+      .mockResolvedValueOnce({ rows: [{ oauth1_token_encrypted: 'encrypted-session' }] } as any) // garmin_credentials
+      .mockResolvedValueOnce({ rows: [] } as any); // health_activities: mark failed
     global.fetch = jest.fn().mockResolvedValue(
       new Response('invalid exercise', { status: 400 }),
     );
@@ -271,7 +277,7 @@ describe('Control API v1 health', () => {
       garminSyncStatus: 'garmin_sync_failed',
     });
     expect(mockPool.query).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.stringContaining("garmin_sync_status = 'garmin_sync_failed'"),
       [user.id, '123', expect.stringContaining('Garmin update failed')],
     );

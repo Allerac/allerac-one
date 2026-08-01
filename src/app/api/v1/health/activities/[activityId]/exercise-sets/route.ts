@@ -3,6 +3,7 @@ import pool from '@/app/clients/db';
 import { safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { requireApiUser } from '../../../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../../../_lib/responses';
+import { getConnection } from '@/app/services/integrations/integration-connections.service';
 
 const exerciseSchema = z.object({
   category: z.string().trim().min(1),
@@ -84,13 +85,12 @@ export async function PUT(
 
     let garminResult: unknown = null;
     try {
+      const connection = await getConnection(user.id, 'garmin');
       const credentials = await pool.query(
-        `SELECT oauth1_token_encrypted
-         FROM garmin_credentials
-         WHERE user_id = $1 AND is_connected = true`,
+        `SELECT oauth1_token_encrypted FROM garmin_credentials WHERE user_id = $1`,
         [user.id],
       );
-      if (!credentials.rows[0]?.oauth1_token_encrypted) {
+      if (!connection?.isConnected || !credentials.rows[0]?.oauth1_token_encrypted) {
         throw new Error('Garmin is not connected');
       }
       garminResult = await updateGarmin(

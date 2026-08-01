@@ -6,6 +6,9 @@ import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { submitLog } from '@/lib/submit-log';
 import { applyActivityCorrection } from '@/app/services/health/activity-corrections';
 import { callHealthWorker, queryDailyMetricsSnapshot, queryGarminStatus, queryHealthSummary } from '@/app/services/health/health-query.service';
+import { clearConnection, getConnection, upsertConnection } from '@/app/services/integrations/integration-connections.service';
+
+const GARMIN_PROVIDER = 'garmin';
 
 export async function isHealthConfigured(): Promise<boolean> {
   return Boolean(process.env.HEALTH_WORKER_SECRET);
@@ -17,6 +20,26 @@ async function getSessionUserId(): Promise<string> {
 }
 
 const workerFetch = callHealthWorker;
+
+// Loads the decrypted session dump plus whether this connection is in
+// "proxy" mode (data_mode='proxy'). Proxy connections never get their live
+// fetches written back to health_activities / health_daily_metrics — see
+// callers below. Returns null when Garmin isn't connected.
+async function getGarminConnection(userId: string): Promise<{ sessionDump: string; isProxy: boolean } | null> {
+  const connection = await getConnection(userId, GARMIN_PROVIDER);
+  if (!connection || !connection.isConnected) return null;
+
+  const res = await pool.query(
+    'SELECT oauth1_token_encrypted FROM garmin_credentials WHERE user_id = $1',
+    [userId],
+  );
+  if (res.rows.length === 0) return null;
+
+  return {
+    sessionDump: safeDecrypt(res.rows[0].oauth1_token_encrypted),
+    isProxy: connection.dataMode === 'proxy',
+  };
+}
 
 // ─── Garmin status ─────────────────────────────────────────────────────────────
 
@@ -31,6 +54,7 @@ export async function getGarminStatus() {
       sync_enabled: false,
       last_sync_at: null,
       last_error: null,
+      data_mode: 'cached' as const,
       error: e.message,
     };
   }
@@ -38,10 +62,17 @@ export async function getGarminStatus() {
 
 // ─── Connect ───────────────────────────────────────────────────────────────────
 
-export async function connectGarmin(email: string, password: string) {
+export async function connectGarmin(email: string, password: string, dataMode: 'cached' | 'proxy' = 'cached') {
   const userId = await getSessionUserId();
   await submitLog('Health', `Garmin connect started for ${email}`);
   const result = await workerFetch('POST', '/connect', { email, password });
+
+  // Only apply the chosen data_mode on a genuinely new connection — a
+  // reconnect (e.g. after a Garmin session expiry) must never silently
+  // change an existing connection's mode, regardless of what the form
+  // happens to submit this time.
+  const existingConnection = await getConnection(userId, GARMIN_PROVIDER);
+  const dataModeForUpsert = existingConnection ? undefined : dataMode;
 
   if (result.status === 'mfa_required') {
     await submitLog('Health', `Garmin MFA required`);
@@ -59,15 +90,15 @@ export async function connectGarmin(email: string, password: string) {
     );
 
     await pool.query(
-      `INSERT INTO garmin_credentials (user_id, email_encrypted, mfa_pending, is_connected)
-       VALUES ($1, $2, true, false)
+      `INSERT INTO garmin_credentials (user_id, email_encrypted, mfa_pending)
+       VALUES ($1, $2, true)
        ON CONFLICT (user_id) DO UPDATE SET
          email_encrypted = EXCLUDED.email_encrypted,
          mfa_pending = true,
-         is_connected = false,
          updated_at = NOW()`,
       [userId, encrypt(email)]
     );
+    await upsertConnection(userId, GARMIN_PROVIDER, { isConnected: false, dataMode: dataModeForUpsert, lastError: null });
 
     return { is_connected: false, mfa_pending: true, message: 'MFA code required. Check your email or phone.' };
   }
@@ -75,17 +106,16 @@ export async function connectGarmin(email: string, password: string) {
   if (result.status === 'success') {
     await submitLog('Health', `Garmin connected successfully`);
     await pool.query(
-      `INSERT INTO garmin_credentials (user_id, email_encrypted, oauth1_token_encrypted, is_connected, mfa_pending)
-       VALUES ($1, $2, $3, true, false)
+      `INSERT INTO garmin_credentials (user_id, email_encrypted, oauth1_token_encrypted, mfa_pending)
+       VALUES ($1, $2, $3, false)
        ON CONFLICT (user_id) DO UPDATE SET
          email_encrypted = EXCLUDED.email_encrypted,
          oauth1_token_encrypted = EXCLUDED.oauth1_token_encrypted,
-         is_connected = true,
          mfa_pending = false,
-         last_error = NULL,
          updated_at = NOW()`,
       [userId, encrypt(email), encrypt(result.session_dump)]
     );
+    await upsertConnection(userId, GARMIN_PROVIDER, { isConnected: true, dataMode: dataModeForUpsert, lastError: null });
 
     return { is_connected: true, mfa_pending: false };
   }
@@ -127,13 +157,12 @@ export async function submitGarminMfa(mfaCode: string) {
   await pool.query(
     `UPDATE garmin_credentials SET
        oauth1_token_encrypted = $2,
-       is_connected = true,
        mfa_pending = false,
-       last_error = NULL,
        updated_at = NOW()
      WHERE user_id = $1`,
     [userId, encrypt(result.session_dump)]
   );
+  await upsertConnection(userId, GARMIN_PROVIDER, { isConnected: true, lastError: null });
 
   await pool.query('DELETE FROM health_mfa_sessions WHERE user_id = $1', [userId]);
 
@@ -146,6 +175,7 @@ export async function disconnectGarmin() {
   const userId = await getSessionUserId();
   await pool.query('DELETE FROM garmin_credentials WHERE user_id = $1', [userId]);
   await pool.query('DELETE FROM health_mfa_sessions WHERE user_id = $1', [userId]);
+  await clearConnection(userId, GARMIN_PROVIDER);
   return { success: true };
 }
 
@@ -163,15 +193,15 @@ export async function triggerInitialSync() {
 
 async function _runSync(userId: string, jobType: 'manual' | 'full', days: number) {
   await submitLog('Health', '_runSync called');
-  const res = await pool.query(
-    'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
-    [userId]
-  );
-  if (res.rows.length === 0 || !res.rows[0].is_connected) {
+  const connection = await getGarminConnection(userId);
+  if (!connection) {
     throw new Error('Garmin not connected');
   }
+  if (connection.isProxy) {
+    throw new Error('Sync is disabled for this connection — it is set to live/proxy mode, where nothing is cached.');
+  }
 
-  const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
+  const sessionDump = connection.sessionDump;
   const endDate = new Date().toISOString().split('T')[0];
   const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -240,10 +270,7 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
       `UPDATE health_sync_jobs SET status='completed', completed_at=NOW(), records_fetched=$2 WHERE id=$1`,
       [jobId, data.metrics.length + allActivities.length]
     );
-    await pool.query(
-      `UPDATE garmin_credentials SET last_sync_at=NOW(), last_error=NULL, updated_at=NOW() WHERE user_id=$1`,
-      [userId]
-    );
+    await upsertConnection(userId, GARMIN_PROVIDER, { lastSyncAt: new Date(), lastError: null });
 
     return { success: true, records: data.metrics.length + allActivities.length };
   } catch (e: any) {
@@ -252,10 +279,7 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
       `UPDATE health_sync_jobs SET status='failed', completed_at=NOW(), error_message=$2 WHERE id=$1`,
       [jobId, e.message]
     );
-    await pool.query(
-      `UPDATE garmin_credentials SET last_error=$2, updated_at=NOW() WHERE user_id=$1`,
-      [userId, e.message]
-    );
+    await upsertConnection(userId, GARMIN_PROVIDER, { lastError: e.message });
     throw e;
   }
 }
@@ -277,18 +301,17 @@ export async function getHealthMetrics(startDate: string, endDate: string) {
     date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date).split('T')[0],
   }));
 
-  // If no data in database for this range, fetch from API
+  // If no data in database for this range, fetch from API — but only for
+  // cached-mode connections. Proxy-mode connections are never browsed from
+  // Allerac's own dashboard at all (see HealthDashboard.tsx); this function
+  // simply has nothing to return for them, by design.
   if (metrics.length === 0) {
-    await submitLog('Health', `No metrics in database for ${startDate} to ${endDate}, fetching from API`);
-    const garminRes = await pool.query(
-      'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
-      [userId]
-    );
-    if (garminRes.rows.length > 0 && garminRes.rows[0].is_connected) {
+    const connection = await getGarminConnection(userId);
+    if (connection && !connection.isProxy) {
+      await submitLog('Health', `No metrics in database for ${startDate} to ${endDate}, fetching from API`);
       try {
-        const sessionDump = safeDecrypt(garminRes.rows[0].oauth1_token_encrypted);
         const syncRes = await workerFetch('POST', '/sync', {
-          session_dump: sessionDump,
+          session_dump: connection.sessionDump,
           start_date: startDate,
           end_date: endDate,
         });
@@ -311,6 +334,12 @@ export async function getHealthMetrics(startDate: string, endDate: string) {
 
 export async function getHealthSummary(period: 'day' | '3days' | 'week' | 'month' | 'year') {
   const userId = await getSessionUserId();
+  const connection = await getGarminConnection(userId);
+  if (connection?.isProxy) {
+    // Trends require history, and proxy-mode connections never accumulate
+    // any — nothing to aggregate.
+    return { period, unavailable: true, reason: 'proxy_mode' as const };
+  }
   const summary = await queryHealthSummary(userId, period);
   return { period, ...summary };
 }
@@ -367,18 +396,19 @@ export async function getDailyHealth(date: string) {
     return cached;
   }
 
-  // Fetch from API
-  const res = await pool.query(
-    'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
-    [userId]
-  );
-  if (res.rows.length === 0 || !res.rows[0].is_connected) {
+  // Fetch from API — cached-mode connections only. Proxy-mode connections
+  // are never browsed from Allerac's own dashboard (see HealthDashboard.tsx);
+  // there is nothing to return here for them, by design.
+  const connection = await getGarminConnection(userId);
+  if (!connection) {
     throw new Error('Garmin not connected');
   }
+  if (connection.isProxy) {
+    return null;
+  }
 
-  const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
   const data = await workerFetch('POST', '/daily-health', {
-    session_dump: sessionDump,
+    session_dump: connection.sessionDump,
     date,
   });
 
@@ -399,15 +429,15 @@ export async function getActivitiesRange(startDate: string, endDate: string) {
     return { activities: cachedActivities };
   }
 
-  const res = await pool.query(
-    'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
-    [userId]
-  );
-  if (res.rows.length === 0 || !res.rows[0].is_connected) {
+  const connection = await getGarminConnection(userId);
+  if (!connection) {
     throw new Error('Garmin not connected');
   }
-
-  const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
+  // Proxy-mode connections are never browsed from Allerac's own dashboard
+  // (see HealthDashboard.tsx) — nothing to return here for them.
+  if (connection.isProxy) {
+    return { activities: [] };
+  }
 
   // Fetch activities for each day in range
   const allActivities: any[] = [];
@@ -418,7 +448,7 @@ export async function getActivitiesRange(startDate: string, endDate: string) {
     const dateStr = current.toISOString().split('T')[0];
     try {
       const data = await workerFetch('POST', '/activities', {
-        session_dump: sessionDump,
+        session_dump: connection.sessionDump,
         limit: 50,
         date: dateStr,
       });
@@ -456,18 +486,19 @@ export async function getRecentActivities(limit: number = 10, filterDate?: strin
     }
   }
 
-  const res = await pool.query(
-    'SELECT oauth1_token_encrypted, is_connected FROM garmin_credentials WHERE user_id = $1',
-    [userId]
-  );
-  if (res.rows.length === 0 || !res.rows[0].is_connected) {
+  const connection = await getGarminConnection(userId);
+  if (!connection) {
     throw new Error('Garmin not connected');
   }
+  // Proxy-mode connections are never browsed from Allerac's own dashboard
+  // (see HealthDashboard.tsx) — nothing to return here for them.
+  if (connection.isProxy) {
+    return [];
+  }
 
-  const sessionDump = safeDecrypt(res.rows[0].oauth1_token_encrypted);
   await submitLog('Health', `Calling worker /activities endpoint${filterDate ? ` for ${filterDate}` : ''}...`);
   const data = await workerFetch('POST', '/activities', {
-    session_dump: sessionDump,
+    session_dump: connection.sessionDump,
     limit,
     date: filterDate || undefined
   });

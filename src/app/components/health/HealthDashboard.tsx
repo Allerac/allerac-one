@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import * as healthActions from '@/app/actions/health';
 import GarminSettings from '../settings/GarminSettings';
-import HealthAgentAccess from '../settings/HealthAgentAccess';
+import AgentAccessPanel from '../settings/AgentAccessPanel';
 import RecentActivity from './RecentActivity';
 import DailyHealthMetrics from './DailyHealthMetrics';
 import HealthTodayCharts from './HealthTodayCharts';
@@ -18,6 +18,8 @@ interface HealthDashboardProps {
   inline?: boolean;
   onViewChange?: (period: Period, selectedDate: string) => void;
 }
+
+const HEALTH_SCOPE_OPTIONS = [{ scope: 'health:proxy:read', label: 'Garmin (live reads)', provider: 'garmin' }];
 
 type Period = 'today' | '3days' | '7days' | '30days';
 
@@ -74,6 +76,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
   const t = useTranslations('health');
 
   const [garminConnected, setGarminConnected] = useState<boolean | null>(null);
+  const [dataMode, setDataMode] = useState<'cached' | 'proxy'>('cached');
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('today');
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
@@ -99,9 +102,10 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
     try {
       const status = await healthActions.getGarminStatus();
       setGarminConnected(!!status.is_connected);
+      setDataMode(status.data_mode === 'proxy' ? 'proxy' : 'cached');
       setLastSync(status.last_sync_at ? new Date(status.last_sync_at).toLocaleString() : null);
 
-      if (status.is_connected) {
+      if (status.is_connected && status.data_mode !== 'proxy') {
         const { days } = PERIOD_CONFIG[period];
         const isSingle = period === 'today';
         const endDate   = isSingle ? selectedDate : getTodayStr();
@@ -211,7 +215,20 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
           ) : garminConnected === false ? (
             <div className="p-5">
               <p className={`text-sm mb-4 ${textMuted}`}>{t('connectPrompt')}</p>
-              <GarminSettings userId={userId} isDarkMode={isDarkMode} />
+              <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+            </div>
+          ) : dataMode === 'proxy' ? (
+            <div className="p-5 space-y-4">
+              <div className={`px-3 py-2 rounded-lg text-xs ${isDarkMode ? 'bg-amber-500/10 text-amber-300' : 'bg-amber-50 text-amber-800'}`}>
+                This connection is set to live access only — nothing is stored, so there&apos;s no dashboard to show here.
+                Manage the connection below, or let an authorized agent read your data live via an API key.
+              </div>
+              <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+              <AgentAccessPanel
+                isDarkMode={isDarkMode}
+                scopeOptions={HEALTH_SCOPE_OPTIONS}
+                connectedProviders={garminConnected ? ['garmin'] : []}
+              />
             </div>
           ) : (
             <>
@@ -430,8 +447,12 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                 </button>
               </div>
               <div className="max-h-[calc(90dvh-60px)] overflow-y-auto p-4 space-y-4">
-                <GarminSettings userId={userId} isDarkMode={isDarkMode} />
-                <HealthAgentAccess isDarkMode={isDarkMode} />
+                <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+                <AgentAccessPanel
+                isDarkMode={isDarkMode}
+                scopeOptions={HEALTH_SCOPE_OPTIONS}
+                connectedProviders={garminConnected ? ['garmin'] : []}
+              />
               </div>
             </div>
           </div>
@@ -487,7 +508,20 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
           ) : garminConnected === false ? (
             <div className="p-5">
               <p className={`text-sm mb-4 ${textMuted}`}>{t('connectPrompt')}</p>
-              <GarminSettings userId={userId} isDarkMode={isDarkMode} />
+              <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+            </div>
+          ) : dataMode === 'proxy' ? (
+            <div className="p-5 space-y-4">
+              <div className={`px-3 py-2 rounded-lg text-xs ${isDarkMode ? 'bg-amber-500/10 text-amber-300' : 'bg-amber-50 text-amber-800'}`}>
+                This connection is set to live access only — nothing is stored, so there&apos;s no dashboard to show here.
+                Manage the connection below, or let an authorized agent read your data live via an API key.
+              </div>
+              <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+              <AgentAccessPanel
+                isDarkMode={isDarkMode}
+                scopeOptions={HEALTH_SCOPE_OPTIONS}
+                connectedProviders={garminConnected ? ['garmin'] : []}
+              />
             </div>
           ) : (
             <>

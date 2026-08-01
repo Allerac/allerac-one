@@ -3,6 +3,7 @@
 
 import pool from '@/app/clients/db';
 import { applyActivityCorrection } from '@/app/services/health/activity-corrections';
+import { getConnection } from '@/app/services/integrations/integration-connections.service';
 
 export interface HealthUser {
   id: string;
@@ -235,14 +236,11 @@ export class HealthTool {
 
   async getGarminStatus(user: HealthUser): Promise<GarminStatusResult> {
     try {
-      const res = await pool.query(
-        'SELECT is_connected, last_sync_at FROM garmin_credentials WHERE user_id = $1',
-        [user.id]
-      );
-      if (res.rows.length === 0) return { is_connected: false };
+      const connection = await getConnection(user.id, 'garmin');
+      if (!connection) return { is_connected: false };
       return {
-        is_connected: res.rows[0].is_connected,
-        last_sync_at: res.rows[0].last_sync_at,
+        is_connected: connection.isConnected,
+        last_sync_at: connection.lastSyncAt ? String(connection.lastSyncAt) : undefined,
       };
     } catch (e: any) {
       return { is_connected: false, error: e.message };
@@ -264,10 +262,7 @@ export class HealthTool {
   }
 
   private async _isConnected(userId: string): Promise<boolean> {
-    const res = await pool.query(
-      'SELECT is_connected FROM garmin_credentials WHERE user_id = $1',
-      [userId]
-    );
-    return res.rows[0]?.is_connected === true;
+    const connection = await getConnection(userId, 'garmin');
+    return connection?.isConnected === true;
   }
 }

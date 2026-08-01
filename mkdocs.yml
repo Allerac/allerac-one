@@ -59,6 +59,7 @@ nav:
       - Control API v1: roadmap/control-api-v1.md
       - Portable Backup and Restore: roadmap/portable-backup-restore.md
       - Multi-Cloud Provisioning: roadmap/multi-cloud-environment-provisioning.md
+      - Provider-Independent Local Embeddings: roadmap/provider-independent-local-embeddings.md
       - Native iOS Client: roadmap/ios-client.md
       - Control API v1 Gap Audit (2026-06-29): roadmap/control-api-v1-gap-audit-2026-06-29.md
       - Control API v1 Duplication Audit (2026-07-25): roadmap/control-api-v1-duplication-audit-2026-07-25.md

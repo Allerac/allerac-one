@@ -14,6 +14,33 @@ The assistant must not commit, push, merge, tag, release, or deploy changes.
 
 ## Next session
 
+### Design and benchmark provider-independent local embeddings
+
+**Status:** Documented; implementation not started
+
+**Priority:** High — semantic features are degraded after GitHub Models retirement
+
+GitHub Models was fully retired on 2026-07-30. Tests against both the legacy and
+documented endpoints confirmed that Allerac can no longer generate embeddings
+through that service. The existing corpus is small, so preserving its 1536-dimensional
+vector space is not required.
+
+Continue from
+[Provider-Independent Local Embeddings](../roadmap/provider-independent-local-embeddings.md).
+Start with inventory and benchmarks on the actual mini PC; do not choose a model
+only from its dimension count, change pgvector schemas, or delete existing vectors
+before the benchmark and migration contract are reviewed. The agreed direction is
+local-first embeddings, initially through Ollama, behind a provider-neutral contract.
+Anthropic and other remote chat providers remain independent.
+
+The first implementation session should:
+
+1. inventory all embedding consumers and fixed dimensions;
+2. define the multilingual retrieval evaluation set;
+3. shortlist compact local models;
+4. benchmark cold/warm latency, RAM, throughput, contention, and recall;
+5. return with evidence and a model recommendation before changing the schema.
+
 ### Start portable backup and recovery inventory
 
 **Status:** Ready to start
