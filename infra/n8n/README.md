@@ -37,3 +37,16 @@ HTTP Request node, and attach (or create) the `Allerac API Key` credential:
   `{ job_id, content, delivered_at }`. Imported workflows are deactivated by
   default — after import, run `n8n publish:workflow --id=<id>` and restart the
   `n8n` container for the webhook route to actually bind.
+- `daily-news-telegram.json` — production workflow: Webhook (`/webhook/daily-news`)
+  → Telegram "Send Message". Pair with an Allerac job whose prompt asks it to
+  search and summarize today's news, `channels: ["webhook"]`, and
+  `webhookUrl: "http://n8n:5678/webhook/daily-news"`. Before it'll actually send
+  anything you must, in the n8n UI: (1) open the **Send to Telegram** node and set
+  `chatId` to your numeric Telegram **user ID** (the JSON ships with a placeholder).
+  For a private 1:1 bot chat, Telegram's `chat.id` and your `user.id` are the same
+  number — get it once from `@userinfobot`, and it never changes. (2) attach a
+  **Telegram API** credential (bot token from @BotFather) — separate from and
+  independent of Allerac's own Telegram bot config. The Webhook node's
+  parsed body lands under `$json.body`, so the message text is
+  `={{ $json.body.content }}`, not `{{ $json.content }}`. Same import → publish →
+  restart n8n steps as above.
