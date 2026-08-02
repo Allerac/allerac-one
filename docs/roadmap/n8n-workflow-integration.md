@@ -1,8 +1,10 @@
 # n8n Workflow Integration
 
-**Status:** In progress — Phases 1–3 done and validated end to end 2026-08-01
-(local n8n running; both trigger directions confirmed working: n8n → Allerac via
-`/run` + scoped API key, and Allerac → n8n via the new `webhook` job channel)
+**Status:** Complete (Phases 1–3) — validated both locally and in production
+2026-08-01. Both trigger directions confirmed working: n8n → Allerac via `/run` +
+scoped API key, and Allerac → n8n via the new `webhook` job channel. A real workflow
+(daily news → Telegram) runs live on the sandbox VM. Phase 4 remains deliberately
+deferred — see below.
 
 **Depends on:** Control API v1 (`/api/v1/jobs`), the `scheduled_jobs` model, `apiKeyService`
 scoped API keys
@@ -158,6 +160,34 @@ webhook route was live). Confirmed via `notifier` logs
 (`notifications:dead`) showing zero new `webhook`-channel entries — first-attempt
 success, no retries. The job was reset to its original cron/prompt/channels
 afterward; `webhook_url` stays saved on the row for reuse.
+
+### Production deployment (sandbox VM, validated 2026-08-01)
+
+Beyond the local Docker validation above, n8n was also deployed to the "sbx"
+sandbox VM, behind the same Cloudflare Tunnel already used for the rest of the
+Allerac stack, and used to run a real, non-demo workflow end to end.
+
+1. n8n exposed at `napols-n8n.allerac.ai`. Originally attempted as a two-level
+   subdomain (`napols.n8n.allerac.ai`), which failed with
+   `SSL_ERROR_NO_CYPHER_OVERLAP` — Cloudflare's free Universal SSL only covers the
+   apex domain plus one wildcard level, not multi-level subdomains. Renamed to a
+   single-level subdomain to fix it.
+2. Cloudflare Access (Zero Trust) gates the hostname with an Allow+email policy for
+   the admin UI, plus a second Access Application scoped to
+   `napols-n8n.allerac.ai/webhook/*` with a **Bypass** action — otherwise inbound
+   webhook POSTs get redirected to the Access login page instead of reaching n8n.
+3. `daily-news-telegram.json` (see `infra/n8n/README.md`) was imported, published,
+   and activated on the VM instance: Webhook (`/webhook/daily-news`) → Telegram
+   "Send Message". Paired with a real Allerac job (prompt: search and summarize
+   today's news, `channels: ["webhook"]`, `webhookUrl` pointing at that route).
+4. Confirmed live: the job's cron-triggered execution POSTed its result to the
+   webhook, and the news summary was delivered to Telegram by n8n — the full
+   Allerac → n8n → third-party-service path, in production, not just against the
+   local demo receiver.
+
+This is stronger evidence of completion than the local Phase 2–3 demos alone: it's
+a real workflow, on the real deployment target, doing something a user actually
+wants (daily news delivery) rather than proving connectivity in the abstract.
 
 ### Phase 4 — Deferred: unified trigger model
 

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs/promises';
+
 const baseUrl = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
 const models = (process.env.EMBEDDING_BENCHMARK_MODELS || 'embeddinggemma,nomic-embed-text-v2-moe')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);
 
-const cases = [
+const legacyCases = [
   {
     query: 'Como faço uma cópia de segurança dos meus dados?',
     relevant: 'O backup portátil inclui o banco PostgreSQL, volumes e configurações criptografadas.',
@@ -56,6 +58,16 @@ const cases = [
     ],
   },
 ];
+void legacyCases;
+const cases = JSON.parse(
+  await fs.readFile(new URL('../benchmarks/embedding-retrieval-cases.json', import.meta.url), 'utf8'),
+);
+const acceptanceThresholds = {
+  maxColdMs: Number(process.env.EMBEDDING_ACCEPT_MAX_COLD_MS || 10_000),
+  maxWarmMs: Number(process.env.EMBEDDING_ACCEPT_MAX_WARM_MS || 500),
+  maxBatchMs: Number(process.env.EMBEDDING_ACCEPT_MAX_BATCH_MS || 15_000),
+  minRecallAt1: Number(process.env.EMBEDDING_ACCEPT_MIN_RECALL_AT_1 || 0.9),
+};
 
 function cosine(a, b) {
   let dot = 0;
@@ -112,6 +124,13 @@ async function benchmark(model) {
   const batchStarted = performance.now();
   const batch = await embed(model, batchInputs);
   const batchMs = performance.now() - batchStarted;
+  const recallAt1 = correct / cases.length;
+  const checks = {
+    cold: coldMs <= acceptanceThresholds.maxColdMs,
+    warm: warmMs <= acceptanceThresholds.maxWarmMs,
+    batch: batchMs <= acceptanceThresholds.maxBatchMs,
+    retrieval: recallAt1 >= acceptanceThresholds.minRecallAt1,
+  };
 
   return {
     model,
@@ -119,10 +138,16 @@ async function benchmark(model) {
     coldMs: Math.round(coldMs),
     warmMs: Math.round(warmMs),
     retrieval: `${correct}/${cases.length}`,
+    recallAt1,
     retrievalMs: Math.round(retrievalMs),
     batchCount: batch.length,
     batchMs: Math.round(batchMs),
     batchPerItemMs: Number((batchMs / batch.length).toFixed(1)),
+    acceptance: {
+      passed: Object.values(checks).every(Boolean),
+      checks,
+      thresholds: acceptanceThresholds,
+    },
   };
 }
 
@@ -137,3 +162,4 @@ for (const model of models) {
 
 console.table(results);
 console.log(JSON.stringify({ baseUrl, results }, null, 2));
+if (results.some((result) => result.error || !result.acceptance?.passed)) process.exitCode = 1;

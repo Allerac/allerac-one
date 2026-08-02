@@ -192,7 +192,16 @@ export class NotesService {
       `UPDATE user_notes SET ${fields.join(', ')} WHERE id = $${i++} AND user_id = $${i++} RETURNING *`,
       values
     );
-    return res.rows[0] ?? null;
+    const note = res.rows[0] as Note | undefined;
+    if (!note) return null;
+
+    if (input.content !== undefined && note.document_id) {
+      const embeddingService = new EmbeddingService();
+      const documentService = new DocumentService(embeddingService);
+      await documentService.reprocessDocumentContent(note.document_id, note.content);
+    }
+
+    return note;
   }
 
   async getAllTags(userId: string): Promise<string[]> {

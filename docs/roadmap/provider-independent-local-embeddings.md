@@ -1,6 +1,6 @@
 # Provider-Independent Local Embeddings
 
-**Status:** In progress — local baseline implemented 2026-08-01
+**Status:** Complete — implementation, acceptance, and release validation finished 2026-08-02
 
 **Priority:** High — semantic features are currently degraded
 
@@ -76,13 +76,37 @@ Completed locally on 2026-08-01:
 - protected `/benchmark/embeddings` UI for selecting installed models, running the
   comparison, viewing first/warm/batch/retrieval results, and keeping recent
   browser-local history.
+- runtime enforcement of the persisted provider/model/dimension/version identity;
+- interactive-first in-process scheduling with bounded embedding concurrency and a
+  cooperative pause between external reindex batches;
+- embedding health, model identity, compatibility, latency, and queue state in the
+  System/Admin dashboard;
+- note-content edits clear and regenerate their derived chunks instead of leaving
+  stale vectors searchable.
 
-Still required before calling the roadmap complete:
+The retrieval set now contains 12 versioned Portuguese, Spanish, English, and
+cross-language cases covering documents, notes, search cache, health, and music.
+The user approved the examples and acceptance thresholds on 2026-08-02.
 
-- expand the retrieval evaluation set with real user-approved examples;
-- expose embedding health/model identity in the operational Health/Admin UI or API;
-- add explicit interactive/background prioritization for larger indexing workloads;
-- validate the rebuilt application through the normal release workflow.
+Acceptance thresholds are executable gates:
+
+- cold request: at most 10 seconds;
+- warm query: at most 500 ms;
+- batch of 100 inputs: at most 15 seconds;
+- retrieval recall@1: at least 90%.
+
+The final local run on 2026-08-02 passed all gates with `embeddinggemma`: 450 ms
+loaded request, 355 ms warm request, 9.089 seconds for 100 inputs, 12/12 recall@1,
+768 dimensions, and approximately 1.1 GB resident model size reported by Ollama.
+
+Release validation completed on 2026-08-02:
+
+- Jest: 85 suites and 630 tests passed;
+- production Next.js build passed;
+- fresh-install versus legacy-upgrade schema equivalence passed through migration 109;
+- strict documentation build passed;
+- Playwright release smoke passed both login-page and Control API auth-envelope tests
+  against the production build.
 
 ## Principles
 
@@ -243,13 +267,16 @@ latency/RAM envelope and retrieval threshold before schema changes are finalized
 
 ## Open questions for implementation
 
-- Which compact models enter the first benchmark shortlist?
-- Should model/version metadata live on every row, on an embedding collection, or
-  both?
-- Should each semantic feature have an independent collection/version lifecycle?
-- What latency, RAM, and recall thresholds define acceptance on the mini PC?
-- Is Ollama the permanent local runtime or the first adapter behind the contract?
-- Which background queue should own document and music reindexing?
+Resolved for the initial release:
+
+- `embeddinggemma` and `nomic-embed-text-v2-moe` formed the first shortlist;
+- provider/model/dimension/version are persisted as singleton runtime state because
+  the initial deployment operates one vector space at a time;
+- Ollama is the first replaceable adapter, not part of the consumer contract;
+- application indexing uses an interactive-first bounded scheduler; the standalone
+  resumable reindex command yields between batches.
+- acceptance requires cold ≤10 s, warm ≤500 ms, 100 inputs ≤15 s, recall@1 ≥90%,
+  and the compact model to remain near the observed 1.1 GB resident size.
 
 ## References
 

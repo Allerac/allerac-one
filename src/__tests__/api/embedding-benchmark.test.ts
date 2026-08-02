@@ -66,6 +66,15 @@ describe('Control API v1 embedding benchmark', () => {
         batchCount: 100,
         batchMs: 1000,
         batchPerItemMs: 10,
+        acceptance: {
+          passed: true,
+          checks: {
+            coldStart: true,
+            warmQuery: true,
+            batchThroughput: true,
+            retrievalRecallAt1: true,
+          },
+        },
       },
     ]);
 

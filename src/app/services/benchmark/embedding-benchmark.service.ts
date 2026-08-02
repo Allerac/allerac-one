@@ -1,3 +1,5 @@
+import retrievalCases from '../../../../benchmarks/embedding-retrieval-cases.json';
+
 const DEFAULT_MODELS = ['embeddinggemma', 'nomic-embed-text-v2-moe'];
 const MODEL_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$/;
 
@@ -12,6 +14,10 @@ export interface EmbeddingBenchmarkResult {
   batchCount: number;
   batchMs: number;
   batchPerItemMs: number;
+  acceptance: {
+    passed: boolean;
+    checks: Record<string, boolean>;
+  };
 }
 
 export interface EmbeddingBenchmarkFailure {
@@ -25,7 +31,7 @@ interface RetrievalCase {
   negatives: string[];
 }
 
-const RETRIEVAL_CASES: RetrievalCase[] = [
+const LEGACY_RETRIEVAL_CASES: RetrievalCase[] = [
   {
     query: 'Como faço uma cópia de segurança dos meus dados?',
     relevant: 'O backup portátil inclui o banco PostgreSQL, volumes e configurações criptografadas.',
@@ -75,6 +81,25 @@ const RETRIEVAL_CASES: RetrievalCase[] = [
     ],
   },
 ];
+
+void LEGACY_RETRIEVAL_CASES;
+const RETRIEVAL_CASES: RetrievalCase[] = retrievalCases;
+const ACCEPTANCE = {
+  maxFirstRequestMs: 10_000,
+  maxWarmMs: 500,
+  maxBatchPerItemMs: 150,
+  minRetrievalRecallAt1: 0.9,
+};
+
+function evaluateAcceptance(result: Omit<EmbeddingBenchmarkResult, 'acceptance'>) {
+  const checks = {
+    coldStart: result.firstRequestMs <= ACCEPTANCE.maxFirstRequestMs,
+    warmQuery: result.warmMs <= ACCEPTANCE.maxWarmMs,
+    batchThroughput: result.batchPerItemMs <= ACCEPTANCE.maxBatchPerItemMs,
+    retrievalRecallAt1: result.retrievalCorrect / result.retrievalTotal >= ACCEPTANCE.minRetrievalRecallAt1,
+  };
+  return { passed: Object.values(checks).every(Boolean), checks };
+}
 
 function configuredModels(): string[] {
   return (process.env.EMBEDDING_BENCHMARK_MODELS || DEFAULT_MODELS.join(','))
@@ -200,7 +225,7 @@ export async function runEmbeddingBenchmark(
       const batch = await embed(baseUrl, model, batchInputs, 'document');
       const batchMs = performance.now() - batchStarted;
 
-      results.push({
+      const result = {
         model,
         dimensions,
         firstRequestMs: Math.round(firstRequestMs),
@@ -211,7 +236,8 @@ export async function runEmbeddingBenchmark(
         batchCount: batch.length,
         batchMs: Math.round(batchMs),
         batchPerItemMs: Number((batchMs / batch.length).toFixed(1)),
-      });
+      };
+      results.push({ ...result, acceptance: evaluateAcceptance(result) });
     } catch (error) {
       results.push({
         model,
@@ -222,4 +248,3 @@ export async function runEmbeddingBenchmark(
 
   return results;
 }
-

@@ -14,34 +14,6 @@ The assistant must not commit, push, merge, tag, release, or deploy changes.
 
 ## Next session
 
-### Design and benchmark provider-independent local embeddings
-
-**Status:** Local baseline implemented 2026-08-01; release validation and operational
-health surface remain
-
-**Priority:** High — semantic features are degraded after GitHub Models retirement
-
-GitHub Models was fully retired on 2026-07-30. Tests against both the legacy and
-documented endpoints confirmed that Allerac can no longer generate embeddings
-through that service. The existing corpus is small, so preserving its 1536-dimensional
-vector space is not required.
-
-Continue from
-[Provider-Independent Local Embeddings](../roadmap/provider-independent-local-embeddings.md).
-The local baseline now uses `embeddinggemma` through Ollama at 768 dimensions behind
-a provider-neutral contract. The migration was applied locally and all 804 Spotify
-vectors were reindexed; no document chunks existed. Focused tests pass.
-
-The Benchmark domain now includes `/benchmark/embeddings`, with server-side execution,
-installed-model selection, multilingual retrieval scoring, latency/batch measurements,
-and browser-local recent history.
-
-Next, expand the retrieval set with real examples, expose embedding health and active
-model identity in Health/Admin, add workload prioritization before large-scale
-indexing, and validate the rebuilt app through the normal review/release workflow.
-Anthropic and other remote chat providers remain independent. Do not mix vectors from
-another model/version or change dimensions without running the guarded reindex process.
-
 ### Start portable backup and recovery inventory
 
 **Status:** Ready to start
@@ -137,6 +109,16 @@ will simply stop managing/recreating Grafana.
 Reason: see next entry.
 
 ## Completed context
+
+- **Provider-independent local embeddings completed 2026-08-02.** `embeddinggemma`
+  runs through Ollama at 768 dimensions behind a provider-neutral contract. Runtime
+  vector-space validation, System/Admin health reporting, interactive-first bounded
+  scheduling, resumable paced reindexing, and note-edit reindexing are implemented.
+  All 804 Spotify vectors were regenerated. The user approved the 12-case multilingual
+  evaluation set and thresholds after it passed 12/12 recall@1 and all latency/batch
+  gates. Jest (630 tests), production build, schema equivalence, strict docs build,
+  and production-build Playwright smoke passed. See
+  [Provider-Independent Local Embeddings](../roadmap/provider-independent-local-embeddings.md).
 
 - **Grafana disk I/O — root cause found to be a second, distinct issue beyond
   the classic-database fix; decision made to disable.** The classic-database

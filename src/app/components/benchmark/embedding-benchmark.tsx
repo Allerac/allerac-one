@@ -16,6 +16,10 @@ interface BenchmarkResult {
   retrievalTotal?: number;
   batchMs?: number;
   batchPerItemMs?: number;
+  acceptance?: {
+    passed: boolean;
+    checks: Record<string, boolean>;
+  };
   error?: string;
 }
 
@@ -202,6 +206,7 @@ export function EmbeddingBenchmark() {
                         <th className="px-4 py-3 text-right">Retrieval</th>
                         <th className="px-4 py-3 text-right">100 inputs</th>
                         <th className="px-4 py-3 text-right">Per input</th>
+                        <th className="px-4 py-3 text-right">Gate</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -209,7 +214,7 @@ export function EmbeddingBenchmark() {
                         <tr key={result.model} className="border-t border-slate-800 text-slate-200">
                           <td className="px-4 py-3 font-mono">{result.model}</td>
                           {result.error ? (
-                            <td colSpan={6} className="px-4 py-3 text-red-400">{result.error}</td>
+                            <td colSpan={7} className="px-4 py-3 text-red-400">{result.error}</td>
                           ) : (
                             <>
                               <td className="px-4 py-3 text-right font-mono">{result.dimensions}</td>
@@ -220,6 +225,11 @@ export function EmbeddingBenchmark() {
                               </td>
                               <td className="px-4 py-3 text-right font-mono">{formatMs(result.batchMs)}</td>
                               <td className="px-4 py-3 text-right font-mono">{formatMs(result.batchPerItemMs)}</td>
+                              <td className={`px-4 py-3 text-right font-semibold ${
+                                result.acceptance?.passed ? 'text-emerald-400' : 'text-red-400'
+                              }`}>
+                                {result.acceptance?.passed ? 'PASS' : 'FAIL'}
+                              </td>
                             </>
                           )}
                         </tr>

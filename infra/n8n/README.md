@@ -1,8 +1,10 @@
 # n8n workflows
 
 See [`docs/roadmap/n8n-workflow-integration.md`](../../docs/roadmap/n8n-workflow-integration.md)
-for the full context. n8n workflows are portable JSON, so demo/reference workflows
-live here as code instead of only existing inside one person's n8n instance.
+for the full context, including the production deployment on the sandbox VM
+(`napols-n8n.allerac.ai`, behind Cloudflare Tunnel + Access). n8n workflows are
+portable JSON, so demo/reference workflows live here as code instead of only
+existing inside one person's n8n instance.
 
 Credentials are never stored in these files. A workflow that calls the Allerac
 Control API references a credential by name (e.g. `Allerac API Key`, an n8n

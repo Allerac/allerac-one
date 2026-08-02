@@ -13,6 +13,13 @@ const model = process.env.EMBEDDING_MODEL || 'embeddinggemma';
 const dimensions = Number(process.env.EMBEDDING_DIMENSIONS || 768);
 const version = process.env.EMBEDDING_VERSION || `ollama:${model}:v1`;
 const batchSize = Number(process.env.EMBEDDING_REINDEX_BATCH_SIZE || 32);
+const pauseMs = Number(process.env.EMBEDDING_REINDEX_PAUSE_MS || 250);
+
+async function yieldToInteractiveWork() {
+  if (pauseMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, pauseMs));
+  }
+}
 
 async function embed(texts) {
   const response = await fetch(`${baseUrl}/api/embed`, {
@@ -87,6 +94,7 @@ async function reindexDocumentChunks() {
       await client.query('COMMIT');
       total += result.rows.length;
       console.log(`[Embeddings] document chunks indexed: ${total}`);
+      await yieldToInteractiveWork();
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -126,6 +134,7 @@ async function reindexSpotifyTracks() {
       await client.query('COMMIT');
       total += result.rows.length;
       console.log(`[Embeddings] Spotify tracks indexed: ${total}`);
+      await yieldToInteractiveWork();
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -157,4 +166,3 @@ try {
 } finally {
   await pool.end();
 }
-

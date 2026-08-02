@@ -14,6 +14,8 @@ import {
   OllamaEmbeddingProvider,
   type OllamaEmbeddingProviderConfig,
 } from './ollama-embedding.provider';
+import { assertEmbeddingRuntimeState } from './embedding-runtime.service';
+import { embeddingScheduler } from './embedding-scheduler';
 
 const DEFAULT_MODEL = 'embeddinggemma';
 const DEFAULT_DIMENSIONS = 768;
@@ -64,6 +66,7 @@ function createDefaultProvider(
 
 export class EmbeddingService {
   private readonly provider: EmbeddingProvider;
+  private readonly validateRuntime: boolean;
 
   /**
    * String arguments are accepted temporarily for compatibility with callers that
@@ -73,6 +76,7 @@ export class EmbeddingService {
     const resolvedConfig = typeof config === 'string' ? {} : config;
     this.provider = resolvedConfig.provider
       ?? createDefaultProvider(resolvedConfig.ollama);
+    this.validateRuntime = !resolvedConfig.provider;
   }
 
   async generateEmbedding(
@@ -84,7 +88,13 @@ export class EmbeddingService {
     }
 
     try {
-      const result = await this.provider.embed([text], purpose);
+      if (this.validateRuntime) {
+        await assertEmbeddingRuntimeState(this.provider.metadata);
+      }
+      const result = await embeddingScheduler.schedule(
+        purpose,
+        () => this.provider.embed([text], purpose),
+      );
       return {
         embedding: result.embeddings[0],
         tokenCount: result.tokenCount,
@@ -112,7 +122,13 @@ export class EmbeddingService {
     }
 
     try {
-      const result = await this.provider.embed(validTexts, purpose);
+      if (this.validateRuntime) {
+        await assertEmbeddingRuntimeState(this.provider.metadata);
+      }
+      const result = await embeddingScheduler.schedule(
+        purpose,
+        () => this.provider.embed(validTexts, purpose),
+      );
       const tokenCount = result.tokenCount > 0
         ? result.tokenCount / validTexts.length
         : 0;

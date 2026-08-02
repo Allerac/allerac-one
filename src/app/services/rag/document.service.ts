@@ -230,6 +230,22 @@ export class DocumentService {
   }
 
   /**
+   * Replaces derived chunks after source content changes. Old vectors are removed
+   * before the document is made searchable again, so stale content is never mixed
+   * with the replacement.
+   */
+  async reprocessDocumentContent(documentId: string, text: string): Promise<void> {
+    await pool.query(
+      `UPDATE documents
+       SET status = 'processing', error_message = NULL
+       WHERE id = $1`,
+      [documentId],
+    );
+    await pool.query('DELETE FROM document_chunks WHERE document_id = $1', [documentId]);
+    await this.processDocumentContent(documentId, text);
+  }
+
+  /**
    * Processes chunks by generating embeddings and storing in database.
    */
   private async processAndStoreChunks(
