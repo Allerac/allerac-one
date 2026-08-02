@@ -60,6 +60,8 @@ nav:
       - Portable Backup and Restore: roadmap/portable-backup-restore.md
       - Multi-Cloud Provisioning: roadmap/multi-cloud-environment-provisioning.md
       - Provider-Independent Local Embeddings: roadmap/provider-independent-local-embeddings.md
+      - Ambient Instructions, Memory, and Tasks: roadmap/ambient-instructions-memory-tasks.md
+      - Allerac Intelligence: roadmap/allerac-intelligence.md
       - n8n Workflow Integration: roadmap/n8n-workflow-integration.md
       - Native iOS Client: roadmap/ios-client.md
       - Control API v1 Gap Audit (2026-06-29): roadmap/control-api-v1-gap-audit-2026-06-29.md

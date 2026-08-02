@@ -11,7 +11,6 @@ import SidebarDesktop from '@/app/components/layout/SidebarDesktop';
 import SidebarMobile from '@/app/components/layout/SidebarMobile';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
-import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
 import TelegramBotSettings from '@/app/components/settings/TelegramBotSettings';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
@@ -46,8 +45,7 @@ export default function ChannelsClient({ userId, userName, userEmail, isAdmin, d
   const {
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
-    messagesEndRef, send, stop, handleKeyPress, handleSaveToMemory,
-    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+    messagesEndRef, send, stop, handleKeyPress,
   } = useDomainChat({
     userId,
     domain: 'channels',
@@ -99,7 +97,7 @@ export default function ChannelsClient({ userId, userName, userEmail, isAdmin, d
           setSelectedModel={setSelectedModel} MODELS={MODELS}
           githubConfigured googleConfigured anthropicConfigured ollamaConnected
           isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-          onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
+          onStop={stop}
         />
       </div>
     </div>
@@ -125,7 +123,7 @@ export default function ChannelsClient({ userId, userName, userEmail, isAdmin, d
           setSelectedModel={setSelectedModel} MODELS={MODELS}
           githubConfigured googleConfigured anthropicConfigured ollamaConnected
           isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-          onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
+          onStop={stop}
         />
       </div>
     </>
@@ -191,11 +189,6 @@ export default function ChannelsClient({ userId, userName, userEmail, isAdmin, d
         </div>
       </div>
 
-      <MemorySaveModal
-        isOpen={memoryOpen}
-        onClose={() => { setMemoryOpen(false); setMemoryResult(null); }}
-        loading={memoryLoading} result={memoryResult} isDarkMode={d}
-      />
       <MyAlleracModal
         isOpen={isMyAlleracOpen} onClose={() => setIsMyAlleracOpen(false)}
         isDarkMode={d} userId={userId} githubToken={githubToken}

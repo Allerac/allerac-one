@@ -5,6 +5,7 @@ import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 import pool from '@/app/clients/db';
+import { domainInstructionsService } from '@/app/services/instructions/domain-instructions.service';
 
 const userSettingsService = new UserSettingsService();
 const systemSettingsService = new SystemSettingsService();
@@ -99,22 +100,22 @@ export async function getDomainInstructions(domainSlug: string): Promise<string>
     return res.rows[0]?.content ?? '';
 }
 
-export async function saveDomainInstructions(
+export async function getDomainInstructionDetails(domainSlug: string) {
+    const user = await requireCurrentUser();
+    await assertDomainAccess(user, domainSlug);
+    return domainInstructionsService.list(user.id, domainSlug);
+}
+
+export async function revokeDomainInstruction(
     domainSlug: string,
-    content: string
+    instructionId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const user = await requireCurrentUser();
         await assertDomainAccess(user, domainSlug);
-        await pool.query(
-            `INSERT INTO user_domain_instructions (user_id, domain_slug, content)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (user_id, domain_slug) DO UPDATE SET content = $3, updated_at = NOW()`,
-            [user.id, domainSlug, content]
-        );
-        return { success: true };
+        const revoked = await domainInstructionsService.revoke(user.id, domainSlug, instructionId);
+        return revoked ? { success: true } : { success: false, error: 'Instruction not found' };
     } catch (error: unknown) {
-        console.error('[user] saveDomainInstructions error:', error);
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to save instructions' };
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to revoke instruction' };
     }
 }

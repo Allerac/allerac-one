@@ -1,8 +1,8 @@
 /** @jest-environment node */
 
-import { requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { assertDomainAccess, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { ApiKeyMissingScopeError, apiKeyService } from '@/app/services/api-keys/api-key.service';
-import { GET as listMemories } from '@/app/api/v1/memories/route';
+import { GET as listMemories, POST as createManualMemory } from '@/app/api/v1/memories/route';
 import { DELETE as deleteMemory } from '@/app/api/v1/memories/[id]/route';
 import { POST as createConversationMemory } from '@/app/api/v1/conversations/[id]/memory/route';
 
@@ -12,6 +12,8 @@ var mockChatService: {
 
 var mockMemoryService: {
   getRecentSummaries: jest.Mock;
+  searchSummaries: jest.Mock;
+  createManualMemory: jest.Mock;
   generateConversationSummary: jest.Mock;
   deleteSummary: jest.Mock;
 };
@@ -59,6 +61,8 @@ jest.mock('@/app/services/memory/conversation-memory.service', () => ({
     if (!mockMemoryService) {
       mockMemoryService = {
         getRecentSummaries: jest.fn(),
+        searchSummaries: jest.fn(),
+        createManualMemory: jest.fn(),
         generateConversationSummary: jest.fn(),
         deleteSummary: jest.fn(),
       };
@@ -78,7 +82,14 @@ jest.mock('@/app/services/system/system-settings.service', () => ({
   }),
 }));
 
+jest.mock('@/app/services/memory/instruction-distiller.service', () => ({
+  instructionDistillerService: {
+    distill: jest.fn().mockResolvedValue({ updated: false }),
+  },
+}));
+
 const mockRequireCurrentUser = jest.mocked(requireCurrentUser);
+const mockAssertDomainAccess = jest.mocked(assertDomainAccess);
 const mockApiKeyService = jest.mocked(apiKeyService);
 
 const user = {
@@ -114,6 +125,8 @@ describe('Control API v1 memories', () => {
     };
     mockMemoryService ||= {
       getRecentSummaries: jest.fn(),
+      searchSummaries: jest.fn(),
+      createManualMemory: jest.fn(),
       generateConversationSummary: jest.fn(),
       deleteSummary: jest.fn(),
     };
@@ -136,6 +149,13 @@ describe('Control API v1 memories', () => {
       domain_slug: 'chat',
     });
     mockMemoryService.getRecentSummaries.mockResolvedValue([memory]);
+    mockMemoryService.searchSummaries.mockResolvedValue([memory]);
+    mockMemoryService.createManualMemory.mockResolvedValue({
+      ...memory,
+      id: 'manual-memory-id',
+      conversation_id: null,
+      summary: 'Prefers concise answers.',
+    });
     mockMemoryService.generateConversationSummary.mockResolvedValue(memory);
     mockMemoryService.deleteSummary.mockResolvedValue(undefined);
   });
@@ -248,11 +268,69 @@ describe('Control API v1 memories', () => {
 
     expect(response.status).toBe(200);
     expect(mockMemoryService.getRecentSummaries).toHaveBeenCalledWith(user.id, 10, 5);
+    expect(mockAssertDomainAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ id: user.id, is_admin: false }),
+      'chat',
+    );
     expect(await response.json()).toMatchObject({
       data: {
         memories: [{ id: 'memory-id', conversationId: 'conversation-id' }],
       },
     });
+  });
+
+  it('searches memories by query', async () => {
+    const response = await listMemories(new Request(
+      'http://localhost/api/v1/memories?query=control%20api&domainSlug=chat&limit=5&minImportance=4',
+    ));
+
+    expect(response.status).toBe(200);
+    expect(mockMemoryService.searchSummaries).toHaveBeenCalledWith(user.id, 'control api', 5, 4);
+    expect(mockMemoryService.getRecentSummaries).not.toHaveBeenCalled();
+  });
+
+  it('creates a manual memory without a conversation', async () => {
+    const response = await createManualMemory(new Request('http://localhost/api/v1/memories', {
+      method: 'POST',
+      body: JSON.stringify({
+        content: 'Prefers concise answers.',
+        keyTopics: ['preference'],
+        importanceScore: 8,
+        emotion: 1,
+        domainSlug: 'chat',
+      }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mockAssertDomainAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ id: user.id, is_admin: false }),
+      'chat',
+    );
+    expect(mockMemoryService.createManualMemory).toHaveBeenCalledWith(user.id, {
+      content: 'Prefers concise answers.',
+      keyTopics: ['preference'],
+      importanceScore: 8,
+      emotion: 1,
+    });
+    expect(await response.json()).toMatchObject({
+      data: {
+        memory: {
+          id: 'manual-memory-id',
+          conversationId: null,
+          summary: 'Prefers concise answers.',
+        },
+      },
+    });
+  });
+
+  it('rejects invalid manual memory payloads', async () => {
+    const response = await createManualMemory(new Request('http://localhost/api/v1/memories', {
+      method: 'POST',
+      body: JSON.stringify({ content: '', importanceScore: 11 }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockMemoryService.createManualMemory).not.toHaveBeenCalled();
   });
 
   it('deletes memories owned by the current user', async () => {

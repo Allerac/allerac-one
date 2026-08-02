@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '@/app/context/ThemeContext';
 import { useTranslations, useLocale } from 'next-intl';
-import { Message, Conversation, MemorySaveResult, Model } from '../types';
+import { Message, Conversation } from '../types';
 import { MODELS } from '../services/llm/models';
 import { TOOLS } from '../tools/tools';
 import { ChatMessageService } from '../services/chat/chat-message.service';
@@ -22,9 +22,8 @@ import ChatHeader from '../components/chat/ChatHeader';
 import ChatMessages from '../components/chat/ChatMessages';
 import ChatInput from '../components/chat/ChatInput';
 import TerminalMessageArea, { type TerminalTheme } from '../components/chat/TerminalMessageArea';
-import MemorySaveModal from '../components/memory/MemorySaveModal';
 import CorrectAndMemorize from '../components/memory/CorrectAndMemorize';
-import MyAlleracModal, { type MyAlleracTab, type MemorySubTab } from '../components/allerac/MyAlleracModal';
+import MyAlleracModal from '../components/allerac/MyAlleracModal';
 import SkillsLibrary from '../components/skills/SkillsLibrary';
 import UserSettingsModal from '../components/auth/UserSettingsModal';
 import SystemDashboard from '../components/system/SystemDashboard';
@@ -49,6 +48,7 @@ function buildHealthViewContext(period: HealthPeriod, selectedDate: string): str
 
 export default function AdminChat({
   defaultSkillName,
+  domainSlug,
   domainName,
   showWorkspace = false,
   showHealth = false,
@@ -61,6 +61,7 @@ export default function AdminChat({
   systemDashboardInitialTab: initialDashboardTab,
 }: {
   defaultSkillName?: string;
+  domainSlug: string;
   domainName?: string;
   showWorkspace?: boolean;
   showHealth?: boolean;
@@ -132,11 +133,11 @@ export default function AdminChat({
       }
     };
     const onLogout = () => handleLogoutRef.current();
-    const openMyAlleracModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
-    const openMemorySettingsModal = () => { setMyAlleracTab('instructions'); setIsMyAlleracOpen(true); };
-    const openMemoriesModal = () => { setMyAlleracTab('memory'); setMyAlleracMemoryTab('conversations'); setIsMyAlleracOpen(true); };
-    const openDocumentsModal = () => { setMyAlleracTab('memory'); setMyAlleracMemoryTab('documents'); setIsMyAlleracOpen(true); };
-    const openScheduledJobsModal = () => { setMyAlleracTab('tasks'); setIsMyAlleracOpen(true); };
+    const openMyAlleracModal = () => setIsMyAlleracOpen(true);
+    const openMemorySettingsModal = () => setIsMyAlleracOpen(true);
+    const openMemoriesModal = () => router.push('/memory');
+    const openDocumentsModal = () => router.push('/memory/documents');
+    const openScheduledJobsModal = () => router.push('/jobs');
 
     window.addEventListener('openTokenModal', openTokenModal);
     window.addEventListener('openUserSettingsModal', openUserSettingsModal);
@@ -203,8 +204,6 @@ export default function AdminChat({
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isMyAlleracOpen, setIsMyAlleracOpen] = useState(false);
-  const [myAlleracTab, setMyAlleracTab] = useState<MyAlleracTab>('instructions');
-  const [myAlleracMemoryTab, setMyAlleracMemoryTab] = useState<MemorySubTab>('conversations');
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
   const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(showHealth);
 
@@ -215,10 +214,6 @@ export default function AdminChat({
   const [studioExternalUpdate, setStudioExternalUpdate] = useState<{ platform?: 'instagram' | 'tiktok'; caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; tiktokTitle?: string; timestamp: number } | null>(null);
   const postContextRef = useRef<string>('');
   const healthViewContextRef = useRef<string>('');
-  const [isMemorySaveModalOpen, setIsMemorySaveModalOpen] = useState(false);
-  const [memorySaveLoading, setMemorySaveLoading] = useState(false);
-  const [currentConversationHasMemory, setCurrentConversationHasMemory] = useState(false);
-  const [memorySaveResult, setMemorySaveResult] = useState<MemorySaveResult | null>(null);
   const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
   const [terminalTeachContent, setTerminalTeachContent] = useState<string | null>(null);
   const [instagramDraft, setInstagramDraft] = useState<{ caption: string; tags: string } | null>(null);
@@ -231,7 +226,7 @@ export default function AdminChat({
 
   // Per-domain terminal mode toggle — reads from localStorage, falls back to prop default
   // Toggle is available whenever terminalTheme is set, regardless of chatMode default.
-  const storageKey = domainName ? `chatMode_${domainName.toLowerCase()}` : null;
+  const storageKey = `chatMode_${domainSlug}`;
   const [effectiveChatMode, setEffectiveChatMode] = useState<'default' | 'terminal'>(() => {
     if (!terminalTheme) return chatMode; // domain has no terminal support at all
     if (typeof window === 'undefined' || !storageKey) return chatMode;
@@ -284,7 +279,7 @@ export default function AdminChat({
     activeSkill,
     preSelectedSkill,
     defaultSkillName,
-    domain: domainName?.toLowerCase() ?? 'chat',
+    domain: domainSlug,
     isAdmin,
     onConversationCreated: () => {
       if (userId) loadConversations(userId);
@@ -319,7 +314,7 @@ const savedModel = localStorage.getItem('selected_model');
     if (userId) {
       loadSystemMessage();
     }
-  }, [userId, domainName]);
+  }, [userId, domainSlug]);
 
   useEffect(() => {
     scrollToBottom();
@@ -513,15 +508,12 @@ const savedModel = localStorage.getItem('selected_model');
 
   const loadSystemMessage = async () => {
     if (!userId) return;
-    const slug = domainName?.toLowerCase() ?? 'chat';
-    const message = await userActions.getDomainInstructions(slug);
+    const message = await userActions.getDomainInstructions(domainSlug);
     if (message) setSystemMessage(message);
   };
 
   const loadConversations = async (uid: string) => {
-    // chat (no domainName) = hub, shows all conversations; other domains filter by their own slug
-    const slug = domainName ? domainName.toLowerCase() : null;
-    const data = await chatActions.loadConversations(slug);
+    const data = await chatActions.loadConversations(domainSlug);
     setConversations(data);
   };
 
@@ -537,7 +529,7 @@ const savedModel = localStorage.getItem('selected_model');
         if (shouldSummarize) {
           console.log(`[Memory] Generating summary for conversation ${currentConversationId}...`);
           // Generate summary in background (don't wait for it)
-          memoryActions.generateConversationSummary(currentConversationId, domainName?.toLowerCase() ?? 'chat')
+          memoryActions.generateConversationSummary(currentConversationId, domainSlug)
             .then(summary => console.log('[Memory] Summary generated:', summary))
             .catch(err => console.error('[Memory] Failed to generate summary:', err));
         }
@@ -576,53 +568,6 @@ const savedModel = localStorage.getItem('selected_model');
     // Load active skill for this conversation
     await loadActiveSkill(conversationId);
 
-    // Check if this conversation already has a memory
-    const existingMemory = await memoryActions.shouldSummarizeConversation(conversationId); // Wait, shouldSummarize returns true if NO memory. So if false, it MIGHT mean it has memory OR not enough messages.
-    // Better to have a specific check.
-    // Let's assume for now we don't show the memory flag urgently or we implement a checkHasMemory action.
-    // Implementing checkHasMemory requires importing DB. let's skip for now to save time, or use `shouldSummarize` implication carefully.
-    // Actually, `shouldSummarize` logic is: NO summary AND message_count >= 4.
-    // So !shouldSummarize doesn't mean it has memory.
-
-    // I'll leave `currentConversationHasMemory` as false for now or implement a quick action if needed.
-    setCurrentConversationHasMemory(false);
-  };
-
-  const handleGenerateSummary = async () => {
-    if (!currentConversationId || !userId || !githubToken) return;
-
-    // Open modal and show loading
-    setIsMemorySaveModalOpen(true);
-    setMemorySaveLoading(true);
-    setMemorySaveResult(null);
-
-    try {
-      // Direct action call instead of service
-      const summary = await memoryActions.generateConversationSummary(currentConversationId, domainName?.toLowerCase() ?? 'chat');
-
-      if (summary) {
-        setMemorySaveResult({
-          success: true,
-          message: 'Summary generated successfully!',
-          summary: summary.summary,
-          topics: summary.key_topics
-        });
-        setCurrentConversationHasMemory(true);
-      } else {
-        setMemorySaveResult({
-          success: false,
-          message: 'Could not generate summary (possibly not enough messages)'
-        });
-      }
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      setMemorySaveResult({
-        success: false,
-        message: 'An unexpected error occurred'
-      });
-    } finally {
-      setMemorySaveLoading(false);
-    }
   };
 
 
@@ -971,9 +916,6 @@ const savedModel = localStorage.getItem('selected_model');
               activeSkill={activeSkill}
               currentConversationId={currentConversationId}
               currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
-              currentConversationHasMemory={false}
-              handleGenerateSummary={() => {}}
-              hideMemoryButton
               isTerminalMode={effectiveChatMode === 'terminal'}
               onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
               hideHomeButton={!isAdmin}
@@ -1149,7 +1091,7 @@ const savedModel = localStorage.getItem('selected_model');
                   onStop={stopChat}
                   githubToken={githubToken}
                   isDarkMode={isDarkMode}
-                  setIsDocumentModalOpen={() => { setMyAlleracTab('memory'); setMyAlleracMemoryTab('documents'); setIsMyAlleracOpen(true); }}
+                  setIsDocumentModalOpen={() => router.push('/memory/documents')}
                   imageAttachments={imageAttachments}
                   onImageSelect={handleImageSelect}
                   onRemoveImage={removeImage}
@@ -1174,8 +1116,6 @@ const savedModel = localStorage.getItem('selected_model');
                   onDownloadModel={handleDownloadModel}
                   isAgentMode={isAgentMode}
                   onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
-                  onSaveMemory={handleGenerateSummary}
-                  hasConversation={!!currentConversationId}
                 />
                 {currentConversationId && (
                   <p className={`text-center px-4 pb-2 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} style={{ fontSize: '10px' }}>
@@ -1198,7 +1138,7 @@ const savedModel = localStorage.getItem('selected_model');
                   userId={userId}
                   githubToken={githubToken}
                   messagesEndRef={messagesEndRef}
-                  domainSlug={domainName?.toLowerCase() ?? 'chat'}
+                  domainSlug={domainSlug}
                 />
               </div>
               <div data-name="input-area-wrapper" className={`flex-shrink-0 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
@@ -1212,7 +1152,7 @@ const savedModel = localStorage.getItem('selected_model');
                     onStop={stopChat}
                     githubToken={githubToken}
                     isDarkMode={isDarkMode}
-                    setIsDocumentModalOpen={() => { setMyAlleracTab('memory'); setMyAlleracMemoryTab('documents'); setIsMyAlleracOpen(true); }}
+                    setIsDocumentModalOpen={() => router.push('/memory/documents')}
                     imageAttachments={imageAttachments}
                     onImageSelect={handleImageSelect}
                     onRemoveImage={removeImage}
@@ -1233,8 +1173,6 @@ const savedModel = localStorage.getItem('selected_model');
                     onDownloadModel={handleDownloadModel}
                     isAgentMode={isAgentMode}
                     onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
-                    onSaveMemory={handleGenerateSummary}
-                    hasConversation={!!currentConversationId}
                   />
                   {currentConversationId && (
                     <p
@@ -1264,9 +1202,7 @@ const savedModel = localStorage.getItem('selected_model');
         userId={userId}
         githubToken={githubToken}
         userName={userName}
-        domainSlug={domainName?.toLowerCase() ?? 'chat'}
-        defaultTab={myAlleracTab}
-        defaultMemoryTab={myAlleracMemoryTab}
+        domainSlug={domainSlug}
       />
 
       {/* Skills Library Modal */}
@@ -1280,18 +1216,6 @@ const savedModel = localStorage.getItem('selected_model');
         }}
       />
 
-      {/* Memory Save Modal */}
-      <MemorySaveModal
-        isOpen={isMemorySaveModalOpen}
-        onClose={() => {
-          setIsMemorySaveModalOpen(false);
-          setMemorySaveResult(null);
-        }}
-        loading={memorySaveLoading}
-        result={memorySaveResult}
-        isDarkMode={isDarkMode}
-      />
-
       {/* Terminal Teach Modal */}
       {terminalTeachContent !== null && (
         <CorrectAndMemorize
@@ -1302,7 +1226,7 @@ const savedModel = localStorage.getItem('selected_model');
           userId={userId}
           githubToken={githubToken}
           isDarkMode={isDarkMode}
-          domainSlug={domainName?.toLowerCase() ?? 'chat'}
+          domainSlug={domainSlug}
         />
       )}
 

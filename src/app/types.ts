@@ -49,14 +49,6 @@ export interface Model {
   shortName: string;
 }
 
-export interface MemorySaveResult {
-  success: boolean;
-  message: string;
-  summary?: string;
-  importance?: number;
-  topics?: string[];
-}
-
 export interface SearchWebResult {
   answer?: string;
   results: Array<{

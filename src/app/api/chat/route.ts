@@ -21,7 +21,6 @@ import {
   UnauthorizedError,
 } from '@/app/lib/auth-session';
 import { ChatService } from '@/app/services/database/chat.service';
-import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
 import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { skillsService } from '@/app/services/skills/skills.service';
@@ -168,6 +167,7 @@ export async function POST(request: Request): Promise<Response> {
 
         const activeSkill = await resolveActiveChatSkill({
           conversationId: convId,
+          domain: effectiveDomain,
           userId,
           message,
           isNewConversation: !inputConversationId,
@@ -189,18 +189,6 @@ export async function POST(request: Request): Promise<Response> {
           : message;
         const savedUserMessage = await chatService.saveMessage(convId, 'user', messageToSave, { userId });
         if (!savedUserMessage.success) throw new Error('Failed to save user message');
-
-        // 7. Load memory context (domain-scoped)
-        let conversationMemories = '';
-        try {
-          const memoryService = new ConversationMemoryService(githubToken, effectiveDomain);
-          const summaries = await memoryService.getRecentSummaries(userId, 3, 4);
-          if (summaries && summaries.length > 0) {
-            conversationMemories = memoryService.formatMemoryContext(summaries);
-          }
-        } catch (e) {
-          console.log('[ChatRoute] Memory load failed:', e);
-        }
 
         // 8. Load RAG context (domain-scoped)
         let relevantContext = '';
@@ -233,7 +221,6 @@ export async function POST(request: Request): Promise<Response> {
           postContext,
           activeSkill,
           skillContent,
-          conversationMemories,
           relevantContext,
         });
 
@@ -282,6 +269,7 @@ export async function POST(request: Request): Promise<Response> {
           anthropicApiKey,
           tavilyApiKey,
           user,
+          domain: effectiveDomain,
           conversationId: convId,
           message,
           locale,

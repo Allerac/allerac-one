@@ -11,7 +11,6 @@ import SidebarDesktop from '@/app/components/layout/SidebarDesktop';
 import SidebarMobile from '@/app/components/layout/SidebarMobile';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
-import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import WorkspacePanel from './WorkspacePanel';
@@ -64,8 +63,7 @@ export default function CodeClient({ userId, userName, userEmail, isAdmin, defau
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, handleKeyPress, handleSaveToMemory,
-    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+    send, handleKeyPress,
   } = useDomainChat({
     userId, domain: 'code', defaultSkillName,
     currentConvId, messages, setMessages,
@@ -207,7 +205,6 @@ export default function CodeClient({ userId, userName, userEmail, isAdmin, defau
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
                       />
                     </div>
                   </div>
@@ -245,7 +242,6 @@ export default function CodeClient({ userId, userName, userEmail, isAdmin, defau
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId}
                       />
                     </div>
                   </>
@@ -257,10 +253,6 @@ export default function CodeClient({ userId, userName, userEmail, isAdmin, defau
         </div>
       </div>
 
-      <MemorySaveModal
-        isOpen={memoryOpen} onClose={() => { setMemoryOpen(false); setMemoryResult(null); }}
-        loading={memoryLoading} result={memoryResult} isDarkMode={d}
-      />
       <MyAlleracModal
         isOpen={isMyAlleracOpen}
         onClose={() => setIsMyAlleracOpen(false)}

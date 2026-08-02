@@ -299,6 +299,13 @@ paths:
             type: integer
             minimum: 1
             maximum: 10
+        - name: query
+          in: query
+          required: false
+          description: Case-insensitive text search across memory summaries and topics.
+          schema:
+            type: string
+            minLength: 1
       responses:
         "200":
           description: Memories owned by the authenticated user
@@ -1631,6 +1638,29 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Memories]
+      summary: Create a manual memory
+      operationId: createManualMemory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateManualMemoryRequest"
+      responses:
+        "201":
+          description: Manual memory created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/benchmark/embeddings:
     get:
       tags: [Benchmark]
@@ -2265,6 +2295,33 @@ components:
           type: [integer, "null"]
           enum: [-1, 0, 1, null]
           description: Optional UI-aligned sentiment override. -1 is frustrated/negative, 0 is neutral, 1 is happy/positive.
+    CreateManualMemoryRequest:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        keyTopics:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        importanceScore:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 7
+        emotion:
+          type: [integer, "null"]
+          enum: [-1, 0, 1, null]
+        domainSlug:
+          type: string
+          description: Accessible target domain. Defaults to chat.
     MemoryListResponse:
       type: object
       required: [data]
@@ -2315,7 +2372,7 @@ components:
         id:
           type: string
         conversationId:
-          type: string
+          type: [string, "null"]
         userId:
           type: string
         summary:

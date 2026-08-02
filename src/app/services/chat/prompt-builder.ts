@@ -40,6 +40,11 @@ export function buildChatSystemPrompt(input: PromptBuilderInput): string {
   if (input.userLocation) contextLines.push(`- Location: ${input.userLocation}`);
 
   let prompt = `${buildSoul(input.domain)}\n\n## User context\n${contextLines.join('\n')}`;
+  prompt += `\n\n## Memory, notes, and reminders
+- Durable memory is for stable facts, preferences, corrections, relationships, and decisions that should shape future conversations. Use create_memory.
+- Notes are user-authored information to keep for later reference. Requests such as "anote isso" or "crie uma nota" use save_note.
+- Time-bound reminders and future actions such as "me lembre amanhã" use schedule_task.
+Only confirm that something was stored or scheduled after the corresponding tool returns success. Never claim that unsaved information exists in memory, notes, jobs, or the initial instructions.`;
 
   if (input.userInstructions) {
     prompt += `\n\n## User instructions\n${input.userInstructions}`;

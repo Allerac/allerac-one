@@ -32,6 +32,29 @@ describe('resolveChatTools', () => {
 
     expect(names).toContain('search_web');
     expect(names).toContain('save_note');
+    expect(names).toContain('recall_memory');
+    expect(names).toContain('schedule_task');
+    expect(names).toContain('learn_instruction');
     expect(names).not.toContain('execute_shell');
+  });
+
+  test('allows every domain to create memories while reserving global management for memory', async () => {
+    mockedGetSkillTools.mockResolvedValue(['search_web']);
+
+    const memoryNames = (await resolveChatTools('skill-1', 'memory'))
+      .map((tool) => tool.function.name);
+    const chatNames = (await resolveChatTools('skill-1', 'chat'))
+      .map((tool) => tool.function.name);
+
+    expect(memoryNames).toEqual(expect.arrayContaining([
+      'recall_memory',
+      'search_memory',
+      'create_memory',
+      'delete_memory',
+    ]));
+    expect(chatNames).toContain('recall_memory');
+    expect(chatNames).toContain('create_memory');
+    expect(chatNames).not.toContain('search_memory');
+    expect(chatNames).not.toContain('delete_memory');
   });
 });

@@ -1,6 +1,5 @@
 import type { User } from '@/app/services/auth/auth.service';
 import { ChatService } from '@/app/services/database/chat.service';
-import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
 import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { skillsService } from '@/app/services/skills/skills.service';
@@ -101,17 +100,6 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     throw new ChatMessagePersistenceError('Failed to save user message');
   }
 
-  let conversationMemories = '';
-  try {
-    const memoryService = new ConversationMemoryService(githubToken, input.domain);
-    const summaries = await memoryService.getRecentSummaries(input.user.id, 3, 4);
-    if (summaries && summaries.length > 0) {
-      conversationMemories = memoryService.formatMemoryContext(summaries);
-    }
-  } catch (error) {
-    console.log('[ChatExecution] Memory load failed:', error);
-  }
-
   let relevantContext = '';
   try {
     const embeddingService = new EmbeddingService();
@@ -140,7 +128,6 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     postContext: input.postContext,
     activeSkill,
     skillContent,
-    conversationMemories,
     relevantContext,
   });
 
@@ -178,6 +165,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     anthropicApiKey,
     tavilyApiKey,
     user: input.user,
+    domain: input.domain,
     conversationId: input.conversationId,
     message: input.message,
     locale: input.locale,

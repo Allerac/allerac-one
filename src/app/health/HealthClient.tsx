@@ -11,7 +11,6 @@ import SidebarDesktop from '@/app/components/layout/SidebarDesktop';
 import SidebarMobile from '@/app/components/layout/SidebarMobile';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
-import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import HealthDashboard from '@/app/components/health/HealthDashboard';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
@@ -61,8 +60,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, stop, handleKeyPress, handleSaveToMemory,
-    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+    send, stop, handleKeyPress,
   } = useDomainChat({
     userId, domain: 'health', defaultSkillName,
     currentConvId, messages, setMessages,
@@ -173,7 +171,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
+                        onStop={stop}
                       />
                     </div>
                   </div>
@@ -197,7 +195,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
+                        onStop={stop}
                       />
                     </div>
                   </>
@@ -209,10 +207,6 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
         </div>
       </div>
 
-      <MemorySaveModal
-        isOpen={memoryOpen} onClose={() => { setMemoryOpen(false); setMemoryResult(null); }}
-        loading={memoryLoading} result={memoryResult} isDarkMode={d}
-      />
       <MyAlleracModal
         isOpen={isMyAlleracOpen}
         onClose={() => setIsMyAlleracOpen(false)}

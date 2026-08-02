@@ -99,6 +99,9 @@ function JobRow({ job, selected, onSelect, onToggle, d }: {
             <span className={`text-sm font-medium truncate ${
               selected ? d ? 'text-indigo-300' : 'text-indigo-700' : d ? 'text-gray-200' : 'text-gray-800'
             }`}>{job.name}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+              d ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'
+            }`}>{job.domainSlug ?? 'chat'}</span>
             {job.channels.map(ch => (
               <span key={ch} className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                 d ? 'bg-brand-900/40 text-brand-300' : 'bg-brand-100 text-brand-700'
@@ -260,7 +263,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
       )}
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="max-w-2xl mx-auto space-y-4">
+        <div className="max-w-6xl mx-auto space-y-4">
         {editorTab === 'config' && (
         <>
         {/* Name */}
@@ -273,6 +276,18 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
         <div>
           <label className={labelCls}>{t('fields.prompt')}</label>
           <textarea value={form.prompt} onChange={e => s({ prompt: e.target.value })} rows={4} className={inputCls} placeholder={t('placeholderPrompt')} />
+        </div>
+
+        <div>
+          <label className={labelCls}>Domain</label>
+          <div className={`px-3 py-2 rounded-lg border text-sm ${
+            d ? 'bg-gray-800 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'
+          }`}>
+            {job?.domainSlug ?? domainSlug ?? 'jobs'}
+          </div>
+          <p className={`mt-1 text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+            The domain is assigned when the task is created.
+          </p>
         </div>
 
         {/* Channels */}
@@ -495,7 +510,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
 
       {/* Footer */}
       <div className={`flex-shrink-0 border-t px-4 sm:px-6 py-3 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <button onClick={handleSave} disabled={saving}
             className="w-full px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium transition">
             {saving ? t('saving') : job ? t('saveChanges') : t('createJob')}
@@ -521,6 +536,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
   const [isCreating, setIsCreating]   = useState(false);
   const [loading, setLoading]         = useState(true);
   const [mobileTab, setMobileTab]     = useState<'list' | 'editor'>('list');
+  const [domainFilter, setDomainFilter] = useState('all');
 
   const load = useCallback(async () => {
     const res = await getScheduledJobs();
@@ -557,6 +573,10 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
   };
 
   const showEditor = selected !== null || isCreating;
+  const domainOptions = Array.from(new Set(jobs.map(job => job.domainSlug ?? 'chat'))).sort();
+  const filteredJobs = domainFilter === 'all'
+    ? jobs
+    : jobs.filter(job => (job.domainSlug ?? 'chat') === domainFilter);
   const border = d ? 'border-gray-700' : 'border-gray-200';
   const bg = d ? 'bg-gray-900' : 'bg-white';
 
@@ -564,10 +584,23 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
     <div className={`flex flex-1 min-h-0 ${bg}`}>
 
       {/* Job list */}
-      <div className={`${mobileTab === 'list' ? 'flex flex-col flex-1' : 'hidden'} lg:flex lg:flex-col lg:flex-none lg:w-64 border-r ${border} overflow-hidden`}>
+      <div className={`${mobileTab === 'list' ? 'flex flex-col flex-1' : 'hidden'} lg:flex lg:flex-col lg:flex-none lg:w-[364px] border-r ${border} overflow-hidden`}>
         {/* List header */}
-        <div className={`flex-shrink-0 flex items-center justify-between px-3 py-2.5 border-b ${border}`}>
+        <div className={`flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2.5 border-b ${border}`}>
           <span className={`text-xs font-semibold uppercase tracking-wider ${d ? 'text-gray-400' : 'text-gray-500'}`}>{t('tabs.list')}</span>
+          <select
+            value={domainFilter}
+            onChange={event => setDomainFilter(event.target.value)}
+            aria-label="Filter jobs by domain"
+            className={`min-w-0 flex-1 px-2 py-1 rounded border text-xs ${
+              d ? 'bg-gray-800 border-gray-600 text-gray-300' : 'bg-white border-gray-300 text-gray-700'
+            }`}
+          >
+            <option value="all">All domains</option>
+            {domainOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
           <button onClick={handleNew}
             className={`text-xs px-2 py-1 rounded transition-colors ${d ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
             {t('newJob')}
@@ -578,7 +611,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <p className={`text-xs text-center py-8 ${d ? 'text-gray-500' : 'text-gray-400'}`}>{t('loading')}</p>
-          ) : jobs.length === 0 ? (
+          ) : filteredJobs.length === 0 ? (
             <div className="text-center py-12 px-4">
               <p className={`text-2xl mb-2`}>⏰</p>
               <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>{t('noJobs')}</p>
@@ -587,7 +620,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
               </button>
             </div>
           ) : (
-            jobs.map(job => (
+            filteredJobs.map(job => (
               <JobRow key={job.id} job={job} selected={selected?.id === job.id}
                 onSelect={() => handleSelect(job)} onToggle={() => handleToggle(job)} d={d} />
             ))
@@ -603,7 +636,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
             job={selected}
             userId={userId}
             isDarkMode={d}
-            domainSlug={domainSlug}
+            domainSlug={selected?.domainSlug ?? domainSlug}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
             onClose={handleClose}

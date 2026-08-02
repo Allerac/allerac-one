@@ -1,6 +1,6 @@
 # Ambient Instructions, Memory, and Tasks
 
-**Status:** Proposed
+**Status:** Completed — 2026-08-02
 
 **Depends on:** `ConversationMemoryService`, `scheduled-jobs` service, the domains/skills/skill_tools infrastructure, and the existing [add-domain guide](../domains/add-domain.md)
 
@@ -8,13 +8,13 @@
 
 ## Objective
 
-Today, `MyAlleracModal.tsx` gives every domain three manually-managed tabs:
+Before this roadmap, `MyAlleracModal.tsx` gave every domain three manually-managed tabs:
 
 - **Instructions** — a free-text system prompt the user writes and edits per domain (`user_domain_instructions`, via `actions/user.ts`).
 - **Memory** — a viewer over auto-generated conversation summaries (`conversation_summaries`, via `actions/memory.ts` and `ConversationMemoryService`) plus RAG document upload.
 - **Tasks** — a form-based CRUD over scheduled jobs (`scheduled_jobs`, via `actions/scheduled-jobs.ts`), duplicated inside every domain's modal even though a dedicated `jobs` domain already exists (migration `061_jobs_domain.sql`).
 
-The goal is to remove all manual configuration. The user should only ever talk to Allerac; the system decides what to remember, what to codify as a standing instruction, and when to schedule something recurring. Two of these three concepts (Memory and Tasks) become their own **meta-domains** — informative, chat-capable, and exposed as tools any other domain's agent can call on demand. Instructions stays domain-local and stays editable, but is no longer solely the user's responsibility to maintain — the agent writes to it too, from what it learns in conversation.
+The goal is to remove all manual configuration. The user should only ever talk to Allerac; the system decides what to remember, what to codify as a standing instruction, and when to schedule something recurring. Two of these three concepts (Memory and Tasks) become their own **meta-domains** — informative, chat-capable, and exposed as tools any other domain's agent can call on demand. Instructions stays domain-local but becomes agent-authored, user-reviewable, and individually revocable.
 
 ## Known bug to fix first (independent of this redesign)
 
@@ -22,9 +22,9 @@ The goal is to remove all manual configuration. The user should only ever talk t
 
 ## Target model
 
-### Instructions — agent-authored, still user-editable
+### Instructions — agent-authored and user-reviewable
 
-`user_domain_instructions` stays domain-local (it's inherently 1:1 with a domain's identity — no cross-domain query makes sense for it). What changes is that the user no longer has to be the one to write it: a background "instruction distiller" reads recent correction memories and conversation summaries for a domain and updates the document itself via `saveDomainInstructions`. The edit textarea stays in the modal — direct editing is a second, equally valid way of teaching Allerac, not something the redesign removes. The distiller and the user are both writers of the same document; neither is exclusive.
+Instructions stay domain-local, but the user teaches Allerac through normal conversation rather than editing a system prompt. The global `learn_instruction(instruction, evidence?)` tool captures explicit durable rules immediately, while a background instruction distiller extracts implicit recurring preferences from correction memories and conversation summaries. Instructions are stored as structured, attributable records and materialized into the domain prompt. My Allerac is read-only except for revoking individual learned instructions.
 
 ### Memory — its own domain
 
@@ -38,13 +38,16 @@ The Tasks tab disappears from every domain's modal. A single cross-domain tool, 
 
 ## Phased delivery
 
-### Phase 1 — Fix the foundation
+All five phases are complete. The lists below are retained as the implementation
+record.
+
+### Phase 1 — Fix the foundation ✅
 
 1. Give every domain page an explicit `domainSlug` prop instead of deriving it from a display name; fix `write/page.tsx` and any other mismatched call site.
 2. Migrate existing rows tagged `domain_slug = 'content'` to `'write'` (`conversation_summaries`, `documents`).
 3. Determine how a tool becomes available to *every* domain regardless of `skill_tools` bindings (today tools appear to be assigned per-skill) — this is required by both `recall_memory` and `schedule_task` below.
 
-### Phase 2 — Memory becomes a domain
+### Phase 2 — Memory becomes a domain ✅
 
 1. `skills/memory.md` with `domain: memory` frontmatter and a search/review/create/delete persona.
 2. Migration registering the `memory` domain (mirror `061_jobs_domain.sql`).
@@ -54,38 +57,55 @@ The Tasks tab disappears from every domain's modal. A single cross-domain tool, 
 6. Remove the unconditional top-3-summary injection in `chat-handler.ts` once `recall_memory` is in place.
 7. Decide where RAG document upload (currently the Memory tab's "Documents" sub-tab) lives going forward — folded into the Memory domain chat, or kept separate (see open questions).
 
-### Phase 3 — Tasks centralized in Jobs
+### Phase 3 — Tasks centralized in Jobs ✅
 
 1. Cross-domain tool `schedule_task(cron, prompt)`, auto-injecting the caller's current `domain_slug`.
 2. Expand the `jobs` domain page into the full management surface (list/edit/delete across all domains, filter by `domain_slug`, view executions) — likely promoting what `ScheduledJobsModal` already renders inline.
 3. Remove the Tasks tab from `MyAlleracModal.tsx`.
 
-### Phase 4 — Instructions becomes agent-maintained
+### Phase 4 — Instructions becomes agent-maintained ✅
 
-1. Build the instruction distiller: reads recent correction memories + summaries for a domain, updates `user_domain_instructions` via `saveDomainInstructions`. Trigger it off the existing `shouldSummarizeConversation` flow, or on a scheduled cadence via `agent-worker`.
-2. Keep the Instructions tab editable; the distiller and manual edits both write to the same document.
-3. Decide whether instruction changes need a history/audit trail — this matters more now that two writers (agent + user) touch the same document (see open questions), and whether a user's manual edit should be protected from being silently overwritten by the next distiller pass.
+1. Build the instruction distiller: read recent correction memories + summaries for a domain and add structured distilled instructions after summarized conversations.
+2. Add global `learn_instruction`, with caller user/domain/conversation injected automatically.
+3. Store structured instructions with source, evidence, provenance, status, and an audit trail; materialize active instructions into `user_domain_instructions`.
+4. Make the Instructions tab read-only with per-instruction revocation.
 
-### Phase 5 — Retire the three-tab modal
+### Phase 5 — Retire the three-tab modal ✅
 
-1. Once Memory and Tasks tabs are gone, decide the final shape of `MyAlleracModal.tsx` — likely a lightweight "About this domain" panel (editable instructions + links to the Memory and Jobs domains) rather than a 3-tab modal.
-2. Update every `openMyAlleracModal` call site if the entry point changes.
-3. Remove now-dead code (e.g. the already-nonfunctional manual "save to memory" button in `ConversationSidebar.tsx`).
+1. Reduce `MyAlleracModal.tsx` to a lightweight learned-instructions review/revocation panel with links to Memory, Documents, and Jobs.
+2. Redirect legacy Memory/Documents/Jobs events to their centralized routes.
+3. Remove manual "save to memory" controls from shared chat inputs, headers, and conversation sidebars.
 
-## Open questions
+## Resolved decisions
 
-- Where does RAG document upload live once Memory becomes a domain?
-- What is the mechanism for making a tool available to every domain by default, instead of per-skill assignment?
-- Should the instruction distiller run after every summarized conversation, or on a schedule? Does it need version history for auditability?
-- Icon/route for the `memory` domain (🧠 is already used by `learn`).
-- Should `recall_memory` fully replace automatic context injection, or should a small default still be injected for very short conversations where a tool call round-trip isn't worth it?
+- RAG document upload remains at `/memory/documents`.
+- Universal tools are appended by the chat tool registry after skill filtering.
+- `recall_memory`, `create_memory`, `schedule_task`, and `learn_instruction` are
+  available across domains; global search and deletion remain centralized in
+  Memory.
+- `recall_memory` replaces unconditional recent-memory prompt injection.
+- Explicit persistence language is routed deterministically: durable memory to
+  `create_memory`, notes to `save_note`, time-bound reminders to `schedule_task`,
+  and standing rules to `learn_instruction`.
+- The instruction distiller runs after conversation summary creation. Moving it to
+  a scheduled batch remains an optional optimization, not required functionality.
+- The technical domain slug and route remain `memory` and `/memory`. The broader
+  product evolution is documented separately in
+  [Allerac Intelligence](allerac-intelligence.md).
+- Manual save-to-memory controls and `MemorySaveModal` were removed. Memory creation
+  now happens through conversation and API tools.
 
 ## Definition of done
 
-- No domain has a manual memory save/delete UI or a manual task-creation form outside of natural conversation; Instructions remains editable but is no longer the only way the document gets written.
+- No domain has manual memory/task creation or a manual system-prompt editor; teaching happens through natural conversation, with learned instructions reviewable and revocable.
 - The `write` domain slug bug is fixed and historical data corrected.
 - `recall_memory` and `schedule_task` are available to every domain and used instead of always-on context injection / per-domain task forms.
 - `MyAlleracModal.tsx`'s three-tab structure is retired or reduced to a read-only summary.
+
+All definition-of-done items were verified on 2026-08-02. Focused tests cover
+domain/user scoping, memory API behavior, global tool registration, instruction
+distillation and revocation, job scheduling, and natural-language persistence
+routing.
 
 ## Deferred / out of scope
 

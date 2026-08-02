@@ -9,8 +9,6 @@ import { useDomainContext } from '@/app/context/DomainContext';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
-import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
-import * as memoryActions from '@/app/actions/memory';
 import { saveSelectedModel } from '@/app/actions/user';
 
 interface Props {
@@ -42,20 +40,13 @@ export default function DomainChatPanel({
   const [convId, setConvId]       = useState<string | null>(currentConvId);
   const [isAgentMode, setIsAgentMode] = useState(false);
   const messagesEndRef            = useRef<HTMLDivElement>(null);
-  const [githubToken, setGithubToken] = useState('');
   const sendingRef                = useRef(false);
   const queueRef                  = useRef<string[]>([]);
   const abortRef                  = useRef<AbortController | null>(null);
 
-  const [memoryModalOpen, setMemoryModalOpen]   = useState(false);
-  const [memoryLoading, setMemoryLoading]       = useState(false);
-  const [memoryResult, setMemoryResult]         = useState<{ success: boolean; message: string; summary?: string; importance?: number; topics?: string[] } | null>(null);
-
   useEffect(() => {
     const saved = localStorage.getItem('selected_model');
     if (saved) setModel(saved);
-    const token = localStorage.getItem('github_token') || '';
-    setGithubToken(token);
   }, []);
 
   useEffect(() => { setConvId(currentConvId); }, [currentConvId]);
@@ -185,25 +176,6 @@ export default function DomainChatPanel({
     executeMessage(text);
   }, [input, executeMessage]);
 
-  const handleSaveToMemory = useCallback(async () => {
-    if (!convId || !userId) return;
-    setMemoryModalOpen(true);
-    setMemoryLoading(true);
-    setMemoryResult(null);
-    try {
-      const summary = await memoryActions.generateConversationSummary(convId, domainSlug);
-      if (summary) {
-        setMemoryResult({ success: true, message: 'Summary generated successfully!', summary: summary.summary, topics: summary.key_topics });
-      } else {
-        setMemoryResult({ success: false, message: 'Could not generate summary (possibly not enough messages)' });
-      }
-    } catch {
-      setMemoryResult({ success: false, message: 'An unexpected error occurred' });
-    } finally {
-      setMemoryLoading(false);
-    }
-  }, [convId, userId, githubToken]);
-
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   };
@@ -297,8 +269,6 @@ export default function DomainChatPanel({
               ollamaConnected={true}
               isAgentMode={isAgentMode}
               onToggleAgentMode={() => setIsAgentMode(v => !v)}
-              onSaveMemory={handleSaveToMemory}
-              hasConversation={!!convId}
               onStop={stop}
             />
           </div>
@@ -339,21 +309,12 @@ export default function DomainChatPanel({
                 ollamaConnected={true}
                 isAgentMode={isAgentMode}
                 onToggleAgentMode={() => setIsAgentMode(v => !v)}
-                onSaveMemory={handleSaveToMemory}
-                hasConversation={!!convId}
               />
             </div>
           </div>
         </>
       )}
 
-      <MemorySaveModal
-        isOpen={memoryModalOpen}
-        onClose={() => { setMemoryModalOpen(false); setMemoryResult(null); }}
-        loading={memoryLoading}
-        result={memoryResult}
-        isDarkMode={d}
-      />
     </div>
   );
 }

@@ -4,11 +4,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { MODELS } from '@/app/services/llm/models';
 import type { ChatMessage } from '@/app/hooks/useConversations';
-import * as memoryActions from '@/app/actions/memory';
 import { saveSelectedModel } from '@/app/actions/user';
 import type { ToolCallEvent } from '@/app/context/DomainContext';
-
-interface MemoryResult { success: boolean; message: string; summary?: string; topics?: string[]; }
 
 interface UseDomainChatOptions {
   userId: string;
@@ -50,9 +47,6 @@ export function useDomainChat({
   const abortRef                      = useRef<AbortController | null>(null);
 
   const [lastToolCall, setLastToolCall] = useState<ToolCallEvent | null>(null);
-  const [memoryOpen, setMemoryOpen]     = useState(false);
-  const [memoryLoading, setMemoryLoading] = useState(false);
-  const [memoryResult, setMemoryResult] = useState<MemoryResult | null>(null);
 
   // Sync convId state from prop changes
   useEffect(() => {
@@ -216,24 +210,6 @@ export function useDomainChat({
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   }, [send]);
 
-  const handleSaveToMemory = useCallback(async () => {
-    if (!convIdRef.current) return;
-    setMemoryOpen(true);
-    setMemoryLoading(true);
-    setMemoryResult(null);
-    try {
-      const summary = await memoryActions.generateConversationSummary(convIdRef.current, domain);
-      setMemoryResult(summary
-        ? { success: true, message: 'Summary generated!', summary: summary.summary, topics: summary.key_topics }
-        : { success: false, message: 'Not enough messages to summarize' }
-      );
-    } catch {
-      setMemoryResult({ success: false, message: 'An unexpected error occurred' });
-    } finally {
-      setMemoryLoading(false);
-    }
-  }, [userId, githubToken, domain]);
-
   return {
     input,
     setInput,
@@ -250,11 +226,5 @@ export function useDomainChat({
     send,
     stop,
     handleKeyPress,
-    handleSaveToMemory,
-    memoryOpen,
-    setMemoryOpen,
-    memoryLoading,
-    memoryResult,
-    setMemoryResult,
   };
 }

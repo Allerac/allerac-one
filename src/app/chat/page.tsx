@@ -3,5 +3,5 @@ import ChatClient from './ChatClient';
 
 export default async function ChatPage() {
   const user = await requireDomainAccess('chat');
-  return <ChatClient defaultSidebarCollapsed isAdmin={user.is_admin} />;
+  return <ChatClient domainSlug="chat" defaultSidebarCollapsed isAdmin={user.is_admin} />;
 }

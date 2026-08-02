@@ -125,15 +125,6 @@ export default function ConversationSidebar({
             <path d="M5 9.3v-2.8a3.5 3.5 0 0 1 7 0v10" />
           </svg>
         </button>
-        <button
-          disabled
-          className={`p-2 rounded-lg opacity-30 cursor-not-allowed ${d ? 'text-gray-400' : 'text-gray-500'}`}
-          title="Save to memory (select a conversation first)"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </button>
         <div className="flex-1" />
         <button
           onClick={onToggleTheme}
@@ -305,15 +296,6 @@ export default function ConversationSidebar({
             <path d="M19 9.3v-2.8a3.5 3.5 0 0 0 -7 0" />
             <path d="M6.5 16a3.5 3.5 0 0 1 0 -7h.5" />
             <path d="M5 9.3v-2.8a3.5 3.5 0 0 1 7 0v10" />
-          </svg>
-        </button>
-        <button
-          disabled
-          className={`p-2 rounded-lg opacity-30 cursor-not-allowed flex-1 flex justify-center ${d ? 'text-gray-400' : 'text-gray-500'}`}
-          title="Save to memory (coming soon)"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
           </svg>
         </button>
       </div>

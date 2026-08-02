@@ -41,7 +41,7 @@ function iso(value: Date | string | null | undefined): string | null {
 export function memoryDto(memory: ConversationSummary) {
   return {
     id: memory.id,
-    conversationId: memory.conversation_id,
+    conversationId: memory.conversation_id ?? null,
     userId: memory.user_id,
     summary: memory.summary,
     keyTopics: memory.key_topics ?? [],
