@@ -141,15 +141,33 @@ export class ScheduledJobsService {
     return result.rows[0] ? mapJob(result.rows[0]) : null;
   }
 
-  async getJobExecutions(jobId: string, userId: string, limit = 5): Promise<JobExecution[]> {
+  async getJobExecutions(
+    jobId: string,
+    userId: string,
+    options: { limit?: number; startDate?: Date; endDate?: Date } = {}
+  ): Promise<JobExecution[]> {
+    const { startDate, endDate } = options;
+    const limit = options.limit ?? (startDate || endDate ? 200 : 5);
+    const conditions = ['je.job_id = $1', 'sj.user_id = $2'];
+    const params: unknown[] = [jobId, userId];
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`je.started_at >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`je.started_at < $${params.length}`);
+    }
+    params.push(limit);
+
     const result = await pool.query<DBJobExecution>(
       `SELECT je.*
        FROM job_executions je
        INNER JOIN scheduled_jobs sj ON sj.id = je.job_id
-       WHERE je.job_id = $1 AND sj.user_id = $2
+       WHERE ${conditions.join(' AND ')}
        ORDER BY je.started_at DESC
-       LIMIT $3`,
-      [jobId, userId, limit]
+       LIMIT $${params.length}`,
+      params
     );
     return result.rows.map(mapExecution);
   }

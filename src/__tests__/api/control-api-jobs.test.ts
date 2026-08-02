@@ -272,9 +272,27 @@ describe('Control API v1 scheduled jobs', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockJobsService.getJobExecutions).toHaveBeenCalledWith('job-id', user.id);
+    expect(mockJobsService.getJobExecutions).toHaveBeenCalledWith('job-id', user.id, {
+      startDate: undefined,
+      endDate: undefined,
+    });
     const body = await response.json();
     expect(body.data.executions[0]).toMatchObject({ id: 'exec-id', status: 'completed' });
+  });
+
+  it('filters job executions by startDate/endDate query params', async () => {
+    mockJobsService.getJobExecutions.mockResolvedValueOnce([execution]);
+
+    const response = await listJobExecutions(
+      new Request('http://localhost/api/v1/jobs/job-id/executions?startDate=2026-08-02T00:00:00.000Z&endDate=2026-08-03T00:00:00.000Z'),
+      routeParams(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockJobsService.getJobExecutions).toHaveBeenCalledWith('job-id', user.id, {
+      startDate: new Date('2026-08-02T00:00:00.000Z'),
+      endDate: new Date('2026-08-03T00:00:00.000Z'),
+    });
   });
 
   it('runs a job immediately', async () => {

@@ -391,9 +391,19 @@
       "Nov",
       "Dec"
     ],
-    "execHistory": "Last executions",
+    "execHistory": "Executions",
+    "execHistoryEmpty": "No executions on this day",
+    "execDetail": {
+      "id": "Execution ID",
+      "status": "Status",
+      "completedAt": "Completed at"
+    },
     "timezone": "Timezone:",
-    "editorHint": "Select a job or create one"
+    "editorHint": "Select a job or create one",
+    "editorTabs": {
+      "config": "Configuration",
+      "executions": "Executions"
+    }
   },
   "consciousness": {
     "title": "About me",

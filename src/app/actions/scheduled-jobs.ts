@@ -128,11 +128,15 @@ export async function toggleJobEnabled(
 }
 
 export async function getJobExecutions(
-  jobId: string
+  jobId: string,
+  options?: { startDate?: string; endDate?: string }
 ): Promise<{ success: boolean; data?: JobExecution[]; error?: string }> {
   try {
     const user = await requireCurrentUser();
-    const data = await scheduledJobsService.getJobExecutions(jobId, user.id);
+    const data = await scheduledJobsService.getJobExecutions(jobId, user.id, {
+      startDate: options?.startDate ? new Date(options.startDate) : undefined,
+      endDate: options?.endDate ? new Date(options.endDate) : undefined,
+    });
     return { success: true, data };
   } catch (error) {
     console.error('[Actions] Error getting job executions:', error);

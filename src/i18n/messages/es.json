@@ -622,9 +622,19 @@
       "Nov",
       "Dic"
     ],
-    "execHistory": "Últimas ejecuciones",
+    "execHistory": "Ejecuciones",
+    "execHistoryEmpty": "Sin ejecuciones ese día",
+    "execDetail": {
+      "id": "ID de ejecución",
+      "status": "Estado",
+      "completedAt": "Completado el"
+    },
     "timezone": "Zona horaria:",
-    "editorHint": "Selecciona un job o crea uno"
+    "editorHint": "Selecciona un job o crea uno",
+    "editorTabs": {
+      "config": "Configuración",
+      "executions": "Ejecuciones"
+    }
   },
   "learn": {
     "trainingView": "Visualizacion del entrenamiento",

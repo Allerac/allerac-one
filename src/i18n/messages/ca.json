@@ -608,9 +608,19 @@
       "Nov",
       "Des"
     ],
-    "execHistory": "Darreres execucions",
+    "execHistory": "Execucions",
+    "execHistoryEmpty": "Cap execució aquest dia",
+    "execDetail": {
+      "id": "ID de l'execució",
+      "status": "Estat",
+      "completedAt": "Completat el"
+    },
     "timezone": "Zona horària:",
-    "editorHint": "Selecciona un job o crea'n un"
+    "editorHint": "Selecciona un job o crea'n un",
+    "editorTabs": {
+      "config": "Configuració",
+      "executions": "Execucions"
+    }
   },
   "memoriesModal": {
     "title": "Memòries de converses",

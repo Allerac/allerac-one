@@ -26,6 +26,26 @@ function userTz(): string {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return 'UTC'; }
 }
 
+function todayLocalISODate(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function dayBoundsUTC(dateStr: string): { startDate: string; endDate: string } {
+  const [y, m, day] = dateStr.split('-').map(Number);
+  const start = new Date(y, m - 1, day, 0, 0, 0, 0);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { startDate: start.toISOString(), endDate: end.toISOString() };
+}
+
+function formatDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rem = Math.round(seconds % 60);
+  return `${minutes}m ${rem}s`;
+}
+
 const UTC_OFFSETS = Array.from({ length: 27 }, (_, i) => {
   const h = i - 12;
   return { label: h === 0 ? 'UTC+0' : h > 0 ? `UTC+${h}` : `UTC${h}`, offsetMin: -h * 60 };
@@ -128,18 +148,36 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
   const [success, setSuccess] = useState('');
   const [tzOffset, setTzOffset] = useState<number | null>(null);
   const [executions, setExecs] = useState<JobExecution[]>([]);
+  const [execDate, setExecDate] = useState<string>(todayLocalISODate);
+  const [loadingExecs, setLoadingExecs] = useState(false);
+  const [expandedExecId, setExpandedExecId] = useState<string | null>(null);
+  const [editorTab, setEditorTab] = useState<'config' | 'executions'>('config');
   const tz = userTz();
   const autoOff = -Math.round(new Date().getTimezoneOffset() / 60);
 
   useEffect(() => {
     setForm(job ? jobToForm(job) : emptyForm);
     setError(''); setSuccess('');
-    if (job) {
-      getJobExecutions(job.id).then(r => { if (r.success) setExecs(r.data ?? []); });
-    } else {
-      setExecs([]);
-    }
+    setExpandedExecId(null);
+    setExecDate(todayLocalISODate());
+    setEditorTab('config');
   }, [job?.id]);
+
+  const shiftExecDate = (deltaDays: number) => {
+    const [y, m, day] = execDate.split('-').map(Number);
+    const shifted = new Date(y, m - 1, day + deltaDays);
+    setExecDate(`${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}-${String(shifted.getDate()).padStart(2, '0')}`);
+  };
+
+  useEffect(() => {
+    if (!job) { setExecs([]); return; }
+    setLoadingExecs(true);
+    const { startDate, endDate } = dayBoundsUTC(execDate);
+    getJobExecutions(job.id, { startDate, endDate }).then(r => {
+      setLoadingExecs(false);
+      if (r.success) setExecs(r.data ?? []);
+    });
+  }, [job?.id, execDate]);
 
   const derivedCron = buildCron(form.preset, form.hour, form.minute, form.weekday, form.monthDay,
     form.cMin, form.cHour, form.cDom, form.cMonth, form.cDow, tzOffset);
@@ -206,8 +244,25 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
         </div>
       </div>
 
+      {job && (
+        <div className={`flex-shrink-0 flex gap-1 px-4 sm:px-6 pt-2 border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+          {(['config', 'executions'] as const).map(tabKey => (
+            <button key={tabKey} onClick={() => setEditorTab(tabKey)}
+              className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                editorTab === tabKey
+                  ? 'border-brand-500 text-brand-500'
+                  : `border-transparent ${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-800'}`
+              }`}>
+              {tabKey === 'config' ? t('editorTabs.config') : t('editorTabs.executions')}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="max-w-2xl mx-auto space-y-4">
+        {editorTab === 'config' && (
+        <>
         {/* Name */}
         <div>
           <label className={labelCls}>{t('fields.name')}</label>
@@ -365,26 +420,71 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
             </select>
           </div>
         </div>
+        </>
+        )}
 
         {/* Execution history */}
-        {executions.length > 0 && (
+        {editorTab === 'executions' && job && (
           <div>
-            <p className={`text-xs font-medium mb-2 ${d ? 'text-gray-400' : 'text-gray-500'}`}>{t('execHistory')}</p>
-            <div className="space-y-2">
-              {executions.slice(0, 5).map(ex => (
-                <div key={ex.id} className={`p-2 rounded-lg ${d ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs ${ex.status === 'completed' ? 'text-green-400' : ex.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
-                      {ex.status === 'completed' ? '✓' : ex.status === 'failed' ? '✗' : '…'}
-                    </span>
-                    <span className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>{new Date(ex.startedAt).toLocaleString()}</span>
-                  </div>
-                  {ex.result && (
-                    <p className={`text-xs mt-1 ${d ? 'text-gray-400' : 'text-gray-600'} line-clamp-3`}>{ex.result}</p>
-                  )}
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-2">
+              <p className={`text-xs font-medium ${d ? 'text-gray-400' : 'text-gray-500'}`}>{t('execHistory')}</p>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => shiftExecDate(-1)}
+                  className={`px-1.5 py-1 rounded border text-xs leading-none ${
+                    d ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-100'
+                  }`} aria-label="Previous day">‹</button>
+                <input type="date" value={execDate} max={todayLocalISODate()}
+                  onChange={e => setExecDate(e.target.value || todayLocalISODate())}
+                  className={`text-xs px-2 py-1 rounded border focus:outline-none focus:border-brand-500 ${
+                    d ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                  }`} />
+                <button type="button" onClick={() => shiftExecDate(1)} disabled={execDate >= todayLocalISODate()}
+                  className={`px-1.5 py-1 rounded border text-xs leading-none disabled:opacity-30 disabled:cursor-not-allowed ${
+                    d ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-100'
+                  }`} aria-label="Next day">›</button>
+              </div>
             </div>
+            {loadingExecs ? (
+              <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>{t('loading')}</p>
+            ) : executions.length === 0 ? (
+              <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>{t('execHistoryEmpty')}</p>
+            ) : (
+              <div className="space-y-2">
+                {executions.map(ex => {
+                  const expanded = expandedExecId === ex.id;
+                  const durationMs = ex.completedAt
+                    ? new Date(ex.completedAt).getTime() - new Date(ex.startedAt).getTime()
+                    : null;
+                  return (
+                    <button key={ex.id} type="button"
+                      onClick={() => setExpandedExecId(expanded ? null : ex.id)}
+                      className={`w-full text-left p-2 rounded-lg transition-colors ${
+                        d ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
+                      }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs ${ex.status === 'completed' ? 'text-green-400' : ex.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
+                          {ex.status === 'completed' ? '✓' : ex.status === 'failed' ? '✗' : '…'}
+                        </span>
+                        <span className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>{new Date(ex.startedAt).toLocaleString()}</span>
+                        {durationMs !== null && (
+                          <span className={`text-xs ml-auto ${d ? 'text-gray-500' : 'text-gray-400'}`}>{formatDuration(durationMs)}</span>
+                        )}
+                      </div>
+                      {ex.result && (
+                        <p className={`text-xs mt-1 ${d ? 'text-gray-400' : 'text-gray-600'} ${expanded ? '' : 'line-clamp-3'}`}>{ex.result}</p>
+                      )}
+                      {expanded && (
+                        <div className={`mt-2 pt-2 border-t text-[11px] space-y-0.5 ${d ? 'border-gray-600 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
+                          <p>{t('execDetail.id')}: {ex.id}</p>
+                          <p>{t('execDetail.status')}: {ex.status}</p>
+                          {ex.completedAt && <p>{t('execDetail.completedAt')}: {new Date(ex.completedAt).toLocaleString()}</p>}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
