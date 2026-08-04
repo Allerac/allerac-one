@@ -91,7 +91,7 @@ record.
   a scheduled batch remains an optional optimization, not required functionality.
 - The technical domain slug and route remain `memory` and `/memory`. The broader
   product evolution is documented separately in
-  [Allerac Intelligence](allerac-intelligence.md).
+  [Knowledge](knowledge.md).
 - Manual save-to-memory controls and `MemorySaveModal` were removed. Memory creation
   now happens through conversation and API tools.
 

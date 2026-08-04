@@ -1,8 +1,8 @@
-# Allerac Intelligence
+# Knowledge
 
 **Status:** Proposed — Memory Graph baseline implemented
 
-**Working product name:** **Allerac Intelligence**
+**Domain name:** **Knowledge**
 
 **Product description:** *Memory, knowledge, and context—connected.*
 
@@ -10,13 +10,13 @@
 
 ## Decision
 
-Evolve the user-facing **Memory** domain into **Allerac Intelligence**, a
-private-first personal knowledge graph. The product name changes before the
+Evolve the user-facing **Memory** domain into **Knowledge**, a private-first
+personal knowledge graph. The user-facing name changes before the
 technical identifiers do:
 
 | Surface | Initial value |
 |---|---|
-| UI name | Allerac Intelligence |
+| UI name | Knowledge |
 | Subtitle | Your personal knowledge graph |
 | Existing route | `/memory` |
 | Existing domain slug | `memory` |
@@ -24,8 +24,8 @@ technical identifiers do:
 
 Keeping the route, slug, scopes, tables, and API stable avoids breaking
 conversations, permissions, tools, clients, and integrations. A future
-`/intelligence` route may become canonical while `/memory` remains a compatible
-redirect.
+`/knowledge` route may become canonical later while `/memory` remains a
+compatible redirect.
 
 ## Why this name
 
@@ -33,12 +33,12 @@ Memory describes only one input. The target experience connects memories with
 notes, documents, learned instructions, conversations, entities, and temporary
 operational context.
 
-**Allerac Intelligence** gives the product room to grow from a memory viewer into
-the place where the user can inspect what Allerac knows, why it knows it, and how
-that knowledge is related.
+**Knowledge** is broad enough to include different information sources while
+remaining concrete inside the application. It is the place where the user can
+inspect what Allerac knows, why it knows it, and how that knowledge is related.
 
-The subtitle is important. Without it, "Intelligence" can sound like analytics,
-monitoring, or business intelligence. Use one of:
+The subtitle clarifies that this is connected personal knowledge rather than a
+generic document repository. Use one of:
 
 - **Your personal knowledge graph** — preferred for the domain header.
 - **Memory, knowledge, and context—connected.** — preferred for descriptive copy.
@@ -47,14 +47,14 @@ Names considered but not selected:
 
 - **Allerac Memory** — accurate today but too narrow for the target.
 - **Allerac Mind** — approachable, but anthropomorphic and less precise.
-- **Allerac Knowledge** — clear, but does not communicate learned context or
-  relationships.
+- **Allerac Intelligence** — useful as a marketing concept, but too abstract and
+  institutional as a system module.
 - **My Allerac** — already used for the lightweight learned-instructions review
   surface.
 
 ## Product boundary
 
-Allerac Intelligence is not a second copy of every record in Allerac. It is a
+Knowledge is not a second copy of every record in Allerac. It is a
 unified read, retrieval, and relationship layer over records that retain a single
 source of truth.
 
@@ -191,7 +191,7 @@ recognize paraphrases or relationships expressed with different vocabulary.
 ## Local semantic relationships
 
 Use the existing provider-independent local embedding boundary to add semantic
-similarity without coupling Allerac Intelligence directly to Ollama or a specific
+similarity without coupling Knowledge directly to Ollama or a specific
 model.
 
 Principles:
@@ -210,7 +210,7 @@ additional classification or explicit user confirmation.
 
 ## Retrieval
 
-Allerac Intelligence should support several retrieval strategies behind one
+Knowledge should support several retrieval strategies behind one
 service boundary:
 
 1. exact identifiers and structured filters;
@@ -253,7 +253,7 @@ must be rebuildable.
   derived edges.
 - Provenance must never expose another user's records.
 
-Allerac Intelligence remains private-first and self-hosted. Managed external
+Knowledge remains private-first and self-hosted. Managed external
 knowledge-base services may be architectural references or optional adapters, but
 are not the default source of truth.
 
@@ -261,7 +261,7 @@ are not the default source of truth.
 
 ### Phase 1 — Product identity and compatibility
 
-1. Rename the domain in the UI to **Allerac Intelligence**.
+1. Rename the domain in the UI to **Knowledge**.
 2. Add the subtitle and explanatory empty states.
 3. Keep `memory` as the technical slug and `/memory` as a compatible route.
 4. Document the Memory, Notes, Jobs, and Instructions boundaries in user-facing
@@ -308,7 +308,7 @@ are not the default source of truth.
 
 ## Definition of done
 
-- The UI presents Allerac Intelligence as a personal knowledge graph.
+- The UI presents Knowledge as a personal knowledge graph.
 - Memory, Notes, Jobs, Documents, and Instructions retain distinct semantics and
   sources of truth.
 - Typed nodes and edges include ownership, source references, and provenance.
@@ -326,4 +326,3 @@ are not the default source of truth.
 - Replacing transactional Notes or Jobs behavior with vector search.
 - Requiring a managed cloud knowledge-base service.
 - Letting inferred relations become authoritative facts without provenance.
-

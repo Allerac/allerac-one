@@ -187,7 +187,7 @@ System management for the platform owner.
 ## Global Features (available in every workspace)
 
 - **Conversation history** — every workspace keeps a sidebar with past conversations you can return to
-- **Memory** — the AI remembers important things across conversations; you can view, add, or delete memories
+- **Knowledge** (`/memory`) — the personal knowledge graph where users explore and manage durable memories and their relationships
 - **Documents** — upload files the AI can read and reference in its answers
 - **Model selector** — choose which AI model to use for that conversation
 - **My Allerac** — access your personal profile and account settings

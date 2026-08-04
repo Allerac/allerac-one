@@ -50,7 +50,7 @@ const DOMAINS = [
   { slug: 'email',   label: 'Email',   icon: '✉️' },
   { slug: 'notes',   label: 'Notes',   icon: '📝' },
   { slug: 'jobs',    label: 'Jobs',    icon: '⏰' },
-  { slug: 'memory',  label: 'Memory',  icon: '🗂️' },
+  { slug: 'memory',  label: 'Knowledge', icon: '🗂️' },
   { slug: 'robot-assistant', label: 'Robot', icon: 'R' },
 ];
 

@@ -119,8 +119,8 @@ export default function MyAlleracModal({
             <Link href="/memory" onClick={onClose} className={`rounded-lg border p-3 text-sm transition ${
               d ? 'border-gray-700 hover:bg-gray-700 text-gray-200' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
             }`}>
-              <span className="block font-medium">Memory</span>
-              <span className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>Search and manage memories</span>
+              <span className="block font-medium">Knowledge</span>
+              <span className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>Explore your personal knowledge graph</span>
             </Link>
             <Link href="/memory/documents" onClick={onClose} className={`rounded-lg border p-3 text-sm transition ${
               d ? 'border-gray-700 hover:bg-gray-700 text-gray-200' : 'border-gray-200 hover:bg-gray-50 text-gray-700'

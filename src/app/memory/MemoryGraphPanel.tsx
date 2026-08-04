@@ -264,16 +264,16 @@ export default function MemoryGraphPanel() {
         isDark ? 'border-white/10 bg-[#080b12]/75' : 'border-slate-200 bg-white/75'
       }`}>
         <div className="min-w-0">
-          <h1 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Memory map</h1>
+          <h1 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Knowledge</h1>
           <p className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-            {filtered.length} memories · drag to orbit · scroll to zoom
+            Your personal knowledge graph · {filtered.length} memories connected
           </p>
         </div>
         <div className="flex-1" />
         <input
           value={query}
           onChange={event => setQuery(event.target.value)}
-          placeholder="Search memories…"
+          placeholder="Search your knowledge…"
           className={`w-40 xl:w-56 rounded-lg border px-3 py-1.5 text-xs outline-none ${
             isDark ? 'border-white/10 bg-white/5 text-slate-200 placeholder:text-slate-600 focus:border-violet-500/60'
               : 'border-slate-200 bg-white/80 text-slate-700 placeholder:text-slate-400 focus:border-violet-400'
@@ -302,14 +302,14 @@ export default function MemoryGraphPanel() {
       <div className="absolute inset-0 top-16">
         {loading ? (
           <div className={`h-full flex items-center justify-center text-sm ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-            Building your memory map…
+            Building your knowledge graph…
           </div>
         ) : filtered.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-8">
             <div className="h-16 w-16 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl mb-4">✦</div>
-            <h2 className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>No memories found</h2>
+            <h2 className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Your knowledge graph is ready</h2>
             <p className={`text-sm mt-1 max-w-sm ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
-              Ask Allerac in the chat to remember something and its first node will appear here.
+              Ask Allerac to remember durable context and its first knowledge node will appear here.
             </p>
           </div>
         ) : (
