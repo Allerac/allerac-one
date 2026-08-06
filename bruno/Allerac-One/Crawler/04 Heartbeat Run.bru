@@ -1,0 +1,33 @@
+meta {
+  name: 04 Heartbeat Run
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/crawler/runs/{{crawlerRunId}}/heartbeat
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "schemaVersion": "1.0",
+    "workerId": "{{crawlerWorkerId}}",
+    "state": "crawling",
+    "pagesCrawled": 1,
+    "itemsScraped": 1
+  }
+}
+
+docs {
+  Renews the worker lease and records progress.
+  Expected response: 204 No Content.
+  Required scope: crawler:runs:heartbeat.
+}
+

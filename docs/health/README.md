@@ -2,6 +2,10 @@
 
 Allerac integrates with Garmin Connect to sync daily health metrics (steps, sleep, heart rate, HRV, body battery, stress) and activity data into the database.
 
+The planned expansion for complete activity metrics, GPS routes, synchronized
+time series, maps, privacy controls, and assistant analysis is documented in
+[Detailed Health Activities and Maps](../roadmap/health-detailed-activities.md).
+
 ## Architecture
 
 ```

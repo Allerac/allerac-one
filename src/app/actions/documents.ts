@@ -67,6 +67,13 @@ export async function getAllDocuments(domainSlug?: string | null) {
     return await docService.getAllDocuments(user.id, domainSlug);
 }
 
+export async function getDocumentDetails(documentId: string) {
+    const user = await requireCurrentUser();
+    const embeddingService = new EmbeddingService();
+    const docService = new DocumentService(embeddingService);
+    return await docService.getDocumentDetails(documentId, user.id);
+}
+
 export async function deleteDocument(documentId: string) {
     const user = await requireCurrentUser();
 

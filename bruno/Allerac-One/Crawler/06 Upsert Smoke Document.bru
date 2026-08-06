@@ -1,0 +1,56 @@
+meta {
+  name: 06 Upsert Smoke Document
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/crawler/runs/{{crawlerRunId}}/documents-upsert
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+  Idempotency-Key: {{crawlerIdempotencyKey}}
+}
+
+body:json {
+  {
+    "schemaVersion": "1.0",
+    "runId": "{{crawlerRunId}}",
+    "batchId": "bruno-smoke-batch-1",
+    "idempotencyKey": "{{crawlerIdempotencyKey}}",
+    "finalBatch": true,
+    "documents": [
+      {
+        "schemaVersion": "1.0",
+        "sourceId": "receita-federal-duimp",
+        "externalId": "bruno-smoke-document-1",
+        "canonicalUrl": "https://www.gov.br/receitafederal/pt-br/assuntos/aduana-e-comercio-exterior/manuais/despacho-de-importacao/sistemas/duimp",
+        "title": "DUIMP - Integration smoke test",
+        "content": "DUIMP integration smoke test document.",
+        "contentHash": "sha256:e2c581ee8aedda043e2d7ebc182dfb1c2607acfc296e896932f10168bd3c0009",
+        "contentType": "text/plain",
+        "language": "pt-BR",
+        "retrievedAt": "2026-08-05T12:00:00.000Z",
+        "attribution": {
+          "name": "Receita Federal do Brasil",
+          "url": "https://www.gov.br/receitafederal/pt-br/assuntos/aduana-e-comercio-exterior/manuais/despacho-de-importacao/sistemas/duimp"
+        },
+        "metadata": {
+          "test": true,
+          "client": "Bruno"
+        }
+      }
+    ]
+  }
+}
+
+docs {
+  Sends one normalized document and waits until its chunks and embeddings are durable.
+  Repeating the same completed request returns the stored acknowledgement.
+  Required scope: crawler:documents:write.
+}
+

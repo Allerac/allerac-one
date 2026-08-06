@@ -1,0 +1,35 @@
+meta {
+  name: 05 Add Run Event
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/crawler/runs/{{crawlerRunId}}/events
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "schemaVersion": "1.0",
+    "level": "info",
+    "code": "bruno_smoke_test",
+    "message": "Crawler integration smoke test reached document delivery.",
+    "details": {
+      "client": "Bruno"
+    }
+  }
+}
+
+docs {
+  Appends a structured operational event.
+  Expected response: 204 No Content.
+  Required scope: crawler:events:write.
+}
+

@@ -8,6 +8,8 @@
 
 **Depends on:** [Ambient Instructions, Memory, and Tasks](ambient-instructions-memory-tasks.md), [Provider-Independent Local Embeddings](provider-independent-local-embeddings.md), Notes, Documents/RAG, Scheduled Jobs, and domain-scoped access control
 
+**Execution plan:** [Unified Knowledge Graph](unified-knowledge-graph-execution.md)
+
 ## Decision
 
 Evolve the user-facing **Memory** domain into **Knowledge**, a private-first

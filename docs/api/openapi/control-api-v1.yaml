@@ -31,7 +31,80 @@ tags:
   - name: Finance
   - name: Music
   - name: Benchmark
+  - name: Crawler
 paths:
+  /api/v1/crawler/sources:
+    put:
+      tags: [Crawler]
+      summary: Create or update a crawler source
+      operationId: upsertCrawlerSource
+      responses:
+        "200": { description: Source saved }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/crawler/runs:
+    post:
+      tags: [Crawler]
+      summary: Queue a crawler run
+      operationId: createCrawlerRun
+      responses:
+        "202": { description: Run queued }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/crawler/runs/claim:
+    post:
+      tags: [Crawler]
+      summary: Atomically claim the next crawler run
+      operationId: claimCrawlerRun
+      responses:
+        "200": { description: Leased run and source configuration }
+        "204": { description: No eligible work }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/crawler/runs/{runId}:
+    patch:
+      tags: [Crawler]
+      summary: Update crawler run state
+      operationId: updateCrawlerRun
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Run updated }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/crawler/runs/{runId}/heartbeat:
+    post:
+      tags: [Crawler]
+      summary: Renew a crawler run lease
+      operationId: heartbeatCrawlerRun
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Lease renewed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/crawler/runs/{runId}/events:
+    post:
+      tags: [Crawler]
+      summary: Append an operational crawler event
+      operationId: createCrawlerRunEvent
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Event stored }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/crawler/runs/{runId}/documents-upsert:
+    post:
+      tags: [Crawler]
+      summary: Idempotently ingest normalized crawler documents
+      operationId: upsertCrawlerDocuments
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8 } }
+      responses:
+        "200": { description: Durable document acknowledgement }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/version:
     get:
       tags: [System]

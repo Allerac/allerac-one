@@ -1,0 +1,39 @@
+meta {
+  name: 01 Configure DUIMP Source
+  type: http
+  seq: 1
+}
+
+put {
+  url: {{baseUrl}}/api/v1/crawler/sources
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "sourceId": "receita-federal-duimp",
+    "name": "Receita Federal - DUIMP",
+    "startUrls": [
+      "https://www.gov.br/receitafederal/pt-br/assuntos/aduana-e-comercio-exterior/manuais/despacho-de-importacao/sistemas/duimp"
+    ],
+    "allowedDomains": [
+      "www.gov.br"
+    ],
+    "configuration": {
+      "maxDepth": 2
+    },
+    "domainSlug": "memory"
+  }
+}
+
+docs {
+  Creates or updates the DUIMP source owned by the API-key user.
+  Required scope: crawler:sources:write.
+}
+

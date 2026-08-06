@@ -21,6 +21,7 @@ Health and wellness assistant with direct access to Garmin Connect data. The AI 
 | Garmin service | `services/health-worker/garmin.py` |
 | Worker | `services/health-worker/app.py` |
 | Architecture doc | `docs/health/README.md` |
+| Detailed activities roadmap | `docs/roadmap/health-detailed-activities.md` |
 
 ## Tools Available
 

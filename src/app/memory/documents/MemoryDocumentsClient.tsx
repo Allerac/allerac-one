@@ -16,9 +16,14 @@ export default function MemoryDocumentsClient({ userId }: { userId: string }) {
               Documents uploaded here provide retrieval context to your personal knowledge graph.
             </p>
           </div>
-          <Link href="/memory" className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm">
-            Back to Knowledge
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/memory/crawlers" className="px-3 py-2 rounded-lg border border-cyan-500/30 text-cyan-500 text-sm">
+              Crawlers
+            </Link>
+            <Link href="/memory" className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm">
+              Back to Knowledge
+            </Link>
+          </div>
         </div>
         <div className={`rounded-xl border p-5 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <DocumentUpload

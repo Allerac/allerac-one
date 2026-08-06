@@ -19,7 +19,7 @@ import { embeddingScheduler } from './embedding-scheduler';
 
 const DEFAULT_MODEL = 'embeddinggemma';
 const DEFAULT_DIMENSIONS = 768;
-const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_KEEP_ALIVE = '10m';
 
 export interface EmbeddingResult {

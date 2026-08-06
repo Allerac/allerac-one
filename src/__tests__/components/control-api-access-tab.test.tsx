@@ -78,4 +78,15 @@ describe('ControlApiAccessTab', () => {
       expiresAt: null,
     });
   });
+
+  it('offers the Allerac Crawler preset and crawler permissions', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { apiKeys: [] } }));
+
+    render(<ControlApiAccessTab isDarkMode />);
+
+    await screen.findByText('No active access keys.');
+    expect(screen.getByText('Crawler')).toBeInTheDocument();
+    expect(screen.getByText('crawler:runs:claim')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Allerac Crawler' })).toBeInTheDocument();
+  });
 });

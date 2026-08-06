@@ -22,6 +22,8 @@ sequence of implementation.
 | [Multi-Cloud Environment Provisioning](multi-cloud-environment-provisioning.md) | Proposed | Provision, restore, validate, and safely cut over Allerac environments across supported clouds |
 | [Ambient Instructions, Memory, and Tasks](ambient-instructions-memory-tasks.md) | Completed | Retired manual Instructions/Memory/Tasks management in favor of agent-driven, cross-domain tools |
 | [Knowledge](knowledge.md) | Proposed | Evolve Memory into a private-first typed personal knowledge graph with local semantic relationships |
+| [Unified Knowledge Graph Execution](unified-knowledge-graph-execution.md) | Proposed | Step-by-step delivery plan for showing memories and crawler/uploaded documents in one explainable graph |
+| [Detailed Health Activities and Maps](health-detailed-activities.md) | Proposed | Import complete Garmin activity metrics, routes, time series, and privacy-safe maps |
 | [Provider-Independent Local Embeddings](provider-independent-local-embeddings.md) | Completed | Replace the retired GitHub Models integration with benchmarked local embeddings behind a provider-neutral contract |
 | [n8n Workflow Integration](n8n-workflow-integration.md) | Completed | Run n8n self-hosted alongside Allerac as an optional automation layer for multi-step logic and external-service integration |
 
