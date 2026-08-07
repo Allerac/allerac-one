@@ -1,0 +1,25 @@
+meta {
+  name: Proxy Activity Detail
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/proxy/activities/{{proxyActivityId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "Proxy Activities" first to populate proxyActivityId.
+  Live read from Garmin via the health-worker's /activity-details — laps,
+  zones, samples (exact GPS), route bounds/polyline, and details_raw
+  (Garmin's complete unreduced payload), returned untouched. Unlike the
+  cached activity-detail family, this response is NOT redacted — treat it
+  as sensitive. Never written to health_activities/laps/zones/samples.
+  Returns 409 garmin_not_connected if the user hasn't connected Garmin yet.
+}

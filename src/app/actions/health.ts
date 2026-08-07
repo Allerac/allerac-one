@@ -5,7 +5,14 @@ import { requireCurrentUser } from '@/app/lib/auth-session';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { submitLog } from '@/lib/submit-log';
 import { applyActivityCorrection } from '@/app/services/health/activity-corrections';
-import { callHealthWorker, queryDailyMetricsSnapshot, queryGarminStatus, queryHealthSummary } from '@/app/services/health/health-query.service';
+import {
+  callHealthWorker,
+  getGarminConnection,
+  queryDailyMetricsSnapshot,
+  queryGarminStatus,
+  queryHealthSummary,
+  queryProtectedLocations,
+} from '@/app/services/health/health-query.service';
 import { clearConnection, getConnection, upsertConnection } from '@/app/services/integrations/integration-connections.service';
 
 const GARMIN_PROVIDER = 'garmin';
@@ -20,26 +27,6 @@ async function getSessionUserId(): Promise<string> {
 }
 
 const workerFetch = callHealthWorker;
-
-// Loads the decrypted session dump plus whether this connection is in
-// "proxy" mode (data_mode='proxy'). Proxy connections never get their live
-// fetches written back to health_activities / health_daily_metrics — see
-// callers below. Returns null when Garmin isn't connected.
-async function getGarminConnection(userId: string): Promise<{ sessionDump: string; isProxy: boolean } | null> {
-  const connection = await getConnection(userId, GARMIN_PROVIDER);
-  if (!connection || !connection.isConnected) return null;
-
-  const res = await pool.query(
-    'SELECT oauth1_token_encrypted FROM garmin_credentials WHERE user_id = $1',
-    [userId],
-  );
-  if (res.rows.length === 0) return null;
-
-  return {
-    sessionDump: safeDecrypt(res.rows[0].oauth1_token_encrypted),
-    isProxy: connection.dataMode === 'proxy',
-  };
-}
 
 // ─── Garmin status ─────────────────────────────────────────────────────────────
 
@@ -550,7 +537,25 @@ export async function getActivitiesInRange(startDate: string, endDate: string, l
 
 const toInt = (v: any) => (v != null ? Math.round(Number(v)) : null);
 
+// Columns Phase 1 (docs/roadmap/health-detailed-activities.md) added to
+// health_activities. Keys match 1:1 the normalized dict returned by
+// services/health-worker/garmin.py:normalize_activity_summary.
+const NORMALIZED_ACTIVITY_COLUMNS = [
+  'provider', 'provider_activity_id', 'sport_type', 'sub_sport_type', 'timezone',
+  'moving_time_seconds', 'elapsed_time_seconds',
+  'average_pace_seconds_per_km', 'best_pace_seconds_per_km',
+  'average_power_watts', 'max_power_watts',
+  'min_elevation_meters', 'max_elevation_meters',
+  'training_effect_aerobic', 'training_effect_anaerobic', 'training_benefit', 'exercise_load', 'vo2_max',
+  'average_cadence_spm', 'max_cadence_spm', 'average_stride_length_meters',
+  'average_vertical_ratio_percent', 'average_vertical_oscillation_cm', 'average_ground_contact_time_ms',
+  'estimated_sweat_loss_ml',
+  'beginning_stamina_percent', 'ending_stamina_percent', 'minimum_stamina_percent',
+] as const;
+
 async function _upsertActivities(userId: string, activities: any[]) {
+  const insertedActivityIds: string[] = [];
+
   for (const a of activities) {
     // Calculate date from startTimeLocal or startTimeInSeconds
     let activityDate: string | null = null;
@@ -563,14 +568,28 @@ async function _upsertActivities(userId: string, activities: any[]) {
       activityDate = new Date(ms).toISOString().split('T')[0];
     }
 
-    await pool.query(
+    // Phase 1: raw_data now stores the true unreduced Garmin payload
+    // (a.summaryRaw), not the reduced wrapper object previously stored here.
+    // Callers that never went through the updated worker mapper (e.g. an
+    // older cached response) fall back to the wrapper itself.
+    const summaryRaw = a.summaryRaw ?? a;
+    const n: Record<string, any> = a.normalized ?? {};
+    const normalizedValues = NORMALIZED_ACTIVITY_COLUMNS.map((key) => n[key] ?? null);
+
+    const res = await pool.query(
       `INSERT INTO health_activities (
          user_id, activity_id, activity_name, activity_type, date,
          start_time_seconds, start_time_local,
          duration_seconds, calories, distance_meters,
          avg_heart_rate, max_heart_rate,
-         elevation_gain, elevation_loss, raw_data
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         elevation_gain, elevation_loss, raw_data,
+         ${NORMALIZED_ACTIVITY_COLUMNS.join(', ')},
+         payload_version
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+         ${NORMALIZED_ACTIVITY_COLUMNS.map((_, i) => `$${16 + i}`).join(', ')},
+         $${16 + NORMALIZED_ACTIVITY_COLUMNS.length}
+       )
        ON CONFLICT (user_id, activity_id) DO UPDATE SET
          activity_name = COALESCE(EXCLUDED.activity_name, health_activities.activity_name),
          activity_type = COALESCE(EXCLUDED.activity_type, health_activities.activity_type),
@@ -585,7 +604,10 @@ async function _upsertActivities(userId: string, activities: any[]) {
          elevation_gain = COALESCE(EXCLUDED.elevation_gain, health_activities.elevation_gain),
          elevation_loss = COALESCE(EXCLUDED.elevation_loss, health_activities.elevation_loss),
          raw_data = COALESCE(EXCLUDED.raw_data, health_activities.raw_data),
-         updated_at = NOW()`,
+         ${NORMALIZED_ACTIVITY_COLUMNS.map((col) => `${col} = COALESCE(EXCLUDED.${col}, health_activities.${col})`).join(',\n         ')},
+         payload_version = COALESCE(EXCLUDED.payload_version, health_activities.payload_version),
+         updated_at = NOW()
+       RETURNING activity_id, (xmax = 0) AS inserted`,
       [
         userId, a.activityId, a.activityName, a.activityType,
         activityDate,
@@ -593,10 +615,164 @@ async function _upsertActivities(userId: string, activities: any[]) {
         a.duration, a.calories, a.distance,
         a.avgHeartRate, a.maxHeartRate,
         a.elevationGain, a.elevationLoss,
-        JSON.stringify(a)
+        JSON.stringify(summaryRaw),
+        ...normalizedValues,
+        a.payloadVersion ?? null,
       ]
     );
+
+    if (res.rows[0]?.inserted && a.activityId) {
+      insertedActivityIds.push(String(a.activityId));
+    }
   }
+
+  if (insertedActivityIds.length > 0) {
+    await _enqueueDetailSyncJobs(userId, insertedActivityIds);
+  }
+}
+
+// New activities get a detail-sync job queued automatically (Phase 2). The
+// job table's own DEFAULT 'pending' + UNIQUE(user_id, activity_id) makes
+// this safe to call repeatedly — see src/app/services/health/detail-sync.repository.ts
+// for how src/agent-worker.ts claims and processes these.
+async function _enqueueDetailSyncJobs(userId: string, activityIds: string[]) {
+  for (const activityId of activityIds) {
+    await pool.query(
+      `INSERT INTO health_activity_detail_sync_jobs (user_id, activity_id)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id, activity_id) DO NOTHING`,
+      [userId, activityId],
+    );
+  }
+}
+
+// ─── Activity detail sync (Phase 2) ─────────────────────────────────────────
+//
+// runActivityDetailSync itself now lives in
+// src/app/services/health/detail-sync.service.ts — not here — since it takes
+// a raw userId (not session-resolved) and must never be reachable as a
+// client-callable Server Action. Keeping it out of this 'use server' file
+// also keeps auth-session.ts's bcrypt import out of src/agent-worker.ts's
+// dependency-free esbuild bundle (which can't include native addons).
+
+// ─── Backfill (Phase 1) ──────────────────────────────────────────────────────
+
+// Bounded, manual-trigger backfill for existing rows imported before the
+// lossless-summary mapper existed (payload_version IS NULL). Re-fetches the
+// day for each affected activity and reuses _upsertActivities — this is not
+// automatic mass reprocessing, to stay within Garmin's rate limits (see the
+// roadmap's "Refresh policy").
+export async function backfillActivitySummaries(limit: number = 20) {
+  const userId = await getSessionUserId();
+  const connection = await getGarminConnection(userId);
+  if (!connection) {
+    throw new Error('Garmin not connected');
+  }
+  if (connection.isProxy) {
+    throw new Error('Backfill is disabled for this connection — it is set to live/proxy mode.');
+  }
+
+  const stale = await pool.query(
+    `SELECT DISTINCT date FROM health_activities
+     WHERE user_id = $1 AND payload_version IS NULL
+     ORDER BY date DESC
+     LIMIT $2`,
+    [userId, limit],
+  );
+
+  let refetched = 0;
+  for (const row of stale.rows) {
+    const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date);
+    try {
+      const data = await workerFetch('POST', '/activities', {
+        session_dump: connection.sessionDump,
+        limit: 50,
+        date: dateStr,
+      });
+      const activities = data.activities ?? [];
+      if (activities.length > 0) {
+        await _upsertActivities(userId, activities);
+        refetched += activities.length;
+      }
+    } catch (e: any) {
+      await submitLog('Health', `Backfill: failed to refetch ${dateStr}: ${e.message}`);
+    }
+  }
+
+  await submitLog(
+    'Health',
+    `Backfill complete: refetched ${refetched} activities across ${stale.rows.length} day(s)`,
+  );
+  return { days: stale.rows.length, activities: refetched };
+}
+
+// ─── Activity deletion (Phase 3) ────────────────────────────────────────────
+
+// Deletes one activity and all derived data. Laps, zones, and samples
+// cascade via FK ON DELETE CASCADE (migrations 114, 116) — deleting the
+// health_activities row is sufficient. Returns whether a row was actually
+// deleted, so callers can distinguish "not yours"/"already gone" from a
+// real failure. Deliberately separate from disconnectGarmin(), which must
+// never silently delete history (see the roadmap's privacy section).
+export async function deleteActivity(activityId: string): Promise<boolean> {
+  const userId = await getSessionUserId();
+  const res = await pool.query(
+    `DELETE FROM health_activities WHERE user_id = $1 AND activity_id = $2`,
+    [userId, activityId],
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+// ─── Protected locations (Phase 3 privacy zones) ────────────────────────────
+
+export interface ProtectedLocation {
+  id: string;
+  label: string | null;
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+}
+
+// Coordinates are encrypted at rest (not activity-scoped — a user-level
+// privacy setting) so they don't appear in ordinary queries/backups. The
+// Control API's route/series endpoints call queryProtectedLocations
+// directly (they resolve their user via requireApiUser, not a session
+// cookie, so they can't call this session-bound wrapper).
+export async function listProtectedLocations(): Promise<ProtectedLocation[]> {
+  const userId = await getSessionUserId();
+  return queryProtectedLocations(userId);
+}
+
+export async function addProtectedLocation(
+  label: string | null,
+  lat: number,
+  lng: number,
+  radiusMeters: number,
+): Promise<ProtectedLocation> {
+  const userId = await getSessionUserId();
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error('lat/lng must be finite numbers');
+  }
+  if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) {
+    throw new Error('radiusMeters must be a positive number');
+  }
+  const locationEncrypted = encrypt(JSON.stringify({ lat, lng }));
+  const res = await pool.query(
+    `INSERT INTO health_protected_locations (user_id, label, location_encrypted, radius_meters)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id`,
+    [userId, label, locationEncrypted, radiusMeters],
+  );
+  return { id: res.rows[0].id, label, lat, lng, radiusMeters };
+}
+
+export async function removeProtectedLocation(id: string): Promise<boolean> {
+  const userId = await getSessionUserId();
+  const res = await pool.query(
+    `DELETE FROM health_protected_locations WHERE user_id = $1 AND id = $2`,
+    [userId, id],
+  );
+  return (res.rowCount ?? 0) > 0;
 }
 
 async function _retryGarminExerciseCorrections(userId: string, sessionDump: string): Promise<number> {

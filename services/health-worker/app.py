@@ -70,6 +70,11 @@ class UpdateExerciseSetsRequest(BaseModel):
     exercise_sets: list[dict]
 
 
+class ActivityDetailsRequest(BaseModel):
+    session_dump: str
+    activity_id: str
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -188,41 +193,24 @@ def update_exercise_sets(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
 
-@app.post("/debug-activities")
-def debug_activities(req: ActivitiesRequest, x_worker_secret: str = Header(...)):
-    """DEBUG: Returns raw activity data from Garmin"""
+@app.post("/activity-details")
+def activity_details(req: ActivityDetailsRequest, x_worker_secret: str = Header(...)):
+    """
+    Fetches laps, time-in-zone aggregates, and route/time-series samples for
+    one activity (Phases 2 and 3 of docs/roadmap/health-detailed-activities.md).
+
+    Returns { laps: [...], zones: [...], samples: [...], route_bounds: {...}|None,
+    route_simplified_polyline: str|None, details_raw: {...}, errors: {...},
+    payload_version }. A resource-level error in `errors` does not fail the
+    request — the caller (allerac-one) decides between 'complete'/'partial'
+    detail_sync_status based on it.
+    """
     _auth(x_worker_secret)
     try:
-        from garminconnect import Garmin
-        garmin = Garmin()
-        garmin.garth.loads(req.session_dump)
-
-        last = garmin.get_last_activity()
-
-        result = {
-            "raw_last_activity": last,
-            "last_activity_keys": list(last.keys()) if last else [],
-            "activity_id": last.get("activityId") if last else None,
-        }
-
-        if last and last.get("activityId"):
-            act_id = str(last.get("activityId"))
-            try:
-                sets = garmin.get_activity_exercise_sets(act_id)
-                result["exercise_sets"] = sets
-            except Exception as e:
-                result["exercise_sets_error"] = str(e)
-
-            try:
-                details = garmin.get_activity_details(act_id)
-                result["activity_details"] = details
-            except Exception as e:
-                result["activity_details_error"] = str(e)
-
-        return result
+        return garmin_service.fetch_activity_details(req.session_dump, req.activity_id)
     except Exception as e:
-        logger.error(f"debug error: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"activity_details error: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,20 @@
+meta {
+  name: Get Activity Series
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/activities/{{activityId}}/series?metrics=heart_rate,power&maxPoints=200
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "List Activities" first to populate activityId.
+  Required scope: health:read. Never includes latitude/longitude — see "Get Activity Route" for coordinates.
+}

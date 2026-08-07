@@ -6,6 +6,33 @@
 // can't call them directly.
 
 import pool from '@/app/clients/db';
+import { decrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
+import { getConnection } from '@/app/services/integrations/integration-connections.service';
+
+const GARMIN_PROVIDER = 'garmin';
+
+// Loads the decrypted session dump plus whether this connection is in
+// "proxy" mode (data_mode='proxy'). Proxy connections never get their live
+// fetches written back to health_activities / health_daily_metrics.
+// userId-parameterized (not session-bound), so it's also safe to import
+// from src/agent-worker.ts's bundle — unlike actions/health.ts, this file
+// never imports auth-session.ts (which pulls in bcrypt, a native addon
+// esbuild can't bundle for that container).
+export async function getGarminConnection(userId: string): Promise<{ sessionDump: string; isProxy: boolean } | null> {
+  const connection = await getConnection(userId, GARMIN_PROVIDER);
+  if (!connection || !connection.isConnected) return null;
+
+  const res = await pool.query(
+    'SELECT oauth1_token_encrypted FROM garmin_credentials WHERE user_id = $1',
+    [userId],
+  );
+  if (res.rows.length === 0) return null;
+
+  return {
+    sessionDump: safeDecrypt(res.rows[0].oauth1_token_encrypted),
+    isProxy: connection.dataMode === 'proxy',
+  };
+}
 
 // Calls the Python health-worker container, which holds the actual Garmin
 // Connect client. Shared by the Server Actions (cached reads/writes) and the
@@ -113,4 +140,35 @@ export async function queryDailyMetricsSnapshot(userId: string, date: string): P
     [userId, date],
   );
   return res.rows[0] ?? null;
+}
+
+// Phase 3 privacy zones (docs/roadmap/health-detailed-activities.md).
+// userId-parameterized (not session-bound) so both the Server Action
+// (actions/health.ts:listProtectedLocations) and the Control API route/series
+// endpoints — which resolve their user via requireApiUser, not a session
+// cookie — can share this without duplicating the decrypt-and-map logic.
+export interface ProtectedLocationRow {
+  id: string;
+  label: string | null;
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+}
+
+export async function queryProtectedLocations(userId: string): Promise<ProtectedLocationRow[]> {
+  const res = await pool.query(
+    `SELECT id, label, location_encrypted, radius_meters
+     FROM health_protected_locations WHERE user_id = $1 ORDER BY created_at ASC`,
+    [userId],
+  );
+  return res.rows.map((row: any) => {
+    const location = JSON.parse(decrypt(row.location_encrypted));
+    return {
+      id: row.id,
+      label: row.label,
+      lat: location.lat,
+      lng: location.lng,
+      radiusMeters: Number(row.radius_meters),
+    };
+  });
 }

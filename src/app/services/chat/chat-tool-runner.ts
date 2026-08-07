@@ -132,7 +132,7 @@ export async function executeChatTool(
     return instagramTool.getRecentMedia(userId, toolArgs.limit ?? 6);
   }
 
-  if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'].includes(toolName)) {
+  if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities', 'get_activity_detail'].includes(toolName)) {
     const healthTool = new HealthTool();
     const healthUser = { id: userId, email: user.email, name: user.name || user.email };
     if (toolName === 'get_health_summary') {
@@ -151,6 +151,9 @@ export async function executeChatTool(
         toolArgs.start_date,
         toolArgs.end_date,
       );
+    }
+    if (toolName === 'get_activity_detail') {
+      return healthTool.getActivityDetail(healthUser, toolArgs.activity_id);
     }
     return healthTool.getGarminStatus(healthUser);
   }

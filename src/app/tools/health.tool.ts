@@ -80,6 +80,59 @@ export interface RecentActivitiesResult {
   error?: string;
 }
 
+export interface ActivityLapSummary {
+  lap: number;
+  duration_seconds: number | null;
+  distance_meters: number | null;
+  pace_seconds_per_km: number | null;
+  avg_heart_rate: number | null;
+  avg_power_watts: number | null;
+  avg_cadence_spm: number | null;
+}
+
+export interface ActivityZoneSummary {
+  metric: string;
+  zone: number;
+  duration_seconds: number | null;
+  percent: number | null;
+}
+
+// Bounded per-activity detail for the assistant (laps, zones, running
+// dynamics, training effect). Deliberately excludes GPS/route fields
+// (coordinates, bounds, polyline) — per docs/roadmap/
+// health-detailed-activities.md's "Assistant access"/"Privacy and security"
+// sections, exact location data must never reach chat context.
+export interface ActivityDetailResult {
+  activity_id: string;
+  name?: string;
+  type?: string;
+  date?: string;
+  duration_seconds?: number | null;
+  calories?: number | null;
+  distance_meters?: number | null;
+  avg_heart_rate?: number | null;
+  max_heart_rate?: number | null;
+  elevation_gain_meters?: number | null;
+  average_pace_seconds_per_km?: number | null;
+  average_power_watts?: number | null;
+  average_cadence_spm?: number | null;
+  average_stride_length_meters?: number | null;
+  average_vertical_oscillation_cm?: number | null;
+  average_vertical_ratio_percent?: number | null;
+  average_ground_contact_time_ms?: number | null;
+  estimated_sweat_loss_ml?: number | null;
+  beginning_stamina_percent?: number | null;
+  ending_stamina_percent?: number | null;
+  training_effect_aerobic?: number | null;
+  training_effect_anaerobic?: number | null;
+  training_benefit?: string | null;
+  exercise_load?: number | null;
+  vo2_max?: number | null;
+  laps?: ActivityLapSummary[];
+  zones?: ActivityZoneSummary[];
+  error?: string;
+}
+
 function compressActivity(a: any): ActivitySummary {
   const summary: ActivitySummary = {
     date: a.startTimeLocal ?? (a.startTimeInSeconds ? new Date(a.startTimeInSeconds * 1000).toISOString().split('T')[0] : '?'),
@@ -258,6 +311,96 @@ export class HealthTool {
       return { activities: raw.map(compressActivity) };
     } catch (e: any) {
       return { error: e.message };
+    }
+  }
+
+  async getActivityDetail(user: HealthUser, activityId: string): Promise<ActivityDetailResult> {
+    if (!/^\d+$/.test(activityId)) {
+      return { activity_id: activityId, error: 'activityId must be numeric' };
+    }
+    try {
+      const res = await pool.query(
+        `SELECT activity_id, activity_name, activity_type, date, duration_seconds, calories,
+                distance_meters, avg_heart_rate, max_heart_rate, elevation_gain,
+                average_pace_seconds_per_km, average_power_watts, average_cadence_spm,
+                average_stride_length_meters, average_vertical_oscillation_cm,
+                average_vertical_ratio_percent, average_ground_contact_time_ms,
+                estimated_sweat_loss_ml, beginning_stamina_percent, ending_stamina_percent,
+                training_effect_aerobic, training_effect_anaerobic, training_benefit,
+                exercise_load, vo2_max
+         FROM health_activities
+         WHERE user_id = $1 AND activity_id = $2`,
+        [user.id, activityId],
+      );
+      if (res.rows.length === 0) {
+        return { activity_id: activityId, error: 'Activity not found' };
+      }
+      // No exercise-set correction data was selected above (it's irrelevant
+      // to laps/zones/dynamics) — applyActivityCorrection isn't needed here.
+      const row = res.rows[0];
+
+      const [lapsRes, zonesRes] = await Promise.all([
+        pool.query(
+          `SELECT lap_index, duration_seconds, distance_meters, pace_seconds_per_km,
+                  average_heart_rate, average_power_watts, average_cadence_spm
+           FROM health_activity_laps
+           WHERE user_id = $1 AND activity_id = $2
+           ORDER BY lap_index ASC`,
+          [user.id, activityId],
+        ),
+        pool.query(
+          `SELECT metric_type, zone_number, duration_seconds, percent
+           FROM health_activity_zones
+           WHERE user_id = $1 AND activity_id = $2
+           ORDER BY metric_type ASC, zone_number ASC`,
+          [user.id, activityId],
+        ),
+      ]);
+
+      return {
+        activity_id: row.activity_id,
+        name: row.activity_name ?? row.activity_type ?? 'Activity',
+        type: row.activity_type,
+        date: row.date,
+        duration_seconds: row.duration_seconds != null ? Number(row.duration_seconds) : null,
+        calories: row.calories != null ? Number(row.calories) : null,
+        distance_meters: row.distance_meters != null ? Number(row.distance_meters) : null,
+        avg_heart_rate: row.avg_heart_rate != null ? Number(row.avg_heart_rate) : null,
+        max_heart_rate: row.max_heart_rate != null ? Number(row.max_heart_rate) : null,
+        elevation_gain_meters: row.elevation_gain != null ? Number(row.elevation_gain) : null,
+        average_pace_seconds_per_km: row.average_pace_seconds_per_km != null ? Number(row.average_pace_seconds_per_km) : null,
+        average_power_watts: row.average_power_watts != null ? Number(row.average_power_watts) : null,
+        average_cadence_spm: row.average_cadence_spm != null ? Number(row.average_cadence_spm) : null,
+        average_stride_length_meters: row.average_stride_length_meters != null ? Number(row.average_stride_length_meters) : null,
+        average_vertical_oscillation_cm: row.average_vertical_oscillation_cm != null ? Number(row.average_vertical_oscillation_cm) : null,
+        average_vertical_ratio_percent: row.average_vertical_ratio_percent != null ? Number(row.average_vertical_ratio_percent) : null,
+        average_ground_contact_time_ms: row.average_ground_contact_time_ms != null ? Number(row.average_ground_contact_time_ms) : null,
+        estimated_sweat_loss_ml: row.estimated_sweat_loss_ml != null ? Number(row.estimated_sweat_loss_ml) : null,
+        beginning_stamina_percent: row.beginning_stamina_percent != null ? Number(row.beginning_stamina_percent) : null,
+        ending_stamina_percent: row.ending_stamina_percent != null ? Number(row.ending_stamina_percent) : null,
+        training_effect_aerobic: row.training_effect_aerobic != null ? Number(row.training_effect_aerobic) : null,
+        training_effect_anaerobic: row.training_effect_anaerobic != null ? Number(row.training_effect_anaerobic) : null,
+        training_benefit: row.training_benefit ?? null,
+        exercise_load: row.exercise_load != null ? Number(row.exercise_load) : null,
+        vo2_max: row.vo2_max != null ? Number(row.vo2_max) : null,
+        laps: lapsRes.rows.map((l: any) => ({
+          lap: l.lap_index,
+          duration_seconds: l.duration_seconds != null ? Number(l.duration_seconds) : null,
+          distance_meters: l.distance_meters != null ? Number(l.distance_meters) : null,
+          pace_seconds_per_km: l.pace_seconds_per_km != null ? Number(l.pace_seconds_per_km) : null,
+          avg_heart_rate: l.average_heart_rate != null ? Number(l.average_heart_rate) : null,
+          avg_power_watts: l.average_power_watts != null ? Number(l.average_power_watts) : null,
+          avg_cadence_spm: l.average_cadence_spm != null ? Number(l.average_cadence_spm) : null,
+        })),
+        zones: zonesRes.rows.map((z: any) => ({
+          metric: z.metric_type,
+          zone: z.zone_number,
+          duration_seconds: z.duration_seconds != null ? Number(z.duration_seconds) : null,
+          percent: z.percent != null ? Number(z.percent) : null,
+        })),
+      };
+    } catch (e: any) {
+      return { activity_id: activityId, error: e.message };
     }
   }
 

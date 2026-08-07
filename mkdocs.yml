@@ -64,6 +64,7 @@ nav:
       - Knowledge: roadmap/knowledge.md
       - Unified Knowledge Graph Execution: roadmap/unified-knowledge-graph-execution.md
       - Detailed Health Activities and Maps: roadmap/health-detailed-activities.md
+      - Strava Integration for Health: roadmap/health-strava-integration.md
       - n8n Workflow Integration: roadmap/n8n-workflow-integration.md
       - Native iOS Client: roadmap/ios-client.md
       - Control API v1 Gap Audit (2026-06-29): roadmap/control-api-v1-gap-audit-2026-06-29.md

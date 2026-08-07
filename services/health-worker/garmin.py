@@ -17,6 +17,7 @@ Data fetch:
 
 import json
 import logging
+import math
 import os
 import threading
 import queue
@@ -27,6 +28,11 @@ from datetime import datetime, date, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Bumped whenever the field mapping below changes shape. Stored as
+# health_activities.payload_version so historical rows can be reprocessed
+# from provider_summary_raw/provider_details_raw without re-fetching Garmin.
+MAPPER_VERSION = 1
 
 _AUTH_WORKER_URL = os.getenv("AUTH_WORKER_URL", "").rstrip("/")
 _AUTH_WORKER_SECRET = os.getenv("AUTH_WORKER_SECRET", "")
@@ -495,6 +501,144 @@ def fetch_daily_health(session_dump: str, date: str) -> dict:
         raise
 
 
+# ---------------------------------------------------------------------------
+# Provider-neutral field mapping
+#
+# Garmin Connect is an unofficial/internal API (see docs/roadmap/
+# health-detailed-activities.md, "Provider boundary"): field names below are
+# the community-confirmed shapes for `get_activities`/`get_activities_by_date`
+# list items. Stamina and sweat-loss fields are newer/less documented and are
+# mapped defensively with multiple candidate keys — if none match, the
+# normalized value stays None (never inferred) while the untouched Garmin
+# payload is still preserved in raw_data for future reprocessing under a
+# bumped MAPPER_VERSION.
+# ---------------------------------------------------------------------------
+
+
+def _finite_or_none(value: Any) -> float | None:
+    """Distinguishes zero from missing and rejects non-finite numbers."""
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def _first_present(activity: dict, *candidates: str) -> tuple[Any, str | None]:
+    """Returns (raw_value, field_name) for the first candidate key with a non-null value."""
+    for key in candidates:
+        raw = activity.get(key)
+        if raw is not None:
+            return raw, key
+    return None, None
+
+
+def _first_numeric(
+    activity: dict, provenance: dict[str, str], provenance_key: str, *candidates: str
+) -> float | None:
+    raw, used_key = _first_present(activity, *candidates)
+    value = _finite_or_none(raw)
+    if value is not None and used_key:
+        provenance[provenance_key] = used_key
+    return value
+
+
+def _speed_to_pace_seconds_per_km(speed_meters_per_second: float | None) -> float | None:
+    if speed_meters_per_second is None or speed_meters_per_second <= 0:
+        return None
+    return 1000.0 / speed_meters_per_second
+
+
+def normalize_activity_summary(activity: dict) -> dict[str, Any]:
+    """
+    Maps a raw Garmin activity (from get_activities/get_activities_by_date)
+    into the provider-neutral, explicit-unit shape stored on health_activities.
+
+    Returns { "normalized": {...}, "field_provenance": {...} }. Ambiguous
+    mappings record which Garmin field was used in "field_provenance" so the
+    mapping can be audited/corrected later without losing raw_data.
+    """
+    activity_type = activity.get("activityType") or {}
+    event_type = activity.get("eventType") or {}
+    provenance: dict[str, str] = {}
+
+    avg_speed = _first_numeric(activity, provenance, "average_pace_seconds_per_km", "averageSpeed")
+    max_speed = _first_numeric(activity, provenance, "best_pace_seconds_per_km", "maxSpeed")
+
+    normalized: dict[str, Any] = {
+        "provider": "garmin",
+        "provider_activity_id": str(activity.get("activityId")) if activity.get("activityId") else None,
+        "sport_type": activity_type.get("typeKey"),
+        "sub_sport_type": event_type.get("typeKey"),
+        "timezone": activity.get("timeZoneId") or activity.get("timeZoneUnitDTO", {}).get("timeZone"),
+        "moving_time_seconds": _first_numeric(
+            activity, provenance, "moving_time_seconds", "movingDuration"
+        ),
+        "elapsed_time_seconds": _first_numeric(
+            activity, provenance, "elapsed_time_seconds", "elapsedDuration", "duration"
+        ),
+        "average_pace_seconds_per_km": _speed_to_pace_seconds_per_km(avg_speed),
+        "best_pace_seconds_per_km": _speed_to_pace_seconds_per_km(max_speed),
+        "average_power_watts": _first_numeric(activity, provenance, "average_power_watts", "avgPower"),
+        "max_power_watts": _first_numeric(activity, provenance, "max_power_watts", "maxPower"),
+        "min_elevation_meters": _first_numeric(activity, provenance, "min_elevation_meters", "minElevation"),
+        "max_elevation_meters": _first_numeric(activity, provenance, "max_elevation_meters", "maxElevation"),
+        "training_effect_aerobic": _first_numeric(
+            activity, provenance, "training_effect_aerobic", "aerobicTrainingEffect"
+        ),
+        "training_effect_anaerobic": _first_numeric(
+            activity, provenance, "training_effect_anaerobic", "anaerobicTrainingEffect"
+        ),
+        "training_benefit": activity.get("trainingEffectLabel"),
+        "exercise_load": _first_numeric(
+            activity, provenance, "exercise_load", "activityTrainingLoad", "trainingLoad"
+        ),
+        "vo2_max": _first_numeric(activity, provenance, "vo2_max", "vO2MaxValue", "vo2MaxValue"),
+        "average_cadence_spm": _first_numeric(
+            activity, provenance, "average_cadence_spm", "averageRunningCadenceInStepsPerMinute"
+        ),
+        "max_cadence_spm": _first_numeric(
+            activity, provenance, "max_cadence_spm", "maxRunningCadenceInStepsPerMinute"
+        ),
+        "average_ground_contact_time_ms": _first_numeric(
+            activity, provenance, "average_ground_contact_time_ms", "avgGroundContactTime"
+        ),
+        "average_vertical_ratio_percent": _first_numeric(
+            activity, provenance, "average_vertical_ratio_percent", "avgVerticalRatio"
+        ),
+        "average_vertical_oscillation_cm": _first_numeric(
+            activity, provenance, "average_vertical_oscillation_cm", "avgVerticalOscillation"
+        ),
+        # Garmin reports stride length in centimeters; normalize to meters.
+        "average_stride_length_meters": None,
+        # Best-effort/unconfirmed field names (Garmin "Real-Time Stamina" and
+        # hydration features are not publicly documented). Left None unless a
+        # candidate key is actually present.
+        "estimated_sweat_loss_ml": _first_numeric(
+            activity, provenance, "estimated_sweat_loss_ml", "sweatLoss", "estimatedSweatLoss"
+        ),
+        "beginning_stamina_percent": _first_numeric(
+            activity, provenance, "beginning_stamina_percent", "beginningPotential"
+        ),
+        "ending_stamina_percent": _first_numeric(
+            activity, provenance, "ending_stamina_percent", "endingPotential"
+        ),
+        "minimum_stamina_percent": _first_numeric(
+            activity, provenance, "minimum_stamina_percent", "minAvailableStamina"
+        ),
+    }
+
+    stride_cm = _first_numeric(activity, provenance, "average_stride_length_meters", "avgStrideLength")
+    if stride_cm is not None:
+        normalized["average_stride_length_meters"] = stride_cm / 100.0
+
+    return {"normalized": normalized, "field_provenance": provenance}
+
+
 def fetch_recent_activities(session_dump: str, limit: int = 10, date: str = None) -> list[dict]:
     """
     Fetches activities from Garmin using garminconnect library.
@@ -562,6 +706,17 @@ def fetch_recent_activities(session_dump: str, limit: int = 10, date: str = None
                     activity_detail["activeSets"] = activity.get("activeSets")
                     activity_detail["totalExerciseReps"] = activity.get("totalExerciseReps")
                     activity_detail["summarizedExerciseSets"] = activity.get("summarizedExerciseSets")
+
+                # Lossless summary: keep the full, unreduced Garmin dict plus
+                # the provider-neutral normalized mapping (Phase 1 of
+                # docs/roadmap/health-detailed-activities.md). `activity_detail`
+                # above is kept only for backward compatibility with older
+                # consumers of this function's return shape.
+                mapping = normalize_activity_summary(activity)
+                activity_detail["summaryRaw"] = activity
+                activity_detail["normalized"] = mapping["normalized"]
+                activity_detail["fieldProvenance"] = mapping["field_provenance"]
+                activity_detail["payloadVersion"] = MAPPER_VERSION
 
                 results.append(activity_detail)
                 logger.debug(f"7.{idx} ✓ Activity added to results")
@@ -637,4 +792,425 @@ def update_activity_exercise_sets(
     return {
         "activity_id": activity_id,
         "exercise_sets": verified,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — detailed activity import (laps + time-in-zone)
+#
+# Route/GPS samples are out of scope here (Phase 3 of docs/roadmap/
+# health-detailed-activities.md). This promotes the calls that previously
+# only existed in app.py's /debug-activities into a supported path.
+# ---------------------------------------------------------------------------
+
+
+def _map_laps(splits: dict | None) -> list[dict[str, Any]]:
+    if not isinstance(splits, dict):
+        return []
+    lap_dtos = splits.get("lapDTOs") or []
+    laps: list[dict[str, Any]] = []
+    cumulative_seconds = 0.0
+    for idx, lap in enumerate(lap_dtos):
+        if not isinstance(lap, dict):
+            continue
+        duration = _finite_or_none(lap.get("duration"))
+        avg_speed = _finite_or_none(lap.get("averageSpeed"))
+        laps.append({
+            "lap_index": idx + 1,
+            "start_offset_seconds": cumulative_seconds,
+            "duration_seconds": duration,
+            "distance_meters": _finite_or_none(lap.get("distance")),
+            "pace_seconds_per_km": _speed_to_pace_seconds_per_km(avg_speed),
+            "average_heart_rate": _finite_or_none(lap.get("averageHR")),
+            "average_power_watts": _finite_or_none(lap.get("averagePower")),
+            "average_cadence_spm": _finite_or_none(lap.get("averageRunCadence")),
+            "ascent_meters": _finite_or_none(lap.get("elevationGain")),
+            "descent_meters": _finite_or_none(lap.get("elevationLoss")),
+            "raw_data": lap,
+        })
+        if duration is not None:
+            cumulative_seconds += duration
+    return laps
+
+
+def _map_zones(zones_response: Any, metric_type: str) -> list[dict[str, Any]]:
+    if isinstance(zones_response, dict):
+        entries = zones_response.get("zones") or zones_response.get("timeInZones") or []
+    elif isinstance(zones_response, list):
+        entries = zones_response
+    else:
+        entries = []
+
+    total_seconds = sum(
+        _finite_or_none(z.get("secsInZone")) or 0
+        for z in entries
+        if isinstance(z, dict)
+    )
+    mapped: list[dict[str, Any]] = []
+    for z in entries:
+        if not isinstance(z, dict):
+            continue
+        duration = _finite_or_none(z.get("secsInZone"))
+        mapped.append({
+            "metric_type": metric_type,
+            "zone_number": z.get("zoneNumber"),
+            "lower_bound": _finite_or_none(z.get("zoneLowBoundary")),
+            "upper_bound": _finite_or_none(z.get("zoneHighBoundary")),
+            "duration_seconds": duration,
+            "percent": (
+                (duration / total_seconds * 100.0)
+                if duration is not None and total_seconds
+                else None
+            ),
+            "raw_data": z,
+        })
+    return mapped
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — route and time series
+#
+# Douglas-Peucker simplification and polyline encoding are implemented here
+# rather than adding a dependency: both are small, well-known, deterministic
+# algorithms with no Garmin-specific ambiguity — unlike the best-effort
+# field-name guessing in normalize_activity_summary above. Encoding follows
+# Google's precision-5 encoded polyline format, decodable by any standard
+# map library (Leaflet, MapLibre, Mapbox, ...), matching the roadmap's
+# "renderer-neutral route contract" requirement.
+# ---------------------------------------------------------------------------
+
+
+def _perpendicular_distance(
+    point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]
+) -> float:
+    x, y = point
+    x1, y1 = start
+    x2, y2 = end
+    if (x1, y1) == (x2, y2):
+        return math.hypot(x - x1, y - y1)
+    num = abs((y2 - y1) * x - (x2 - x1) * y + x2 * y1 - y2 * x1)
+    den = math.hypot(y2 - y1, x2 - x1)
+    return num / den
+
+
+def _douglas_peucker(points: list[tuple[float, float]], epsilon: float) -> list[tuple[float, float]]:
+    """Reduces a polyline to within `epsilon` tolerance (same units as the
+    point coordinates — degrees, for lat/lon pairs)."""
+    if len(points) < 3:
+        return list(points)
+
+    start, end = points[0], points[-1]
+    max_dist = -1.0
+    max_index = 0
+    for i in range(1, len(points) - 1):
+        dist = _perpendicular_distance(points[i], start, end)
+        if dist > max_dist:
+            max_dist = dist
+            max_index = i
+
+    if max_dist > epsilon:
+        left = _douglas_peucker(points[: max_index + 1], epsilon)
+        right = _douglas_peucker(points[max_index:], epsilon)
+        return left[:-1] + right
+    return [start, end]
+
+
+def simplify_route(
+    points: list[tuple[float, float]],
+    epsilon: float = 0.00005,
+    max_points: int = 500,
+) -> list[tuple[float, float]]:
+    """
+    Simplifies a route to at most `max_points` points, for list previews and
+    fast initial rendering (the roadmap's "simplified route" contract).
+    Increases epsilon (coarser simplification) until the output fits, rather
+    than truncating — truncating would distort the shape instead of just
+    reducing detail.
+    """
+    if len(points) <= max_points:
+        return list(points)
+
+    simplified = _douglas_peucker(points, epsilon)
+    attempts = 0
+    while len(simplified) > max_points and attempts < 20:
+        epsilon *= 1.8
+        simplified = _douglas_peucker(points, epsilon)
+        attempts += 1
+    return simplified
+
+
+def _encode_unsigned_number(num: int) -> str:
+    chunks = []
+    while num >= 0x20:
+        chunks.append((0x20 | (num & 0x1F)) + 63)
+        num >>= 5
+    chunks.append(num + 63)
+    return "".join(chr(c) for c in chunks)
+
+
+def _encode_signed_number(num: int) -> str:
+    shifted = ~(num << 1) if num < 0 else (num << 1)
+    return _encode_unsigned_number(shifted)
+
+
+def encode_polyline(points: list[tuple[float, float]], precision: int = 5) -> str:
+    """Encodes (lat, lon) pairs using Google's precision-5 polyline algorithm."""
+    factor = 10 ** precision
+    result: list[str] = []
+    prev_lat = 0
+    prev_lon = 0
+
+    for lat, lon in points:
+        lat_i = round(lat * factor)
+        lon_i = round(lon * factor)
+        result.append(_encode_signed_number(lat_i - prev_lat))
+        result.append(_encode_signed_number(lon_i - prev_lon))
+        prev_lat = lat_i
+        prev_lon = lon_i
+
+    return "".join(result)
+
+
+def _route_bounds(geo: dict) -> dict[str, Any] | None:
+    if not isinstance(geo, dict):
+        return None
+    bounds = {
+        "min_lat": _finite_or_none(geo.get("minLat")),
+        "max_lat": _finite_or_none(geo.get("maxLat")),
+        "min_lon": _finite_or_none(geo.get("minLon")),
+        "max_lon": _finite_or_none(geo.get("maxLon")),
+    }
+    if all(v is None for v in bounds.values()):
+        return None
+    return bounds
+
+
+def _parse_activity_metrics(details: dict) -> list[dict[str, Any]]:
+    """
+    Maps activityDetailMetrics (indexed via metricDescriptors) into
+    provider-neutral sample dicts. Field-key candidates follow the
+    community-documented Garmin Connect activity-details shape; unconfirmed
+    device-specific fields (stamina) are left None rather than guessed, same
+    policy as normalize_activity_summary.
+    """
+    descriptors = details.get("metricDescriptors") or []
+    key_to_index: dict[str, int] = {}
+    for d in descriptors:
+        if not isinstance(d, dict):
+            continue
+        key = d.get("key")
+        index = d.get("metricsIndex")
+        if key is not None and index is not None:
+            key_to_index[key] = index
+
+    def value(entry_metrics: list, *candidates: str) -> float | None:
+        for key in candidates:
+            index = key_to_index.get(key)
+            if index is not None and 0 <= index < len(entry_metrics):
+                v = _finite_or_none(entry_metrics[index])
+                if v is not None:
+                    return v
+        return None
+
+    entries = details.get("activityDetailMetrics") or []
+    samples: list[dict[str, Any]] = []
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        m = entry.get("metrics") or []
+
+        speed = value(m, "directSpeed")
+        stride_cm = value(m, "directStrideLength")
+
+        samples.append({
+            "sample_index": i,
+            "timestamp": value(m, "directTimestamp"),
+            "elapsed_seconds": value(m, "directElapsedDuration", "sumElapsedDuration"),
+            "distance_meters": value(m, "directDistance", "sumDistance"),
+            "elevation_meters": value(m, "directElevation"),
+            "heart_rate_bpm": value(m, "directHeartRate"),
+            "speed_meters_per_second": speed,
+            "pace_seconds_per_km": _speed_to_pace_seconds_per_km(speed),
+            "power_watts": value(m, "directPower", "directPowerObserved"),
+            "cadence_spm": value(m, "directRunCadence", "directBikeCadence"),
+            "stamina_percent": value(m, "directPotential"),
+            "stamina_potential_percent": value(m, "directBodyBatteryEstimated"),
+            "ground_contact_time_ms": value(m, "directGroundContactTime"),
+            "stride_length_meters": (stride_cm / 100.0) if stride_cm is not None else None,
+            "vertical_oscillation_cm": value(m, "directVerticalOscillation"),
+            "run_walk_state": None,
+            "latitude": None,
+            "longitude": None,
+        })
+    return samples
+
+
+def _merge_gps_points(
+    samples: list[dict[str, Any]], polyline_points: list[dict]
+) -> list[dict[str, Any]]:
+    """
+    Fills latitude/longitude (and elevation when the metric series lacks it)
+    onto `samples` using a two-pointer merge against `geoPolylineDTO.polyline`
+    — both series are chronological, so this avoids an O(n*m) nearest-point
+    search. If `samples` is empty (no activityDetailMetrics came back), the
+    sample list is built directly from the polyline points instead.
+    """
+    def point_time(point: dict) -> float | None:
+        raw, _ = _first_present(point, "time", "timestamp")
+        return _finite_or_none(raw)
+
+    def point_lat(point: dict) -> float | None:
+        raw, _ = _first_present(point, "lat", "latitude")
+        return _finite_or_none(raw)
+
+    def point_lon(point: dict) -> float | None:
+        raw, _ = _first_present(point, "lon", "longitude")
+        return _finite_or_none(raw)
+
+    def point_elevation(point: dict) -> float | None:
+        raw, _ = _first_present(point, "altitude", "elevation")
+        return _finite_or_none(raw)
+
+    if not polyline_points:
+        return samples
+
+    if not samples:
+        built: list[dict[str, Any]] = []
+        first_time = point_time(polyline_points[0])
+        for i, p in enumerate(polyline_points):
+            t = point_time(p)
+            built.append({
+                "sample_index": i,
+                "timestamp": t,
+                "elapsed_seconds": (
+                    (t - first_time) if (t is not None and first_time is not None) else None
+                ),
+                "latitude": point_lat(p),
+                "longitude": point_lon(p),
+                "elevation_meters": point_elevation(p),
+                "distance_meters": None,
+                "heart_rate_bpm": None,
+                "pace_seconds_per_km": None,
+                "speed_meters_per_second": None,
+                "power_watts": None,
+                "cadence_spm": None,
+                "stamina_percent": None,
+                "stamina_potential_percent": None,
+                "ground_contact_time_ms": None,
+                "stride_length_meters": None,
+                "vertical_oscillation_cm": None,
+                "run_walk_state": None,
+            })
+        return built
+
+    j = 0
+    for sample in samples:
+        s_time = sample.get("timestamp")
+        if s_time is None:
+            continue
+        while j + 1 < len(polyline_points):
+            current_time = point_time(polyline_points[j])
+            next_time = point_time(polyline_points[j + 1])
+            if next_time is None:
+                break
+            if current_time is None or abs(next_time - s_time) <= abs(current_time - s_time):
+                j += 1
+            else:
+                break
+        gps_point = polyline_points[j]
+        sample["latitude"] = point_lat(gps_point)
+        sample["longitude"] = point_lon(gps_point)
+        if sample.get("elevation_meters") is None:
+            sample["elevation_meters"] = point_elevation(gps_point)
+
+    return samples
+
+
+def fetch_activity_details(session_dump: str, activity_id: str) -> dict[str, Any]:
+    """
+    Fetches laps, time-in-zone aggregates, and route/time-series samples for
+    one activity.
+
+    Each Garmin call is isolated: one failed/unsupported optional resource
+    (e.g. a device that doesn't report power zones, or an indoor activity
+    with no GPS route) must not abort the whole detail sync — the caller
+    decides whether the overall result is 'complete' or 'partial' based on
+    `errors`.
+
+    Returns {
+      "laps": [...], "zones": [...], "samples": [...],
+      "route_bounds": {min_lat, max_lat, min_lon, max_lon} | None,
+      "route_simplified_polyline": <encoded string> | None,
+      "details_raw": { "splits": ..., "hr_zones": ..., "power_zones": ...,
+                        "activity_details": ... },
+      "errors": { "<resource>": "<message>" },
+      "payload_version": MAPPER_VERSION,
+    }
+    """
+    if not activity_id or not str(activity_id).isdigit():
+        raise ValueError("activity_id must be a positive numeric Garmin activity id")
+    activity_id = str(activity_id)
+
+    garmin = _garmin_from_session(session_dump)
+    laps: list[dict[str, Any]] = []
+    zones: list[dict[str, Any]] = []
+    details_raw: dict[str, Any] = {}
+    errors: dict[str, str] = {}
+
+    try:
+        splits = garmin.get_activity_splits(activity_id)
+        details_raw["splits"] = splits
+        laps = _map_laps(splits)
+    except Exception as e:
+        logger.warning(f"activity {activity_id}: laps unavailable: {e}")
+        errors["laps"] = str(e)
+
+    try:
+        hr_zones = garmin.get_activity_hr_in_timezones(activity_id)
+        details_raw["hr_zones"] = hr_zones
+        zones.extend(_map_zones(hr_zones, "heart_rate"))
+    except Exception as e:
+        logger.warning(f"activity {activity_id}: HR zones unavailable: {e}")
+        errors["zones_heart_rate"] = str(e)
+
+    try:
+        power_zones = garmin.get_activity_power_in_timezones(activity_id)
+        details_raw["power_zones"] = power_zones
+        zones.extend(_map_zones(power_zones, "power"))
+    except Exception as e:
+        logger.warning(f"activity {activity_id}: power zones unavailable: {e}")
+        errors["zones_power"] = str(e)
+
+    samples: list[dict[str, Any]] = []
+    route_bounds: dict[str, Any] | None = None
+    route_simplified_polyline: str | None = None
+
+    try:
+        activity_details = garmin.get_activity_details(activity_id, maxchart=2000, maxpoly=2000)
+        details_raw["activity_details"] = activity_details
+        samples = _parse_activity_metrics(activity_details)
+        geo = activity_details.get("geoPolylineDTO") or {}
+        samples = _merge_gps_points(samples, geo.get("polyline") or [])
+        route_bounds = _route_bounds(geo)
+
+        coords = [
+            (s["latitude"], s["longitude"])
+            for s in samples
+            if s.get("latitude") is not None and s.get("longitude") is not None
+        ]
+        if coords:
+            route_simplified_polyline = encode_polyline(simplify_route(coords))
+    except Exception as e:
+        logger.warning(f"activity {activity_id}: route/samples unavailable: {e}")
+        errors["route"] = str(e)
+
+    return {
+        "laps": laps,
+        "zones": zones,
+        "samples": samples,
+        "route_bounds": route_bounds,
+        "route_simplified_polyline": route_simplified_polyline,
+        "details_raw": details_raw,
+        "errors": errors,
+        "payload_version": MAPPER_VERSION,
     }

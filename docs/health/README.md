@@ -5,6 +5,9 @@ Allerac integrates with Garmin Connect to sync daily health metrics (steps, slee
 The planned expansion for complete activity metrics, GPS routes, synchronized
 time series, maps, privacy controls, and assistant analysis is documented in
 [Detailed Health Activities and Maps](../roadmap/health-detailed-activities.md).
+The multi-provider Strava connection, webhook, streams, and activity
+reconciliation design is documented in
+[Strava Integration for Health](../roadmap/health-strava-integration.md).
 
 ## Architecture
 

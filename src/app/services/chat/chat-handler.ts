@@ -343,7 +343,7 @@ export async function handleChatMessage(
         } else if (toolName === 'learn_instruction') {
           toolResult = await buildInstructionTools(userId, domainSlug ?? 'chat', convId)
             .learn_instruction(toolArgs);
-        } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'].includes(toolName)) {
+        } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities', 'get_activity_detail'].includes(toolName)) {
           const userRes = await pool.query('SELECT id, email, name FROM users WHERE id = $1', [userId]);
           const u = userRes.rows[0];
           if (!u) {
@@ -359,6 +359,8 @@ export async function handleChatMessage(
               toolResult = await healthTool.getDailySnapshot(healthUser, toolArgs.date);
             } else if (toolName === 'get_recent_activities') {
               toolResult = await healthTool.getRecentActivities(healthUser, toolArgs.limit || 10, toolArgs.start_date, toolArgs.end_date);
+            } else if (toolName === 'get_activity_detail') {
+              toolResult = await healthTool.getActivityDetail(healthUser, toolArgs.activity_id);
             } else {
               toolResult = await healthTool.getGarminStatus(healthUser);
             }

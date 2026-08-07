@@ -1,6 +1,15 @@
 # Detailed Health Activities and Maps
 
-**Status:** Proposed
+**Status:** In progress — Phase 1 (lossless summaries), Phase 2 (laps + zones),
+Phase 3 (route/time series, privacy-zone redaction, deletion), and Phase 4
+(activity detail page: interactive map, synchronized charts, laps/zones/
+running-dynamics panels, a sync action, loading/degraded states, and inline
+rendering on the /health dashboard for the selected day's activity)
+implemented. Deletion exists only as an API (`DELETE /api/v1/health/
+activities/{activityId}`) — deliberately no UI trigger, to avoid accidental
+data loss. Phase 5 (assistant intelligence) has a first slice done (activity
+context auto-injected into /health chat, `get_activity_detail` tool for
+other activities); the rest remains proposed.
 
 **Scope:** Full Garmin activity ingestion, maps, time series, activity details,
 Health UI, assistant access, privacy, and historical analysis.
@@ -8,11 +17,17 @@ Health UI, assistant access, privacy, and historical analysis.
 **Depends on:** Existing Garmin connection, `health-worker`,
 `health_activities`, Health Control API, and domain-scoped access control.
 
+**Related:** [Strava Integration for Health](health-strava-integration.md), which
+extends this activity model to multiple providers and reconciles Garmin
+activities uploaded to Strava.
+
 ## Decision
 
 Expand the Health domain from activity summaries into a private activity record
-that preserves the complete provider response and exposes stable,
-provider-neutral fields for the application.
+that preserves complete provider responses and exposes stable, provider-neutral
+fields for the application. Garmin is the first detailed provider; the storage
+and API contracts must also support Strava without duplicating the activity
+experience.
 
 For supported Garmin activities, Allerac should import:
 
@@ -119,7 +134,7 @@ are optional.
 | Elevation | ascent, descent, minimum/maximum elevation, elevation samples |
 | Power | average/maximum power, power zones, timestamped samples |
 | Stamina | beginning/ending potential, minimum stamina, stamina samples |
-| Training | primary benefit, aerobic/anaerobic effect, exercise load, intensity minutes |
+| Training | primary benefit, aerobic/anaerobic effect, exercise load, intensity minutes, VO2 max |
 | Running dynamics | cadence, stride length, vertical ratio/oscillation, ground contact time |
 | Impact | impact load, actual distance, impact load factor when available |
 | Route | GPS samples, bounds, detailed geometry, simplified polyline |
@@ -169,6 +184,7 @@ training_effect_aerobic
 training_effect_anaerobic
 training_benefit
 exercise_load
+vo2_max
 average_cadence_spm
 max_cadence_spm
 average_stride_length_meters
@@ -374,9 +390,10 @@ Activity routes are sensitive location and routine data.
 - Route previews use redacted geometry.
 - Exports clearly indicate whether detailed location data is included.
 - Deleting an activity deletes its laps, zones, samples, route, cached previews,
-  and derived analysis.
-- Disconnecting Garmin does not silently delete history; the UI offers a
-  separate explicit deletion choice.
+  and derived analysis. Deletion is API-only (no UI button), a deliberate
+  choice to prevent accidental data loss from a stray click.
+- Disconnecting Garmin does not silently delete history; a separate,
+  explicit `DELETE` call is required.
 
 Protected locations should be stored separately and encrypted or represented in
 a way that does not reveal the precise location in ordinary queries.
@@ -438,6 +455,13 @@ Garmin Connect access currently relies on unofficial/internal endpoints through
 3. Add synchronized charts and route selection.
 4. Add laps, zones, running dynamics, and hydration panels.
 5. Add loading, partial-data, unsupported, and degraded states.
+
+Delivered as: a single-color route line with start/finish markers and a
+hover-synced position marker (chart hover moves the map marker); full
+click-drag segment selection and the "Map modes" section's per-metric route
+coloring (pace/HR/elevation/power/cadence/run-walk) are deferred — the route
+contract already carries per-sample metrics, so adding those modes later is
+additive, not a rework.
 
 ### Phase 5 — Health intelligence
 

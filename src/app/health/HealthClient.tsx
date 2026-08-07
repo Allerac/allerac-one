@@ -14,6 +14,8 @@ import ChatInput from '@/app/components/chat/ChatInput';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import HealthDashboard from '@/app/components/health/HealthDashboard';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
+import { formatPace } from '@/app/components/health/ActivityCharts';
+import type { ActivityChatContext } from '@/app/components/health/RecentActivity';
 
 type HealthPeriod = 'today' | '3days' | '7days' | '30days';
 
@@ -26,6 +28,79 @@ function buildHealthViewContext(period: HealthPeriod, selectedDate: string): str
   const endDate = new Date().toISOString().split('T')[0];
   const startDate = new Date(Date.now() - (days - 1) * 86400000).toISOString().split('T')[0];
   return `## Health dashboard context\nThe user is currently viewing their health dashboard for the last ${days} days (${fmt(startDate)} → ${fmt(endDate)}). Use this as the default date range for health queries unless they specify otherwise.`;
+}
+
+function fmtDuration(seconds: number | null): string {
+  if (!seconds || seconds <= 0) return '—';
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Mirrors exactly what ActivityDetailPanel.tsx renders on screen for the
+// selected day's activity (header stats, dynamics, laps, zones), so the
+// assistant can answer questions grounded in what the user is looking at —
+// deliberately excludes route/GPS data (see ActivityChatContext's docstring).
+function buildActivityContext(ctx: ActivityChatContext | null): string {
+  if (!ctx) return '';
+  const a = ctx.activity;
+  const lines: string[] = ['## Currently viewed activity'];
+  lines.push(`${a.activity_name ?? a.activity_type ?? 'Activity'} (${a.activity_type ?? 'unknown'}) on ${a.date}`);
+
+  const stats = [
+    a.duration_seconds ? `duration ${fmtDuration(a.duration_seconds)}` : null,
+    a.distance_meters ? `distance ${(a.distance_meters / 1000).toFixed(2)}km` : null,
+    a.calories ? `${Math.round(a.calories)}kcal` : null,
+    a.avg_heart_rate ? `avg HR ${Math.round(a.avg_heart_rate)}bpm` : null,
+    a.max_heart_rate ? `max HR ${Math.round(a.max_heart_rate)}bpm` : null,
+    a.average_pace_seconds_per_km ? `pace ${formatPace(a.average_pace_seconds_per_km)}` : null,
+    a.average_power_watts ? `power ${Math.round(a.average_power_watts)}W` : null,
+    a.elevation_gain ? `elevation +${Math.round(a.elevation_gain)}m` : null,
+  ].filter(Boolean);
+  if (stats.length > 0) lines.push(stats.join(', '));
+
+  const dynamics = [
+    a.average_cadence_spm ? `cadence ${Math.round(Number(a.average_cadence_spm))}spm` : null,
+    a.average_stride_length_meters ? `stride ${Number(a.average_stride_length_meters).toFixed(2)}m` : null,
+    a.average_vertical_oscillation_cm ? `vertical oscillation ${Number(a.average_vertical_oscillation_cm).toFixed(1)}cm` : null,
+    a.average_vertical_ratio_percent ? `vertical ratio ${Number(a.average_vertical_ratio_percent).toFixed(1)}%` : null,
+    a.average_ground_contact_time_ms ? `ground contact ${Math.round(Number(a.average_ground_contact_time_ms))}ms` : null,
+    a.vo2_max ? `VO2 max ${Number(a.vo2_max).toFixed(1)}` : null,
+    a.training_effect_aerobic ? `training effect aerobic ${Number(a.training_effect_aerobic).toFixed(1)}` : null,
+    a.training_effect_anaerobic ? `anaerobic ${Number(a.training_effect_anaerobic).toFixed(1)}` : null,
+    a.training_benefit ? `benefit ${a.training_benefit}` : null,
+    a.exercise_load ? `exercise load ${Math.round(Number(a.exercise_load))}` : null,
+    a.estimated_sweat_loss_ml ? `sweat loss ${Math.round(Number(a.estimated_sweat_loss_ml))}ml` : null,
+  ].filter(Boolean);
+  if (dynamics.length > 0) lines.push(dynamics.join(', '));
+
+  if (ctx.exercises && ctx.exercises.length > 0) {
+    lines.push('Exercises: ' + ctx.exercises.map((ex) => {
+      const parts = [ex.sets ? `${ex.sets} sets` : null, ex.reps ? `${ex.reps} reps` : null, ex.maxWeight ? `${ex.maxWeight}kg` : null].filter(Boolean).join(' × ');
+      return `${ex.category}${parts ? ` (${parts})` : ''}`;
+    }).join('; '));
+  }
+
+  // Cap laps shown — ultra-endurance activities can have hundreds of
+  // auto-laps, which would otherwise flood the prompt for little benefit.
+  const MAX_LAPS = 20;
+  if (ctx.laps.length > 0) {
+    const shown = ctx.laps.slice(0, MAX_LAPS);
+    lines.push('Laps: ' + shown.map((l) =>
+      `#${l.lap_index} ${fmtDuration(l.duration_seconds)}${l.distance_meters ? ` ${(l.distance_meters / 1000).toFixed(2)}km` : ''}${l.pace_seconds_per_km ? ` ${formatPace(l.pace_seconds_per_km)}` : ''}${l.average_heart_rate ? ` ${Math.round(l.average_heart_rate)}bpm` : ''}`
+    ).join('; ') + (ctx.laps.length > MAX_LAPS ? ` (+${ctx.laps.length - MAX_LAPS} more)` : ''));
+  }
+
+  if (ctx.zones.length > 0) {
+    const byMetric = new Map<string, typeof ctx.zones>();
+    for (const z of ctx.zones) byMetric.set(z.metric_type, [...(byMetric.get(z.metric_type) ?? []), z]);
+    for (const [metric, zones] of byMetric) {
+      const sorted = zones.slice().sort((x, y) => x.zone_number - y.zone_number);
+      lines.push(`${metric} zones: ` + sorted.map((z) => `Z${z.zone_number} ${Math.round(z.percent ?? 0)}%`).join(', '));
+    }
+  }
+
+  return lines.join('\n');
 }
 
 interface Props {
@@ -42,6 +117,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
   const [isSidebarOpen, setSidebarOpen]           = useState(false);
 
   const healthViewContextRef = useRef('');
+  const activityContextRef = useRef('');
 
   const {
     conversations, currentConvId, setCurrentConvId,
@@ -65,7 +141,7 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
     userId, domain: 'health', defaultSkillName,
     currentConvId, messages, setMessages,
     onConversationCreated: handleConvCreated,
-    getPostContext: () => healthViewContextRef.current,
+    getPostContext: () => [healthViewContextRef.current, activityContextRef.current].filter(Boolean).join('\n\n'),
   });
 
   const [isMyAlleracOpen, setIsMyAlleracOpen] = useState(false);
@@ -147,8 +223,12 @@ export default function HealthClient({ userId, userName, userEmail, isAdmin, def
                   isDarkMode={d}
                   userId={userId}
                   inline
+                  syncUrl
                   onViewChange={(period, date) => {
                     healthViewContextRef.current = buildHealthViewContext(period, date);
+                  }}
+                  onActivityContextChange={(ctx) => {
+                    activityContextRef.current = buildActivityContext(ctx);
                   }}
                 />
               </div>

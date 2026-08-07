@@ -4,6 +4,11 @@ import { requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import pool from '@/app/clients/db';
 import { GET as getProxyStatus } from '@/app/api/v1/health/proxy/status/route';
 import { GET as getProxyActivities } from '@/app/api/v1/health/proxy/activities/route';
+import { GET as getProxyActivityDetail } from '@/app/api/v1/health/proxy/activities/[activityId]/route';
+import { GET as getProxyActivityLaps } from '@/app/api/v1/health/proxy/activities/[activityId]/laps/route';
+import { GET as getProxyActivityZones } from '@/app/api/v1/health/proxy/activities/[activityId]/zones/route';
+import { GET as getProxyActivityRoute } from '@/app/api/v1/health/proxy/activities/[activityId]/route/route';
+import { GET as getProxyActivitySeries } from '@/app/api/v1/health/proxy/activities/[activityId]/series/route';
 import { GET as getProxyDaily } from '@/app/api/v1/health/proxy/daily/route';
 
 jest.mock('@/app/lib/auth-session', () => {
@@ -146,6 +151,162 @@ describe('Control API v1 health proxy', () => {
           body: JSON.stringify({ session_dump: 'decrypted-session-dump', date: '2026-06-25', limit: 5 }),
         }),
       );
+    });
+  });
+
+  describe('GET /proxy/activities/:id', () => {
+    it('returns 400 for a non-numeric activityId', async () => {
+      const response = await getProxyActivityDetail(
+        new Request('http://localhost/api/v1/health/proxy/activities/abc'),
+        { params: Promise.resolve({ activityId: 'abc' }) },
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockPool.query).not.toHaveBeenCalled();
+    });
+
+    it('returns 409 when garmin is not connected', async () => {
+      mockPool.query.mockResolvedValueOnce({ rows: [] } as any); // integration_connections
+
+      const response = await getProxyActivityDetail(
+        new Request('http://localhost/api/v1/health/proxy/activities/123'),
+        { params: Promise.resolve({ activityId: '123' }) },
+      );
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: { code: 'garmin_not_connected' } });
+    });
+
+    it('returns the worker\'s raw activity-details payload unmodified, including details_raw', async () => {
+      mockPool.query
+        .mockResolvedValueOnce({ rows: [{ is_connected: true }] } as any) // integration_connections
+        .mockResolvedValueOnce({ rows: [{ oauth1_token_encrypted: 'encrypted' }] } as any); // garmin_credentials
+      const workerPayload = {
+        laps: [{ lapIndex: 1 }],
+        zones: [{ zoneNumber: 1 }],
+        samples: [{ sampleIndex: 0, latitude: 10.0, longitude: 20.0 }],
+        route_bounds: { minLat: 10.0, maxLat: 10.01 },
+        route_simplified_polyline: '_p~iF~ps|U',
+        details_raw: { anything: 'the complete unreduced Garmin payload', nested: { field: 1 } },
+        errors: {},
+        payload_version: 1,
+      };
+      const fetchMock = jest.fn().mockResolvedValue(
+        new Response(JSON.stringify(workerPayload), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+      global.fetch = fetchMock;
+
+      const response = await getProxyActivityDetail(
+        new Request('http://localhost/api/v1/health/proxy/activities/123'),
+        { params: Promise.resolve({ activityId: '123' }) },
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      const body = await response.json();
+      // The whole worker payload passes through untouched — no column
+      // whitelist, no redaction — unlike the cached /activities/:id route.
+      expect(body.data).toMatchObject(workerPayload);
+      expect(body.data.meta).toMatchObject({ dataMode: 'proxy', stored: false });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/activity-details'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ session_dump: 'decrypted-session-dump', activity_id: '123' }),
+        }),
+      );
+    });
+  });
+
+  // laps/zones/route/series each mirror the cached API's endpoint shape but
+  // make their own independent live /activity-details call and slice a
+  // different piece of the same raw response — no sharing/caching between
+  // them, consistent with every other proxy endpoint.
+  describe('GET /proxy/activities/:id/laps, /zones, /route, /series', () => {
+    const workerPayload = {
+      laps: [{ lapIndex: 1 }],
+      zones: [{ zoneNumber: 1 }],
+      samples: [{ sampleIndex: 0, latitude: 10.0, longitude: 20.0, heartRate: 150 }],
+      route_bounds: { minLat: 10.0, maxLat: 10.01 },
+      route_simplified_polyline: '_p~iF~ps|U',
+      details_raw: { activity_details: {} },
+      errors: {},
+      payload_version: 1,
+    };
+
+    function mockConnectedWorkerFetch() {
+      mockPool.query
+        .mockResolvedValueOnce({ rows: [{ is_connected: true }] } as any)
+        .mockResolvedValueOnce({ rows: [{ oauth1_token_encrypted: 'encrypted' }] } as any);
+      global.fetch = jest.fn().mockResolvedValue(
+        new Response(JSON.stringify(workerPayload), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+    }
+
+    it('laps: slices just the laps array', async () => {
+      mockConnectedWorkerFetch();
+      const response = await getProxyActivityLaps(
+        new Request('http://localhost/api/v1/health/proxy/activities/123/laps'),
+        { params: Promise.resolve({ activityId: '123' }) },
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.data.laps).toEqual(workerPayload.laps);
+      expect(body.data.zones).toBeUndefined();
+    });
+
+    it('zones: slices just the zones array', async () => {
+      mockConnectedWorkerFetch();
+      const response = await getProxyActivityZones(
+        new Request('http://localhost/api/v1/health/proxy/activities/123/zones'),
+        { params: Promise.resolve({ activityId: '123' }) },
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.data.zones).toEqual(workerPayload.zones);
+    });
+
+    it('route: includes bounds, polyline, and unredacted GPS samples', async () => {
+      mockConnectedWorkerFetch();
+      const response = await getProxyActivityRoute(
+        new Request('http://localhost/api/v1/health/proxy/activities/123/route'),
+        { params: Promise.resolve({ activityId: '123' }) },
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.data.route_bounds).toEqual(workerPayload.route_bounds);
+      expect(body.data.route_simplified_polyline).toBe(workerPayload.route_simplified_polyline);
+      expect(body.data.samples).toEqual(workerPayload.samples);
+    });
+
+    it('series: returns the same raw samples array as /route (no GPS/metric split in raw mode)', async () => {
+      mockConnectedWorkerFetch();
+      const response = await getProxyActivitySeries(
+        new Request('http://localhost/api/v1/health/proxy/activities/123/series'),
+        { params: Promise.resolve({ activityId: '123' }) },
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.data.samples).toEqual(workerPayload.samples);
+    });
+
+    it('returns 409 when garmin is not connected (laps)', async () => {
+      mockPool.query.mockResolvedValueOnce({ rows: [] } as any);
+      const response = await getProxyActivityLaps(
+        new Request('http://localhost/api/v1/health/proxy/activities/123/laps'),
+        { params: Promise.resolve({ activityId: '123' }) },
+      );
+      expect(response.status).toBe(409);
+    });
+
+    it('returns 400 for a non-numeric activityId (route)', async () => {
+      const response = await getProxyActivityRoute(
+        new Request('http://localhost/api/v1/health/proxy/activities/abc/route'),
+        { params: Promise.resolve({ activityId: 'abc' }) },
+      );
+      expect(response.status).toBe(400);
+      expect(mockPool.query).not.toHaveBeenCalled();
     });
   });
 

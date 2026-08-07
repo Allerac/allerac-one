@@ -22,6 +22,7 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'get_daily_snapshot',         label: 'Daily Snapshot',      description: 'All health metrics for a single day',            group: 'Health'    },
   { name: 'get_garmin_status',          label: 'Garmin Status',       description: 'Check Garmin device connection',                 group: 'Health'    },
   { name: 'get_recent_activities',      label: 'Recent Activities',   description: 'Recent workouts from Garmin',                    group: 'Health'    },
+  { name: 'get_activity_detail',        label: 'Activity Detail',     description: 'Laps, zones, and running dynamics for one activity', group: 'Health' },
   { name: 'get_music_recommendations',  label: 'Music Recommendations', description: 'Personalized track recommendations',           group: 'Music'     },
   { name: 'get_top_tracks',             label: 'Top Tracks',          description: 'Most-listened tracks for a time window',        group: 'Music'     },
   { name: 'get_listening_stats',        label: 'Listening Stats',     description: 'Listening totals and top genres',                group: 'Music'     },
@@ -161,6 +162,23 @@ const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
           },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_activity_detail',
+      description: 'Get laps, heart-rate/power zones, and running dynamics (cadence, stride, ground contact time, training effect, VO2 max, etc.) for one specific activity. Use this for questions that need more than the summary from get_recent_activities — e.g. "how were my splits/laps?", "what zone was I mostly in?", "what was my cadence/VO2 max?". Call get_recent_activities first to find the activity_id if you don\'t already have it. Never includes GPS coordinates or route location — those are excluded for privacy.',
+      parameters: {
+        type: 'object',
+        properties: {
+          activity_id: {
+            type: 'string',
+            description: 'The numeric activity ID, from get_recent_activities or the health dashboard context.',
+          },
+        },
+        required: ['activity_id'],
       },
     },
   },

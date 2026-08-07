@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import ActivityDetailPanel, { ActivityDetailData } from './ActivityDetailPanel';
 
 interface ExerciseSet {
   category: string;
@@ -14,36 +15,25 @@ interface ExerciseSet {
 
 interface Activity {
   activityId?: string;
-  activityName?: string;
   activityType?: string;
-  startTimeInSeconds?: number;
-  duration?: number;
-  calories?: number;
-  distance?: number;
-  avgHeartRate?: number;
-  maxHeartRate?: number;
-  elevationGain?: number;
   activeSets?: number;
   totalExerciseReps?: number;
   summarizedExerciseSets?: ExerciseSet[];
 }
 
+// What RecentActivity reports up to the page for the chat's context —
+// ActivityDetailPanel's data plus the strength-training exercise breakdown,
+// which lives only on the basic activity fetch (not the normalized
+// health_activities row ActivityDetailPanel reads).
+export interface ActivityChatContext extends ActivityDetailData {
+  exercises?: ExerciseSet[];
+}
+
 interface Props {
   isDarkMode: boolean;
   selectedDate?: string;
+  onActivityContextChange?: (ctx: ActivityChatContext | null) => void;
 }
-
-const ACTIVITY_ICONS: Record<string, string> = {
-  strength_training: '🏋️',
-  running:           '🏃',
-  cycling:           '🚴',
-  swimming:          '🏊',
-  walking:           '🚶',
-  yoga:              '🧘',
-  cardio:            '💓',
-  hiking:            '🥾',
-  elliptical:        '⚙️',
-};
 
 function formatName(raw: string): string {
   return raw
@@ -52,55 +42,63 @@ function formatName(raw: string): string {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function activityIcon(type?: string): string {
-  return ACTIVITY_ICONS[type?.toLowerCase() ?? ''] ?? '⚡';
-}
-
-function fmtDuration(seconds?: number): string {
-  if (!seconds || seconds <= 0) return '—';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-function fmtDate(seconds?: number): string {
-  if (!seconds) return '';
-  return new Date(seconds * 1000).toLocaleDateString(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-}
-
-export default function RecentActivity({ isDarkMode, selectedDate }: Props) {
+export default function RecentActivity({ isDarkMode, selectedDate, onActivityContextChange }: Props) {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
-  useEffect(() => { fetchActivity(); }, [selectedDate]);
+  // Guards against out-of-order responses: a native <input type="date">
+  // fires onChange once per segment while typing (day, then month, then
+  // year), so an earlier, now-irrelevant request (e.g. for a date with no
+  // cached activity, forcing a live Garmin fetch that can fail or take
+  // longer) can resolve AFTER the final date's request and clobber good
+  // data with an error/empty state. Only the latest-fired request's result
+  // is ever applied.
+  const latestRequestId = useRef(0);
 
-  const fetchActivity = async () => {
+  const fetchActivity = useCallback(async () => {
+    const requestId = ++latestRequestId.current;
     try {
       setLoading(true);
       setError(null);
       const res = await fetch(`/api/health/activities?limit=1${selectedDate ? `&date=${selectedDate}` : ''}`);
+      if (latestRequestId.current !== requestId) return;
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
+      if (latestRequestId.current !== requestId) return;
       setActivity((data.activities || [])[0] ?? null);
     } catch (err) {
+      if (latestRequestId.current !== requestId) return;
       setError(err instanceof Error ? err.message : 'error');
       setActivity(null);
     } finally {
-      setLoading(false);
+      if (latestRequestId.current === requestId) setLoading(false);
     }
-  };
+  }, [selectedDate]);
+
+  useEffect(() => { fetchActivity(); }, [fetchActivity]);
+
+  const isStrength = activity?.activityType === 'strength_training';
+  const exercises = activity?.summarizedExerciseSets ?? [];
+
+  const handleDetailData = useCallback((data: ActivityDetailData | null) => {
+    if (!data) { onActivityContextChange?.(null); return; }
+    onActivityContextChange?.({ ...data, exercises: isStrength && exercises.length > 0 ? exercises : undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onActivityContextChange, isStrength, exercises]);
+
+  // No activity for this day (or not loaded yet, or without an id to look
+  // up detail for) — ActivityDetailPanel won't be mounted, so nothing else
+  // will clear the chat context.
+  useEffect(() => {
+    if (!activity?.activityId) onActivityContextChange?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity, onActivityContextChange]);
 
   const d = isDarkMode;
   const cardCls   = `rounded-lg border p-4 ${d ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`;
   const textMain  = d ? 'text-gray-100' : 'text-gray-900';
   const textMuted = d ? 'text-gray-400' : 'text-gray-500';
-  const divider   = d ? 'border-gray-700' : 'border-gray-200';
 
   if (loading) return (
     <div className={`${cardCls}`}>
@@ -119,51 +117,21 @@ export default function RecentActivity({ isDarkMode, selectedDate }: Props) {
     </div>
   );
 
-  const isStrength = activity.activityType === 'strength_training';
-  const name = activity.activityName ? formatName(activity.activityName) : formatName(activity.activityType ?? 'Activity');
-
-  const stats = [
-    { icon: '⏱️', label: 'Duration',  value: fmtDuration(activity.duration) },
-    { icon: '🔥', label: 'Calories',  value: activity.calories ? `${Math.round(activity.calories)} kcal` : null },
-    { icon: '📍', label: 'Distance',  value: activity.distance ? `${(activity.distance / 1000).toFixed(2)} km` : null },
-    { icon: '❤️', label: 'Avg HR',    value: activity.avgHeartRate ? `${activity.avgHeartRate} bpm` : null },
-    { icon: '💓', label: 'Max HR',    value: activity.maxHeartRate ? `${activity.maxHeartRate} bpm` : null },
-    { icon: '⬆️', label: 'Elevation', value: activity.elevationGain ? `${Math.round(activity.elevationGain)} m` : null },
-    { icon: '💪', label: 'Sets',      value: isStrength && activity.activeSets ? String(activity.activeSets) : null },
-    { icon: '🔄', label: 'Reps',      value: isStrength && activity.totalExerciseReps ? String(activity.totalExerciseReps) : null },
-  ].filter(s => s.value != null) as { icon: string; label: string; value: string }[];
-
-  const exercises = activity.summarizedExerciseSets ?? [];
-
   return (
-    <div className={cardCls}>
-
-      {/* Header: title + stats — stacked on mobile, side-by-side on sm+ */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="text-3xl flex-shrink-0">{activityIcon(activity.activityType)}</span>
-          <div className="min-w-0">
-            <h3 className={`font-semibold text-base leading-tight ${textMain}`}>{name}</h3>
-            <p className={`text-xs mt-0.5 ${textMuted}`}>
-              {formatName(activity.activityType ?? '')} · {fmtDate(activity.startTimeInSeconds)}
-            </p>
-          </div>
+    <div className="flex flex-col gap-4">
+      {activity.activityId ? (
+        <ActivityDetailPanel activityId={activity.activityId} isDarkMode={d} onDataChange={handleDetailData} />
+      ) : (
+        <div className={cardCls}>
+          <p className={`text-sm ${textMuted}`}>{formatName(activity.activityType ?? 'Activity')}</p>
         </div>
+      )}
 
-        {/* Stats — grid on mobile, inline on sm+ */}
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:justify-end gap-x-4 gap-y-2">
-          {stats.map(({ icon, label, value }) => (
-            <div key={label} className="sm:text-right">
-              <p className={`text-sm font-bold leading-tight ${textMain}`}>{value}</p>
-              <p className={`text-xs ${textMuted}`}>{icon} {label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Exercises */}
+      {/* Exercises — strength-training sets/reps breakdown, not part of the
+          detail panel (that data only exists on the live/cached basic
+          activity fetch, not the normalized health_activities row). */}
       {isStrength && exercises.length > 0 && (
-        <div className={`border-t ${divider} mt-4 pt-3`}>
+        <div className={cardCls}>
           <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${textMuted}`}>Exercises</p>
           <table className="w-full border-collapse">
             <tbody>
@@ -187,7 +155,6 @@ export default function RecentActivity({ isDarkMode, selectedDate }: Props) {
           </table>
         </div>
       )}
-
     </div>
   );
 }

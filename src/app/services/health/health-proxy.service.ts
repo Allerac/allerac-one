@@ -6,6 +6,7 @@
 import pool from '@/app/clients/db';
 import { safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { getConnection } from '@/app/services/integrations/integration-connections.service';
+import { callHealthWorker } from '@/app/services/health/health-query.service';
 
 export class GarminNotConnectedError extends Error {
   constructor() {
@@ -27,4 +28,17 @@ export async function requireGarminSessionDump(userId: string): Promise<string> 
     throw new GarminNotConnectedError();
   }
   return safeDecrypt(res.rows[0].oauth1_token_encrypted);
+}
+
+// Shared by every /proxy/activities/{activityId}/* route (detail, laps,
+// zones, route, series) — each is a fresh, independent live call to the
+// health-worker's single /activity-details fetch (proxy mode never caches
+// or shares results between requests, same as every other proxy endpoint).
+// Callers slice out the piece of this raw payload their contract promises.
+export async function fetchProxyActivityDetails(userId: string, activityId: string): Promise<Record<string, unknown>> {
+  const sessionDump = await requireGarminSessionDump(userId);
+  return callHealthWorker('POST', '/activity-details', {
+    session_dump: sessionDump,
+    activity_id: activityId,
+  });
 }

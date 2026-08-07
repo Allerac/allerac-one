@@ -1159,6 +1159,461 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/health/activities/{activityId}:
+    get:
+      tags: [Health]
+      summary: Get one activity's normalized detail
+      operationId: getHealthActivity
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Normalized detail for one activity, including detail_sync_status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthActivityDetailResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Activity not found
+    delete:
+      tags: [Health]
+      summary: Delete an activity and all derived data
+      operationId: deleteHealthActivity
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Activity deleted (laps/zones/samples cascade)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthActivityDeleteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Activity not found
+  /api/v1/health/activities/{activityId}/laps:
+    get:
+      tags: [Health]
+      summary: List laps for one activity
+      operationId: listHealthActivityLaps
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Laps for one activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthActivityLapsResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Activity not found
+  /api/v1/health/activities/{activityId}/zones:
+    get:
+      tags: [Health]
+      summary: List heart-rate/power time-in-zone aggregates for one activity
+      operationId: listHealthActivityZones
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Time-in-zone aggregates for one activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthActivityZonesResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Activity not found
+  /api/v1/health/activities/{activityId}/sync:
+    post:
+      tags: [Health]
+      summary: Queue a detail sync for one activity
+      operationId: syncHealthActivity
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Detail sync queued; processed asynchronously
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthActivitySyncResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Activity not found
+  /api/v1/health/activities/{activityId}/route:
+    get:
+      tags: [Health]
+      summary: Get route bounds, simplified polyline, and optionally redacted detailed coordinates
+      operationId: getHealthActivityRoute
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: detail
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "false"
+      responses:
+        "200":
+          description: Route bounds/polyline, plus redacted coordinates when detail=true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthActivityRouteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Activity not found
+  /api/v1/health/activities/{activityId}/series:
+    get:
+      tags: [Health]
+      summary: Get a bounded, downsampled time series for selected metrics
+      operationId: getHealthActivitySeries
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: metrics
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Comma-separated metric names; defaults to all
+        - name: maxPoints
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 5000
+            default: 500
+      responses:
+        "200":
+          description: Bounded, redacted, downsampled time series
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthActivitySeriesResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Activity not found
+  /api/v1/health/protected-locations:
+    get:
+      tags: [Health]
+      summary: List privacy zones
+      operationId: listHealthProtectedLocations
+      responses:
+        "200":
+          description: The caller's privacy zones
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProtectedLocationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Health]
+      summary: Add a privacy zone
+      operationId: addHealthProtectedLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HealthProtectedLocationInput"
+      responses:
+        "201":
+          description: Privacy zone created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProtectedLocationResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/health/protected-locations/{id}:
+    delete:
+      tags: [Health]
+      summary: Remove a privacy zone
+      operationId: deleteHealthProtectedLocation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Privacy zone deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProtectedLocationDeleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Protected location not found
+  /api/v1/health/proxy/status:
+    get:
+      tags: [Health]
+      summary: Live Garmin connection status (proxy mode, unstored)
+      operationId: getHealthProxyStatus
+      responses:
+        "200":
+          description: Garmin connection status, read live — no health_activities/health_daily_metrics access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProxyStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/health/proxy/activities:
+    get:
+      tags: [Health]
+      summary: List activities live from Garmin (proxy mode, unstored)
+      operationId: getHealthProxyActivities
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Activities fetched live from Garmin for the given date — the raw provider objects, never written to health_activities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProxyActivitiesResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Garmin is not connected for this user
+  /api/v1/health/proxy/activities/{activityId}:
+    get:
+      tags: [Health]
+      summary: Live laps/zones/route/details for one activity (proxy mode, unstored)
+      operationId: getHealthProxyActivityDetail
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9]+$"
+      responses:
+        "200":
+          description: >-
+            The health-worker's raw activity-details payload, untouched — laps, zones,
+            samples (with exact GPS coordinates), route bounds/polyline, and details_raw
+            (Garmin's complete unreduced payload). No column whitelist and no redaction,
+            unlike the cached /activities/{activityId} family.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProxyActivityDetailResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Garmin is not connected for this user
+  /api/v1/health/proxy/activities/{activityId}/laps:
+    get:
+      tags: [Health]
+      summary: Live laps for one activity (proxy mode, unstored)
+      operationId: getHealthProxyActivityLaps
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9]+$"
+      responses:
+        "200":
+          description: >-
+            The health-worker's raw laps array — an independent live call, same shape as
+            /activities/{activityId} but sliced to just laps.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProxyActivityDetailResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Garmin is not connected for this user
+  /api/v1/health/proxy/activities/{activityId}/zones:
+    get:
+      tags: [Health]
+      summary: Live heart-rate/power zones for one activity (proxy mode, unstored)
+      operationId: getHealthProxyActivityZones
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9]+$"
+      responses:
+        "200":
+          description: >-
+            The health-worker's raw zones array — an independent live call, same shape as
+            /activities/{activityId} but sliced to just zones.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProxyActivityDetailResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Garmin is not connected for this user
+  /api/v1/health/proxy/activities/{activityId}/route:
+    get:
+      tags: [Health]
+      summary: Live route bounds/polyline and GPS samples for one activity (proxy mode, unstored)
+      operationId: getHealthProxyActivityRoute
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9]+$"
+      responses:
+        "200":
+          description: >-
+            route_bounds, route_simplified_polyline, and the full raw samples array
+            (exact GPS included, unredacted) — an independent live call. Same samples
+            array as .../series, since Garmin's raw payload doesn't split the two.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProxyActivityDetailResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Garmin is not connected for this user
+  /api/v1/health/proxy/activities/{activityId}/series:
+    get:
+      tags: [Health]
+      summary: Live time-series samples for one activity (proxy mode, unstored)
+      operationId: getHealthProxyActivitySeries
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9]+$"
+      responses:
+        "200":
+          description: >-
+            The raw samples array — an independent live call. Includes GPS coordinates,
+            unlike the cached /series endpoint; identical to .../route's samples.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProxyActivityDetailResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Garmin is not connected for this user
+  /api/v1/health/proxy/daily:
+    get:
+      tags: [Health]
+      summary: Live daily health snapshot (proxy mode, unstored)
+      operationId: getHealthProxyDaily
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Daily health metrics fetched live from Garmin — the raw provider payload, never written to health_daily_metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProxyDailyResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Garmin is not connected for this user
   /api/v1/search:
     get:
       tags: [Search]
@@ -3532,6 +3987,265 @@ components:
               items:
                 type: object
                 additionalProperties: true
+    HealthActivityDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activity]
+          properties:
+            activity:
+              type: object
+              additionalProperties: true
+    HealthActivityLapsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activityId, laps]
+          properties:
+            activityId:
+              type: string
+            laps:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+    HealthActivityZonesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activityId, zones]
+          properties:
+            activityId:
+              type: string
+            zones:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+    HealthActivitySyncResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activityId, queued, jobStatus]
+          properties:
+            activityId:
+              type: string
+            queued:
+              type: boolean
+            jobStatus:
+              type: string
+              enum: [pending, claimed, running, completed, failed]
+    HealthActivityDeleteResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activityId, deleted]
+          properties:
+            activityId:
+              type: string
+            deleted:
+              type: boolean
+    HealthActivityRouteResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activityId, bounds]
+          properties:
+            activityId:
+              type: string
+            bounds:
+              type: object
+              additionalProperties: true
+            simplifiedPolyline:
+              type: string
+              nullable: true
+            sampleCount:
+              type: integer
+              nullable: true
+            coordinates:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            redacted:
+              type: boolean
+    HealthActivitySeriesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activityId, metrics, points]
+          properties:
+            activityId:
+              type: string
+            metrics:
+              type: array
+              items:
+                type: string
+            redacted:
+              type: boolean
+            totalSamples:
+              type: integer
+            points:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+    HealthProtectedLocationInput:
+      type: object
+      required: [lat, lng, radiusMeters]
+      properties:
+        label:
+          type: string
+          nullable: true
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+        radiusMeters:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+    HealthProtectedLocation:
+      type: object
+      required: [id, lat, lng, radiusMeters]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+          nullable: true
+        lat:
+          type: number
+        lng:
+          type: number
+        radiusMeters:
+          type: number
+    HealthProtectedLocationsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [locations]
+          properties:
+            locations:
+              type: array
+              items:
+                $ref: "#/components/schemas/HealthProtectedLocation"
+    HealthProtectedLocationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [location]
+          properties:
+            location:
+              $ref: "#/components/schemas/HealthProtectedLocation"
+    HealthProtectedLocationDeleteResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, deleted]
+          properties:
+            id:
+              type: string
+            deleted:
+              type: boolean
+    HealthProxyMeta:
+      type: object
+      properties:
+        connector:
+          type: string
+          example: garmin
+        operation:
+          type: string
+        dataMode:
+          type: string
+          enum: [proxy]
+        stored:
+          type: boolean
+          enum: [false]
+    HealthProxyStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [status, meta]
+          properties:
+            status:
+              type: object
+              properties:
+                isConnected:
+                  type: boolean
+                mfaPending:
+                  type: boolean
+                syncEnabled:
+                  type: boolean
+            meta:
+              $ref: "#/components/schemas/HealthProxyMeta"
+    HealthProxyActivitiesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [activities, meta]
+          properties:
+            activities:
+              type: array
+              description: Raw Garmin activity objects, as returned by the provider — never normalized.
+              items:
+                type: object
+                additionalProperties: true
+            meta:
+              $ref: "#/components/schemas/HealthProxyMeta"
+    HealthProxyActivityDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          description: >-
+            The health-worker's raw /activity-details payload passed through untouched,
+            plus a meta marker. Includes exact GPS coordinates (samples) and details_raw
+            (Garmin's complete unreduced payload) — treat as sensitive.
+          additionalProperties: true
+    HealthProxyDailyResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [daily, meta]
+          properties:
+            daily:
+              type: object
+              description: Raw Garmin daily-health payload, as returned by the provider — never normalized.
+              additionalProperties: true
+            meta:
+              $ref: "#/components/schemas/HealthProxyMeta"
     WebSearchResponse:
       type: object
       required: [data]

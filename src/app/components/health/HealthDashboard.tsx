@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import * as healthActions from '@/app/actions/health';
 import GarminSettings from '../settings/GarminSettings';
 import AgentAccessPanel from '../settings/AgentAccessPanel';
-import RecentActivity from './RecentActivity';
+import RecentActivity, { ActivityChatContext } from './RecentActivity';
 import DailyHealthMetrics from './DailyHealthMetrics';
 import HealthTodayCharts from './HealthTodayCharts';
 import ActivitiesList from './ActivitiesList';
@@ -17,6 +18,15 @@ interface HealthDashboardProps {
   userId?: string;
   inline?: boolean;
   onViewChange?: (period: Period, selectedDate: string) => void;
+  // Reflects period/date into the page URL (?date=&period=) so a specific
+  // day can be linked/bookmarked directly and the browser back/forward
+  // buttons move between days. Only meaningful on the dedicated /health
+  // page — HealthDashboard is also embedded as a slide-over panel on /chat
+  // (ChatClient.tsx), where rewriting the URL would be wrong.
+  syncUrl?: boolean;
+  // See RecentActivity.tsx — bubbles the currently displayed activity's full
+  // detail up so the page can feed it into the AI chat's context.
+  onActivityContextChange?: (ctx: ActivityChatContext | null) => void;
 }
 
 const HEALTH_SCOPE_OPTIONS = [{ scope: 'health:proxy:read', label: 'Garmin (live reads)', provider: 'garmin' }];
@@ -72,14 +82,25 @@ function fmtMins(mins: number | null) {
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, inline = false, onViewChange }: HealthDashboardProps) {
+export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, inline = false, onViewChange, syncUrl = false, onActivityContextChange }: HealthDashboardProps) {
   const t = useTranslations('health');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [garminConnected, setGarminConnected] = useState<boolean | null>(null);
   const [dataMode, setDataMode] = useState<'cached' | 'proxy'>('cached');
   const [lastSync, setLastSync] = useState<string | null>(null);
-  const [period, setPeriod] = useState<Period>('today');
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
+  const [period, setPeriod] = useState<Period>(() => {
+    if (!syncUrl) return 'today';
+    const p = searchParams?.get('period');
+    return p && p in PERIOD_CONFIG ? (p as Period) : 'today';
+  });
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (!syncUrl) return getTodayStr();
+    const dt = searchParams?.get('date');
+    return dt && /^\d{4}-\d{2}-\d{2}$/.test(dt) ? dt : getTodayStr();
+  });
   const [metrics, setMetrics] = useState<DayMetric[]>([]);
   const [hrHistory, setHrHistory] = useState<{ date: string; value: number }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -95,6 +116,48 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
   useEffect(() => {
     onViewChange?.(period, selectedDate);
   }, [period, selectedDate]);
+
+  // React to the browser's back/forward buttons (and direct URL edits):
+  // Next's useSearchParams() re-renders on navigation, so pick up a
+  // period/date that no longer matches local state and adopt it. Our own
+  // updateDate/updatePeriod below always push a URL that already matches
+  // the state we just set, so this never fights with them.
+  useEffect(() => {
+    if (!syncUrl) return;
+    const urlPeriod = searchParams?.get('period');
+    if (urlPeriod && urlPeriod in PERIOD_CONFIG && urlPeriod !== period) {
+      setPeriod(urlPeriod as Period);
+    }
+    const urlDate = searchParams?.get('date');
+    if ((!urlPeriod || urlPeriod === 'today') && urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate) && urlDate !== selectedDate) {
+      setSelectedDate(urlDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, syncUrl]);
+
+  const updatePeriod = useCallback((next: Period) => {
+    setPeriod(next);
+    if (!syncUrl) return;
+    const params = new URLSearchParams(searchParams?.toString());
+    params.set('period', next);
+    if (next !== 'today') params.delete('date');
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [syncUrl, searchParams, pathname, router]);
+
+  // `push` creates a distinct, back/forward-navigable history entry for a
+  // deliberate "go to this day" action (prev/next day, jumping from the
+  // breakdown table); typing in the date input uses replace so each
+  // in-progress keystroke doesn't spam browser history.
+  const updateDate = useCallback((next: string, opts?: { push?: boolean }) => {
+    setSelectedDate(next);
+    if (!syncUrl) return;
+    const params = new URLSearchParams(searchParams?.toString());
+    params.set('date', next);
+    params.set('period', 'today');
+    const url = `${pathname}?${params.toString()}`;
+    if (opts?.push) router.push(url, { scroll: false });
+    else router.replace(url, { scroll: false });
+  }, [syncUrl, searchParams, pathname, router]);
 
   const loadData = useCallback(async () => {
     if (!userId) return;
@@ -160,14 +223,14 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
   function goToPrevDay() {
     const d = new Date(selectedDate + 'T12:00:00');
     d.setDate(d.getDate() - 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    updateDate(d.toISOString().split('T')[0], { push: true });
   }
 
   function goToNextDay() {
     if (selectedDate >= getTodayStr()) return;
     const d = new Date(selectedDate + 'T12:00:00');
     d.setDate(d.getDate() + 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    updateDate(d.toISOString().split('T')[0], { push: true });
   }
 
   if (!isOpen) return null;
@@ -237,7 +300,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
               <div className="flex items-center gap-2">
                 <select
                   value={period}
-                  onChange={(e) => setPeriod(e.target.value as Period)}
+                  onChange={(e) => updatePeriod(e.target.value as Period)}
                   className={`px-2 py-1.5 rounded-lg text-sm font-medium border transition-colors flex-shrink-0 ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-gray-100 border-transparent text-gray-700'}`}
                 >
                   {(['today', '3days', '7days', '30days'] as Period[]).map((p) => (
@@ -261,7 +324,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                     <input
                       type="date"
                       value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
+                      onChange={(e) => updateDate(e.target.value)}
                       max={getTodayStr()}
                       className={`min-w-0 w-[8.5rem] px-2 py-1.5 rounded-lg text-sm font-semibold border transition-colors
                         ${isDarkMode
@@ -353,7 +416,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                   </div>
 
                   {/* Recent activity card */}
-                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} />
+                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} onActivityContextChange={onActivityContextChange} />
                 </>
               )}
 
@@ -379,7 +442,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                         {[...metrics].reverse().map((m) => (
                           <tr
                             key={m.date}
-                            onClick={() => { setPeriod('today'); setSelectedDate(m.date); }}
+                            onClick={() => updateDate(m.date, { push: true })}
                             className={`border-t ${border} ${isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer`}
                           >
                             <td className={`px-4 py-2.5 font-medium text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -530,7 +593,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
               <div className="flex items-center gap-2">
                 <select
                   value={period}
-                  onChange={(e) => setPeriod(e.target.value as Period)}
+                  onChange={(e) => updatePeriod(e.target.value as Period)}
                   className={`px-2 py-1.5 rounded-lg text-sm font-medium border transition-colors flex-shrink-0 ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-gray-100 border-transparent text-gray-700'}`}
                 >
                   {(['today', '3days', '7days', '30days'] as Period[]).map((p) => (
@@ -554,7 +617,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                     <input
                       type="date"
                       value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
+                      onChange={(e) => updateDate(e.target.value)}
                       max={getTodayStr()}
                       className={`px-2 py-1.5 rounded-lg text-sm font-semibold border transition-colors
                         ${isDarkMode
@@ -632,7 +695,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                   </div>
 
                   {/* Recent activity card */}
-                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} />
+                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} onActivityContextChange={onActivityContextChange} />
                 </>
               )}
 
@@ -658,7 +721,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                         {[...metrics].reverse().map((m) => (
                           <tr
                             key={m.date}
-                            onClick={() => { setPeriod('today'); setSelectedDate(m.date); }}
+                            onClick={() => updateDate(m.date, { push: true })}
                             className={`border-t ${border} ${isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer`}
                           >
                             <td className={`px-4 py-2.5 font-medium text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
