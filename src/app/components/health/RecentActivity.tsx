@@ -15,7 +15,9 @@ interface ExerciseSet {
 
 interface Activity {
   activityId?: string;
+  activityName?: string;
   activityType?: string;
+  provider?: string;
   activeSets?: number;
   totalExerciseReps?: number;
   summarizedExerciseSets?: ExerciseSet[];
@@ -43,6 +45,7 @@ function formatName(raw: string): string {
 }
 
 export default function RecentActivity({ isDarkMode, selectedDate, onActivityContextChange }: Props) {
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -55,21 +58,30 @@ export default function RecentActivity({ isDarkMode, selectedDate, onActivityCon
   // data with an error/empty state. Only the latest-fired request's result
   // is ever applied.
   const latestRequestId = useRef(0);
+  const selectedActivityId = useRef<string | null>(null);
 
   const fetchActivity = useCallback(async () => {
     const requestId = ++latestRequestId.current;
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/health/activities?limit=1${selectedDate ? `&date=${selectedDate}` : ''}`);
+      const res = await fetch(`/api/health/activities?limit=20${selectedDate ? `&date=${selectedDate}` : ''}`);
       if (latestRequestId.current !== requestId) return;
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
       if (latestRequestId.current !== requestId) return;
-      setActivity((data.activities || [])[0] ?? null);
+      const next: Activity[] = data.activities ?? [];
+      setActivities(next);
+      const selected = next.find((item) => item.activityId === selectedActivityId.current)
+        ?? next.find((item) => item.provider === 'garmin')
+        ?? next[0]
+        ?? null;
+      selectedActivityId.current = selected?.activityId ?? null;
+      setActivity(selected);
     } catch (err) {
       if (latestRequestId.current !== requestId) return;
       setError(err instanceof Error ? err.message : 'error');
+      setActivities([]);
       setActivity(null);
     } finally {
       if (latestRequestId.current === requestId) setLoading(false);
@@ -119,6 +131,32 @@ export default function RecentActivity({ isDarkMode, selectedDate, onActivityCon
 
   return (
     <div className="flex flex-col gap-4">
+      {activities.length > 1 && (
+        <div className={`rounded-lg border p-3 ${d ? 'border-gray-700 bg-gray-800/60' : 'border-gray-200 bg-gray-50'}`}>
+          <p className={`mb-2 text-xs font-semibold uppercase tracking-wide ${textMuted}`}>Atividades do dia</p>
+          <div className="flex flex-wrap gap-2">
+            {activities.map((item) => {
+              const selected = item.activityId === activity.activityId;
+              const provider = item.provider === 'strava' ? 'Strava' : 'Garmin';
+              return (
+                <button
+                  key={item.activityId}
+                  type="button"
+                  onClick={() => { selectedActivityId.current = item.activityId ?? null; setActivity(item); }}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${selected
+                    ? d ? 'border-brand-500 bg-brand-500/10 text-white' : 'border-brand-500 bg-brand-50 text-gray-900'
+                    : d ? 'border-gray-700 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+                >
+                  <span className={`mr-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white ${item.provider === 'strava' ? 'bg-[#fc4c02]' : 'bg-blue-600'}`}>
+                    {provider}
+                  </span>
+                  <span className="text-xs font-medium">{item.activityName || formatName(item.activityType ?? 'Activity')}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {activity.activityId ? (
         <ActivityDetailPanel activityId={activity.activityId} isDarkMode={d} onDataChange={handleDetailData} />
       ) : (

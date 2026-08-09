@@ -18,4 +18,6 @@ export const ACTIVITY_DETAIL_COLUMNS = `
   ending_stamina_percent, minimum_stamina_percent, training_effect_aerobic,
   training_effect_anaerobic, training_benefit, exercise_load, vo2_max, provider,
   provider_activity_id, timezone, detail_sync_status, detail_synced_at, payload_version
+  , relative_effort, perceived_exertion, weighted_average_power_watts,
+  energy_kilojoules, source_device, best_effort_count
 `;

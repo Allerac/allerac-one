@@ -16,6 +16,19 @@ const workerFetch = callHealthWorker;
 // appended). Called both by the manual "sync now" Control API route (via an
 // enqueued job) and by the background poll loop in src/agent-worker.ts.
 export async function runActivityDetailSync(userId: string, activityId: string) {
+  if (activityId.startsWith('strava:')) {
+    const { runStravaDetailSync } = await import('@/app/services/strava/strava-detail-sync.service');
+    try {
+      return await runStravaDetailSync(userId, activityId, activityId.slice('strava:'.length));
+    } catch (error) {
+      await pool.query(
+        `UPDATE health_activities SET detail_sync_status='failed', updated_at=NOW()
+         WHERE user_id=$1 AND activity_id=$2`,
+        [userId, activityId],
+      );
+      throw error;
+    }
+  }
   const connection = await getGarminConnection(userId);
   if (!connection) {
     throw new Error('Garmin not connected');

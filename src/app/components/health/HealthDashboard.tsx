@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import * as healthActions from '@/app/actions/health';
+import * as stravaActions from '@/app/actions/strava';
 import GarminSettings from '../settings/GarminSettings';
+import StravaSettings from '../settings/StravaSettings';
 import AgentAccessPanel from '../settings/AgentAccessPanel';
 import RecentActivity, { ActivityChatContext } from './RecentActivity';
 import DailyHealthMetrics from './DailyHealthMetrics';
@@ -89,6 +91,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
   const searchParams = useSearchParams();
 
   const [garminConnected, setGarminConnected] = useState<boolean | null>(null);
+  const [stravaConnected, setStravaConnected] = useState<boolean | null>(null);
   const [dataMode, setDataMode] = useState<'cached' | 'proxy'>('cached');
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>(() => {
@@ -163,8 +166,12 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
     if (!userId) return;
     setLoading(true);
     try {
-      const status = await healthActions.getGarminStatus();
+      const [status, stravaStatus] = await Promise.all([
+        healthActions.getGarminStatus(),
+        stravaActions.getStravaStatus(),
+      ]);
       setGarminConnected(!!status.is_connected);
+      setStravaConnected(!!stravaStatus.is_connected);
       setDataMode(status.data_mode === 'proxy' ? 'proxy' : 'cached');
       setLastSync(status.last_sync_at ? new Date(status.last_sync_at).toLocaleString() : null);
 
@@ -253,6 +260,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
 
   // Hide sync when viewing a past day — data is already there, user can switch to 7/30d to re-sync a range
   const showSync = !!garminConnected;
+  const anyProviderConnected = Boolean(garminConnected || stravaConnected);
 
   if (inline) {
     return (
@@ -271,22 +279,24 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          {loading && garminConnected === null ? (
+          {loading && (garminConnected === null || stravaConnected === null) ? (
             <div className="flex items-center justify-center h-48">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-500 border-t-transparent" />
             </div>
-          ) : garminConnected === false ? (
-            <div className="p-5">
+          ) : !anyProviderConnected ? (
+            <div className="p-5 space-y-4">
               <p className={`text-sm mb-4 ${textMuted}`}>{t('connectPrompt')}</p>
               <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+              <StravaSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={setStravaConnected} />
             </div>
-          ) : dataMode === 'proxy' ? (
+          ) : dataMode === 'proxy' && !stravaConnected ? (
             <div className="p-5 space-y-4">
               <div className={`px-3 py-2 rounded-lg text-xs ${isDarkMode ? 'bg-amber-500/10 text-amber-300' : 'bg-amber-50 text-amber-800'}`}>
                 This connection is set to live access only — nothing is stored, so there&apos;s no dashboard to show here.
                 Manage the connection below, or let an authorized agent read your data live via an API key.
               </div>
               <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+              <StravaSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={setStravaConnected} />
               <AgentAccessPanel
                 isDarkMode={isDarkMode}
                 scopeOptions={HEALTH_SCOPE_OPTIONS}
@@ -511,6 +521,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
               </div>
               <div className="max-h-[calc(90dvh-60px)] overflow-y-auto p-4 space-y-4">
                 <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+                <StravaSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={setStravaConnected} />
                 <AgentAccessPanel
                 isDarkMode={isDarkMode}
                 scopeOptions={HEALTH_SCOPE_OPTIONS}
@@ -564,22 +575,24 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          {loading && garminConnected === null ? (
+          {loading && (garminConnected === null || stravaConnected === null) ? (
             <div className="flex items-center justify-center h-48">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-500 border-t-transparent" />
             </div>
-          ) : garminConnected === false ? (
-            <div className="p-5">
+          ) : !anyProviderConnected ? (
+            <div className="p-5 space-y-4">
               <p className={`text-sm mb-4 ${textMuted}`}>{t('connectPrompt')}</p>
               <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+              <StravaSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={setStravaConnected} />
             </div>
-          ) : dataMode === 'proxy' ? (
+          ) : dataMode === 'proxy' && !stravaConnected ? (
             <div className="p-5 space-y-4">
               <div className={`px-3 py-2 rounded-lg text-xs ${isDarkMode ? 'bg-amber-500/10 text-amber-300' : 'bg-amber-50 text-amber-800'}`}>
                 This connection is set to live access only — nothing is stored, so there&apos;s no dashboard to show here.
                 Manage the connection below, or let an authorized agent read your data live via an API key.
               </div>
               <GarminSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={() => void loadData()} />
+              <StravaSettings userId={userId} isDarkMode={isDarkMode} onStatusChange={setStravaConnected} />
               <AgentAccessPanel
                 isDarkMode={isDarkMode}
                 scopeOptions={HEALTH_SCOPE_OPTIONS}

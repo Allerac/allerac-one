@@ -7,6 +7,7 @@ import ActivityCharts, { SeriesPoint, formatPace } from './ActivityCharts';
 import ActivityLapsPanel, { Lap } from './ActivityLapsPanel';
 import ActivityZonesPanel, { Zone } from './ActivityZonesPanel';
 import ActivityDynamicsPanel from './ActivityDynamicsPanel';
+import ActivityPerformancePanel from './ActivityPerformancePanel';
 import type { RoutePoint, RouteBounds } from './ActivityRouteMap';
 
 // Leaflet needs `window` — load client-only, matching the exact pattern
@@ -51,6 +52,13 @@ export interface ActivityRow {
   exercise_load: number | null;
   vo2_max: number | null;
   detail_sync_status: DetailSyncStatus;
+  provider?: string | null;
+  relative_effort?: number | null;
+  perceived_exertion?: number | null;
+  weighted_average_power_watts?: number | null;
+  energy_kilojoules?: number | null;
+  source_device?: string | null;
+  best_effort_count?: number | null;
   [key: string]: unknown;
 }
 
@@ -335,6 +343,7 @@ export default function ActivityDetailPanel({ activityId, isDarkMode: d, onDataC
       )}
 
       <ActivityDynamicsPanel activity={activity} isDarkMode={d} />
+      <ActivityPerformancePanel activity={activity} isDarkMode={d} />
       <ActivityLapsPanel laps={laps} isDarkMode={d} />
       <ActivityZonesPanel zones={zones} isDarkMode={d} />
     </div>

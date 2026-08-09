@@ -4,6 +4,7 @@ import { requireApiUser } from '../../../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../../../_lib/responses';
 import { queryProtectedLocations } from '@/app/services/health/health-query.service';
 import { redactRouteSamples } from '@/app/services/health/route-redaction.service';
+import { isValidHealthActivityId } from '../../_lib/activity-id';
 
 const querySchema = z.object({
   detail: z.enum(['true', 'false']).optional(),
@@ -22,8 +23,8 @@ export async function GET(
   try {
     const user = await requireApiUser('health:read', request);
     const { activityId } = await context.params;
-    if (!/^\d+$/.test(activityId)) {
-      return apiError('validation_error', 'activityId must be numeric', 400);
+    if (!isValidHealthActivityId(activityId)) {
+      return apiError('validation_error', 'Invalid activityId', 400);
     }
 
     const parsed = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));

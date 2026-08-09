@@ -2,6 +2,7 @@ import pool from '@/app/clients/db';
 import { requireApiUser } from '../../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../../_lib/responses';
 import { ACTIVITY_DETAIL_COLUMNS } from '../../_lib/columns';
+import { isValidHealthActivityId } from '../_lib/activity-id';
 
 // deleteActivity is session-scoped (getSessionUserId()), but ownership here
 // comes from requireApiUser's key/session resolution + the WHERE user_id
@@ -25,8 +26,8 @@ export async function GET(
   try {
     const user = await requireApiUser('health:read', request);
     const { activityId } = await context.params;
-    if (!/^\d+$/.test(activityId)) {
-      return apiError('validation_error', 'activityId must be numeric', 400);
+    if (!isValidHealthActivityId(activityId)) {
+      return apiError('validation_error', 'Invalid activityId', 400);
     }
 
     const res = await pool.query(
@@ -56,8 +57,8 @@ export async function DELETE(
   try {
     const user = await requireApiUser('health:write', request);
     const { activityId } = await context.params;
-    if (!/^\d+$/.test(activityId)) {
-      return apiError('validation_error', 'activityId must be numeric', 400);
+    if (!isValidHealthActivityId(activityId)) {
+      return apiError('validation_error', 'Invalid activityId', 400);
     }
 
     const deleted = await deleteActivityForUser(user.id, activityId);

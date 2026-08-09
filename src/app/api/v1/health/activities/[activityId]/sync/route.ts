@@ -1,6 +1,7 @@
 import pool from '@/app/clients/db';
 import { requireApiUser } from '../../../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../../../_lib/responses';
+import { isValidHealthActivityId } from '../../_lib/activity-id';
 
 // Queues (or re-queues) a Phase 2 detail sync for one activity — processed
 // asynchronously by the detail-sync poll loop in src/agent-worker.ts (see
@@ -13,8 +14,8 @@ export async function POST(
   try {
     const user = await requireApiUser('health:write', request);
     const { activityId } = await context.params;
-    if (!/^\d+$/.test(activityId)) {
-      return apiError('validation_error', 'activityId must be numeric', 400);
+    if (!isValidHealthActivityId(activityId)) {
+      return apiError('validation_error', 'Invalid activityId', 400);
     }
 
     const owns = await pool.query(

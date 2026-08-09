@@ -4,6 +4,7 @@ import { requireApiUser } from '../../../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../../../_lib/responses';
 import { queryProtectedLocations } from '@/app/services/health/health-query.service';
 import { redactRouteSamples } from '@/app/services/health/route-redaction.service';
+import { isValidHealthActivityId } from '../../_lib/activity-id';
 
 // Maps the public metric names callers select via ?metrics= to their
 // health_activity_samples columns. Never includes latitude/longitude —
@@ -38,8 +39,8 @@ export async function GET(
   try {
     const user = await requireApiUser('health:read', request);
     const { activityId } = await context.params;
-    if (!/^\d+$/.test(activityId)) {
-      return apiError('validation_error', 'activityId must be numeric', 400);
+    if (!isValidHealthActivityId(activityId)) {
+      return apiError('validation_error', 'Invalid activityId', 400);
     }
 
     const parsed = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));

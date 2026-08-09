@@ -357,6 +357,7 @@ async function getActivitiesFromDB(userId: string, startDate: string, endDate: s
       activityId: row.activity_id,
       activityName: row.activity_name,
       activityType: row.activity_type,
+      provider: row.provider,
       startTimeInSeconds: row.start_time_seconds ? Number(row.start_time_seconds) : null,
       startTimeLocal: row.start_time_local,
       duration: row.duration_seconds ? Number(row.duration_seconds) : null,

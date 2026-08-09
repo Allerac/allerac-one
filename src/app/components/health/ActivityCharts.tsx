@@ -99,6 +99,9 @@ export default function ActivityCharts({ series, isDarkMode, onHoverSampleIndexC
                 tickLine={false}
                 reversed={m.reversed}
                 domain={['auto', 'auto']}
+                tickFormatter={(value) => m.key === 'pace_seconds_per_km'
+                  ? formatPace(Number(value)).replace('/km', '')
+                  : String(Math.round(Number(value)))}
               />
               <Tooltip
                 formatter={(value) => {
