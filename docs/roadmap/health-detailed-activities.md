@@ -18,16 +18,16 @@ Health UI, assistant access, privacy, and historical analysis.
 `health_activities`, Health Control API, and domain-scoped access control.
 
 **Related:** [Strava Integration for Health](health-strava-integration.md), which
-extends this activity model to multiple providers and reconciles Garmin
-activities uploaded to Strava.
+extends this activity model to multiple providers. Garmin and Strava activities
+currently remain separate and can be selected by provider in the daily Health
+screen; automatic reconciliation is deferred.
 
 ## Decision
 
 Expand the Health domain from activity summaries into a private activity record
 that preserves complete provider responses and exposes stable, provider-neutral
-fields for the application. Garmin is the first detailed provider; the storage
-and API contracts must also support Strava without duplicating the activity
-experience.
+fields for the application. Garmin and Strava use the same detailed activity UI
+and API contracts. Provider records are not yet fused into one logical activity.
 
 For supported Garmin activities, Allerac should import:
 

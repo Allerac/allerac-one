@@ -168,9 +168,12 @@ export async function disconnectGarmin() {
 
 // ─── Sync ──────────────────────────────────────────────────────────────────────
 
-export async function triggerHealthSync(days = 2) {
+export async function triggerHealthSync(days = 2, targetDate?: string) {
   const userId = await getSessionUserId();
-  return _runSync(userId, 'manual', days);
+  if (targetDate && !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+    throw new Error('Invalid sync date. Expected YYYY-MM-DD.');
+  }
+  return _runSync(userId, 'manual', days, targetDate);
 }
 
 export async function triggerInitialSync() {
@@ -178,7 +181,7 @@ export async function triggerInitialSync() {
   return _runSync(userId, 'full', 30);
 }
 
-async function _runSync(userId: string, jobType: 'manual' | 'full', days: number) {
+async function _runSync(userId: string, jobType: 'manual' | 'full', days: number, targetDate?: string) {
   await submitLog('Health', '_runSync called');
   const connection = await getGarminConnection(userId);
   if (!connection) {
@@ -189,8 +192,9 @@ async function _runSync(userId: string, jobType: 'manual' | 'full', days: number
   }
 
   const sessionDump = connection.sessionDump;
-  const endDate = new Date().toISOString().split('T')[0];
-  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const endDate = targetDate ?? new Date().toISOString().split('T')[0];
+  const startDate = targetDate
+    ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   await submitLog('Health', `Sync started: ${startDate} → ${endDate} (${days} days)`);
 

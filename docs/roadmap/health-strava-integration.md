@@ -1,6 +1,9 @@
 # Strava Integration for Health
 
-**Status:** Proposed
+**Status:** MVP implemented. OAuth, manual historical import, detailed activity
+sync, routes/streams, zones, provider-specific performance data, webhook
+ingestion, and the shared Health UI are available. Automatic Garmin/Strava
+reconciliation is intentionally deferred.
 
 **Scope:** Strava account connection, activity synchronization, streams and
 routes, webhook updates, Garmin/Strava reconciliation, provider-neutral Health
@@ -23,6 +26,12 @@ public webhook delivery.
 Add Strava as a supported Health provider without creating a second, isolated
 activity experience.
 
+The current product keeps Garmin and Strava records separate. The daily Health
+screen shows provider badges and lets the user select which version to view.
+This is deliberate for the MVP: an activity recorded by Garmin and uploaded to
+Strava may appear twice, once per provider. Automatic matching and fusion into a
+single logical activity remains the next reconciliation phase.
+
 Garmin and Strava adapters import provider records into one provider-neutral
 Health activity model:
 
@@ -32,9 +41,10 @@ Garmin ──┐
 Strava ──┘
 ```
 
-A logical activity can have one or more provider sources. When a Garmin-recorded
-run is automatically uploaded to Strava, Allerac presents one run with Garmin
-and Strava provenance instead of two duplicate activities.
+The target model allows a logical activity to have one or more provider sources.
+Once reconciliation is implemented, a Garmin-recorded run automatically
+uploaded to Strava can be presented once with both sources and field-level
+provenance.
 
 The Health domain remains the user-facing source. Provider payloads remain
 evidence and synchronization inputs, not public product contracts.
@@ -46,7 +56,7 @@ evidence and synchronization inputs, not public product contracts.
 - Import detailed activities, routes, zones, and supported streams.
 - Receive activity creation, update, deletion, privacy, and deauthorization
   events through Strava webhooks.
-- Reconcile activities already imported from Garmin.
+- Reconcile activities already imported from Garmin (deferred after the MVP).
 - Preserve provider provenance for every field.
 - Keep exact location data private and out of ordinary assistant context.
 - Respect Strava rate limits, privacy changes, attribution, and API terms.
@@ -89,14 +99,16 @@ silently delete local activity history. Deletion is a separate explicit choice.
 
 ### Activity presentation
 
-Provider badges appear in the activity detail:
+The target reconciled presentation is:
 
 ```text
 Barcelona Running
 Sources: Garmin · Strava
 ```
 
-The activity screen remains provider-neutral. It can display:
+The current daily screen instead shows separate Garmin and Strava choices, each
+with its own badge. The selected activity uses the provider-neutral detail
+screen, which can display:
 
 - normalized summary and detailed metrics;
 - GPS route and synchronized charts;
@@ -106,6 +118,25 @@ The activity screen remains provider-neutral. It can display:
 
 Strava attribution must follow the current official guidelines wherever Strava
 data is displayed.
+
+In the current UI, provider badges appear in the daily activity selector.
+Selecting a record renders it through the same provider-neutral detail screen.
+Strava activity identifiers are namespaced as `strava:<providerActivityId>`;
+Garmin identifiers remain numeric strings. Namespacing prevents accidental
+collisions and merging before reconciliation exists.
+
+### Current normalization rules
+
+- Running cadence from Strava is converted from per-leg cadence to total steps
+  per minute.
+- Near-zero speed samples are excluded from running pace charts so pauses do
+  not produce unusable axis ranges.
+- Only heart-rate and power zones supplied by Strava are mapped. Empty zones
+  are omitted and percentages are calculated from available durations.
+- Relative Effort, weighted average power, energy, perceived exertion, device,
+  and best efforts are shown when Strava supplies them.
+- Provider payloads remain internal evidence; normalized fields drive the
+  common UI and API.
 
 ## Authentication and credentials
 
@@ -497,7 +528,13 @@ coordinates.
 
 ## Delivery phases
 
+The phase list below records both the implemented MVP and the remaining target.
+
 ### Phase 1 — Provider-neutral foundation
+
+**Current state:** provider provenance and source uniqueness are implemented.
+Garmin and Strava rows remain distinct; logical fusion and reconciliation
+contracts are deferred.
 
 1. Separate logical activities from provider sources.
 2. Add provider provenance and source uniqueness.
@@ -507,6 +544,9 @@ coordinates.
 
 ### Phase 2 — Strava connection
 
+**Current state:** implemented for OAuth, encrypted credentials, connection
+status, disconnect, and bounded manual history synchronization.
+
 1. Register and configure the Strava application.
 2. Add OAuth state, callback, encrypted tokens, and refresh.
 3. Add connection status, disconnect, and scope display.
@@ -514,6 +554,9 @@ coordinates.
 5. Test ownership, callback forgery, token leakage, and idempotency.
 
 ### Phase 3 — Details, streams, and reconciliation
+
+**Current state:** detail, lap, zone, route, and selected stream import are
+implemented. Automatic reconciliation and user corrections are deferred.
 
 1. Import activity details and supported zones.
 2. Import selected streams and GPS routes.
@@ -523,6 +566,12 @@ coordinates.
 
 ### Phase 4 — Webhooks and reliable incremental sync
 
+**Current state:** verification and event ingestion are implemented. Webhook
+subscription and end-to-end delivery must be validated from a publicly
+reachable deployment; localhost is sufficient for OAuth but not webhook
+delivery. Broader rate-limit budgeting and scheduled missed-event
+reconciliation remain future work.
+
 1. Add webhook verification and event ingestion.
 2. Queue create, update, delete, and deauthorization processing.
 3. Add replay protection and out-of-order handling.
@@ -530,6 +579,10 @@ coordinates.
 5. Run missed-event reconciliation on a conservative schedule.
 
 ### Phase 5 — Unified product experience
+
+**Current state:** provider badges, the daily source selector, and the common
+map/chart/detail experience are implemented. Logical-activity reasoning and
+automatic source fusion remain deferred.
 
 1. Add provider badges and provenance explanations.
 2. Show Strava segments and achievements in attributed sections.
@@ -544,7 +597,9 @@ coordinates.
 - Historical import is paginated, bounded, resumable, and idempotent.
 - Detailed metrics and available streams render in the common Health activity
   page.
-- A Garmin activity uploaded to Strava normally appears once, with both sources.
+- A Garmin activity uploaded to Strava may currently appear twice, and the user
+  chooses which provider record to view. Showing it once with both sources is a
+  deferred reconciliation requirement.
 - Uncertain matches require confirmation and incorrect matches can be reversed.
 - Metric provenance and source discrepancies are explainable.
 - Privacy changes, provider deletion, and deauthorization stop or remove Strava
@@ -553,4 +608,3 @@ coordinates.
   assistant context.
 - Rate limiting degrades synchronization without breaking existing Health data.
 - Garmin-only users and existing Health APIs remain compatible.
-

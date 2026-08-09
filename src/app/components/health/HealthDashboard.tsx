@@ -110,6 +110,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
   const [syncing, setSyncing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
 
   // Reset to today when switching away from 'today' period and back
   useEffect(() => {
@@ -217,8 +218,12 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
     setSyncing(true);
     setSyncMessage(null);
     try {
-      const result = await healthActions.triggerHealthSync(PERIOD_CONFIG[period].days);
+      const result = await healthActions.triggerHealthSync(
+        PERIOD_CONFIG[period].days,
+        period === 'today' ? selectedDate : undefined,
+      );
       setSyncMessage({ type: 'success', text: t('syncSuccess', { records: result.records }) });
+      setActivityRefreshKey((key) => key + 1);
       await loadData();
     } catch (e: any) {
       setSyncMessage({ type: 'error', text: e.message });
@@ -426,7 +431,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                   </div>
 
                   {/* Recent activity card */}
-                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} onActivityContextChange={onActivityContextChange} />
+                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} refreshKey={activityRefreshKey} onActivityContextChange={onActivityContextChange} />
                 </>
               )}
 
@@ -708,7 +713,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                   </div>
 
                   {/* Recent activity card */}
-                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} onActivityContextChange={onActivityContextChange} />
+                  <RecentActivity isDarkMode={isDarkMode} selectedDate={selectedDate} refreshKey={activityRefreshKey} onActivityContextChange={onActivityContextChange} />
                 </>
               )}
 

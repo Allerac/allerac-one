@@ -1150,7 +1150,7 @@ paths:
             format: date
       responses:
         "200":
-          description: Recent Garmin activities
+          description: Recent Garmin and Strava activities. Provider records are returned separately; automatic reconciliation is deferred.
           content:
             application/json:
               schema:
@@ -1170,6 +1170,7 @@ paths:
           required: true
           schema:
             type: string
+          description: Numeric Garmin activity ID or namespaced Strava ID (`strava:<id>`).
       responses:
         "200":
           description: Normalized detail for one activity, including detail_sync_status

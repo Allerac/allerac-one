@@ -34,6 +34,7 @@ export interface ActivityChatContext extends ActivityDetailData {
 interface Props {
   isDarkMode: boolean;
   selectedDate?: string;
+  refreshKey?: number;
   onActivityContextChange?: (ctx: ActivityChatContext | null) => void;
 }
 
@@ -44,7 +45,7 @@ function formatName(raw: string): string {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-export default function RecentActivity({ isDarkMode, selectedDate, onActivityContextChange }: Props) {
+export default function RecentActivity({ isDarkMode, selectedDate, refreshKey = 0, onActivityContextChange }: Props) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -88,7 +89,10 @@ export default function RecentActivity({ isDarkMode, selectedDate, onActivityCon
     }
   }, [selectedDate]);
 
-  useEffect(() => { fetchActivity(); }, [fetchActivity]);
+  useEffect(() => {
+    void refreshKey;
+    fetchActivity();
+  }, [fetchActivity, refreshKey]);
 
   const isStrength = activity?.activityType === 'strength_training';
   const exercises = activity?.summarizedExerciseSets ?? [];

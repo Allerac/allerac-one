@@ -1,9 +1,9 @@
 # Health API
 
-Health endpoints expose Garmin fitness data through the Control API.
-These endpoints require the health worker to be configured
-(`HEALTH_WORKER_SECRET`). If the worker is not configured, all endpoints
-return `503 Service Unavailable`.
+Health endpoints expose normalized Garmin and Strava activity data, plus Garmin
+daily-health data, through the Control API. Garmin-backed synchronization and
+live proxy endpoints require the health worker to be configured
+(`HEALTH_WORKER_SECRET`).
 
 ## Scopes
 
@@ -139,7 +139,9 @@ Response:
 
 ## `GET /api/v1/health/activities`
 
-Returns recent Garmin activities for the authenticated user.
+Returns recent Garmin and Strava activities for the authenticated user. Each
+record includes its `provider`. Providers remain separate; the API does not
+currently reconcile likely duplicates.
 
 Query parameters:
 
@@ -147,6 +149,9 @@ Query parameters:
 |---|---|---|
 | `limit` | integer, 1-50 | Optional, defaults to 10 |
 | `date` | string (`YYYY-MM-DD`) | Optional, filter by date |
+
+Activity IDs are provider-aware: Garmin IDs are numeric strings and Strava IDs
+use `strava:<providerActivityId>`.
 
 Example:
 
@@ -159,7 +164,9 @@ curl -s \
 ## `GET /api/v1/health/activities/{activityId}`
 
 Returns one activity's normalized detail row, including Phase 1's provider-neutral
-fields (pace, power, training effect, running dynamics, stamina where available)
+fields (pace, power, training effect, running dynamics, stamina where available),
+provider-specific normalized performance fields (Relative Effort, perceived
+exertion, weighted average power, energy, source device, and best-effort count),
 and the current `detailSyncStatus` (`pending`, `syncing`, `complete`, `partial`,
 or `failed`). Exact GPS coordinates and raw provider payloads are never included
 in this response — see `docs/roadmap/health-detailed-activities.md`.
@@ -188,6 +195,10 @@ Response:
   }
 }
 ```
+
+For Strava, this endpoint family accepts a namespaced identifier, for example
+`/api/v1/health/activities/strava:19628547417`. Exercise-set updates remain
+Garmin-only.
 
 ## `GET /api/v1/health/activities/{activityId}/laps`
 

@@ -8,7 +8,10 @@
 
 ## Purpose
 
-Health and wellness assistant with direct access to Garmin Connect data. The AI can query steps, sleep stages, heart rate, body battery, calories burned, and recent activities, then provide coaching, training plans, and recovery analysis.
+Health and wellness assistant with Garmin daily-health data and Garmin/Strava
+activities. The AI can query steps, sleep stages, heart rate, body battery,
+calories burned, and recent activities, then provide coaching, training plans,
+and recovery analysis.
 
 ## Key Files
 
@@ -22,6 +25,7 @@ Health and wellness assistant with direct access to Garmin Connect data. The AI 
 | Health tool | `src/app/tools/health.tool.ts` |
 | Skill | `skills/health.md` |
 | Garmin service | `services/health-worker/garmin.py` |
+| Strava services | `src/app/services/strava/` |
 | Worker | `services/health-worker/app.py` |
 | Architecture doc | `docs/health/README.md` |
 | Detailed activities roadmap | `docs/roadmap/health-detailed-activities.md` |
@@ -53,6 +57,7 @@ one currently open (comparisons, history).
 ## External Integrations
 
 - **Garmin Connect** — SSO authentication via garth library (OAuth 1 + OAuth 2)
+- **Strava** — OAuth 2.0, recent-history import, detailed sync, and webhook ingestion
 - **health-worker** — Python FastAPI service running separately (`allerac-health-worker` container)
 - **Cloudflare Tunnel** — exposes the health-worker to the outside when running on mini-PC (for VM deployments that can't reach Garmin SSO directly)
 
@@ -69,10 +74,13 @@ See `docs/health/README.md` for the full auth flow. Short version:
 | Table | Purpose |
 |-------|---------|
 | `garmin_credentials` | Encrypted garth session dump per user |
+| `strava_credentials` | Encrypted Strava credentials and athlete metadata per user |
 | `health_daily_metrics` | Cached daily health data |
 | `health_sync_jobs` | Background sync job tracking |
 | `health_mfa_sessions` | Pending MFA sessions |
-| `health_activities` | Activity summaries — lossless raw Garmin payload (`raw_data`) plus normalized, explicit-unit columns (pace, power, training effect, running dynamics) |
+| `health_activities` | Garmin/Strava activity summaries with raw provider evidence plus normalized, explicit-unit fields |
+| `health_activity_sources` | Provider identity and provenance for an activity |
+| `strava_webhook_events` | Idempotent Strava webhook event inbox |
 | `health_activity_laps` | Per-lap detail (Phase 2) |
 | `health_activity_zones` | Heart-rate/power time-in-zone aggregates (Phase 2) |
 | `health_activity_detail_sync_jobs` | Idempotent async queue that fetches laps/zones/route/samples per activity, polled by `src/agent-worker.ts` |
@@ -80,6 +88,12 @@ See `docs/health/README.md` for the full auth flow. Short version:
 | `health_protected_locations` | User-level privacy zones (encrypted lat/lng) that redact the start/end of served routes (Phase 3) |
 
 ## Notes
+
+- Garmin and Strava records are intentionally shown separately. The daily
+  dashboard labels each provider and lets the user select a record. Automatic
+  duplicate reconciliation is deferred.
+- Cached activity endpoints accept numeric Garmin IDs and namespaced Strava IDs
+  such as `strava:19628547417`. Garmin-only exercise-set editing remains numeric.
 
 - Garmin SSO blocks connections from cloud VMs (Azure, AWS, GCP). Local/residential IPs work fine.
 - The health-worker runs as a separate Python service to isolate the garth dependency from the Node.js app.

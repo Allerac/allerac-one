@@ -1,13 +1,42 @@
 # Health Integration
 
-Allerac integrates with Garmin Connect to sync daily health metrics (steps, sleep, heart rate, HRV, body battery, stress) and activity data into the database.
+Allerac integrates with Garmin Connect for daily health metrics (steps, sleep,
+heart rate, HRV, body battery, and stress) and with Garmin and Strava for
+activity data. Activities from both providers use the same detail, map, chart,
+lap, and zone experience.
 
 The planned expansion for complete activity metrics, GPS routes, synchronized
 time series, maps, privacy controls, and assistant analysis is documented in
 [Detailed Health Activities and Maps](../roadmap/health-detailed-activities.md).
-The multi-provider Strava connection, webhook, streams, and activity
-reconciliation design is documented in
+The implemented Strava connection, webhook, streams, and deferred activity
+reconciliation design are documented in
 [Strava Integration for Health](../roadmap/health-strava-integration.md).
+
+## Current multi-provider behavior
+
+- Garmin and Strava activities are stored as separate provider records.
+- The daily dashboard shows both, labels them with provider badges, and lets the
+  user select which record to inspect.
+- Strava IDs use `strava:<id>`; Garmin IDs remain numeric strings.
+- Automatic duplicate reconciliation is intentionally deferred.
+- Strava manual sync imports recent history; detailed synchronization imports
+  available laps, heart-rate/power zones, routes, streams, and performance
+  fields.
+
+### Strava configuration
+
+```env
+STRAVA_CLIENT_ID=
+STRAVA_CLIENT_SECRET=
+STRAVA_REDIRECT_URI=http://localhost:8080/api/strava/callback
+STRAVA_WEBHOOK_VERIFY_TOKEN=
+```
+
+In Strava application settings, the callback domain for local OAuth is
+`localhost` (without protocol, port, or path). Allerac's redirect URI uses the
+full callback path. Webhooks require a publicly reachable HTTPS endpoint such
+as `https://allerac.example/api/strava/webhook`; localhost cannot receive
+Strava delivery requests.
 
 ## Architecture
 
@@ -200,6 +229,10 @@ The `garmin-auth-worker` Docker service and Node.js server code are already impl
 | `AUTH_WORKER_SECRET` | `health-worker` | Secret for health-worker → garmin-auth-worker calls |
 | `GARMIN_WORKER_SECRET` | `garmin-auth-worker` | Same value as `AUTH_WORKER_SECRET`, read as `WORKER_SECRET` |
 | `ENCRYPTION_KEY` | `allerac-one` | AES-256-GCM key used to encrypt stored Garmin credentials |
+| `STRAVA_CLIENT_ID` | `allerac-one` | Strava OAuth application client ID |
+| `STRAVA_CLIENT_SECRET` | `allerac-one` | Strava OAuth application client secret |
+| `STRAVA_REDIRECT_URI` | `allerac-one` | Full OAuth callback URI; localhost is supported for local OAuth testing |
+| `STRAVA_WEBHOOK_VERIFY_TOKEN` | `allerac-one` | Locally chosen token used during webhook subscription verification |
 
 ---
 
@@ -208,6 +241,9 @@ The `garmin-auth-worker` Docker service and Node.js server code are already impl
 | Table | Purpose |
 |---|---|
 | `garmin_credentials` | Encrypted OAuth tokens, connection status, last sync timestamp |
+| `strava_credentials` | Encrypted Strava OAuth tokens and athlete connection state |
+| `health_activity_sources` | Provider provenance for imported activities |
+| `strava_webhook_events` | Idempotent inbox for Strava webhook events |
 | `health_mfa_sessions` | Temporary MFA state during login (10-minute TTL) |
 | `health_daily_metrics` | Daily aggregated metrics (steps, sleep, HR, HRV, etc.) |
 | `health_activities` | Individual activities (runs, workouts, etc.) |

@@ -134,6 +134,29 @@ describe('Health actions — data_mode gating', () => {
     expect(calledWith('INSERT INTO health_sync_jobs')).toBe(false);
   });
 
+  it('triggerHealthSync synchronizes the explicitly selected day', async () => {
+    mockQueriesByNeedle({
+      'FROM integration_connections': [connectionRow('cached')],
+      'FROM garmin_credentials': [{ oauth1_token_encrypted: 'enc' }],
+      'INSERT INTO health_sync_jobs': [{ id: 'job-1' }],
+    });
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ metrics: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ activities: [] }), { status: 200 }));
+    global.fetch = fetchMock;
+
+    await triggerHealthSync(2, '2026-06-25');
+
+    const syncBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    const activitiesBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(syncBody).toMatchObject({ start_date: '2026-06-25', end_date: '2026-06-25' });
+    expect(activitiesBody).toMatchObject({ date: '2026-06-25' });
+  });
+
+  it('triggerHealthSync rejects an invalid selected date', async () => {
+    await expect(triggerHealthSync(2, '25-06-2026')).rejects.toThrow(/YYYY-MM-DD/);
+  });
+
   it('getHealthSummary reports unavailable for a proxy-mode connection instead of an empty summary', async () => {
     mockQueriesByNeedle({
       'FROM integration_connections': [connectionRow('proxy')],
