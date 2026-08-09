@@ -896,7 +896,7 @@ export default function AdminClient({
                   label="GitHub Repo Token"
                   description="(tickets agent — create branches & PRs)"
                   placeholder="ghp_..."
-                  provider="github"
+                  provider="github-repo"
                   hasStoredValue={!!sysSettings.github_repo_token}
                   value={sysSettings.github_repo_token ?? ''}
                   onChange={v => setSysSettings(prev => ({ ...prev, github_repo_token: v }))}
