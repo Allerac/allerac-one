@@ -144,6 +144,7 @@ nav:
           - Overview: deploy/README.md
           - Sandbox Home: deploy/sandbox-home.md
           - Prod Azure: deploy/prod-azure.md
+      - Database Backup and Restore: database-backup-restore.md
       - Containers: containers/containers.md
       - Infrastructure: infrastructure/infrastructure.md
       - Local Setup: local-setup/local-setup.md
