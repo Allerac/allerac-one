@@ -1,5 +1,5 @@
 import pool from '@/app/clients/db';
-import { assertDomainAccess } from '@/app/lib/auth-session';
+import { assertDomainAccess } from '@/app/lib/domain-access-check';
 import type { User } from '@/app/services/auth/auth.service';
 
 export { MEMORY_DOMAIN_TOOL_DEFINITIONS, RECALL_MEMORY_TOOL_DEFINITION } from './memory.tool.definitions';

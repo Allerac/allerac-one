@@ -3,12 +3,12 @@ jest.mock('@/app/clients/db', () => ({
   default: { query: jest.fn() },
 }));
 
-jest.mock('@/app/lib/auth-session', () => ({
+jest.mock('@/app/lib/domain-access-check', () => ({
   assertDomainAccess: jest.fn(),
 }));
 
 import pool from '@/app/clients/db';
-import { assertDomainAccess } from '@/app/lib/auth-session';
+import { assertDomainAccess } from '@/app/lib/domain-access-check';
 import { buildMemoryTools } from '@/app/tools/memory.tool';
 import type { User } from '@/app/services/auth/auth.service';
 
