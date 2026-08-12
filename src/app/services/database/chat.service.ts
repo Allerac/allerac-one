@@ -61,6 +61,7 @@ export class ChatService {
 
     /**
      * Load all conversations for a user
+     * Excludes conversations from the 'job' domain when loading the hub (no domainSlug specified)
      */
     async loadConversations(userId: string, domainSlug?: string | null) {
         try {
@@ -70,8 +71,8 @@ export class ChatService {
                     [userId, domainSlug]
                   )
                 : await pool.query(
-                    'SELECT * FROM chat_conversations WHERE user_id = $1 ORDER BY pinned DESC, updated_at DESC',
-                    [userId]
+                    'SELECT * FROM chat_conversations WHERE user_id = $1 AND domain_slug != $2 ORDER BY pinned DESC, updated_at DESC',
+                    [userId, 'job']
                   );
             return res.rows;
         } catch (error) {
@@ -79,6 +80,7 @@ export class ChatService {
             return [];
         }
     }
+
 
     async pinConversation(conversationId: string, pinned: boolean, userId?: string) {
         try {
