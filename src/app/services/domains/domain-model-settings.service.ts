@@ -76,6 +76,19 @@ export class DomainModelSettingsService {
     );
   }
 
+  /**
+   * Resolves model+provider purely from the domain's configured setting, with no
+   * caller-supplied fallback — used by callers (like the public Control API) that
+   * don't have a "global" model preference of their own and should fail clearly
+   * instead of guessing a provider when the domain hasn't been configured yet.
+   */
+  async resolveDomainDefault(userId: string, domainSlug: string): Promise<{ modelId: string; provider: Provider } | null> {
+    const settings = await this.get(userId, domainSlug);
+    const configured = settings.modelId ? knownModel(settings.modelId) : null;
+    if (!configured) return null;
+    return { modelId: configured.id, provider: configured.provider as Provider };
+  }
+
   async resolve(input: {
     userId: string;
     domainSlug: string;
