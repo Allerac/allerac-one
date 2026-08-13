@@ -52,6 +52,7 @@ const DOMAINS = [
   { slug: 'jobs',    label: 'Jobs',    icon: '⏰' },
   { slug: 'memory',  label: 'Knowledge', icon: '🗂️' },
   { slug: 'robot-assistant', label: 'Robot', icon: 'R' },
+  { slug: 'sales',   label: 'Sales',   icon: '📣' },
 ];
 
 interface Props {
