@@ -22,6 +22,20 @@ const DOMAIN_TOOL_NAMES = [
   ...TICKET_TOOL_NAMES,
 ];
 
+// Public-facing domains (reached by a service account with no personal data
+// access, e.g. the website sales widget) that must not get the personal
+// notes vault, even though every other domain does by default below.
+const PUBLIC_DOMAINS = ['sales'];
+
+// The sales domain only ever needs to create a ticket (lead capture) — never
+// list, read, or update tickets, which would let one website visitor read
+// another visitor's captured lead (tickets are scoped by the calling
+// account, and every visitor shares the same sales-bot account/conversation
+// history model).
+const SALES_TICKET_TOOL_DEFINITIONS = TICKETS_TOOL_DEFINITIONS.filter(
+  (tool: any) => tool.function.name === 'create_ticket',
+);
+
 export async function resolveChatTools(
   skillId: string | null | undefined,
   domain: string,
@@ -37,9 +51,10 @@ export async function resolveChatTools(
 
   return [
     ...tools.filter((tool) => !DOMAIN_TOOL_NAMES.includes(tool.function.name)),
-    ...NOTES_TOOL_DEFINITIONS,
+    ...(PUBLIC_DOMAINS.includes(domain) ? [] : NOTES_TOOL_DEFINITIONS),
     ...(domain === 'email' ? EMAIL_TOOL_DEFINITIONS : []),
     ...(domain === 'jobs' ? JOBS_TOOL_DEFINITIONS : []),
     ...(domain === 'tickets' ? TICKETS_TOOL_DEFINITIONS : []),
+    ...(domain === 'sales' ? SALES_TICKET_TOOL_DEFINITIONS : []),
   ];
 }
