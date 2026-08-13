@@ -31,6 +31,20 @@ const DOMAIN_TOOL_NAMES = [
   ...TICKET_TOOL_NAMES,
 ];
 
+// Public-facing domains (reached by a service account with no personal data
+// access, e.g. the website sales widget) that must not get the personal
+// notes vault, even though every other domain does by default below.
+const PUBLIC_DOMAINS = ['sales'];
+
+// The sales domain only ever needs to create a ticket (lead capture) — never
+// list, read, or update tickets, which would let one website visitor read
+// another visitor's captured lead (tickets are scoped by the calling
+// account, and every visitor shares the same sales-bot account/conversation
+// history model).
+const SALES_TICKET_TOOL_DEFINITIONS = TICKETS_TOOL_DEFINITIONS.filter(
+  (tool: any) => tool.function.name === 'create_ticket',
+);
+
 export async function resolveChatTools(
   skillId: string | null | undefined,
   domain: string,
@@ -47,14 +61,20 @@ export async function resolveChatTools(
   return [
     ...tools.filter((tool) => !DOMAIN_TOOL_NAMES.includes(tool.function.name)
       && !['recall_memory', 'create_memory'].includes(tool.function.name)),
-    RECALL_MEMORY_TOOL_DEFINITION,
-    CREATE_MEMORY_TOOL_DEFINITION,
-    SCHEDULE_TASK_TOOL_DEFINITION,
-    LEARN_INSTRUCTION_TOOL_DEFINITION,
-    ...NOTES_TOOL_DEFINITIONS,
+    // Memory, scheduling, and self-instruction tools are otherwise unconditional across every
+    // domain — withheld here for public-facing domains (no personal memory/automation access,
+    // and learn_instruction in particular would let a visitor durably alter the agent's behavior).
+    ...(PUBLIC_DOMAINS.includes(domain) ? [] : [
+      RECALL_MEMORY_TOOL_DEFINITION,
+      CREATE_MEMORY_TOOL_DEFINITION,
+      SCHEDULE_TASK_TOOL_DEFINITION,
+      LEARN_INSTRUCTION_TOOL_DEFINITION,
+      ...NOTES_TOOL_DEFINITIONS,
+    ]),
     ...(domain === 'memory' ? MEMORY_DOMAIN_TOOL_DEFINITIONS : []),
     ...(domain === 'email' ? EMAIL_TOOL_DEFINITIONS : []),
     ...(domain === 'jobs' ? JOBS_TOOL_DEFINITIONS : []),
     ...(domain === 'tickets' ? TICKETS_TOOL_DEFINITIONS : []),
+    ...(domain === 'sales' ? SALES_TICKET_TOOL_DEFINITIONS : []),
   ];
 }
