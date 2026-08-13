@@ -13,13 +13,16 @@ import {
 } from '@/app/services/chat/chat-execution.service';
 import { ChatProviderConfigurationError } from '@/app/services/chat/chat-runtime-context';
 import { acquireOperationLimit } from '@/app/lib/operation-limiter';
+import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
 
 const chatService = new ChatService();
 
 const sendMessageSchema = z.object({
   message: z.string().max(100_000).optional(),
-  model: z.string().trim().min(1).max(200),
-  provider: z.enum(CHAT_PROVIDERS),
+  // Optional: omit to use the domain's configured model (see
+  // domainModelSettingsService.resolveDomainDefault below) instead of naming one explicitly.
+  model: z.string().trim().min(1).max(200).optional(),
+  provider: z.enum(CHAT_PROVIDERS).optional(),
   imageAttachments: z.array(z.object({
     url: z.string().max(8 * 1024 * 1024).refine(
       value => value.startsWith('data:image/') || value.startsWith('https://'),
@@ -99,6 +102,21 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       );
     }
 
+    let modelId = parsed.data.model;
+    let provider = parsed.data.provider;
+    if (!modelId || !provider) {
+      const domainDefault = await domainModelSettingsService.resolveDomainDefault(user.id, domain);
+      if (!domainDefault) {
+        return apiError(
+          'provider_not_configured',
+          `No model is configured for domain "${domain}" and no model/provider was provided`,
+          422,
+        );
+      }
+      modelId = domainDefault.modelId;
+      provider = domainDefault.provider;
+    }
+
     const cookieStore = await cookies();
     const locale = cookieStore.get('locale')?.value || 'en';
     const events: Array<Record<string, any>> = [];
@@ -113,8 +131,8 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       conversationId: id,
       domain,
       message: parsed.data.message || 'What do you see in this image?',
-      modelId: parsed.data.model,
-      provider: parsed.data.provider,
+      modelId,
+      provider,
       locale,
       imageAttachments: parsed.data.imageAttachments,
       preSelectedSkillId: parsed.data.preSelectedSkillId,
