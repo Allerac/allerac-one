@@ -1,5 +1,6 @@
 export type ExpensiveOperation =
   | 'chat'
+  | 'public-chat'
   | 'benchmark'
   | 'image-edit'
   | 'model-download';
@@ -56,6 +57,19 @@ function getLimit(operation: ExpensiveOperation): OperationLimit {
         requests: positiveInteger('RATE_LIMIT_CHAT_REQUESTS', 30),
         windowMs: positiveInteger('RATE_LIMIT_CHAT_WINDOW_SECONDS', 60) * 1_000,
         concurrency: positiveInteger('CONCURRENCY_LIMIT_CHAT', 2),
+        scope: 'user',
+      };
+    // Extra daily budget cap stacked on top of 'chat' for public-facing domains
+    // (see PUBLIC_DOMAINS in chat-tool-registry.ts). Every website visitor shares
+    // the same service account, so 'chat's per-minute window alone doesn't stop
+    // sustained abuse (VPN/IP rotation) from running up real LLM spend over a day.
+    // Concurrency is set high — this is a volume cap, not a concurrency cap;
+    // 'chat' already enforces concurrency for this account.
+    case 'public-chat':
+      return {
+        requests: positiveInteger('RATE_LIMIT_PUBLIC_CHAT_REQUESTS', 300),
+        windowMs: positiveInteger('RATE_LIMIT_PUBLIC_CHAT_WINDOW_SECONDS', 86_400) * 1_000,
+        concurrency: positiveInteger('CONCURRENCY_LIMIT_PUBLIC_CHAT', 20),
         scope: 'user',
       };
     case 'benchmark':

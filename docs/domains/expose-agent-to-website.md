@@ -161,12 +161,20 @@ Non-admin, domain-only accounts (like the bot) can't reach the admin-only scope 
 domain's key needs there, and only that scope (e.g. `chat:write`, not `chat:read` if the caller
 never reads history back).
 
-## Rate limiting has two layers
+## Rate limiting has two layers (three, for public domains)
 
 `operation-limiter.ts`'s `acquireOperationLimit('chat', userId)` is **per account**, not per
 visitor — every website visitor authenticates as the same bot account, so this becomes one shared
 bucket for the whole website. The real per-visitor limit has to live in the website's own proxy
 (Workers KV keyed by `CF-Connecting-IP`, in the sales implementation).
+
+For domains in `PUBLIC_DOMAINS` there's a third layer: `acquireOperationLimit('public-chat',
+userId)`, a much longer-window (24h by default) volume cap stacked on top of `chat` in
+`messages/route.ts`, plus a per-conversation message cap
+(`PUBLIC_DOMAIN_MAX_MESSAGES_PER_CONVERSATION`) so no single conversation grows its context (and
+cost) without bound. See
+[public-agent-security-considerations.md](./public-agent-security-considerations.md) for the full
+threat model this is addressing, and what's still open.
 
 ## Windows/PowerShell shell gotchas hit while operating this
 
@@ -188,3 +196,7 @@ bucket for the whole website. The real per-visitor limit has to live in the webs
 
 - Rebuild/redeploy the app so `SystemSkillsLoader` picks up `skills/sales.md`, then run the
   one-time cleanup SQL in "Skill definition" above to remove the old raw-SQL skill row.
+- See [public-agent-security-considerations.md](./public-agent-security-considerations.md) for the
+  open (not-yet-addressed) risks — bot-challenge/CAPTCHA, ticket-creation spam, output content
+  moderation, PII retention policy, and the `chat` concurrency limit's site-wide bottleneck for
+  public domains.

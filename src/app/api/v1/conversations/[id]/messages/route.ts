@@ -14,8 +14,15 @@ import {
 import { ChatProviderConfigurationError } from '@/app/services/chat/chat-runtime-context';
 import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
+import { PUBLIC_DOMAINS } from '@/app/services/chat/chat-tool-registry';
 
 const chatService = new ChatService();
+
+// Anonymous website visitors share one service account per public domain — cap how
+// long a single conversation can run so no visitor can turn one thread into an
+// unbounded, ever-growing (and ever more expensive) context. See
+// docs/domains/expose-agent-to-website.md.
+const PUBLIC_DOMAIN_MAX_MESSAGES_PER_CONVERSATION = 40;
 
 const sendMessageSchema = z.object({
   message: z.string().max(100_000).optional(),
@@ -65,6 +72,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
 
 export async function POST(request: Request, context: RouteContext): Promise<Response> {
   let limitResult: ReturnType<typeof acquireOperationLimit> | null = null;
+  let publicLimitResult: ReturnType<typeof acquireOperationLimit> | null = null;
   try {
     const user = await requireApiUser('chat:write', request);
     const { id } = await context.params;
@@ -87,6 +95,19 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       created_at: new Date(),
     }, domain);
 
+    const isPublicDomain = PUBLIC_DOMAINS.includes(domain);
+
+    if (isPublicDomain) {
+      const existingCount = await chatService.countMessages(id);
+      if (existingCount >= PUBLIC_DOMAIN_MAX_MESSAGES_PER_CONVERSATION) {
+        return apiError(
+          'conversation_limit_reached',
+          'This conversation has reached its message limit. Please start a new conversation.',
+          403,
+        );
+      }
+    }
+
     limitResult = acquireOperationLimit('chat', user.id);
     if (!limitResult.allowed) {
       const code = limitResult.reason === 'concurrency' ? 'concurrency_limited' : 'rate_limited';
@@ -103,6 +124,26 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
         },
         { status: 429, headers: limitResult.headers },
       );
+    }
+
+    // Extra daily volume cap for public domains — every anonymous visitor shares this
+    // one service account, so 'chat's per-minute window alone doesn't stop sustained
+    // abuse (VPN/IP rotation) from running up real LLM spend over a day.
+    if (isPublicDomain) {
+      publicLimitResult = acquireOperationLimit('public-chat', user.id);
+      if (!publicLimitResult.allowed) {
+        // `finally` below releases the already-acquired 'chat' lease.
+        return Response.json(
+          {
+            error: {
+              code: 'rate_limited',
+              message: 'Daily chat volume limit exceeded for this domain',
+              details: { retryAfterSeconds: publicLimitResult.retryAfterSeconds },
+            },
+          },
+          { status: 429, headers: publicLimitResult.headers },
+        );
+      }
     }
 
     let modelId = parsed.data.model;
@@ -172,6 +213,9 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
   } finally {
     if (limitResult?.allowed) {
       limitResult.lease.release();
+    }
+    if (publicLimitResult?.allowed) {
+      publicLimitResult.lease.release();
     }
   }
 }

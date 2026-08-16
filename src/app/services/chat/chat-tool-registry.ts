@@ -33,8 +33,10 @@ const DOMAIN_TOOL_NAMES = [
 
 // Public-facing domains (reached by a service account with no personal data
 // access, e.g. the website sales widget) that must not get the personal
-// notes vault, even though every other domain does by default below.
-const PUBLIC_DOMAINS = ['sales'];
+// notes vault, even though every other domain does by default below. Also
+// used outside this file (e.g. the messages route) to apply extra abuse
+// limits — anonymous website visitors get less trust than logged-in users.
+export const PUBLIC_DOMAINS = ['sales'];
 
 // The sales domain only ever needs to create a ticket (lead capture) — never
 // list, read, or update tickets, which would let one website visitor read
