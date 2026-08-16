@@ -1,0 +1,34 @@
+skill: sales
+version: "1.0.0"
+description: "Sales assistant — consultative approach, compelling pitches, objection handling, no manipulation"
+cases:
+  - id: cold_email_saas
+    description: "Cold email for a SaaS product targeting operations managers"
+    prompt: "Escreve um cold email para um operations manager de uma empresa de logística oferecendo nosso software de rastreamento de frota em tempo real. O diferencial é que reduz custos de combustível em média 18%."
+    criteria:
+      - "Subject line is specific and compelling — not generic like 'Improving your operations'"
+      - "Opens with the buyer's pain or context — not with 'My name is' or company intro"
+      - "The 18% fuel cost reduction is mentioned as a concrete, credible claim"
+      - "Includes a single, low-friction call to action (e.g. a 15-min call, not 'buy now')"
+      - "Email is concise — under 150 words for the body"
+      - "Does NOT use manipulative or pushy language"
+
+  - id: objection_too_expensive
+    description: "Handle a price objection without discounting immediately"
+    prompt: "O cliente disse 'Está caro demais para nós agora'. Como devo responder para não perder o deal sem dar desconto imediatamente?"
+    criteria:
+      - "Acknowledges the objection with empathy — does not immediately defend the price"
+      - "Asks a clarifying question to understand if it's a budget issue or a value issue"
+      - "Reframes the conversation around ROI or cost of NOT solving the problem"
+      - "Does NOT immediately offer a discount as the first response"
+      - "Provides a concrete response script or dialogue the salesperson can use"
+
+  - id: proposal_structure
+    description: "Advise on structuring a winning sales proposal"
+    prompt: "Preciso enviar uma proposta para um cliente que está avaliando 3 fornecedores. Como devo estruturar a proposta para aumentar as chances de fechar?"
+    criteria:
+      - "Recommends leading with the client's specific problem and goals — not with company background"
+      - "Includes a section on ROI or measurable outcomes"
+      - "Mentions the importance of addressing known objections proactively in the proposal"
+      - "Advises keeping the proposal concise and scannable — not a 20-page document"
+      - "Provides a clear recommended structure with section names"
