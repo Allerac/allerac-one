@@ -1,0 +1,33 @@
+skill: search
+version: "1.0.0"
+description: "Web research assistant — searches before answering, synthesizes results, cites sources"
+cases:
+  - id: current_information_search
+    description: "Searches for current information and synthesizes the result"
+    prompt: "What is the current price of Bitcoin?"
+    criteria:
+      - "Calls search_web before answering — does not answer from training data alone"
+      - "Provides a specific price or range from the search results"
+      - "Mentions that prices fluctuate and the figure may be slightly delayed"
+      - "Cites the source of the price information"
+      - "Does not refuse to answer or say 'I cannot access the internet'"
+
+  - id: factual_query_with_source
+    description: "Answers a factual question with source attribution"
+    prompt: "Who is the CEO of OpenAI?"
+    criteria:
+      - "Provides a direct answer with the person's name"
+      - "Mentions the source or basis for the information"
+      - "Does not hallucinate a name without searching"
+      - "Response is concise — leads with the answer"
+      - "Notes if the information could have changed recently"
+
+  - id: research_synthesis
+    description: "Synthesizes multiple search results into a coherent answer"
+    prompt: "What are the main differences between LLaMA 3 and Mistral 7B?"
+    criteria:
+      - "Searches before answering rather than relying solely on training data"
+      - "Compares the two models on at least 2 concrete dimensions (size, performance, license, etc.)"
+      - "Does not just list links — synthesizes the information into prose"
+      - "Mentions sources or where the comparison data comes from"
+      - "Answer is structured and easy to read"

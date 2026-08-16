@@ -1,0 +1,33 @@
+skill: chef
+version: "1.0.0"
+description: "Culinary expert — complete recipes with quantities, timings, and substitutions"
+cases:
+  - id: complete_recipe_with_quantities
+    description: "Provides a complete recipe with exact quantities and timings"
+    prompt: "Give me a recipe for carbonara for 2 people"
+    criteria:
+      - "Includes an ingredients list with exact quantities (grams, not 'a handful')"
+      - "Specifies prep time and cooking time"
+      - "Includes step-by-step cooking instructions"
+      - "Mentions the technique for emulsifying the egg sauce (off heat or low heat)"
+      - "Does not include cream — authentic carbonara uses only eggs, guanciale/pancetta, and cheese"
+
+  - id: dietary_adaptation
+    description: "Adapts a recipe for a dietary restriction without being asked twice"
+    prompt: "I want to make lasagna but I'm lactose intolerant. How do I adapt it?"
+    criteria:
+      - "Provides specific lactose-free substitutions (lactose-free milk, vegan cheese, or dairy-free béchamel)"
+      - "Does not ask for confirmation before adapting — applies restrictions directly"
+      - "Covers all dairy components in the dish (béchamel, ricotta/mozzarella)"
+      - "The adapted recipe is still practical and cookable"
+      - "Mentions if the substitution changes the texture or taste"
+
+  - id: ingredient_substitution
+    description: "Suggests practical substitutions for a missing ingredient"
+    prompt: "I'm making a Thai green curry but I don't have coconut milk. What can I use?"
+    criteria:
+      - "Provides at least 2 substitution options"
+      - "Explains the trade-off for each option (taste, texture, richness)"
+      - "The first suggestion is the most practical pantry substitute"
+      - "Does not say 'just buy coconut milk' as the primary answer"
+      - "Mentions how the substitution affects the final dish"

@@ -1,0 +1,33 @@
+skill: tickets
+version: "1.0.0"
+description: "Ticket manager — detects intent, extracts fields correctly, formats responses consistently"
+cases:
+  - id: create_bug_ticket
+    description: "Creates a bug ticket with correct field extraction"
+    prompt: "There's a bug where the login redirect fails after session timeout — it's blocking users from logging in"
+    criteria:
+      - "Identifies intent as 'create' a bug ticket"
+      - "Extracts a concise, descriptive title (not the full raw message)"
+      - "Sets type to 'bug' (not 'task')"
+      - "Infers urgency as 'high' or 'critical' due to 'blocking' keyword"
+      - "Confirms creation with the format: ticket title, type, and priority"
+
+  - id: list_open_tickets
+    description: "Lists open tickets with correct filter"
+    prompt: "What bugs are currently open?"
+    criteria:
+      - "Identifies intent as 'list'"
+      - "Filters by type 'bug' and status 'open'"
+      - "Presents results in a compact, readable format with ID, title, and priority"
+      - "Does not create a new ticket"
+      - "If no bugs found, says so clearly"
+
+  - id: resolve_ticket_by_reference
+    description: "Resolves a ticket referenced by description"
+    prompt: "Mark the login redirect ticket as done"
+    criteria:
+      - "Identifies intent as 'resolve'"
+      - "Searches for a ticket matching 'login redirect'"
+      - "Sets status to 'resolved'"
+      - "Confirms the resolution with the ticket title"
+      - "Does not create a new ticket instead of resolving"
