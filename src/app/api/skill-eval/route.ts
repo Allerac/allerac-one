@@ -27,14 +27,16 @@ import pool from '@/app/clients/db';
 import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'js-yaml';
+import Anthropic from '@anthropic-ai/sdk';
 
 const userSettingsService = new UserSettingsService();
 const skillsService      = new SkillsService();
 
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,99}$/;
-const ALLOWED_PROVIDERS = new Set(['github', 'ollama']);
+const ALLOWED_PROVIDERS = new Set(['github', 'ollama', 'anthropic', 'gemini']);
 
 interface EvalCase {
   id: string;
@@ -72,8 +74,50 @@ async function generateResponse(
   model: string,
   provider: string,
   githubToken: string,
+  anthropicToken: string,
+  googleApiKey: string,
+  options: { temperature?: number; maxTokens?: number } = {},
 ): Promise<string> {
-  if (provider === 'ollama') {
+  const temperature = options.temperature ?? 0.7;
+  const maxTokens = options.maxTokens ?? 1000;
+
+  if (provider === 'gemini') {
+    const res = await fetch(`${GEMINI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${googleApiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Gemini error ${res.status}: ${text.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? '';
+  } else if (provider === 'anthropic') {
+    const anthropicClient = new Anthropic({ apiKey: anthropicToken });
+    const response = await anthropicClient.messages.create({
+      model,
+      max_tokens: maxTokens,
+      system: systemPrompt || undefined,
+      messages: [{ role: 'user', content: userPrompt }],
+      temperature,
+    });
+    return response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map(block => block.text)
+      .join('');
+  } else if (provider === 'ollama') {
     const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -84,7 +128,7 @@ async function generateResponse(
           { role: 'user',   content: userPrompt },
         ],
         stream: false,
-        options: { temperature: 0.7, num_predict: 1000 },
+        options: { temperature, num_predict: maxTokens },
       }),
     });
     if (!res.ok) throw new Error(`Ollama error: ${res.status}`);
@@ -103,8 +147,8 @@ async function generateResponse(
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: userPrompt },
         ],
-        temperature: 0.7,
-        max_tokens: 1000,
+        temperature,
+        max_tokens: maxTokens,
       }),
     });
     if (!res.ok) {
@@ -124,6 +168,8 @@ async function judgeResponse(
   model: string,
   provider: string,
   githubToken: string,
+  anthropicToken: string,
+  googleApiKey: string,
 ): Promise<CriterionResult[]> {
   const criteriaList = criteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
 
@@ -144,31 +190,11 @@ ${criteriaList}
 Return ONLY a valid JSON array with exactly ${criteria.length} objects, no other text, no markdown:
 [{"label":"criterion text","pass":true,"reason":"one-line explanation"},...]`;
 
-  // Use GitHub Models for judging even if generation used Ollama — better instruction following
-  const judgeModel = provider === 'github' ? model : 'gpt-4o-mini';
-  const judgeProvider = githubToken ? 'github' : provider;
-
-  const res = await fetch(`${GITHUB_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${githubToken}`,
-    },
-    body: JSON.stringify({
-      model: judgeModel,
-      messages: [{ role: 'user', content: judgePrompt }],
-      temperature: 0.1,
-      max_tokens: 800,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Judge error ${res.status}: ${text.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content ?? '';
+  // Judge with the same model/provider used for generation — no separate provider dependency.
+  const content = await generateResponse(
+    '', judgePrompt, model, provider, githubToken, anthropicToken, googleApiKey,
+    { temperature: 0.1, maxTokens: 800 },
+  );
 
   // Extract JSON from response (model may add markdown fences)
   const jsonMatch = content.match(/\[[\s\S]*\]/);
@@ -216,8 +242,16 @@ export async function POST(request: Request) {
 
   const settings = await userSettingsService.loadUserSettings(user.id);
   const githubToken = settings?.github_token || '';
+  const anthropicToken = settings?.anthropic_api_key || '';
+  const googleApiKey = settings?.google_api_key || '';
   if (provider === 'github' && !githubToken) {
     return Response.json({ error: 'GitHub token not configured' }, { status: 422 });
+  }
+  if (provider === 'anthropic' && !anthropicToken) {
+    return Response.json({ error: 'Anthropic API key not configured' }, { status: 422 });
+  }
+  if (provider === 'gemini' && !googleApiKey) {
+    return Response.json({ error: 'Google API key not configured' }, { status: 422 });
   }
   const userId = user.id;
 
@@ -272,6 +306,8 @@ export async function POST(request: Request) {
               modelId,
               provider,
               githubToken,
+              anthropicToken,
+              googleApiKey,
             );
 
             // Step 2: Judge the response
@@ -284,6 +320,8 @@ export async function POST(request: Request) {
               modelId,
               provider,
               githubToken,
+              anthropicToken,
+              googleApiKey,
             );
 
             const passed = criteriaResults.filter(c => c.pass).length;
