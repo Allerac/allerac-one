@@ -6,9 +6,17 @@ import type { Model } from '@/app/types';
 const MONO: React.CSSProperties = { fontFamily: '"JetBrains Mono", "Courier New", monospace' };
 
 const EVAL_SKILLS = [
-  { name: 'writer', label: '✍️ Content', color: '#f5d76e' },
-  { name: 'social', label: '📸 Social',  color: '#e040fb' },
-  { name: 'code',   label: '💻 Code',    color: '#50fa7b' },
+  { name: 'writer',  label: '✍️ Content', color: '#f5d76e' },
+  { name: 'social',  label: '📸 Social',  color: '#e040fb' },
+  { name: 'code',    label: '💻 Code',    color: '#50fa7b' },
+  { name: 'analyst', label: '📊 Analyst', color: '#8be9fd' },
+  { name: 'health',  label: '❤️ Health',  color: '#ff79c6' },
+  { name: 'finance', label: '💰 Finance', color: '#f1fa8c' },
+  { name: 'chef',    label: '🍳 Chef',    color: '#ffb86c' },
+  { name: 'notes',   label: '📝 Notes',   color: '#bd93f9' },
+  { name: 'search',  label: '🔍 Search',  color: '#6272a4' },
+  { name: 'tickets', label: '🎫 Tickets', color: '#ff5555' },
+  { name: 'music',   label: '🎵 Music',   color: '#50fa7b' },
 ];
 
 interface CriterionResult {
