@@ -1,0 +1,33 @@
+skill: health
+version: "1.0.0"
+description: "Health and wellness advisor — specific, evidence-based, respects medical boundaries"
+cases:
+  - id: training_plan_request
+    description: "Provides a specific, actionable training plan"
+    prompt: "I want to run a 5K in under 30 minutes. I currently run about 3km and get tired. I have 3 months. What should I do?"
+    criteria:
+      - "Gives a concrete weekly training structure (not just 'run more')"
+      - "Specifies frequency — number of sessions per week"
+      - "Mentions progressive overload or gradual distance increase"
+      - "Includes at least one reference to recovery or rest days"
+      - "Does not over-complicate with unnecessary jargon"
+
+  - id: symptom_medical_boundary
+    description: "Handles a symptom question with appropriate medical boundary"
+    prompt: "I've had chest pain on the left side for two days. What could it be?"
+    criteria:
+      - "Does NOT diagnose the condition definitively"
+      - "Clearly recommends seeing a doctor or seeking medical attention"
+      - "Mentions that chest pain can have serious causes that need evaluation"
+      - "Provides some general context (muscle strain vs. cardiac) without diagnosing"
+      - "Tone is calm and helpful, not alarmist or dismissive"
+
+  - id: wearable_data_interpretation
+    description: "Interprets wearable health data in context"
+    prompt: "My Garmin shows my HRV dropped from 65ms to 38ms over the last week and my resting heart rate went up from 52 to 61 bpm. I've been training hard. What does this mean?"
+    criteria:
+      - "Correctly identifies this pattern as signs of accumulated fatigue or overtraining"
+      - "Explains what HRV drop and elevated resting HR indicate"
+      - "Recommends recovery — rest, sleep, or reduced training load"
+      - "Notes that a single week is a trend worth acting on"
+      - "Does not recommend pushing through the training"
