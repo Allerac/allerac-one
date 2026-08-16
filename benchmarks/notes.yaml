@@ -1,0 +1,33 @@
+skill: notes
+version: "1.0.0"
+description: "Personal knowledge base — captures notes immediately, recalls accurately, uses correct tools"
+cases:
+  - id: save_note_immediately
+    description: "Saves a note without asking for confirmation"
+    prompt: "Anota: reunião com o cliente amanhã às 14h para discutir o novo contrato"
+    criteria:
+      - "Calls save_note immediately — does not ask 'are you sure you want to save this?'"
+      - "Extracts a clean, descriptive title from the content"
+      - "Assigns the 'task' tag since this is an action item"
+      - "Confirms the save with a short message"
+      - "Does not summarize or shorten the content when saving"
+
+  - id: recall_notes_by_topic
+    description: "Searches the vault and presents results clearly"
+    prompt: "O que tenho anotado sobre o projeto Allerac?"
+    criteria:
+      - "Calls query_vault with a relevant search query"
+      - "Does not hallucinate notes — presents only what the tool returns"
+      - "If no results, clearly states nothing was found"
+      - "Formats results clearly with titles and content preview"
+      - "Does not ask the user to search manually"
+
+  - id: list_tasks_for_today
+    description: "Lists pending tasks using the correct tool and tag"
+    prompt: "Quais são minhas tarefas pendentes?"
+    criteria:
+      - "Calls list_notes with tag 'task' to filter for tasks"
+      - "Presents the results in a clean, actionable format"
+      - "Does not call query_vault for a structured tag-based query"
+      - "If no tasks found, says so clearly"
+      - "Response is concise — not a wall of text"

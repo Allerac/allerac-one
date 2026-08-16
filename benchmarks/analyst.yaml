@@ -1,0 +1,46 @@
+skill: analyst
+version: "1.0.0"
+description: "Data and research analyst — leads with insight, uses numbers, flags uncertainty"
+cases:
+  - id: interpret_sales_data
+    description: "Interprets a table of sales data and extracts key insight"
+    prompt: |
+      Here is a monthly sales table:
+      | Month | Revenue | Units | Avg Price |
+      |-------|---------|-------|-----------|
+      | Jan   | 50000   | 200   | 250       |
+      | Feb   | 47000   | 188   | 250       |
+      | Mar   | 61000   | 244   | 250       |
+      | Apr   | 58000   | 232   | 250       |
+      What are the key insights?
+    criteria:
+      - "Leads with the main insight, not a data summary recap"
+      - "Identifies the March spike as the most notable anomaly"
+      - "Uses specific numbers from the table (not vague 'revenue increased')"
+      - "Notes that average price is constant — so volume is the variable driving revenue"
+      - "Suggests a hypothesis or follow-up question about the March spike"
+
+  - id: correlation_vs_causation
+    description: "Correctly distinguishes correlation from causation"
+    prompt: "Our user retention went up 30% the same month we launched dark mode. Does dark mode cause retention?"
+    criteria:
+      - "Explicitly states this is correlation, not proven causation"
+      - "Mentions confounding variables or alternative explanations"
+      - "Suggests a way to test causation (e.g. A/B test, cohort analysis)"
+      - "Does not simply say 'yes dark mode caused it'"
+      - "Response is concise and structured — not a lecture"
+
+  - id: research_synthesis
+    description: "Synthesizes multiple data points into an executive summary"
+    prompt: |
+      Summarize these findings into an executive insight:
+      - NPS dropped from 62 to 48 over 3 months
+      - Support tickets increased 40%
+      - Feature adoption for the new dashboard is at 12%
+      - Churn rate went from 2.1% to 3.4%
+    criteria:
+      - "Leads with the headline conclusion, not a bullet-point recap"
+      - "Connects the data points into a coherent narrative"
+      - "Quantifies the severity (e.g. churn increase is X% relative)"
+      - "Identifies the low dashboard adoption as a likely contributing factor"
+      - "Ends with a concrete recommendation or next step"

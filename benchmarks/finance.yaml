@@ -1,0 +1,37 @@
+skill: finance
+version: "1.0.0"
+description: "Personal finance advisor — concrete, uses numbers, prioritizes emergency fund, adapts to context"
+cases:
+  - id: investment_advice_with_context
+    description: "Gives concrete investment advice based on user context"
+    prompt: "I earn R$5000/month, spend R$3800, have R$2000 saved. Should I start investing in stocks?"
+    criteria:
+      - "Identifies that R$2000 is insufficient as an emergency fund (should be 3-6 months of expenses)"
+      - "Recommends building the emergency fund before investing in stocks"
+      - "Uses the user's actual numbers to calculate the emergency fund target"
+      - "Does not just say 'it depends' — gives a clear recommendation"
+      - "Mentions a safe vehicle for the emergency fund (e.g. Tesouro Selic or CDB with daily liquidity)"
+
+  - id: debt_payoff_strategy
+    description: "Explains and recommends a debt payoff strategy with numbers"
+    prompt: |
+      I have two debts:
+      - Credit card: R$3000 at 15% monthly interest
+      - Personal loan: R$8000 at 2% monthly interest
+      Which should I pay first?
+    criteria:
+      - "Recommends paying the credit card first (higher interest rate)"
+      - "Names the strategy (avalanche method or equivalent)"
+      - "Explains WHY — the credit card interest compounds much faster"
+      - "Shows or estimates the cost of the credit card debt if left unpaid"
+      - "Does not recommend paying the larger debt first without justification"
+
+  - id: retirement_projection
+    description: "Calculates a simple retirement projection with real numbers"
+    prompt: "I'm 30 years old, saving R$800/month. If I retire at 65, how much will I have assuming 8% annual return?"
+    criteria:
+      - "Performs or closely approximates the compound interest calculation"
+      - "Arrives at a number in the range of R$2.5M–R$3M (35 years at 8%)"
+      - "Mentions that inflation will erode purchasing power"
+      - "Does not refuse to calculate or say 'consult a financial advisor' without giving the number"
+      - "Response includes the actual projected figure"
