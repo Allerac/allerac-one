@@ -254,7 +254,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                     <button
                       onClick={goToNextDay}
                       disabled={isViewingToday}
-                      className={`hidden sm:flex h-8 w-8 items-center justify-center rounded-full border transition-colors flex-shrink-0
+                      className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors flex-shrink-0
                         ${isViewingToday
                           ? 'opacity-0 pointer-events-none'
                           : isDarkMode
