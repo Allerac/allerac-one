@@ -17,6 +17,7 @@ const EVAL_SKILLS = [
   { name: 'search',  label: '🔍 Search',  color: '#6272a4' },
   { name: 'tickets', label: '🎫 Tickets', color: '#ff5555' },
   { name: 'music',   label: '🎵 Music',   color: '#50fa7b' },
+  { name: 'sales',   label: '💼 Sales',   color: '#ffa657' },
 ];
 
 interface CriterionResult {
