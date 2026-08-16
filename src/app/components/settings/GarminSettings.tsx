@@ -6,14 +6,18 @@ import * as healthActions from '@/app/actions/health';
 interface GarminSettingsProps {
   userId?: string;
   isDarkMode: boolean;
+  /** Called whenever connection status is (re)loaded — connect, MFA success, or disconnect. */
+  onStatusChange?: (isConnected: boolean) => void;
 }
 
 type State = 'loading' | 'disconnected' | 'connecting' | 'mfa_required' | 'connected' | 'error';
 
-export default function GarminSettings({ userId, isDarkMode }: GarminSettingsProps) {
+export default function GarminSettings({ userId, isDarkMode, onStatusChange }: GarminSettingsProps) {
   const [state, setState] = useState<State>('loading');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [dataMode, setDataMode] = useState<'cached' | 'proxy'>('cached');
+  const [connectedDataMode, setConnectedDataMode] = useState<'cached' | 'proxy'>('cached');
   const [mfaCode, setMfaCode] = useState('');
   const [mfaMessage, setMfaMessage] = useState('');
   const [lastSync, setLastSync] = useState('');
@@ -46,12 +50,14 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
     const data = await healthActions.getGarminStatus();
     if (data.is_connected) {
       setLastSync(data.last_sync_at ? new Date(data.last_sync_at).toLocaleString() : '');
+      setConnectedDataMode(data.data_mode === 'proxy' ? 'proxy' : 'cached');
       setState('connected');
     } else if (data.mfa_pending) {
       setState('mfa_required');
     } else {
       setState('disconnected');
     }
+    onStatusChange?.(Boolean(data.is_connected));
   }
 
   async function handleConnect(e: React.FormEvent) {
@@ -59,7 +65,7 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
     setState('connecting');
     setMessage(null);
     try {
-      const data = await healthActions.connectGarmin(email, password);
+      const data = await healthActions.connectGarmin(email, password, dataMode);
       if (data.mfa_pending) {
         setMfaMessage(data.message || 'Check your email or phone for the MFA code.');
         setState('mfa_required');
@@ -145,10 +151,17 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
           <div className="flex items-center gap-2">
             <span className="text-green-500">✓</span>
             <span className={`text-sm font-medium ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>Connected</span>
+            {connectedDataMode === 'proxy' && (
+              <span className={`text-xs px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-amber-500/10 text-amber-300' : 'bg-amber-50 text-amber-800'}`}>
+                Live access only
+              </span>
+            )}
           </div>
-          {lastSync && <p className={hint}>Last sync: {lastSync}</p>}
+          {connectedDataMode === 'cached' && lastSync && <p className={hint}>Last sync: {lastSync}</p>}
           <div className="flex gap-2 flex-wrap">
-            <button onClick={handleSync} className={btn('ghost')}>Sync now</button>
+            {connectedDataMode === 'cached' && (
+              <button onClick={handleSync} className={btn('ghost')}>Sync now</button>
+            )}
             <button onClick={handleDisconnect} className={btn('danger')}>Disconnect</button>
           </div>
         </div>
@@ -166,7 +179,36 @@ export default function GarminSettings({ userId, isDarkMode }: GarminSettingsPro
             <input type="password" value={password} onChange={e => setPassword(e.target.value)}
               placeholder="Your Garmin password" required className={input} />
           </div>
-          <p className={hint}>Your credentials are encrypted and used only to fetch health data.</p>
+          <div>
+            <label className={label}>What should Allerac do with this data?</label>
+            <div className="space-y-2">
+              <label className={`flex items-start gap-2 p-2.5 rounded-md border cursor-pointer ${
+                dataMode === 'cached'
+                  ? isDarkMode ? 'border-brand-500 bg-brand-500/10' : 'border-brand-500 bg-brand-50'
+                  : isDarkMode ? 'border-gray-700' : 'border-gray-200'
+              }`}>
+                <input type="radio" name="dataMode" className="mt-0.5" checked={dataMode === 'cached'}
+                  onChange={() => setDataMode('cached')} />
+                <span>
+                  <span className={`block text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Keep history (recommended)</span>
+                  <span className={hint}>Saves synced data so you get a dashboard, trends, and Sync now.</span>
+                </span>
+              </label>
+              <label className={`flex items-start gap-2 p-2.5 rounded-md border cursor-pointer ${
+                dataMode === 'proxy'
+                  ? isDarkMode ? 'border-brand-500 bg-brand-500/10' : 'border-brand-500 bg-brand-50'
+                  : isDarkMode ? 'border-gray-700' : 'border-gray-200'
+              }`}>
+                <input type="radio" name="dataMode" className="mt-0.5" checked={dataMode === 'proxy'}
+                  onChange={() => setDataMode('proxy')} />
+                <span>
+                  <span className={`block text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Live access only — nothing stored</span>
+                  <span className={hint}>Every read goes live to Garmin. No dashboard history, trends, or sync — only live reads (here or via an agent key).</span>
+                </span>
+              </label>
+            </div>
+            <p className={hint}>This choice only applies the first time you connect and can&apos;t be changed later without disconnecting and reconnecting.</p>
+          </div>
           <button type="submit" className={btn('primary')}>Connect Garmin</button>
         </form>
       )}

@@ -9,6 +9,8 @@ import { buildGithubTools } from '@/app/tools/github.tool';
 import { buildLogsTool } from '@/app/tools/logs.tool';
 import { buildJobsTools } from '@/app/tools/jobs.tool';
 import { buildNotesTools } from '@/app/tools/notes.tool';
+import { buildMemoryTools } from '@/app/tools/memory.tool';
+import { buildInstructionTools } from '@/app/tools/instructions.tool';
 import { ReadUrlTool } from '@/app/tools/read-url.tool';
 import { SearchWebTool } from '@/app/tools/search-web.tool';
 import { ShellTool } from '@/app/tools/shell.tool';
@@ -26,6 +28,9 @@ import {
   LOGS_TOOL_NAMES,
   NOTE_TOOL_NAMES,
   TICKET_TOOL_NAMES,
+  MEMORY_TOOL_NAMES,
+  SCHEDULE_TASK_TOOL_NAME,
+  LEARN_INSTRUCTION_TOOL_NAME,
 } from './chat-tool-registry';
 
 export interface ChatToolRunnerContext {
@@ -34,6 +39,8 @@ export interface ChatToolRunnerContext {
   tavilyApiKey?: string;
   message: string;
   locale: string;
+  conversationId?: string;
+  domain?: string;
   emit: (event: object) => void;
 }
 
@@ -42,7 +49,7 @@ export async function executeChatTool(
   toolArgs: Record<string, any>,
   context: ChatToolRunnerContext,
 ): Promise<any> {
-  const { user, githubToken, tavilyApiKey, message, locale, emit } = context;
+  const { user, githubToken, tavilyApiKey, message, locale, emit, conversationId, domain } = context;
   const userId = user.id;
 
   if (toolName === 'update_social_form' || toolName === 'update_instagram_form') {
@@ -125,7 +132,7 @@ export async function executeChatTool(
     return instagramTool.getRecentMedia(userId, toolArgs.limit ?? 6);
   }
 
-  if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'].includes(toolName)) {
+  if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities', 'get_activity_detail'].includes(toolName)) {
     const healthTool = new HealthTool();
     const healthUser = { id: userId, email: user.email, name: user.name || user.email };
     if (toolName === 'get_health_summary') {
@@ -144,6 +151,9 @@ export async function executeChatTool(
         toolArgs.start_date,
         toolArgs.end_date,
       );
+    }
+    if (toolName === 'get_activity_detail') {
+      return healthTool.getActivityDetail(healthUser, toolArgs.activity_id);
     }
     return healthTool.getGarminStatus(healthUser);
   }
@@ -220,13 +230,26 @@ export async function executeChatTool(
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
     return handler(toolArgs);
   }
+  if (MEMORY_TOOL_NAMES.includes(toolName)) {
+    const handlers = buildMemoryTools({
+      user,
+      conversationId: conversationId || '',
+      callerDomain: domain || 'chat',
+    });
+    const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
+    return handler(toolArgs);
+  }
+  if (toolName === LEARN_INSTRUCTION_TOOL_NAME) {
+    return buildInstructionTools(userId, domain || 'chat', conversationId)
+      .learn_instruction(toolArgs as { instruction: string; evidence?: string });
+  }
   if (EMAIL_TOOL_NAMES.includes(toolName)) {
     const handlers = buildEmailTools(userId);
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
     return handler(toolArgs);
   }
-  if (JOB_TOOL_NAMES.includes(toolName)) {
-    const handlers = buildJobsTools(userId);
+  if (toolName === SCHEDULE_TASK_TOOL_NAME || JOB_TOOL_NAMES.includes(toolName)) {
+    const handlers = buildJobsTools(userId, domain || 'chat');
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
     return handler(toolArgs);
   }

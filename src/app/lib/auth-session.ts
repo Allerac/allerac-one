@@ -1,22 +1,12 @@
 import { cookies } from 'next/headers';
 import { AuthService, User } from '@/app/services/auth/auth.service';
+import { ForbiddenError, UnauthorizedError } from '@/app/lib/auth-errors';
+import { assertDomainAccess } from '@/app/lib/domain-access-check';
+
+export { ForbiddenError, UnauthorizedError, assertDomainAccess };
 
 const authService = new AuthService();
 const SESSION_COOKIE_NAME = 'session_token';
-
-export class UnauthorizedError extends Error {
-  constructor(message = 'Unauthorized') {
-    super(message);
-    this.name = 'UnauthorizedError';
-  }
-}
-
-export class ForbiddenError extends Error {
-  constructor(message = 'Forbidden') {
-    super(message);
-    this.name = 'ForbiddenError';
-  }
-}
 
 export function authenticationErrorResponse(
   error: unknown,
@@ -52,9 +42,4 @@ export async function requireCurrentAdmin(): Promise<User> {
   const user = await requireCurrentUser();
   if (!user.is_admin) throw new ForbiddenError('Admin access required');
   return user;
-}
-
-export async function assertDomainAccess(user: User, domainSlug: string): Promise<void> {
-  const allowed = await authService.canAccessDomain(user.id, user.is_admin, domainSlug);
-  if (!allowed) throw new ForbiddenError('Domain access denied');
 }

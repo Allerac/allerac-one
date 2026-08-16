@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
-  embedding vector(1536),
+  embedding vector(768),
   token_count INTEGER,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -105,7 +105,7 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON document_chunks
 
 -- Function for vector similarity search (filtered by user)
 CREATE OR REPLACE FUNCTION search_document_chunks(
-  query_embedding vector(1536),
+  query_embedding vector(768),
   search_user_id uuid,
   match_threshold float DEFAULT 0.5,
   match_count int DEFAULT 5

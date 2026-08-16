@@ -49,14 +49,6 @@ export interface Model {
   shortName: string;
 }
 
-export interface MemorySaveResult {
-  success: boolean;
-  message: string;
-  summary?: string;
-  importance?: number;
-  topics?: string[];
-}
-
 export interface SearchWebResult {
   answer?: string;
   results: Array<{
@@ -78,6 +70,7 @@ export interface ScheduledJob {
   cronExpr: string;
   prompt: string;
   channels: string[];
+  webhookUrl: string | null;
   domainSlug: string | null;
   llmModel: string | null;
   llmProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | null;

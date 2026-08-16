@@ -1,0 +1,21 @@
+meta {
+  name: Proxy Activity Zones
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/proxy/activities/{{proxyActivityId}}/zones
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "Proxy Activities" first to populate proxyActivityId.
+  Independent live call to the health-worker's /activity-details, sliced to
+  just zones. Never written to health_activity_zones.
+}

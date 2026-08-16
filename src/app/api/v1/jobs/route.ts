@@ -12,6 +12,7 @@ const createJobSchema = z.object({
   cronExpr: z.string().trim().regex(CRON_REGEX, 'Invalid cron expression'),
   prompt: z.string().trim().min(1),
   channels: z.array(z.string()).min(1),
+  webhookUrl: z.string().trim().url().nullable().optional(),
   enabled: z.boolean().optional(),
   domainSlug: z.string().trim().min(1).nullable().optional(),
   llmModel: z.string().trim().min(1).nullable().optional(),
@@ -19,6 +20,9 @@ const createJobSchema = z.object({
 }).superRefine((data, context) => {
   const error = validateJobModelSelection(data.llmModel, data.llmProvider);
   if (error) context.addIssue({ code: 'custom', message: error });
+  if (data.channels.includes('webhook') && !data.webhookUrl?.trim()) {
+    context.addIssue({ code: 'custom', message: 'webhookUrl is required when the webhook channel is enabled', path: ['webhookUrl'] });
+  }
 });
 
 export async function GET(request: Request): Promise<Response> {
@@ -46,6 +50,7 @@ export async function POST(request: Request): Promise<Response> {
       cronExpr: parsed.data.cronExpr,
       prompt: parsed.data.prompt,
       channels: parsed.data.channels,
+      webhookUrl: parsed.data.webhookUrl ?? null,
       enabled: parsed.data.enabled ?? true,
       domainSlug: parsed.data.domainSlug ?? null,
       llmModel: parsed.data.llmModel ?? null,

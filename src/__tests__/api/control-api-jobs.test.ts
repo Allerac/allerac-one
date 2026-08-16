@@ -128,6 +128,43 @@ describe('Control API v1 scheduled jobs', () => {
     expect(await response.json()).toMatchObject({ error: { code: 'validation_error' } });
   });
 
+  it('requires webhookUrl when the webhook channel is enabled', async () => {
+    const response = await createJob(jsonRequest('http://localhost/api/v1/jobs', 'POST', {
+      name: 'n8n trigger',
+      cronExpr: '0 8 * * *',
+      prompt: 'Do something.',
+      channels: ['webhook'],
+    }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'validation_error' } });
+    expect(mockJobsService.createScheduledJob).not.toHaveBeenCalled();
+  });
+
+  it('creates a job with a webhook channel and URL', async () => {
+    mockJobsService.createScheduledJob.mockResolvedValueOnce({
+      ...job,
+      channels: ['webhook'],
+      webhookUrl: 'http://n8n:5678/webhook/abc',
+    } as any);
+
+    const response = await createJob(jsonRequest('http://localhost/api/v1/jobs', 'POST', {
+      name: 'n8n trigger',
+      cronExpr: '0 8 * * *',
+      prompt: 'Do something.',
+      channels: ['webhook'],
+      webhookUrl: 'http://n8n:5678/webhook/abc',
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mockJobsService.createScheduledJob).toHaveBeenCalledWith(user.id, expect.objectContaining({
+      channels: ['webhook'],
+      webhookUrl: 'http://n8n:5678/webhook/abc',
+    }));
+    const body = await response.json();
+    expect(body.data.job.webhookUrl).toBe('http://n8n:5678/webhook/abc');
+  });
+
   it('creates a job with enabled defaulting to true', async () => {
     mockJobsService.createScheduledJob.mockResolvedValueOnce(job as any);
 
@@ -235,9 +272,27 @@ describe('Control API v1 scheduled jobs', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockJobsService.getJobExecutions).toHaveBeenCalledWith('job-id', user.id);
+    expect(mockJobsService.getJobExecutions).toHaveBeenCalledWith('job-id', user.id, {
+      startDate: undefined,
+      endDate: undefined,
+    });
     const body = await response.json();
     expect(body.data.executions[0]).toMatchObject({ id: 'exec-id', status: 'completed' });
+  });
+
+  it('filters job executions by startDate/endDate query params', async () => {
+    mockJobsService.getJobExecutions.mockResolvedValueOnce([execution]);
+
+    const response = await listJobExecutions(
+      new Request('http://localhost/api/v1/jobs/job-id/executions?startDate=2026-08-02T00:00:00.000Z&endDate=2026-08-03T00:00:00.000Z'),
+      routeParams(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockJobsService.getJobExecutions).toHaveBeenCalledWith('job-id', user.id, {
+      startDate: new Date('2026-08-02T00:00:00.000Z'),
+      endDate: new Date('2026-08-03T00:00:00.000Z'),
+    });
   });
 
   it('runs a job immediately', async () => {

@@ -32,6 +32,9 @@ const sendMessageSchema = z.object({
   preSelectedSkillId: z.string().uuid().optional(),
   defaultSkillName: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,49}$/).optional(),
   postContext: z.string().max(20_000).optional(),
+  // Server-to-server callers (e.g. the website's Worker) have no browser session/cookie to read
+  // locale from — let them state it explicitly. Falls back to the locale cookie, then 'en'.
+  locale: z.string().trim().regex(/^[a-z]{2}(-[A-Z]{2})?$/).optional(),
 }).refine(
   value => Boolean(value.message?.trim()) || Boolean(value.imageAttachments?.length),
   { message: 'Message or imageAttachments is required', path: ['message'] },
@@ -118,7 +121,11 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     }
 
     const cookieStore = await cookies();
-    const locale = cookieStore.get('locale')?.value || 'en';
+    // prompt-builder.ts only recognizes bare 2-letter codes (LANGUAGE_NAMES) — strip any
+    // region suffix (e.g. the website's 'pt-BR' -> 'pt') or the language instruction silently
+    // falls back to English.
+    const rawLocale = parsed.data.locale || cookieStore.get('locale')?.value || 'en';
+    const locale = rawLocale.split('-')[0];
     const events: Array<Record<string, any>> = [];
     const result = await executeChatMessage({
       user: {

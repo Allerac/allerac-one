@@ -44,6 +44,9 @@ yarn-error.log*
 # telegram bot configuration (contains sensitive tokens)
 telegram-bots.json
 
+# local database backups and disaster-recovery packages (contain real data)
+/backups/
+
 # vercel
 .vercel
 

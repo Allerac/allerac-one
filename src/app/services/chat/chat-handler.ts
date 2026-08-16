@@ -16,10 +16,17 @@ import { skillsService } from '../skills/skills.service';
 import { TOOLS } from '../../tools/tools';
 import { buildNotesTools } from '../../tools/notes.tool';
 import { buildEmailTools } from '../../tools/email.tool';
+import { buildMemoryTools } from '../../tools/memory.tool';
+import { CREATE_MEMORY_TOOL_DEFINITION, MEMORY_DOMAIN_TOOL_DEFINITIONS, RECALL_MEMORY_TOOL_DEFINITION } from '../../tools/memory.tool.definitions';
+import { buildJobsTools } from '../../tools/jobs.tool';
+import { SCHEDULE_TASK_TOOL_DEFINITION } from '../../tools/jobs.tool.definitions';
+import { buildInstructionTools } from '../../tools/instructions.tool';
+import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '../../tools/instructions.tool.definitions';
 import { HealthTool } from '../../tools/health.tool';
 import { buildSoul } from '@/app/config/allerac-soul';
 import pool from '@/app/clients/db';
 import { normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
+import { instructionDistillerService } from '@/app/services/memory/instruction-distiller.service';
 
 export interface ChatHandlerConfig {
   userId: string;
@@ -121,13 +128,21 @@ export async function handleChatMessage(
   }
 
   // Filter available tools by skill assignment
-  let activeTools: typeof TOOLS = TOOLS;
+  let activeTools: any[] = TOOLS;
   if (activeSkill?.id) {
     const allowedToolNames = await skillsService.getSkillTools(activeSkill.id);
     if (allowedToolNames.length > 0) {
       activeTools = TOOLS.filter(t => allowedToolNames.includes(t.function.name));
     }
   }
+  activeTools = [
+    ...activeTools.filter(tool => !['recall_memory', 'create_memory'].includes(tool.function.name)),
+    RECALL_MEMORY_TOOL_DEFINITION,
+    CREATE_MEMORY_TOOL_DEFINITION,
+    SCHEDULE_TASK_TOOL_DEFINITION,
+    LEARN_INSTRUCTION_TOOL_DEFINITION,
+    ...(domainSlug === 'memory' ? MEMORY_DOMAIN_TOOL_DEFINITIONS : []),
+  ];
 
   // Save user message (with image indicator if present)
   const messageToSave = imageAttachments && imageAttachments.length > 0
@@ -135,22 +150,10 @@ export async function handleChatMessage(
     : message;
   await chatService.saveMessage(convId, 'user', messageToSave);
 
-  // 2. Load memory context
-  let conversationMemories = '';
-  try {
-    const memoryService = new ConversationMemoryService(githubToken, domainSlug ?? 'chat');
-    const summaries = await memoryService.getRecentSummaries(userId, 3, 4);
-    if (summaries && summaries.length > 0) {
-      conversationMemories = memoryService.formatMemoryContext(summaries);
-    }
-  } catch (error) {
-    console.log('[ChatHandler] Failed to load memories:', error);
-  }
-
   // 3. Load RAG context
   let relevantContext = '';
   try {
-    const embeddingService = new EmbeddingService(githubToken);
+    const embeddingService = new EmbeddingService();
     const vectorService = new VectorSearchService(embeddingService);
     relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: domainSlug ?? null });
   } catch (error) {
@@ -190,10 +193,6 @@ export async function handleChatMessage(
     } catch (error) {
       console.error('[ChatHandler] Failed to load skill content:', error);
     }
-  }
-
-  if (conversationMemories) {
-    enrichedSystemMessage = conversationMemories + '\n\n' + enrichedSystemMessage;
   }
 
   if (relevantContext && !relevantContext.includes('No relevant documents found')) {
@@ -327,7 +326,24 @@ export async function handleChatMessage(
           const emailHandlers = buildEmailTools(userId);
           const handler = emailHandlers[toolName as keyof typeof emailHandlers];
           toolResult = await handler(toolArgs as any);
-        } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities'].includes(toolName)) {
+        } else if (['recall_memory', 'search_memory', 'create_memory', 'delete_memory'].includes(toolName)) {
+          const userResult = await pool.query(
+            'SELECT id, email, name, is_admin, created_at FROM users WHERE id = $1',
+            [userId],
+          );
+          const memoryHandlers = buildMemoryTools({
+            user: userResult.rows[0],
+            conversationId: convId,
+            callerDomain: domainSlug ?? 'chat',
+          });
+          const handler = memoryHandlers[toolName as keyof typeof memoryHandlers];
+          toolResult = await handler(toolArgs as never);
+        } else if (toolName === 'schedule_task') {
+          toolResult = await buildJobsTools(userId, domainSlug ?? 'chat').schedule_task(toolArgs);
+        } else if (toolName === 'learn_instruction') {
+          toolResult = await buildInstructionTools(userId, domainSlug ?? 'chat', convId)
+            .learn_instruction(toolArgs);
+        } else if (['get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_garmin_status', 'get_recent_activities', 'get_activity_detail'].includes(toolName)) {
           const userRes = await pool.query('SELECT id, email, name FROM users WHERE id = $1', [userId]);
           const u = userRes.rows[0];
           if (!u) {
@@ -343,6 +359,8 @@ export async function handleChatMessage(
               toolResult = await healthTool.getDailySnapshot(healthUser, toolArgs.date);
             } else if (toolName === 'get_recent_activities') {
               toolResult = await healthTool.getRecentActivities(healthUser, toolArgs.limit || 10, toolArgs.start_date, toolArgs.end_date);
+            } else if (toolName === 'get_activity_detail') {
+              toolResult = await healthTool.getActivityDetail(healthUser, toolArgs.activity_id);
             } else {
               toolResult = await healthTool.getGarminStatus(healthUser);
             }
@@ -424,7 +442,15 @@ export async function maybeSummarizeConversation(
     const memoryService = new ConversationMemoryService(githubToken, domainSlug);
     const shouldSummarize = await memoryService.shouldSummarizeConversation(conversationId, userId);
     if (shouldSummarize) {
-      await memoryService.generateConversationSummary(conversationId, userId);
+      const summary = await memoryService.generateConversationSummary(conversationId, userId);
+      if (summary) {
+        await instructionDistillerService.distill({
+          userId,
+          domainSlug,
+          llmConfig: githubToken,
+          sourceSummaryId: summary.id,
+        });
+      }
       console.log(`[ChatHandler] Summary generated for conversation ${conversationId}`);
     }
   } catch (error) {

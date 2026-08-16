@@ -56,6 +56,7 @@ Print the `html_url` from the response.
 
 ## Rules
 
+- ALWAYS write the GitHub issue title and body in English, regardless of the language the ticket/conversation is in
 - ALWAYS use execute_shell to run commands — never just describe commands
 - Never run `git commit`, `git push`, or modify files — only investigate and propose
 - Keep searches focused — read the minimum code needed to understand the bug

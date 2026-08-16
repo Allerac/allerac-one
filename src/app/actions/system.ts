@@ -6,6 +6,9 @@ import pool from '@/app/clients/db';
 import { safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { GITHUB_MODELS } from '@/app/constants/models';
 import { requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
+import { EmbeddingService } from '@/app/services/rag/embedding.service';
+import { assertEmbeddingRuntimeState } from '@/app/services/rag/embedding-runtime.service';
+import { embeddingScheduler } from '@/app/services/rag/embedding-scheduler';
 
 const BACKUP_DIR = process.env.BACKUP_DIR || '/app/backups';
 
@@ -65,6 +68,19 @@ export interface AIModelsInfo {
   ollama: OllamaInfo;
 }
 
+export interface EmbeddingHealthInfo {
+  healthy: boolean;
+  provider: string;
+  model: string;
+  dimensions: number;
+  version: string;
+  runtimeCompatible: boolean;
+  modelInstalled: boolean;
+  latencyMs: number;
+  queue: ReturnType<typeof embeddingScheduler.getStats>;
+  error?: string;
+}
+
 export interface DatabaseInfo {
   connected: boolean;
   version?: string;
@@ -83,6 +99,7 @@ export interface SystemDashboard {
   memory: MemoryInfo;
   cpu: CpuInfo;
   aiModels: AIModelsInfo;
+  embeddings: EmbeddingHealthInfo;
   database: DatabaseInfo;
   timestamp: string;
 }
@@ -242,6 +259,60 @@ export async function getAIModelsInfo(): Promise<AIModelsInfo> {
   return { github, ollama };
 }
 
+export async function getEmbeddingHealth(): Promise<EmbeddingHealthInfo> {
+  await requireCurrentUser();
+  const service = new EmbeddingService();
+  const metadata = service.getMetadata();
+  const startedAt = Date.now();
+  let runtimeCompatible = false;
+  let modelInstalled = false;
+
+  try {
+    await assertEmbeddingRuntimeState(metadata, true);
+    runtimeCompatible = true;
+
+    const baseUrl = (
+      process.env.EMBEDDING_BASE_URL
+      ?? process.env.OLLAMA_BASE_URL
+      ?? 'http://host.docker.internal:11434'
+    ).replace(/\/$/, '');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2_000);
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!response.ok) throw new Error(`Ollama health check returned HTTP ${response.status}`);
+    const body = await response.json() as { models?: Array<{ name?: string; model?: string }> };
+    modelInstalled = (body.models ?? []).some((entry) => {
+      const name = entry.name ?? entry.model ?? '';
+      return name === metadata.model || name.startsWith(`${metadata.model}:`);
+    });
+    if (!modelInstalled) throw new Error(`Embedding model ${metadata.model} is not installed`);
+
+    return {
+      healthy: true,
+      ...metadata,
+      runtimeCompatible,
+      modelInstalled,
+      latencyMs: Date.now() - startedAt,
+      queue: embeddingScheduler.getStats(),
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      ...metadata,
+      runtimeCompatible,
+      modelInstalled,
+      latencyMs: Date.now() - startedAt,
+      queue: embeddingScheduler.getStats(),
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
  * Count backup files
  */
@@ -358,11 +429,12 @@ export async function pullOllamaModel(modelId: string): Promise<{ success: boole
  */
 export async function getSystemDashboard(): Promise<SystemDashboard> {
   await requireCurrentUser();
-  const [system, memory, cpu, aiModels, database] = await Promise.all([
+  const [system, memory, cpu, aiModels, embeddings, database] = await Promise.all([
     getSystemInfo(),
     getMemoryInfo(),
     getCpuInfo(),
     getAIModelsInfo(),
+    getEmbeddingHealth(),
     getDatabaseInfo(),
   ]);
 
@@ -371,6 +443,7 @@ export async function getSystemDashboard(): Promise<SystemDashboard> {
     memory,
     cpu,
     aiModels,
+    embeddings,
     database,
     timestamp: new Date().toISOString(),
   };

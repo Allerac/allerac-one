@@ -19,8 +19,15 @@ sequence of implementation.
 |---|---|---|
 | [Control API v1](control-api-v1.md) | Beta baseline complete | Stable `/api/v1` control plane delivered; deferred contracts and UI migrations remain evolutionary work |
 | [Portable Allerac Backup and Restore](portable-backup-restore.md) | Proposed — high priority for beta | Reconstruct application state on a clean, provider-independent Docker host |
+| [Sustain Agent](sustain-agent.md) | Proposed | Two-tier production monitoring (external Cloudflare health check + internal ticket-raising agent) scoped to maintenance, not feature work |
 | [Multi-Cloud Environment Provisioning](multi-cloud-environment-provisioning.md) | Proposed | Provision, restore, validate, and safely cut over Allerac environments across supported clouds |
-| [Ambient Instructions, Memory, and Tasks](ambient-instructions-memory-tasks.md) | Proposed | Retire manual Instructions/Memory/Tasks management; Memory and Jobs become cross-domain tools the agent uses on its own |
+| [Ambient Instructions, Memory, and Tasks](ambient-instructions-memory-tasks.md) | Completed | Retired manual Instructions/Memory/Tasks management in favor of agent-driven, cross-domain tools |
+| [Knowledge](knowledge.md) | Proposed | Evolve Memory into a private-first typed personal knowledge graph with local semantic relationships |
+| [Unified Knowledge Graph Execution](unified-knowledge-graph-execution.md) | Proposed | Step-by-step delivery plan for showing memories and crawler/uploaded documents in one explainable graph |
+| [Detailed Health Activities and Maps](health-detailed-activities.md) | Proposed | Import complete Garmin activity metrics, routes, time series, and privacy-safe maps |
+| [Strava Integration for Health](health-strava-integration.md) | Proposed | Add OAuth, webhooks, streams, and Garmin/Strava activity reconciliation to Health |
+| [Provider-Independent Local Embeddings](provider-independent-local-embeddings.md) | Completed | Replace the retired GitHub Models integration with benchmarked local embeddings behind a provider-neutral contract |
+| [n8n Workflow Integration](n8n-workflow-integration.md) | Completed | Run n8n self-hosted alongside Allerac as an optional automation layer for multi-step logic and external-service integration |
 
 ## Long-Term Architecture
 

@@ -11,12 +11,10 @@ import SidebarMobile from '@/app/components/layout/SidebarMobile';
 import ChatHeader from '@/app/components/chat/ChatHeader';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
-import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import SearchBar from '@/app/components/search/SearchBar';
 import SearchResultsPanel from '@/app/components/search/SearchResultsPanel';
-import * as memoryActions from '@/app/actions/memory';
 
 interface SearchResult {
   title: string;
@@ -84,9 +82,6 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
   const [isSearching, setIsSearching]   = useState(false);
 
   // — memory modal —
-  const [memoryOpen, setMemoryOpen]       = useState(false);
-  const [memoryLoading, setMemoryLoading] = useState(false);
-  const [memoryResult, setMemoryResult]   = useState<any>(null);
 
   // — search —
   const handleSearch = useCallback(async () => {
@@ -223,19 +218,6 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
   };
 
   // — save to memory —
-  const handleSaveToMemory = useCallback(async () => {
-    if (!convId) return;
-    setMemoryOpen(true); setMemoryLoading(true); setMemoryResult(null);
-    try {
-      const summary = await memoryActions.generateConversationSummary(convId, 'search');
-      setMemoryResult(summary
-        ? { success: true, message: 'Summary generated!', summary: summary.summary, topics: summary.key_topics }
-        : { success: false, message: 'Not enough messages to summarize' }
-      );
-    } catch { setMemoryResult({ success: false, message: 'An unexpected error occurred' }); }
-    finally { setMemoryLoading(false); }
-  }, [convId, userId, githubToken]);
-
   const [isMyAlleracOpen, setIsMyAlleracOpen] = useState(false);
   useEffect(() => {
     const open = () => setIsMyAlleracOpen(true);
@@ -278,7 +260,6 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
               isDarkMode={d} toggleTheme={() => toggleDark} clearChat={clearChat}
               domainName="Search" activeSkill={activeSkill}
               currentConversationId={convId} currentConversationTitle={currentTitle}
-              currentConversationHasMemory={false} handleGenerateSummary={handleSaveToMemory}
               hideHomeButton={!isAdmin} userName={userName ?? undefined} userEmail={userEmail} onLogout={handleLogout} /> */}
 
             {/* Mobile tab bar */}
@@ -321,7 +302,7 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
                         setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} />
+                      />
                     </div>
                   </div>
                 ) : (
@@ -340,7 +321,7 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
                         setSelectedModel={(m) => { setModel(m); localStorage.setItem('selected_model', m); }}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={() => setAgentMode(v => !v)}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} />
+                      />
                     </div>
                   </>
                 )}
@@ -350,8 +331,6 @@ export default function SearchClient({ userId, userName, userEmail, isAdmin, def
         </div>
       </div>
 
-      <MemorySaveModal isOpen={memoryOpen} onClose={() => { setMemoryOpen(false); setMemoryResult(null); }}
-        loading={memoryLoading} result={memoryResult} isDarkMode={d} />
       <MyAlleracModal
         isOpen={isMyAlleracOpen}
         onClose={() => setIsMyAlleracOpen(false)}

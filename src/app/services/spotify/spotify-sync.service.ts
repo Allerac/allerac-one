@@ -5,8 +5,6 @@
 
 import pool from '@/app/clients/db';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
-import { SystemSettingsService } from '@/app/services/system/system-settings.service';
-import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import {
   SpotifyApiService,
   SpotifyArtist,
@@ -31,22 +29,12 @@ const TRACKS_PER_PLAYLIST = 50;
 
 const api = new SpotifyApiService();
 const credentials = new SpotifyCredentialsService(api);
-const userSettingsService = new UserSettingsService();
-const systemSettingsService = new SystemSettingsService();
 
 export interface SpotifySyncResult {
   tracksUpserted: number;
   historyInserted: number;
   candidatesDiscovered: number;
   recommendationsGenerated: number;
-}
-
-async function resolveGithubToken(userId: string): Promise<string> {
-  const [settings, systemSettings] = await Promise.all([
-    userSettingsService.loadUserSettings(userId),
-    systemSettingsService.loadAll(),
-  ]);
-  return settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN || '';
 }
 
 async function upsertTracks(tracks: SpotifyTrack[], genresByArtistId: Map<string, string[]>): Promise<void> {
@@ -80,17 +68,13 @@ async function upsertTracks(tracks: SpotifyTrack[], genresByArtistId: Map<string
   }
 }
 
-async function embedMissingTracks(githubToken: string): Promise<number> {
-  if (!githubToken) {
-    console.warn('[Spotify] No GitHub token available — skipping embedding generation');
-    return 0;
-  }
+async function embedMissingTracks(): Promise<number> {
   const missing = await pool.query<{ id: string; name: string; artists: Array<{ name: string }>; album_name: string | null; genres: string[] }>(
     `SELECT id, name, artists, album_name, genres FROM spotify_tracks WHERE embedding IS NULL LIMIT 500`,
   );
   if (missing.rows.length === 0) return 0;
 
-  const embeddingService = new EmbeddingService(githubToken);
+  const embeddingService = new EmbeddingService();
   let embedded = 0;
   for (let i = 0; i < missing.rows.length; i += EMBEDDING_BATCH_SIZE) {
     const batch = missing.rows.slice(i, i + EMBEDDING_BATCH_SIZE);
@@ -283,8 +267,7 @@ export async function runSpotifySync(userId: string): Promise<SpotifySyncResult>
     await upsertTracks(candidateTracks, genresByArtistId);
   }
 
-  const githubToken = await resolveGithubToken(userId);
-  await embedMissingTracks(githubToken);
+  await embedMissingTracks();
 
   const recommendationsGenerated = await generateRecommendations(userId);
   await credentials.markSynced(userId);

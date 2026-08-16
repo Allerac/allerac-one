@@ -10,7 +10,6 @@ import { MODELS } from '@/app/services/llm/models';
 import type { Message, Conversation } from '@/app/types';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
-import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import { DomainProvider } from '@/app/context/DomainContext';
@@ -284,8 +283,7 @@ export default function TicketsClient({ userId, userName, userEmail, isAdmin, de
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, stop, handleKeyPress, handleSaveToMemory,
-    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+    send, stop, handleKeyPress,
   } = useDomainChat({
     userId, domain: 'tickets', defaultSkillName,
     currentConvId, messages, setMessages,
@@ -1121,7 +1119,7 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
                 MODELS={MODELS}
                 githubConfigured={true} googleConfigured={true} anthropicConfigured={true} ollamaConnected={true}
                 isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
+                onStop={stop}
               />
             </div>
           </div>
@@ -1150,7 +1148,7 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
                 MODELS={MODELS}
                 githubConfigured={true} googleConfigured={true} anthropicConfigured={true} ollamaConnected={true}
                 isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
+                onStop={stop}
               />
             </div>
           </>
@@ -1228,11 +1226,6 @@ Workflow: explore → create branch "${branchPrefix}/${num}-..." → edit files 
         </div>
       )}
 
-      <MemorySaveModal
-        isOpen={memoryOpen}
-        onClose={() => { setMemoryOpen(false); setMemoryResult(null); }}
-        loading={memoryLoading} result={memoryResult} isDarkMode={isDark}
-      />
       <MyAlleracModal
         isOpen={isMyAlleracOpen}
         onClose={() => setIsMyAlleracOpen(false)}

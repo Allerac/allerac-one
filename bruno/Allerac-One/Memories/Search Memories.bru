@@ -1,0 +1,15 @@
+meta {
+  name: Search Memories
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/memories?query=preference&domainSlug=chat&limit=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

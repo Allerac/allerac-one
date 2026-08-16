@@ -1,7 +1,7 @@
 'use client';
 
 import { useTheme } from '@/app/context/ThemeContext';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MODELS } from '@/app/services/llm/models';
 import type { Message, Conversation } from '@/app/types';
 import { DomainProvider } from '@/app/context/DomainContext';
@@ -11,7 +11,6 @@ import SidebarDesktop from '@/app/components/layout/SidebarDesktop';
 import SidebarMobile from '@/app/components/layout/SidebarMobile';
 import ChatMessages from '@/app/components/chat/ChatMessages';
 import ChatInput from '@/app/components/chat/ChatInput';
-import MemorySaveModal from '@/app/components/memory/MemorySaveModal';
 import MyAlleracModal from '@/app/components/allerac/MyAlleracModal';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 import JobsPanel from './JobsPanel';
@@ -46,8 +45,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
     input, setInput, sending, selectedModel, setSelectedModel,
     convId, isAgentMode, toggleAgentMode, githubToken,
     messagesEndRef, lastToolCall, setLastToolCall,
-    send, stop, handleKeyPress, handleSaveToMemory,
-    memoryOpen, setMemoryOpen, memoryLoading, memoryResult, setMemoryResult,
+    send, stop, handleKeyPress,
   } = useDomainChat({
     userId, domain: 'jobs', defaultSkillName,
     currentConvId, messages, setMessages,
@@ -123,7 +121,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
               </div>
 
               {/* Chat panel */}
-              <div className={`${mobileTab === 'chat' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-none lg:w-[360px] flex-col border-l overflow-hidden ${d ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
+              <div className={`${mobileTab === 'chat' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-none lg:w-[496px] flex-col border-l overflow-hidden ${d ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'}`}>
                 {messages.length === 0 && !sending ? (
                   <div className={`flex-1 flex flex-col items-center justify-center px-4 ${d ? 'bg-gray-900' : 'bg-white'}`}>
                     <div className="w-full max-w-sm">
@@ -140,7 +138,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
+                        onStop={stop}
                       />
                     </div>
                   </div>
@@ -164,7 +162,7 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
                         setSelectedModel={setSelectedModel}
                         MODELS={MODELS} githubConfigured ollamaConnected googleConfigured anthropicConfigured
                         isAgentMode={isAgentMode} onToggleAgentMode={toggleAgentMode}
-                        onSaveMemory={handleSaveToMemory} hasConversation={!!convId} onStop={stop}
+                        onStop={stop}
                       />
                     </div>
                   </>
@@ -175,10 +173,6 @@ export default function JobsClient({ userId, userName, userEmail, isAdmin, defau
           </div>
         </div>
 
-        <MemorySaveModal
-          isOpen={memoryOpen} onClose={() => { setMemoryOpen(false); setMemoryResult(null); }}
-          loading={memoryLoading} result={memoryResult} isDarkMode={d}
-        />
         <MyAlleracModal
           isOpen={isMyAlleracOpen}
           onClose={() => setIsMyAlleracOpen(false)}

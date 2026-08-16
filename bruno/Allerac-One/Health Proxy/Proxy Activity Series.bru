@@ -1,0 +1,24 @@
+meta {
+  name: Proxy Activity Series
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/proxy/activities/{{proxyActivityId}}/series
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "Proxy Activities" first to populate proxyActivityId.
+  Independent live call to the health-worker's /activity-details. Returns
+  the same raw `samples` array as "Proxy Activity Route" — Garmin's raw
+  payload doesn't split GPS samples from other metrics the way the cached,
+  normalized tables do. Includes exact GPS coordinates, unlike the cached
+  /series endpoint.
+}

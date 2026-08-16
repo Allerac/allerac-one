@@ -2,7 +2,6 @@ import { DocumentService } from '@/app/services/rag/document.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { requireApiUser } from '../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../_lib/responses';
-import { resolveEmbeddingToken } from '../../_lib/documents';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -16,8 +15,7 @@ export async function DELETE(
     const user = await requireApiUser('documents:write', request);
     const { id } = await params;
 
-    const token = await resolveEmbeddingToken(user.id);
-    const docService = new DocumentService(new EmbeddingService(token));
+    const docService = new DocumentService(new EmbeddingService());
 
     try {
       await docService.deleteDocument(id, user.id);

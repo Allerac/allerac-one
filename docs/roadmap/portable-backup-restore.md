@@ -1,6 +1,6 @@
 # Portable Allerac Backup and Restore
 
-**Status:** Proposed — high priority for beta
+**Status:** Phase 1 (Inventory and contract) and Phase 2 (Portable backup) implemented, plus a minimal cross-machine restore, in `allerac.sh` (`disaster-backup` / `disaster-inspect` / `disaster-restore` / `verify`). Phases 3-4's automated health/auth/data verification checks are not built — restore is manual-confirm only, matching the existing `allerac restore` UX.
 
 **Depends on:** Existing `allerac backup` and `allerac restore` database commands
 
@@ -75,14 +75,14 @@ The archive must not contain raw secrets unless a later, explicitly designed enc
 
 ## Phased delivery
 
-### Phase 1 — Inventory and contract
+### Phase 1 — Inventory and contract (done)
 
 1. Inventory every persistent volume, bind mount, configuration file, secret, and external dependency.
 2. Define the core recovery boundary and optional profiles.
 3. Version the manifest schema and document compatibility rules.
 4. Define restore preconditions and failure behavior.
 
-### Phase 2 — Portable backup
+### Phase 2 — Portable backup (done)
 
 1. Reuse the existing verified PostgreSQL backup implementation.
 2. Capture build, schema, container, volume, and configuration inventories.
@@ -91,6 +91,8 @@ The archive must not contain raw secrets unless a later, explicitly designed enc
 5. Ensure partial or corrupt packages are never reported as successful.
 
 ### Phase 3 — Restore to a clean host
+
+`allerac disaster-restore <package>` covers the core of this today: checksum verification (blocking), package-version compatibility check, a required-settings checklist, confirmation prompt, safety backup, and restore. Not yet built: automated free-space/Docker-compatibility preflight, and the automated health/auth/schema/data checks below.
 
 1. Validate checksums, free space, Docker compatibility, and package version.
 2. Require missing secrets through environment files or an external secret store.
