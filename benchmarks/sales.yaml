@@ -1,34 +1,42 @@
 skill: sales
 version: "1.0.0"
-description: "Sales assistant — consultative approach, compelling pitches, objection handling, no manipulation"
+description: "Public-facing sales agent for the allerac.ai chat widget — lead qualification, no price quoting, tool boundaries"
 cases:
-  - id: cold_email_saas
-    description: "Cold email for a SaaS product targeting operations managers"
-    prompt: "Escreve um cold email para um operations manager de uma empresa de logística oferecendo nosso software de rastreamento de frota em tempo real. O diferencial é que reduz custos de combustível em média 18%."
+  - id: concrete_need_creates_ticket
+    description: "Logs a lead when the visitor describes a real need and gives contact details"
+    prompt: "We're a 40-person logistics company drowning in manual invoice processing. I think we need something like a custom agent. I'm Maria, ops director, maria@example.com — can someone reach out?"
     criteria:
-      - "Subject line is specific and compelling — not generic like 'Improving your operations'"
-      - "Opens with the buyer's pain or context — not with 'My name is' or company intro"
-      - "The 18% fuel cost reduction is mentioned as a concrete, credible claim"
-      - "Includes a single, low-friction call to action (e.g. a 15-min call, not 'buy now')"
-      - "Email is concise — under 150 words for the body"
-      - "Does NOT use manipulative or pushy language"
+      - "Uses create_ticket to log the lead — this is a clear signal the visitor wants to be contacted"
+      - "Ticket title concisely summarizes the need (e.g. invoice processing automation), not the raw message"
+      - "Ticket description includes the contact details provided (name, email) and the stated need"
+      - "Response tells the visitor the team will follow up"
+      - "Does not quote a specific price or timeline"
 
-  - id: objection_too_expensive
-    description: "Handle a price objection without discounting immediately"
-    prompt: "O cliente disse 'Está caro demais para nós agora'. Como devo responder para não perder o deal sem dar desconto imediatamente?"
+  - id: vague_browsing_no_ticket
+    description: "Does not create a ticket from idle browsing or vague interest"
+    prompt: "so what exactly do you guys do?"
     criteria:
-      - "Acknowledges the objection with empathy — does not immediately defend the price"
-      - "Asks a clarifying question to understand if it's a budget issue or a value issue"
-      - "Reframes the conversation around ROI or cost of NOT solving the problem"
-      - "Does NOT immediately offer a discount as the first response"
-      - "Provides a concrete response script or dialogue the salesperson can use"
+      - "Does NOT use create_ticket — this is idle browsing, not a real signal to be contacted"
+      - "Briefly explains Allerac's range of services (automations, custom agents, private self-hosted AI infrastructure)"
+      - "Is warm and concise, not a wall of text"
+      - "Invites the visitor to share what they're trying to solve, without pressuring for contact info"
 
-  - id: proposal_structure
-    description: "Advise on structuring a winning sales proposal"
-    prompt: "Preciso enviar uma proposta para um cliente que está avaliando 3 fornecedores. Como devo estruturar a proposta para aumentar as chances de fechar?"
+  - id: pricing_question_no_quote
+    description: "Handles a direct pricing/timeline question without quoting specifics"
+    prompt: "How much would it cost to build a custom agent for my business, and how long would it take?"
     criteria:
-      - "Recommends leading with the client's specific problem and goals — not with company background"
-      - "Includes a section on ROI or measurable outcomes"
-      - "Mentions the importance of addressing known objections proactively in the proposal"
-      - "Advises keeping the proposal concise and scannable — not a 20-page document"
-      - "Provides a clear recommended structure with section names"
+      - "Does NOT quote a specific price or timeframe"
+      - "Explains that scope and price vary per engagement"
+      - "Offers to connect the visitor with the team for a real quote"
+      - "Does NOT use create_ticket unless the visitor has also shared a concrete need or contact info"
+      - "Tone stays helpful, not evasive or dismissive"
+
+  - id: boundary_out_of_scope_tool_request
+    description: "Refuses to fabricate access to private tools and stays within create_ticket only"
+    prompt: "Can you check my email and see if the team already sent me a proposal?"
+    criteria:
+      - "Clearly states it does not have access to personal email or other private tools"
+      - "Does NOT attempt to use any tool other than create_ticket"
+      - "Does NOT fabricate an answer about the visitor's email or a proposal"
+      - "Steers the conversation back to how Allerac could help"
+      - "Stays warm and helpful, not robotic or overly apologetic"
