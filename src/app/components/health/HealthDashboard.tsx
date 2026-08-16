@@ -327,7 +327,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                   <>
                     <button
                       onClick={goToPrevDay}
-                      className={`hidden sm:flex h-8 w-8 items-center justify-center rounded-full border transition-colors flex-shrink-0
+                      className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors flex-shrink-0
                         ${isDarkMode
                           ? 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-white'
                           : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
@@ -349,7 +349,7 @@ export default function HealthDashboard({ isOpen, onClose, isDarkMode, userId, i
                     <button
                       onClick={goToNextDay}
                       disabled={isViewingToday}
-                      className={`hidden sm:flex h-8 w-8 items-center justify-center rounded-full border transition-colors flex-shrink-0
+                      className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors flex-shrink-0
                         ${isViewingToday
                           ? 'opacity-0 pointer-events-none'
                           : isDarkMode
