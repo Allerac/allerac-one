@@ -1,0 +1,20 @@
+meta {
+  name: Get Activity Detail
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/activities/{{activityId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "List Activities" first to populate activityId.
+  Required scope: health:read. Never includes GPS coordinates or raw provider payloads.
+}

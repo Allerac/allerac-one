@@ -4,6 +4,9 @@ This section documents stable and emerging HTTP contracts for Allerac One.
 
 Start with [Control API v1](control-api-v1/overview.md).
 
+The crawler worker integration is documented in
+[Crawler API](control-api-v1/crawler.md).
+
 ## Artifacts
 
 - [OpenAPI: Control API v1](openapi/control-api-v1.yaml)

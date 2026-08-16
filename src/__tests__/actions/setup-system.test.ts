@@ -2,7 +2,7 @@ import '../__mocks__/db';
 import pool from '@/app/clients/db';
 import { requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
 import { saveDefaultModel } from '@/app/actions/setup';
-import { getDatabaseInfo, pullOllamaModel } from '@/app/actions/system';
+import { getDatabaseInfo, getEmbeddingHealth, pullOllamaModel } from '@/app/actions/system';
 
 jest.mock('@/app/lib/auth-session', () => ({
   requireCurrentAdmin: jest.fn(),
@@ -21,10 +21,16 @@ const sessionUser = {
 };
 
 describe('Setup and system action authorization', () => {
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockRequireCurrentUser.mockResolvedValue(sessionUser);
     mockRequireCurrentAdmin.mockResolvedValue({ ...sessionUser, is_admin: true });
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
   });
 
   it('saves the default model for the session user', async () => {
@@ -61,5 +67,30 @@ describe('Setup and system action authorization', () => {
 
     expect(result).toEqual({ success: false, message: 'Admin access required' });
     expect(mockRequireCurrentAdmin).toHaveBeenCalled();
+  });
+
+  it('reports compatible installed embedding model health', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{
+        provider: 'ollama',
+        model: 'embeddinggemma',
+        dimensions: 768,
+        version: 'ollama:embeddinggemma:v1',
+      }],
+    } as never);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ models: [{ name: 'embeddinggemma:latest' }] }),
+    });
+
+    const health = await getEmbeddingHealth();
+
+    expect(health).toEqual(expect.objectContaining({
+      healthy: true,
+      runtimeCompatible: true,
+      modelInstalled: true,
+      model: 'embeddinggemma',
+      dimensions: 768,
+    }));
   });
 });

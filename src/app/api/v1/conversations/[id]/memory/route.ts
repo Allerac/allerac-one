@@ -4,6 +4,7 @@ import { ConversationMemoryService } from '@/app/services/memory/conversation-me
 import { requireApiUser } from '../../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../../_lib/responses';
 import { memoryDto, resolveMemoryLlmConfig } from '../../../_lib/memories';
+import { instructionDistillerService } from '@/app/services/memory/instruction-distiller.service';
 
 const chatService = new ChatService();
 
@@ -51,6 +52,16 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     const memory = await memoryService.generateConversationSummary(id, user.id, parsedBody.data);
     if (!memory) {
       return apiError('not_enough_content', 'Conversation does not have enough messages to create memory.', 422);
+    }
+    try {
+      await instructionDistillerService.distill({
+        userId: user.id,
+        domainSlug: conversation.domain_slug ?? 'chat',
+        llmConfig,
+        sourceSummaryId: memory.id,
+      });
+    } catch (error) {
+      console.error('[Memory API] Instruction distillation failed:', error);
     }
 
     return apiData({ memory: memoryDto(memory) }, { status: 201 });

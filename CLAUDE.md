@@ -35,7 +35,7 @@ src/telegram-multi-bot.ts # Entry for the telegram container
 ## Key Patterns
 
 - **LLM Providers:** Two providers - GitHub Models API (cloud) and Ollama (local). Configured in `services/llm/models.ts`
-- **Embeddings:** Uses `text-embedding-3-small` (1536 dimensions) via GitHub Models for RAG
+- **Embeddings:** Uses local `embeddinggemma` (768 dimensions) via Ollama behind a provider-neutral service
 - **Vector Search:** pgvector with HNSW index, cosine distance
 - **Memory:** Automatic conversation summarization with importance scoring and topic extraction
 - **Auth:** Session-based with bcrypt password hashing

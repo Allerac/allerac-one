@@ -12,13 +12,18 @@ const updateJobSchema = z.object({
   cronExpr: z.string().trim().regex(CRON_REGEX, 'Invalid cron expression').optional(),
   prompt: z.string().trim().min(1).optional(),
   channels: z.array(z.string()).min(1).optional(),
+  webhookUrl: z.string().trim().url().nullable().optional(),
   enabled: z.boolean().optional(),
   llmModel: z.string().trim().min(1).nullable().optional(),
   llmProvider: z.enum(['github', 'ollama', 'gemini', 'anthropic']).nullable().optional(),
 }).superRefine((data, context) => {
-  if (data.llmModel === undefined && data.llmProvider === undefined) return;
-  const error = validateJobModelSelection(data.llmModel, data.llmProvider);
-  if (error) context.addIssue({ code: 'custom', message: error });
+  if (data.llmModel !== undefined || data.llmProvider !== undefined) {
+    const error = validateJobModelSelection(data.llmModel, data.llmProvider);
+    if (error) context.addIssue({ code: 'custom', message: error });
+  }
+  if (data.channels?.includes('webhook') && !data.webhookUrl?.trim()) {
+    context.addIssue({ code: 'custom', message: 'webhookUrl is required when the webhook channel is enabled', path: ['webhookUrl'] });
+  }
 });
 
 interface RouteContext {

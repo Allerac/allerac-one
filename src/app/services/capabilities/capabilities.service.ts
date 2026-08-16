@@ -1,6 +1,7 @@
 import pool from '@/app/clients/db';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { getConnection } from '@/app/services/integrations/integration-connections.service';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 
@@ -83,19 +84,17 @@ export class CapabilitiesService {
   private systemSettingsService = new SystemSettingsService();
 
   async loadForUser(userId: string): Promise<CapabilitiesResponse> {
-    const [userSettings, systemSettings, ollamaConnected, emailAccounts, telegramBots, garminStatus, instagramStatus, tiktokStatus] = await Promise.all([
+    const [userSettings, systemSettings, ollamaConnected, emailAccounts, telegramBots, garminConfiguredRows, garminConnection, instagramStatus, tiktokStatus] = await Promise.all([
       this.userSettingsService.loadUserSettings(userId),
       this.systemSettingsService.loadAll(),
       checkOllamaConnected(),
       countRows('SELECT COUNT(*) FROM user_email_accounts WHERE user_id = $1', [userId]),
       countRows('SELECT COUNT(*) FROM telegram_bot_configs WHERE user_id = $1 AND enabled = true', [userId]),
       pool.query(
-        `SELECT is_connected, sync_enabled
-         FROM garmin_credentials
-         WHERE user_id = $1
-         LIMIT 1`,
+        `SELECT 1 FROM garmin_credentials WHERE user_id = $1 LIMIT 1`,
         [userId],
       ).catch(() => ({ rows: [] })),
+      getConnection(userId, 'garmin').catch(() => null),
       pool.query(
         `SELECT is_connected
          FROM instagram_credentials
@@ -112,9 +111,8 @@ export class CapabilitiesService {
       ).catch(() => ({ rows: [] })),
     ]);
 
-    const garminRow = garminStatus.rows[0];
-    const garminConfigured = Boolean(garminRow);
-    const garminConnected = Boolean(garminRow?.is_connected && garminRow?.sync_enabled);
+    const garminConfigured = garminConfiguredRows.rows.length > 0;
+    const garminConnected = Boolean(garminConnection?.isConnected && garminConnection?.syncEnabled);
     const instagramRow = instagramStatus.rows[0];
     const tiktokRow = tiktokStatus.rows[0];
 

@@ -56,6 +56,17 @@ const SCOPE_GROUPS = [
     ],
   },
   {
+    label: 'Crawler',
+    scopes: [
+      ['crawler:sources:write', 'Sources: configure'],
+      ['crawler:runs:write', 'Runs: create and update'],
+      ['crawler:runs:claim', 'Runs: claim'],
+      ['crawler:runs:heartbeat', 'Runs: heartbeat'],
+      ['crawler:events:write', 'Events: write'],
+      ['crawler:documents:write', 'Documents: ingest'],
+    ],
+  },
+  {
     label: 'Personal data',
     scopes: [
       ['health:read', 'Health: read'],
@@ -74,6 +85,17 @@ const SCOPE_GROUPS = [
 const ALL_SCOPES = SCOPE_GROUPS.flatMap(group => group.scopes.map(([scope]) => scope));
 
 const PRESETS = {
+  crawler: {
+    label: 'Allerac Crawler',
+    scopes: [
+      'crawler:sources:write',
+      'crawler:runs:write',
+      'crawler:runs:claim',
+      'crawler:runs:heartbeat',
+      'crawler:events:write',
+      'crawler:documents:write',
+    ],
+  },
   robot: {
     label: 'Android Robot',
     scopes: ['profile:read', 'chat:read', 'chat:write', 'capabilities:read'],

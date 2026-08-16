@@ -10,6 +10,7 @@ export const ALLERAC_DOMAINS: AlleracDomain[] = [
   { key: 'code',      name: 'Code',      icon: '💻', path: '/code' },
   { key: 'notes',     name: 'Notes',     icon: '📝', path: '/notes' },
   { key: 'jobs',      name: 'Jobs',      icon: '⏰', path: '/jobs' },
+  { key: 'memory',    name: 'Knowledge', icon: '🗂️', path: '/memory' },
   { key: 'finance',   name: 'Finance',   icon: '💰', path: '/finance' },
   { key: 'health',    name: 'Health',    icon: '❤️', path: '/health' },
   { key: 'email',     name: 'Email',     icon: '✉️', path: '/email' },
@@ -25,6 +26,7 @@ export const ALLERAC_DOMAINS: AlleracDomain[] = [
   { key: 'admin',     name: 'Admin',     icon: '⚙️', path: '/admin' },
   { key: 'robot-assistant', name: 'Robot', icon: 'R', path: '/robot-assistant' },
   { key: 'channels', name: 'Channels', icon: '📡', path: '/channels' },
+  { key: 'sales',     name: 'Sales',     icon: '📣', path: '/sales' },
 ];
 
 export function getDomainByKey(key: string): AlleracDomain | undefined {

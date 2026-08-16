@@ -30,8 +30,15 @@ export default function JoinClient({ token, email, domainSlug, error }: Props) {
   const [apiKeySecret, setApiKeySecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [redirectTo, setRedirectTo] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
-  if (error) {
+  // Registering consumes the invite token server-side (marks it used).
+  // Calling the registerWithInvite Server Action also causes Next.js to
+  // re-render this route's Server Component (JoinPage), which re-validates
+  // the token and now sees it as already used — passing a stale `error`
+  // prop down right after a successful signup. Once we know client-side
+  // that registration succeeded, that prop must never override our view.
+  if (error && !submitted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
         <div className="w-full max-w-md text-center">
@@ -118,6 +125,7 @@ export default function JoinClient({ token, email, domainSlug, error }: Props) {
       const hashed = await hashPassword(password);
       const result = await registerWithInvite(token, email, hashed, name || undefined);
       if (result.success) {
+        setSubmitted(true);
         if (result.apiKeySecret) {
           setApiKeySecret(result.apiKeySecret);
           setRedirectTo(result.redirectTo);

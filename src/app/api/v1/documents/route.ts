@@ -3,7 +3,7 @@ import { DocumentService } from '@/app/services/rag/document.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { requireApiUser } from '../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../_lib/responses';
-import { documentDto, resolveEmbeddingToken } from '../_lib/documents';
+import { documentDto } from '../_lib/documents';
 
 const listQuerySchema = z.object({
   domainSlug: z.string().trim().min(1).optional(),
@@ -18,8 +18,7 @@ export async function GET(request: Request): Promise<Response> {
       return apiError('validation_error', 'Invalid document filters', 400, parsed.error.flatten());
     }
 
-    const token = await resolveEmbeddingToken(user.id);
-    const docService = new DocumentService(new EmbeddingService(token));
+    const docService = new DocumentService(new EmbeddingService());
     const rows = await docService.getAllDocuments(user.id, parsed.data.domainSlug);
     const limited = parsed.data.limit ? rows.slice(0, parsed.data.limit) : rows.slice(0, 50);
 
@@ -45,8 +44,7 @@ export async function POST(request: Request): Promise<Response> {
       return apiError('validation_error', 'Document is too large. Maximum size is 20 MB.', 400);
     }
 
-    const token = await resolveEmbeddingToken(user.id);
-    const docService = new DocumentService(new EmbeddingService(token));
+    const docService = new DocumentService(new EmbeddingService());
 
     const documentId = await docService.createDocumentRecord(
       file,

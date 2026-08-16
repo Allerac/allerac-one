@@ -25,6 +25,7 @@ export interface RunChatPipelineInput {
   tavilyApiKey?: string;
   user: User;
   conversationId: string;
+  domain?: string;
   message: string;
   locale: string;
   activeSkill: Skill | null;
@@ -42,6 +43,27 @@ function parseToolArguments(rawArguments: unknown): Record<string, any> {
   } catch {
     return {};
   }
+}
+
+function explicitlyRequestedPersistenceTool(message: string): string | null {
+  const normalized = message.toLocaleLowerCase();
+  const temporalReference = /(?:^|\s)(?:amanh[aã]|hoje|depois|mais tarde|pr[oó]xim[oa]|segunda|terça|quarta|quinta|sexta|sábado|domingo|\d{1,2}(?::\d{2})?\s*(?:h|horas?)?|tomorrow|today|tonight|next|at\s+\d|mañana|hoy)(?=\s|[,.!?]|$)/iu;
+  const reminderRequest = /\b(?:me\s+lembre|lembre-me|me\s+avise|avise-me|n[aã]o\s+esqueça|remind\s+me|don'?t\s+forget|recu[eé]rdame|no\s+olvides)\b/i;
+  const noteRequest = /\b(?:anote|anota|tome\s+nota|crie\s+uma\s+nota|salve\s+(?:isso\s+)?(?:nas?|como)\s+notas?|write\s+(?:this\s+)?down|take\s+(?:a\s+)?note|create\s+(?:a\s+)?note)\b/i;
+  const standingInstruction = /\b(?:daqui\s+(?:em\s+diante|pra\s+frente|para\s+frente)|a\s+partir\s+de\s+agora|de\s+agora\s+em\s+diante|from\s+now\s+on|going\s+forward|a\s+partir\s+de\s+ahora)\b/i;
+  const writeVerb = '(?:guard(?:e|a|ar|asse)|salv(?:e|a|ar)|lembr(?:e|a|ar)|memoriz(?:e|a|ar)|remember|save|memorize|recuerd(?:a|e)|guardar)';
+  const memoryNoun = '(?:mem[oó]ria|memory|memoria)';
+
+  if (reminderRequest.test(normalized) && temporalReference.test(normalized)) return 'schedule_task';
+  if (noteRequest.test(normalized)) return 'save_note';
+  if (standingInstruction.test(normalized)) return 'learn_instruction';
+
+  const memoryRequest = new RegExp(`${writeVerb}.{0,100}${memoryNoun}|${memoryNoun}.{0,100}${writeVerb}`, 'i').test(normalized)
+    || /\b(?:lembre|remember|recuerda)(?:-se)?\s+(?:de\s+)?(?:que|that)\b/i.test(normalized)
+    || /\b(?:guarde|guarda|memorize|memoriza)\b.{0,50}\b(?:isso|isto|que|o seguinte|essa|esta|esse|este)\b/i.test(normalized)
+    || /\b(?:n[aã]o\s+esqueça|don'?t\s+forget|do\s+not\s+forget|no\s+olvides)\b/i.test(normalized)
+    || /\bkeep\s+(?:this|that|it)\s+in\s+mind\b/i.test(normalized);
+  return memoryRequest ? 'create_memory' : null;
 }
 
 export async function runChatPipeline(input: RunChatPipelineInput): Promise<string> {
@@ -80,7 +102,14 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
     }
   };
   const forceTool = input.activeSkill?.force_tool ?? null;
-  const initialToolChoice = forceTool
+  const requestedPersistenceTool = explicitlyRequestedPersistenceTool(input.message);
+  const availableRequestedTool = requestedPersistenceTool
+    && input.activeTools.some(tool => tool.function?.name === requestedPersistenceTool)
+    ? requestedPersistenceTool
+    : null;
+  const initialToolChoice = availableRequestedTool
+    ? { type: 'function', function: { name: availableRequestedTool } }
+    : forceTool
     ? { type: 'function', function: { name: forceTool } }
     : input.provider !== 'gemini' ? 'auto' : undefined;
 
@@ -118,6 +147,8 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
           tavilyApiKey: input.tavilyApiKey,
           message: input.message,
           locale: input.locale,
+          conversationId: input.conversationId,
+          domain: input.domain || 'chat',
           emit: input.emit,
         });
         const resultEvent: Record<string, any> = {

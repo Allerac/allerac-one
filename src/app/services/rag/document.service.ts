@@ -35,6 +35,33 @@ export interface ProcessedDocument {
   chunks: DocumentChunk[];
 }
 
+export interface StoredDocumentDetails {
+  id: string;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  domain_slug: string | null;
+  status: 'processing' | 'completed' | 'failed';
+  error_message: string | null;
+  metadata: Record<string, unknown>;
+  uploaded_at: string;
+  crawler: {
+    source_id: string;
+    external_id: string;
+    canonical_url: string;
+    attribution: Record<string, unknown>;
+    retrieved_at: string;
+  } | null;
+  chunks: Array<{
+    id: string;
+    chunk_index: number;
+    content: string;
+    token_count: number | null;
+    metadata: Record<string, unknown>;
+    has_embedding: boolean;
+  }>;
+}
+
 export class DocumentService {
   private embeddingService: EmbeddingService;
 
@@ -230,6 +257,22 @@ export class DocumentService {
   }
 
   /**
+   * Replaces derived chunks after source content changes. Old vectors are removed
+   * before the document is made searchable again, so stale content is never mixed
+   * with the replacement.
+   */
+  async reprocessDocumentContent(documentId: string, text: string): Promise<void> {
+    await pool.query(
+      `UPDATE documents
+       SET status = 'processing', error_message = NULL
+       WHERE id = $1`,
+      [documentId],
+    );
+    await pool.query('DELETE FROM document_chunks WHERE document_id = $1', [documentId]);
+    await this.processDocumentContent(documentId, text);
+  }
+
+  /**
    * Processes chunks by generating embeddings and storing in database.
    */
   private async processAndStoreChunks(
@@ -303,6 +346,49 @@ export class DocumentService {
     } catch (error: any) {
       throw new Error(`Failed to fetch documents: ${error.message}`);
     }
+  }
+
+  async getDocumentDetails(documentId: string, userId: string): Promise<StoredDocumentDetails> {
+    const documentResult = await pool.query(
+      `SELECT d.id, d.filename, d.file_type, d.file_size, d.domain_slug, d.status,
+              d.error_message, d.metadata, d.uploaded_at,
+              cd.source_id, cd.external_id, cd.canonical_url, cd.attribution, cd.retrieved_at
+       FROM documents d
+       LEFT JOIN crawler_documents cd ON cd.document_id = d.id
+       WHERE d.id = $1 AND d.uploaded_by = $2`,
+      [documentId, userId],
+    );
+    const document = documentResult.rows[0];
+    if (!document) throw new Error('Document not found');
+
+    const chunksResult = await pool.query(
+      `SELECT id, chunk_index, content, token_count, metadata,
+              embedding IS NOT NULL AS has_embedding
+       FROM document_chunks
+       WHERE document_id = $1
+       ORDER BY chunk_index`,
+      [documentId],
+    );
+
+    return {
+      id: document.id,
+      filename: document.filename,
+      file_type: document.file_type,
+      file_size: document.file_size,
+      domain_slug: document.domain_slug,
+      status: document.status,
+      error_message: document.error_message,
+      metadata: document.metadata ?? {},
+      uploaded_at: new Date(document.uploaded_at).toISOString(),
+      crawler: document.source_id ? {
+        source_id: document.source_id,
+        external_id: document.external_id,
+        canonical_url: document.canonical_url,
+        attribution: document.attribution ?? {},
+        retrieved_at: new Date(document.retrieved_at).toISOString(),
+      } : null,
+      chunks: chunksResult.rows,
+    };
   }
 
   /**

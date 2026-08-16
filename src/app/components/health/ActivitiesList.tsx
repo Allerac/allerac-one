@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 interface Activity {
@@ -24,18 +25,26 @@ interface ActivitiesListProps {
 
 export default function ActivitiesList({ isDarkMode, startDate, endDate }: ActivitiesListProps) {
   const t = useTranslations();
+  const router = useRouter();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // See the identical guard in RecentActivity.tsx: a native <input
+  // type="date"> fires onChange per segment while typing, so an earlier
+  // request can resolve after a newer one and clobber good data.
+  const latestRequestId = useRef(0);
 
   useEffect(() => {
     fetchActivities();
   }, [startDate, endDate]);
 
   const fetchActivities = async () => {
+    const requestId = ++latestRequestId.current;
     try {
       setLoading(true);
       const response = await fetch(`/api/health/activities-range?startDate=${startDate}&endDate=${endDate}`);
+      if (latestRequestId.current !== requestId) return;
 
       if (!response.ok) {
         const text = await response.text();
@@ -43,14 +52,16 @@ export default function ActivitiesList({ isDarkMode, startDate, endDate }: Activ
       }
 
       const data = await response.json();
+      if (latestRequestId.current !== requestId) return;
       setActivities(data.activities || []);
       setError(null);
     } catch (err) {
+      if (latestRequestId.current !== requestId) return;
       const message = err instanceof Error ? err.message : 'Unknown error';
       setError(message);
       setActivities([]);
     } finally {
-      setLoading(false);
+      if (latestRequestId.current === requestId) setLoading(false);
     }
   };
 
@@ -122,7 +133,8 @@ export default function ActivitiesList({ isDarkMode, startDate, endDate }: Activ
               return (
                 <tr
                   key={activity.activityId}
-                  className={`border-t ${borderColor} ${isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'} transition-colors`}
+                  onClick={() => activity.activityId && router.push(`/health/activities/${activity.activityId}`)}
+                  className={`border-t ${borderColor} ${isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'} transition-colors ${activity.activityId ? 'cursor-pointer' : ''}`}
                 >
                   <td className={`px-4 py-2.5 text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     {activity.activityName || '—'}

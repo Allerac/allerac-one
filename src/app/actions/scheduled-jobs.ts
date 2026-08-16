@@ -4,18 +4,9 @@ import { scheduledJobsService } from '../services/scheduled-jobs/scheduled-jobs.
 import type { ScheduledJob, JobExecution } from '../types';
 import { assertDomainAccess, requireCurrentUser } from '../lib/auth-session';
 import { validateJobModelSelection, type JobModelProvider } from '../services/scheduled-jobs/job-model';
+import { validateCronExpression } from '../services/scheduled-jobs/cron-validation';
 
 type JobModelSelection = { llmModel?: string | null; llmProvider?: JobModelProvider | null };
-
-const CRON_REGEX =
-  /^(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)$/;
-
-function validateCron(expr: string): string | null {
-  if (!CRON_REGEX.test(expr.trim())) {
-    return 'Invalid cron expression';
-  }
-  return null;
-}
 
 export async function getScheduledJobs(): Promise<{ success: boolean; data?: ScheduledJob[]; error?: string }> {
   try {
@@ -29,7 +20,7 @@ export async function getScheduledJobs(): Promise<{ success: boolean; data?: Sch
 }
 
 export async function createScheduledJob(
-  data: { name: string; cronExpr: string; prompt: string; channels: string[]; enabled: boolean; domainSlug?: string | null } & JobModelSelection
+  data: { name: string; cronExpr: string; prompt: string; channels: string[]; webhookUrl?: string | null; enabled: boolean; domainSlug?: string | null } & JobModelSelection
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (!data.name?.trim()) {
     return { success: false, error: 'Name is required' };
@@ -40,7 +31,10 @@ export async function createScheduledJob(
   if (!data.channels || data.channels.length === 0) {
     return { success: false, error: 'At least one channel is required' };
   }
-  const cronError = validateCron(data.cronExpr);
+  if (data.channels.includes('webhook') && !data.webhookUrl?.trim()) {
+    return { success: false, error: 'Webhook URL is required when the webhook channel is enabled' };
+  }
+  const cronError = validateCronExpression(data.cronExpr);
   if (cronError) {
     return { success: false, error: cronError };
   }
@@ -65,13 +59,16 @@ export async function createScheduledJob(
 
 export async function updateScheduledJob(
   jobId: string,
-  data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; enabled?: boolean } & JobModelSelection
+  data: { name?: string; cronExpr?: string; prompt?: string; channels?: string[]; webhookUrl?: string | null; enabled?: boolean } & JobModelSelection
 ): Promise<{ success: boolean; data?: ScheduledJob; error?: string }> {
   if (data.cronExpr !== undefined) {
-    const cronError = validateCron(data.cronExpr);
+    const cronError = validateCronExpression(data.cronExpr);
     if (cronError) {
       return { success: false, error: cronError };
     }
+  }
+  if (data.channels?.includes('webhook') && !data.webhookUrl?.trim()) {
+    return { success: false, error: 'Webhook URL is required when the webhook channel is enabled' };
   }
   const modelError = validateJobModelSelection(data.llmModel, data.llmProvider);
   if (modelError) return { success: false, error: modelError };
@@ -122,11 +119,15 @@ export async function toggleJobEnabled(
 }
 
 export async function getJobExecutions(
-  jobId: string
+  jobId: string,
+  options?: { startDate?: string; endDate?: string }
 ): Promise<{ success: boolean; data?: JobExecution[]; error?: string }> {
   try {
     const user = await requireCurrentUser();
-    const data = await scheduledJobsService.getJobExecutions(jobId, user.id);
+    const data = await scheduledJobsService.getJobExecutions(jobId, user.id, {
+      startDate: options?.startDate ? new Date(options.startDate) : undefined,
+      endDate: options?.endDate ? new Date(options.endDate) : undefined,
+    });
     return { success: true, data };
   } catch (error) {
     console.error('[Actions] Error getting job executions:', error);

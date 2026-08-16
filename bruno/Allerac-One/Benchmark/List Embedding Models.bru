@@ -1,0 +1,15 @@
+meta {
+  name: List Embedding Models
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/benchmark/embeddings
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

@@ -16,6 +16,7 @@ import { validateWorkerRuntimeConfig } from './lib/runtime-config';
 import { installConsoleInterceptor } from './lib/logger';
 import { installLogInterceptor } from './lib/log-interceptor';
 import { getWorkerRunner } from './app/services/agents/worker-runner.service';
+import { getDetailSyncRunner } from './app/services/health/detail-sync-runner.service';
 import pool from './app/clients/db';
 
 const HEALTH_PORT = parseInt(process.env.AGENT_WORKER_HEALTH_PORT || '8090', 10);
@@ -34,6 +35,10 @@ async function main(): Promise<void> {
   runner.start();
   console.log('[AgentWorker] Started agent worker process');
 
+  const detailSyncRunner = getDetailSyncRunner();
+  detailSyncRunner.start();
+  console.log('[AgentWorker] Started health detail-sync poll loop');
+
   const healthServer = http.createServer(async (req, res) => {
     if (req.url !== '/health') {
       res.writeHead(404).end();
@@ -45,12 +50,16 @@ async function main(): Promise<void> {
       dbOk = true;
     } catch { /* reported below */ }
 
-    const healthy = runner.isRunning() && dbOk;
+    const healthy = runner.isRunning() && detailSyncRunner.isRunning() && dbOk;
     res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: healthy ? 'ok' : 'unhealthy',
       isRunning: runner.isRunning(),
       activeRunCount: runner.getActiveRunCount(),
+      healthDetailSync: {
+        isRunning: detailSyncRunner.isRunning(),
+        activeJobCount: detailSyncRunner.getActiveJobCount(),
+      },
       db: dbOk ? 'ok' : 'unreachable',
     }));
   });
@@ -65,16 +74,28 @@ async function main(): Promise<void> {
     console.log(`[AgentWorker] ${signal} received, stopping runner`);
 
     runner.stop();
+    detailSyncRunner.stop();
     healthServer.close();
 
     const deadline = Date.now() + SHUTDOWN_TIMEOUT_MS;
-    while (runner.getActiveRunCount() > 0 && Date.now() < deadline) {
+    while (
+      (runner.getActiveRunCount() > 0 || detailSyncRunner.getActiveJobCount() > 0)
+      && Date.now() < deadline
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     const remaining = runner.getActiveRunCount();
     if (remaining > 0) {
       // Interrupted runs are picked up again by retryStaleRuns after restart.
       console.warn(`[AgentWorker] Exiting with ${remaining} active run(s); stale-run recovery will retry them`);
+    }
+    const remainingDetailSyncJobs = detailSyncRunner.getActiveJobCount();
+    if (remainingDetailSyncJobs > 0) {
+      // Interrupted jobs are picked up again by recoverStaleJobs after restart.
+      console.warn(
+        `[AgentWorker] Exiting with ${remainingDetailSyncJobs} active detail-sync job(s); `
+        + `stale-job recovery will retry them`
+      );
     }
 
     await pool.end().catch(() => {});

@@ -152,13 +152,13 @@ describe('Control API v1 notes', () => {
     expect(notesSvc().createNote).toHaveBeenCalledWith(
       user.id,
       expect.objectContaining({ content: 'Note content', source: 'api' }),
-      null,
     );
     const body = await response.json();
     expect(body.data.note).toMatchObject({ id: 'note-id' });
   });
 
-  it('searches notes using keyword fallback when no token', async () => {
+  it('uses keyword fallback when local semantic search is unavailable', async () => {
+    notesSvc().searchNotes.mockRejectedValueOnce(new Error('Ollama unavailable'));
     notesSvc().keywordSearchNotes.mockResolvedValueOnce([note]);
 
     const response = await searchNotes(new Request('http://localhost/api/v1/notes/search?q=test'));

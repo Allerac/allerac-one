@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 
 interface DailyMetrics {
@@ -41,8 +41,14 @@ export default function DailyHealthMetrics({ isDarkMode, selectedDate }: DailyHe
   const [metrics, setMetrics] = useState<DailyMetrics | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // See the identical guard in RecentActivity.tsx: a native <input
+  // type="date"> fires onChange per segment while typing, so an earlier
+  // request can resolve after a newer one and clobber good data.
+  const latestRequestId = useRef(0);
+
   useEffect(() => {
     if (!selectedDate) {
+      latestRequestId.current += 1;
       setMetrics(null);
       setLoading(false);
       return;
@@ -51,9 +57,11 @@ export default function DailyHealthMetrics({ isDarkMode, selectedDate }: DailyHe
   }, [selectedDate]);
 
   const fetchMetrics = async () => {
+    const requestId = ++latestRequestId.current;
     try {
       setLoading(true);
       const response = await fetch(`/api/health/daily?date=${selectedDate}`);
+      if (latestRequestId.current !== requestId) return;
 
       if (!response.ok) {
         const text = await response.text();
@@ -61,11 +69,13 @@ export default function DailyHealthMetrics({ isDarkMode, selectedDate }: DailyHe
       }
 
       const data = await response.json();
+      if (latestRequestId.current !== requestId) return;
       setMetrics(data);
     } catch {
+      if (latestRequestId.current !== requestId) return;
       setMetrics(null);
     } finally {
-      setLoading(false);
+      if (latestRequestId.current === requestId) setLoading(false);
     }
   };
 

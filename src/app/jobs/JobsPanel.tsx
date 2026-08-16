@@ -26,6 +26,26 @@ function userTz(): string {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return 'UTC'; }
 }
 
+function todayLocalISODate(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function dayBoundsUTC(dateStr: string): { startDate: string; endDate: string } {
+  const [y, m, day] = dateStr.split('-').map(Number);
+  const start = new Date(y, m - 1, day, 0, 0, 0, 0);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { startDate: start.toISOString(), endDate: end.toISOString() };
+}
+
+function formatDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rem = Math.round(seconds % 60);
+  return `${minutes}m ${rem}s`;
+}
+
 const UTC_OFFSETS = Array.from({ length: 27 }, (_, i) => {
   const h = i - 12;
   return { label: h === 0 ? 'UTC+0' : h > 0 ? `UTC+${h}` : `UTC${h}`, offsetMin: -h * 60 };
@@ -79,6 +99,9 @@ function JobRow({ job, selected, onSelect, onToggle, d }: {
             <span className={`text-sm font-medium truncate ${
               selected ? d ? 'text-indigo-300' : 'text-indigo-700' : d ? 'text-gray-200' : 'text-gray-800'
             }`}>{job.name}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+              d ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'
+            }`}>{job.domainSlug ?? 'chat'}</span>
             {job.channels.map(ch => (
               <span key={ch} className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                 d ? 'bg-brand-900/40 text-brand-300' : 'bg-brand-100 text-brand-700'
@@ -100,20 +123,20 @@ function JobRow({ job, selected, onSelect, onToggle, d }: {
 // ── JobEditor ────────────────────────────────────────────────────────────────
 
 interface FormState {
-  name: string; prompt: string; channels: string[]; enabled: boolean;
+  name: string; prompt: string; channels: string[]; webhookUrl: string; enabled: boolean;
   modelSelection: string;
   preset: Preset; hour: string; minute: string; weekday: string; monthDay: string;
   cMin: string; cHour: string; cDom: string; cMonth: string; cDow: string; cronExpr: string;
 }
 
 const emptyForm: FormState = {
-  name: '', prompt: '', channels: ['telegram'], enabled: true, modelSelection: 'automatic',
+  name: '', prompt: '', channels: ['telegram'], webhookUrl: '', enabled: true, modelSelection: 'automatic',
   preset: 'daily', hour: '8', minute: '0', weekday: '1', monthDay: '1',
   cMin: '0', cHour: '8', cDom: '*', cMonth: '*', cDow: '*', cronExpr: '',
 };
 
 function jobToForm(job: ScheduledJob): FormState {
-  return { ...emptyForm, name: job.name, prompt: job.prompt, channels: job.channels, enabled: job.enabled, modelSelection: job.llmModel ?? 'automatic', preset: 'custom', cronExpr: job.cronExpr };
+  return { ...emptyForm, name: job.name, prompt: job.prompt, channels: job.channels, webhookUrl: job.webhookUrl ?? '', enabled: job.enabled, modelSelection: job.llmModel ?? 'automatic', preset: 'custom', cronExpr: job.cronExpr };
 }
 
 function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted, onClose }: {
@@ -128,18 +151,36 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
   const [success, setSuccess] = useState('');
   const [tzOffset, setTzOffset] = useState<number | null>(null);
   const [executions, setExecs] = useState<JobExecution[]>([]);
+  const [execDate, setExecDate] = useState<string>(todayLocalISODate);
+  const [loadingExecs, setLoadingExecs] = useState(false);
+  const [expandedExecId, setExpandedExecId] = useState<string | null>(null);
+  const [editorTab, setEditorTab] = useState<'config' | 'executions'>('config');
   const tz = userTz();
   const autoOff = -Math.round(new Date().getTimezoneOffset() / 60);
 
   useEffect(() => {
     setForm(job ? jobToForm(job) : emptyForm);
     setError(''); setSuccess('');
-    if (job) {
-      getJobExecutions(job.id).then(r => { if (r.success) setExecs(r.data ?? []); });
-    } else {
-      setExecs([]);
-    }
+    setExpandedExecId(null);
+    setExecDate(todayLocalISODate());
+    setEditorTab('config');
   }, [job?.id]);
+
+  const shiftExecDate = (deltaDays: number) => {
+    const [y, m, day] = execDate.split('-').map(Number);
+    const shifted = new Date(y, m - 1, day + deltaDays);
+    setExecDate(`${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}-${String(shifted.getDate()).padStart(2, '0')}`);
+  };
+
+  useEffect(() => {
+    if (!job) { setExecs([]); return; }
+    setLoadingExecs(true);
+    const { startDate, endDate } = dayBoundsUTC(execDate);
+    getJobExecutions(job.id, { startDate, endDate }).then(r => {
+      setLoadingExecs(false);
+      if (r.success) setExecs(r.data ?? []);
+    });
+  }, [job?.id, execDate]);
 
   const derivedCron = buildCron(form.preset, form.hour, form.minute, form.weekday, form.monthDay,
     form.cMin, form.cHour, form.cDom, form.cMonth, form.cDow, tzOffset);
@@ -155,6 +196,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
     if (!form.name.trim()) { setError(t('errors.nameRequired')); return; }
     if (!form.prompt.trim()) { setError(t('errors.promptRequired')); return; }
     if (form.channels.length === 0) { setError(t('errors.channelRequired')); return; }
+    if (form.channels.includes('webhook') && !form.webhookUrl.trim()) { setError(t('errors.webhookUrlRequired')); return; }
     setSaving(true); setError('');
     const selectedModel = MODELS.find(model => model.id === form.modelSelection);
     const data = {
@@ -162,6 +204,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
       cronExpr: derivedCron.trim(),
       prompt: form.prompt,
       channels: form.channels,
+      webhookUrl: form.channels.includes('webhook') ? form.webhookUrl.trim() : null,
       enabled: form.enabled,
       domainSlug: domainSlug ?? null,
       llmModel: selectedModel?.id ?? null,
@@ -204,8 +247,25 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
         </div>
       </div>
 
+      {job && (
+        <div className={`flex-shrink-0 flex gap-1 px-4 sm:px-6 pt-2 border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+          {(['config', 'executions'] as const).map(tabKey => (
+            <button key={tabKey} onClick={() => setEditorTab(tabKey)}
+              className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                editorTab === tabKey
+                  ? 'border-brand-500 text-brand-500'
+                  : `border-transparent ${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-800'}`
+              }`}>
+              {tabKey === 'config' ? t('editorTabs.config') : t('editorTabs.executions')}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="max-w-2xl mx-auto space-y-4">
+        <div className="max-w-6xl mx-auto space-y-4">
+        {editorTab === 'config' && (
+        <>
         {/* Name */}
         <div>
           <label className={labelCls}>{t('fields.name')}</label>
@@ -216,6 +276,18 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
         <div>
           <label className={labelCls}>{t('fields.prompt')}</label>
           <textarea value={form.prompt} onChange={e => s({ prompt: e.target.value })} rows={4} className={inputCls} placeholder={t('placeholderPrompt')} />
+        </div>
+
+        <div>
+          <label className={labelCls}>Domain</label>
+          <div className={`px-3 py-2 rounded-lg border text-sm ${
+            d ? 'bg-gray-800 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'
+          }`}>
+            {job?.domainSlug ?? domainSlug ?? 'jobs'}
+          </div>
+          <p className={`mt-1 text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+            The domain is assigned when the task is created.
+          </p>
         </div>
 
         {/* Channels */}
@@ -243,7 +315,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
         <div>
           <label className={labelCls}>{t('fields.channels')}</label>
           <div className="flex gap-4">
-            {['telegram'].map(ch => (
+            {['telegram', 'webhook'].map(ch => (
               <label key={ch} className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.channels.includes(ch)}
                   onChange={() => s({ channels: form.channels.includes(ch) ? form.channels.filter(c => c !== ch) : [...form.channels, ch] })}
@@ -252,6 +324,10 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
               </label>
             ))}
           </div>
+          {form.channels.includes('webhook') && (
+            <input value={form.webhookUrl} onChange={e => s({ webhookUrl: e.target.value })}
+              className={`${inputCls} mt-2`} placeholder={t('placeholderWebhookUrl')} />
+          )}
         </div>
 
         {/* Enabled */}
@@ -359,26 +435,71 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
             </select>
           </div>
         </div>
+        </>
+        )}
 
         {/* Execution history */}
-        {executions.length > 0 && (
+        {editorTab === 'executions' && job && (
           <div>
-            <p className={`text-xs font-medium mb-2 ${d ? 'text-gray-400' : 'text-gray-500'}`}>{t('execHistory')}</p>
-            <div className="space-y-2">
-              {executions.slice(0, 5).map(ex => (
-                <div key={ex.id} className={`p-2 rounded-lg ${d ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs ${ex.status === 'completed' ? 'text-green-400' : ex.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
-                      {ex.status === 'completed' ? '✓' : ex.status === 'failed' ? '✗' : '…'}
-                    </span>
-                    <span className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>{new Date(ex.startedAt).toLocaleString()}</span>
-                  </div>
-                  {ex.result && (
-                    <p className={`text-xs mt-1 ${d ? 'text-gray-400' : 'text-gray-600'} line-clamp-3`}>{ex.result}</p>
-                  )}
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-2">
+              <p className={`text-xs font-medium ${d ? 'text-gray-400' : 'text-gray-500'}`}>{t('execHistory')}</p>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => shiftExecDate(-1)}
+                  className={`px-1.5 py-1 rounded border text-xs leading-none ${
+                    d ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-100'
+                  }`} aria-label="Previous day">‹</button>
+                <input type="date" value={execDate} max={todayLocalISODate()}
+                  onChange={e => setExecDate(e.target.value || todayLocalISODate())}
+                  className={`text-xs px-2 py-1 rounded border focus:outline-none focus:border-brand-500 ${
+                    d ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                  }`} />
+                <button type="button" onClick={() => shiftExecDate(1)} disabled={execDate >= todayLocalISODate()}
+                  className={`px-1.5 py-1 rounded border text-xs leading-none disabled:opacity-30 disabled:cursor-not-allowed ${
+                    d ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-100'
+                  }`} aria-label="Next day">›</button>
+              </div>
             </div>
+            {loadingExecs ? (
+              <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>{t('loading')}</p>
+            ) : executions.length === 0 ? (
+              <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>{t('execHistoryEmpty')}</p>
+            ) : (
+              <div className="space-y-2">
+                {executions.map(ex => {
+                  const expanded = expandedExecId === ex.id;
+                  const durationMs = ex.completedAt
+                    ? new Date(ex.completedAt).getTime() - new Date(ex.startedAt).getTime()
+                    : null;
+                  return (
+                    <button key={ex.id} type="button"
+                      onClick={() => setExpandedExecId(expanded ? null : ex.id)}
+                      className={`w-full text-left p-2 rounded-lg transition-colors ${
+                        d ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
+                      }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs ${ex.status === 'completed' ? 'text-green-400' : ex.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
+                          {ex.status === 'completed' ? '✓' : ex.status === 'failed' ? '✗' : '…'}
+                        </span>
+                        <span className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>{new Date(ex.startedAt).toLocaleString()}</span>
+                        {durationMs !== null && (
+                          <span className={`text-xs ml-auto ${d ? 'text-gray-500' : 'text-gray-400'}`}>{formatDuration(durationMs)}</span>
+                        )}
+                      </div>
+                      {ex.result && (
+                        <p className={`text-xs mt-1 ${d ? 'text-gray-400' : 'text-gray-600'} ${expanded ? '' : 'line-clamp-3'}`}>{ex.result}</p>
+                      )}
+                      {expanded && (
+                        <div className={`mt-2 pt-2 border-t text-[11px] space-y-0.5 ${d ? 'border-gray-600 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
+                          <p>{t('execDetail.id')}: {ex.id}</p>
+                          <p>{t('execDetail.status')}: {ex.status}</p>
+                          {ex.completedAt && <p>{t('execDetail.completedAt')}: {new Date(ex.completedAt).toLocaleString()}</p>}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -389,7 +510,7 @@ function JobEditor({ job, userId, isDarkMode: d, domainSlug, onSaved, onDeleted,
 
       {/* Footer */}
       <div className={`flex-shrink-0 border-t px-4 sm:px-6 py-3 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <button onClick={handleSave} disabled={saving}
             className="w-full px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium transition">
             {saving ? t('saving') : job ? t('saveChanges') : t('createJob')}
@@ -415,6 +536,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
   const [isCreating, setIsCreating]   = useState(false);
   const [loading, setLoading]         = useState(true);
   const [mobileTab, setMobileTab]     = useState<'list' | 'editor'>('list');
+  const [domainFilter, setDomainFilter] = useState('all');
 
   const load = useCallback(async () => {
     const res = await getScheduledJobs();
@@ -451,6 +573,10 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
   };
 
   const showEditor = selected !== null || isCreating;
+  const domainOptions = Array.from(new Set(jobs.map(job => job.domainSlug ?? 'chat'))).sort();
+  const filteredJobs = domainFilter === 'all'
+    ? jobs
+    : jobs.filter(job => (job.domainSlug ?? 'chat') === domainFilter);
   const border = d ? 'border-gray-700' : 'border-gray-200';
   const bg = d ? 'bg-gray-900' : 'bg-white';
 
@@ -458,10 +584,23 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
     <div className={`flex flex-1 min-h-0 ${bg}`}>
 
       {/* Job list */}
-      <div className={`${mobileTab === 'list' ? 'flex flex-col flex-1' : 'hidden'} lg:flex lg:flex-col lg:flex-none lg:w-64 border-r ${border} overflow-hidden`}>
+      <div className={`${mobileTab === 'list' ? 'flex flex-col flex-1' : 'hidden'} lg:flex lg:flex-col lg:flex-none lg:w-[364px] border-r ${border} overflow-hidden`}>
         {/* List header */}
-        <div className={`flex-shrink-0 flex items-center justify-between px-3 py-2.5 border-b ${border}`}>
+        <div className={`flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2.5 border-b ${border}`}>
           <span className={`text-xs font-semibold uppercase tracking-wider ${d ? 'text-gray-400' : 'text-gray-500'}`}>{t('tabs.list')}</span>
+          <select
+            value={domainFilter}
+            onChange={event => setDomainFilter(event.target.value)}
+            aria-label="Filter jobs by domain"
+            className={`min-w-0 flex-1 px-2 py-1 rounded border text-xs ${
+              d ? 'bg-gray-800 border-gray-600 text-gray-300' : 'bg-white border-gray-300 text-gray-700'
+            }`}
+          >
+            <option value="all">All domains</option>
+            {domainOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
           <button onClick={handleNew}
             className={`text-xs px-2 py-1 rounded transition-colors ${d ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
             {t('newJob')}
@@ -472,7 +611,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <p className={`text-xs text-center py-8 ${d ? 'text-gray-500' : 'text-gray-400'}`}>{t('loading')}</p>
-          ) : jobs.length === 0 ? (
+          ) : filteredJobs.length === 0 ? (
             <div className="text-center py-12 px-4">
               <p className={`text-2xl mb-2`}>⏰</p>
               <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>{t('noJobs')}</p>
@@ -481,7 +620,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
               </button>
             </div>
           ) : (
-            jobs.map(job => (
+            filteredJobs.map(job => (
               <JobRow key={job.id} job={job} selected={selected?.id === job.id}
                 onSelect={() => handleSelect(job)} onToggle={() => handleToggle(job)} d={d} />
             ))
@@ -497,7 +636,7 @@ export default function JobsPanel({ userId, isDarkMode: d, domainSlug }: Props) 
             job={selected}
             userId={userId}
             isDarkMode={d}
-            domainSlug={domainSlug}
+            domainSlug={selected?.domainSlug ?? domainSlug}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
             onClose={handleClose}

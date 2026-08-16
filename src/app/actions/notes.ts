@@ -1,21 +1,9 @@
 'use server';
 
 import { NotesService, CreateNoteInput, UpdateNoteInput } from '@/app/services/notes/notes.service';
-import { UserSettingsService } from '@/app/services/user/user-settings.service';
-import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { requireCurrentUser } from '@/app/lib/auth-session';
 
 const notesService = new NotesService();
-const userSettingsService = new UserSettingsService();
-const systemSettingsService = new SystemSettingsService();
-
-async function getGithubToken(userId: string): Promise<string | null> {
-  const [settings, systemSettings] = await Promise.all([
-    userSettingsService.loadUserSettings(userId),
-    systemSettingsService.loadAll(),
-  ]);
-  return settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN || null;
-}
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
@@ -24,8 +12,7 @@ function getErrorMessage(error: unknown): string {
 export async function createNote(input: CreateNoteInput) {
   try {
     const user = await requireCurrentUser();
-    const githubToken = await getGithubToken(user.id);
-    const note = await notesService.createNote(user.id, input, githubToken);
+    const note = await notesService.createNote(user.id, input);
     return { success: true, note };
   } catch (err: unknown) {
     console.error('[notes] createNote error:', err);
@@ -47,10 +34,11 @@ export async function listNotes(options: { limit?: number; tag?: string; due_on?
 export async function searchNotes(query: string) {
   try {
     const user = await requireCurrentUser();
-    const githubToken = await getGithubToken(user.id);
-    if (githubToken) {
-      const results = await notesService.searchNotes(user.id, query, githubToken);
+    try {
+      const results = await notesService.searchNotes(user.id, query);
       return { success: true, results };
+    } catch (embeddingError) {
+      console.warn('[notes] Semantic search unavailable, using keyword fallback:', getErrorMessage(embeddingError));
     }
     const notes = await notesService.keywordSearchNotes(user.id, query);
     return { success: true, results: notes.map(n => ({ ...n, note_id: n.id, similarity: 0 })) };

@@ -9,6 +9,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { handleChatMessage, maybeSummarizeConversation, ChatHandlerConfig, ChatImageAttachment } from '../chat/chat-handler';
 import { UserSettingsService } from '../user/user-settings.service';
 import { ConversationMemoryService } from '../memory/conversation-memory.service';
+import { instructionDistillerService } from '../memory/instruction-distiller.service';
 import { skillsService } from '../skills/skills.service';
 import { MODELS } from '../llm/models';
 import pool from '../../clients/db';
@@ -501,6 +502,16 @@ export class AlleracTelegramBot {
         );
 
         if (summary) {
+          try {
+            await instructionDistillerService.distill({
+              userId: mapping.user_id,
+              domainSlug: 'chat',
+              llmConfig: config.githubToken,
+              sourceSummaryId: summary.id,
+            });
+          } catch (error) {
+            console.error('[Telegram] Instruction distillation failed:', error);
+          }
           const topics = summary.key_topics?.join(', ') || 'general';
           await this.bot.sendMessage(chatId,
             `✅ *Memory Saved!*\n\n` +

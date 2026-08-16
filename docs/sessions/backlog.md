@@ -110,6 +110,16 @@ Reason: see next entry.
 
 ## Completed context
 
+- **Provider-independent local embeddings completed 2026-08-02.** `embeddinggemma`
+  runs through Ollama at 768 dimensions behind a provider-neutral contract. Runtime
+  vector-space validation, System/Admin health reporting, interactive-first bounded
+  scheduling, resumable paced reindexing, and note-edit reindexing are implemented.
+  All 804 Spotify vectors were regenerated. The user approved the 12-case multilingual
+  evaluation set and thresholds after it passed 12/12 recall@1 and all latency/batch
+  gates. Jest (630 tests), production build, schema equivalence, strict docs build,
+  and production-build Playwright smoke passed. See
+  [Provider-Independent Local Embeddings](../roadmap/provider-independent-local-embeddings.md).
+
 - **Grafana disk I/O — root cause found to be a second, distinct issue beyond
   the classic-database fix; decision made to disable.** The classic-database
   fix (SQLite → Postgres, `grafana/grafana:13.1.1` pinned, 2026-07-29)

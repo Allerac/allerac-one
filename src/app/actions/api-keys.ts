@@ -2,7 +2,7 @@
 
 import { requireCurrentUser } from '@/app/lib/auth-session';
 
-export type ApiKeyProvider = 'github' | 'anthropic' | 'google' | 'openai' | 'tavily';
+export type ApiKeyProvider = 'github' | 'github-repo' | 'anthropic' | 'google' | 'openai' | 'tavily';
 
 export async function validateApiKey(
   provider: ApiKeyProvider,
@@ -22,6 +22,17 @@ export async function validateApiKey(
     if (provider === 'github') {
       res = await fetch('https://models.inference.ai.azure.com/models', {
         headers: { Authorization: `Bearer ${trimmed}` },
+        signal: controller.signal,
+      });
+    } else if (provider === 'github-repo') {
+      // Repo PATs (scope: repo) aren't guaranteed access to GitHub Models inference,
+      // so this checks against the GitHub REST API — what the token is actually used for.
+      res = await fetch('https://api.github.com/user', {
+        headers: {
+          Authorization: `Bearer ${trimmed}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
         signal: controller.signal,
       });
     } else if (provider === 'anthropic') {
