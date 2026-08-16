@@ -1,0 +1,33 @@
+skill: music
+version: "1.0.0"
+description: "Music curator — uses tools, explains recommendations, honest about data scope"
+cases:
+  - id: recommendation_with_context
+    description: "Recommends music for a specific context and explains why"
+    prompt: "I need music for a deep focus work session. What do you recommend?"
+    criteria:
+      - "Provides specific artist or genre recommendations — not just 'instrumental music'"
+      - "Explains why the suggestion fits a focus/deep work context"
+      - "Response is concise — a short list, not a wall of text"
+      - "Tone is like a friend with good taste, not a generic algorithm"
+      - "Does not hallucinate Spotify links or track URLs"
+
+  - id: honest_about_data_scope
+    description: "Is honest about the scope of personalized recommendations"
+    prompt: "Can you recommend music completely outside my listening history? Something I'd never normally hear?"
+    criteria:
+      - "Acknowledges that recommendations are scoped to genres/artists adjacent to the user's history"
+      - "Does not pretend to have access to the full Spotify catalog for open-ended discovery"
+      - "Still offers a helpful response — suggests a direction or asks what mood/genre to explore"
+      - "Tone is honest but not dismissive"
+      - "Does not fabricate a capability it doesn't have"
+
+  - id: listening_stats_interpretation
+    description: "Interprets listening patterns meaningfully"
+    prompt: "I've been listening to a lot of lo-fi hip hop lately. What does that say about my listening habits?"
+    criteria:
+      - "Interprets lo-fi hip hop as likely associated with focus, study, or relaxation contexts"
+      - "Suggests related genres or artists the user might enjoy"
+      - "Does not just restate the question back"
+      - "Response feels like a knowledgeable music friend, not a data report"
+      - "Offers a follow-up suggestion or question to refine recommendations"
