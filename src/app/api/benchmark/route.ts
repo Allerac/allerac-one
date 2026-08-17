@@ -29,7 +29,8 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
-const ALLOWED_PROVIDERS = new Set(['ollama', 'github', 'gemini', 'anthropic']);
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const ALLOWED_PROVIDERS = new Set(['ollama', 'github', 'gemini', 'anthropic', 'openai']);
 const MODEL_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$/;
 
 interface BenchmarkPrompt {
@@ -282,6 +283,7 @@ export async function POST(request: Request) {
   const githubToken = settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN || '';
   const geminiToken = settings?.google_api_key || systemSettings.google_api_key || '';
   const anthropicToken = settings?.anthropic_api_key || systemSettings.anthropic_api_key || '';
+  const openaiToken = settings?.openai_api_key || systemSettings.openai_api_key || process.env.OPENAI_API_KEY || '';
   const userId = user.id;
   const providerToken = provider === 'github'
     ? githubToken
@@ -289,7 +291,9 @@ export async function POST(request: Request) {
       ? geminiToken
       : provider === 'anthropic'
         ? anthropicToken
-        : 'local';
+        : provider === 'openai'
+          ? openaiToken
+          : 'local';
   if (!providerToken) {
     return Response.json({ error: `API key for ${provider} is not configured` }, { status: 422 });
   }
@@ -315,6 +319,8 @@ export async function POST(request: Request) {
             await runOpenAICompatiblePrompt(GEMINI_BASE_URL, geminiToken, modelId, 'Reply with only: OK', abortCtrl.signal);
           } else if (provider === 'anthropic') {
             await runAnthropicPrompt(anthropicToken, modelId, 'Reply with only: OK');
+          } else if (provider === 'openai') {
+            await runOpenAICompatiblePrompt(OPENAI_BASE_URL, openaiToken, modelId, 'Reply with only: OK', abortCtrl.signal);
           } else {
             await runOpenAICompatiblePrompt(GITHUB_BASE_URL, githubToken, modelId, 'Reply with only: OK', abortCtrl.signal);
           }
@@ -333,6 +339,8 @@ export async function POST(request: Request) {
               result = await runOpenAICompatiblePrompt(GEMINI_BASE_URL, geminiToken, modelId, bench.prompt, abortCtrl.signal);
             } else if (provider === 'anthropic') {
               result = await runAnthropicPrompt(anthropicToken, modelId, bench.prompt);
+            } else if (provider === 'openai') {
+              result = await runOpenAICompatiblePrompt(OPENAI_BASE_URL, openaiToken, modelId, bench.prompt, abortCtrl.signal);
             } else {
               result = await runOpenAICompatiblePrompt(GITHUB_BASE_URL, githubToken, modelId, bench.prompt, abortCtrl.signal);
             }

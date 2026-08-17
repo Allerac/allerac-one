@@ -50,7 +50,7 @@ export async function POST(request: Request): Promise<Response> {
       userId,
       domainSlug: domain,
       globalModelId: model || 'qwen2.5:3b',
-      globalProvider: (provider || 'ollama') as 'github' | 'ollama' | 'gemini' | 'anthropic',
+      globalProvider: (provider || 'ollama') as 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai',
     });
     const llmModel = resolvedModel.modelId;
     const llmProvider = resolvedModel.provider;

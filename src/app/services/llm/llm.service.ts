@@ -1,5 +1,5 @@
 // LLM Service with automatic metrics tracking
-// Supports GitHub Models, Ollama, Gemini, and Anthropic providers
+// Supports GitHub Models, Ollama, Gemini, Anthropic, and OpenAI providers
 import { MetricsService } from '@/app/services/infrastructure/metrics.service';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -46,7 +46,7 @@ export interface LLMResponse {
   model: string;
 }
 
-type LLMProvider = 'github' | 'ollama' | 'gemini' | 'anthropic';
+type LLMProvider = 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai';
 
 // Converts OpenAI-format messages to Anthropic MessageParam format.
 // Key differences:
@@ -169,16 +169,18 @@ export class LLMService {
   private githubToken?: string;
   private geminiToken?: string;
   private anthropicToken?: string;
+  private openaiToken?: string;
   private anthropicClient?: Anthropic;
   private _userId?: string;
   private _conversationId?: string;
 
-  constructor(provider: LLMProvider, baseUrl: string, config?: { githubToken?: string; geminiToken?: string; anthropicToken?: string }) {
+  constructor(provider: LLMProvider, baseUrl: string, config?: { githubToken?: string; geminiToken?: string; anthropicToken?: string; openaiToken?: string }) {
     this.provider = provider;
     this.baseUrl = baseUrl;
     this.githubToken = config?.githubToken;
     this.geminiToken = config?.geminiToken;
     this.anthropicToken = config?.anthropicToken;
+    this.openaiToken = config?.openaiToken;
 
     // Initialize Anthropic client if using anthropic provider
     if (provider === 'anthropic') {
@@ -195,6 +197,9 @@ export class LLMService {
     if (provider === 'gemini' && !this.geminiToken) {
       throw new Error('Google API key is required for gemini provider');
     }
+    if (provider === 'openai' && !this.openaiToken) {
+      throw new Error('OpenAI API key is required for openai provider');
+    }
   }
 
   /**
@@ -209,6 +214,8 @@ export class LLMService {
       return this.geminiChatCompletion(request);
     } else if (this.provider === 'anthropic') {
       return this.anthropicChatCompletion(request);
+    } else if (this.provider === 'openai') {
+      return this.openaiChatCompletion(request);
     } else {
       return this.ollamaChatCompletion(request);
     }
@@ -227,6 +234,8 @@ export class LLMService {
       yield* this.geminiStreamChatCompletion(request);
     } else if (this.provider === 'anthropic') {
       yield* this.anthropicStreamChatCompletion(request);
+    } else if (this.provider === 'openai') {
+      yield* this.openaiStreamChatCompletion(request);
     } else {
       yield* this.ollamaStreamChatCompletion(request);
     }
@@ -539,6 +548,122 @@ export class LLMService {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.geminiToken}`,
+      },
+      body: JSON.stringify({ ...apiRequest, stream: true }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || response.statusText);
+    }
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') return;
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) yield content;
+        } catch { /* skip malformed lines */ }
+      }
+    }
+  }
+
+  /**
+   * Call OpenAI API (OpenAI-compatible endpoint)
+   */
+  private async openaiChatCompletion(request: LLMRequest): Promise<LLMResponse> {
+    const startTime = Date.now();
+    let response: Response | undefined;
+    let success = true;
+    let statusCode = 200;
+    let errorMessage: string | undefined;
+
+    try {
+      const { userId: _u, conversationId: _c, ...apiRequest } = request;
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.openaiToken}`,
+        },
+        body: JSON.stringify(apiRequest),
+      });
+
+      statusCode = response.status;
+
+      if (!response.ok) {
+        success = false;
+        let errorData: any;
+        try {
+          errorData = await response.json();
+          errorMessage = errorData.error?.message || errorData.message || response.statusText;
+        } catch {
+          errorMessage = await response.text() || response.statusText;
+        }
+
+        await this.logMetrics({
+          model: request.model,
+          provider: 'openai',
+          responseTime: Date.now() - startTime,
+          success: false,
+          statusCode,
+          errorMessage,
+          errorType: this.getErrorType(statusCode, errorMessage),
+        });
+
+        throw new Error(errorMessage);
+      }
+
+      const data: LLMResponse = await response.json();
+
+      await this.logMetrics({
+        model: request.model,
+        provider: 'openai',
+        responseTime: Date.now() - startTime,
+        success: true,
+        statusCode: 200,
+        usage: data.usage,
+        hasTools: request.tools && request.tools.length > 0,
+        messageCount: request.messages.length,
+      });
+
+      return data;
+    } catch (error: any) {
+      if (success) {
+        await this.logMetrics({
+          model: request.model,
+          provider: 'openai',
+          responseTime: Date.now() - startTime,
+          success: false,
+          statusCode: statusCode || 500,
+          errorMessage: error.message,
+          errorType: error.name || 'Error',
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async *openaiStreamChatCompletion(request: LLMRequest): AsyncGenerator<string> {
+    const { userId: _u, conversationId: _c, ...apiRequest } = request;
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.openaiToken}`,
       },
       body: JSON.stringify({ ...apiRequest, stream: true }),
     });
@@ -919,7 +1044,7 @@ export class LLMService {
     try {
       // Log API call metrics
       await metricsService.logApiCall({
-        api_name: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : data.provider === 'anthropic' ? 'anthropic' : 'ollama',
+        api_name: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : data.provider === 'anthropic' ? 'anthropic' : data.provider === 'openai' ? 'openai' : 'ollama',
         endpoint: '/chat/completions',
         method: 'POST',
         response_time_ms: data.responseTime,
@@ -943,7 +1068,7 @@ export class LLMService {
 
         await metricsService.logTokenUsage({
           model: data.model,
-          provider: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : data.provider === 'anthropic' ? 'anthropic' : 'ollama',
+          provider: data.provider === 'github' ? 'github-models' : data.provider === 'gemini' ? 'gemini' : data.provider === 'anthropic' ? 'anthropic' : data.provider === 'openai' ? 'openai' : 'ollama',
           prompt_tokens: data.usage.prompt_tokens,
           completion_tokens: data.usage.completion_tokens,
           total_tokens: data.usage.total_tokens,
@@ -978,9 +1103,14 @@ export class LLMService {
       'o1-mini':                   { input: 3.000000, output: 12.000000 },
       'ministral-3b':              { input: 0.040000, output:  0.040000 },
       'gemini-2.5-flash':          { input: 0.150000, output:  0.600000 },
+      'gemini-3.5-flash-lite':     { input: 0.075000, output:  0.300000 },
+      'gemini-3.7-flash':          { input: 0.200000, output:  0.800000 },
+      'gemini-3.1-pro-preview':    { input: 1.250000, output:  5.000000 },
       'claude-haiku-4-5-20251001': { input: 0.800000, output:  4.000000 },
       'claude-sonnet-4-6':         { input: 3.000000, output: 15.000000 },
       'claude-opus-4-7':           { input: 15.00000, output: 75.000000 },
+      'gpt-5.6-luna':              { input: 0.250000, output:  1.000000 },
+      'gpt-5.6-sol':               { input: 3.000000, output: 12.000000 },
     };
 
     const modelPricing = pricing[model] ?? { input: 0, output: 0 };

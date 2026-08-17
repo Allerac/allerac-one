@@ -66,6 +66,7 @@ const defaultSettings = {
   tavily_api_key: 'tv_key',
   google_api_key: 'g_key',
   anthropic_api_key: 'anth_key',
+  openai_api_key: 'oai_key',
   system_message: 'You are helpful',
   model_provider: 'ollama',
   model_name: 'qwen2.5:3b',

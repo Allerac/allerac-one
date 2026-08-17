@@ -16,6 +16,7 @@ interface ApiKeysTabProps {
   googleApiKey: string;
   setGoogleApiKey: (v: string) => void;
   anthropicApiKey: string;
+  openaiApiKey: string;
   tokenInput: string;
   setTokenInput: (v: string) => void;
   tavilyKeyInput: string;
@@ -24,6 +25,8 @@ interface ApiKeysTabProps {
   setGoogleKeyInput: (v: string) => void;
   anthropicKeyInput: string;
   setAnthropicKeyInput: (v: string) => void;
+  openaiKeyInput: string;
+  setOpenaiKeyInput: (v: string) => void;
   onSave: () => Promise<void>;
   isSavingKeys: boolean;
   keySaveMessage: { type: 'success' | 'error'; text: string } | null;
@@ -36,6 +39,7 @@ export default function ApiKeysTab({
   googleApiKey,
   setGoogleApiKey,
   anthropicApiKey,
+  openaiApiKey,
   tokenInput,
   setTokenInput,
   tavilyKeyInput,
@@ -44,6 +48,8 @@ export default function ApiKeysTab({
   setGoogleKeyInput,
   anthropicKeyInput,
   setAnthropicKeyInput,
+  openaiKeyInput,
+  setOpenaiKeyInput,
   onSave,
   isSavingKeys,
   keySaveMessage,
@@ -89,6 +95,8 @@ export default function ApiKeysTab({
     await onSave();
     if (savesPersonalGoogleKey) setGooglePreference('personal');
   };
+
+  const hasAnyInput = tokenInput.trim() || tavilyKeyInput.trim() || googleKeyInput.trim() || anthropicKeyInput.trim() || openaiKeyInput.trim();
 
   return (
     <div className={`space-y-5 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -198,6 +206,19 @@ export default function ApiKeysTab({
         helpText="Get a key at "
       />
 
+      <ApiKeyField
+        label="OpenAI API Key"
+        description="(optional — GPT models)"
+        placeholder="sk-..."
+        provider="openai"
+        hasStoredValue={!!openaiApiKey}
+        value={openaiKeyInput}
+        onChange={setOpenaiKeyInput}
+        isDarkMode={isDarkMode}
+        helpUrl="https://platform.openai.com/api-keys"
+        helpText="Get a key at "
+      />
+
       {keySaveMessage && (
         <div className={`p-2.5 rounded-lg text-sm ${
           keySaveMessage.type === 'success'
@@ -210,7 +231,7 @@ export default function ApiKeysTab({
 
       <button
         onClick={saveKeys}
-        disabled={isSavingKeys || (!tokenInput.trim() && !tavilyKeyInput.trim() && !googleKeyInput.trim() && !anthropicKeyInput.trim())}
+        disabled={isSavingKeys || !hasAnyInput}
         className="px-5 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
       >
         {isSavingKeys && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />}

@@ -184,10 +184,12 @@ export default function AdminChat({
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
   const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
   const [providerConfig, setProviderConfig] = useState({
     githubConfigured: false,
     googleConfigured: false,
     anthropicConfigured: false,
+    openaiConfigured: false,
     tavilyConfigured: false,
   });
   const [systemDashboardInitialTab, setSystemDashboardInitialTab] = useState<'preferences' | 'system' | 'apiKeys' | 'apiAccess'>(initialDashboardTab ?? 'preferences');
@@ -195,6 +197,7 @@ export default function AdminChat({
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [googleKeyInput, setGoogleKeyInput] = useState('');
   const [anthropicKeyInput, setAnthropicKeyInput] = useState('');
+  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
   const [timezoneInput, setTimezoneInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
@@ -485,6 +488,7 @@ const savedModel = localStorage.getItem('selected_model');
         if (settings.telegram_bot_token) setTelegramBotToken(settings.telegram_bot_token);
         if (settings.google_api_key) setGoogleApiKey(settings.google_api_key);
         if (settings.anthropic_api_key) setAnthropicApiKey(settings.anthropic_api_key);
+        if (settings.openai_api_key) setOpenaiApiKey(settings.openai_api_key);
         if (settings.location) setLocationInput(settings.location);
         if (settings.timezone) setTimezoneInput(settings.timezone);
         if (!settings.onboarding_completed) setShowOnboarding(true);
@@ -601,6 +605,7 @@ const savedModel = localStorage.getItem('selected_model');
     const newTavilyKey = tavilyKeyInput.trim();
     const newGoogleKey = googleKeyInput.trim();
     const newAnthropicKey = anthropicKeyInput.trim();
+    const newOpenaiKey = openaiKeyInput.trim();
     const newLocation = locationInput.trim();
     const newTimezone = timezoneInput.trim();
 
@@ -624,9 +629,13 @@ const savedModel = localStorage.getItem('selected_model');
         setAnthropicApiKey(newAnthropicKey);
         setAnthropicKeyInput('');
       }
+      if (newOpenaiKey) {
+        setOpenaiApiKey(newOpenaiKey);
+        setOpenaiKeyInput('');
+      }
 
       // Save to DB
-      const result = await userActions.saveUserSettings(newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined, newTimezone || undefined);
+      const result = await userActions.saveUserSettings(newGithubToken || undefined, newTavilyKey || undefined, undefined, newGoogleKey || undefined, newAnthropicKey || undefined, newLocation || undefined, newTimezone || undefined, newOpenaiKey || undefined);
 
       if (!result?.success) {
         alert('Error saving keys to database. Please check server configuration.');
@@ -1297,6 +1306,7 @@ const savedModel = localStorage.getItem('selected_model');
         googleApiKey={googleApiKey}
         setGoogleApiKey={setGoogleApiKey}
         anthropicApiKey={anthropicApiKey}
+        openaiApiKey={openaiApiKey}
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}
         tavilyKeyInput={tavilyKeyInput}
@@ -1305,6 +1315,8 @@ const savedModel = localStorage.getItem('selected_model');
         setGoogleKeyInput={setGoogleKeyInput}
         anthropicKeyInput={anthropicKeyInput}
         setAnthropicKeyInput={setAnthropicKeyInput}
+        openaiKeyInput={openaiKeyInput}
+        setOpenaiKeyInput={setOpenaiKeyInput}
         locationInput={locationInput}
         setLocationInput={setLocationInput}
         timezoneInput={timezoneInput}

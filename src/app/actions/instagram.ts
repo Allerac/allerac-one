@@ -36,7 +36,7 @@ function inferImageMediaType(base64Data: string): string {
   return 'image/jpeg';
 }
 
-type LLMProviderType = 'github' | 'gemini' | 'anthropic' | 'ollama';
+type LLMProviderType = 'github' | 'gemini' | 'anthropic' | 'openai' | 'ollama';
 
 async function getSessionUserId(): Promise<string> {
   const user = await requireCurrentUser();
@@ -58,6 +58,11 @@ async function resolveLLMConfig(userId: string, provider: LLMProviderType): Prom
       return {
         token: settings?.anthropic_api_key || sysSettings.anthropic_api_key || '',
         baseUrl: 'https://api.anthropic.com',
+      };
+    case 'openai':
+      return {
+        token: settings?.openai_api_key || sysSettings.openai_api_key || process.env.OPENAI_API_KEY || '',
+        baseUrl: 'https://api.openai.com/v1',
       };
     case 'ollama':
       return { token: '', baseUrl: '/api/ollama' };
@@ -240,7 +245,7 @@ export async function resubscribeWebhooks(): Promise<{ success: boolean; message
  * Generate Instagram caption using LLM
  * @param imageInput - Either a public image URL (http/https) or base64-encoded image data
  * @param modelId - Model ID from user's selection (e.g. 'gemini-2.5-flash', 'gpt-4o-mini')
- * @param provider - Provider from user's selection ('github' | 'gemini' | 'anthropic' | 'ollama')
+ * @param provider - Provider from user's selection ('github' | 'gemini' | 'anthropic' | 'openai' | 'ollama')
  */
 export async function generateCaption(
   imageInput: string,
@@ -263,6 +268,7 @@ export async function generateCaption(
       githubToken: provider === 'github' ? llmConfig.token : undefined,
       geminiToken: provider === 'gemini' ? llmConfig.token : undefined,
       anthropicToken: provider === 'anthropic' ? llmConfig.token : undefined,
+      openaiToken: provider === 'openai' ? llmConfig.token : undefined,
     });
 
     const imageMessage = topic
@@ -332,6 +338,7 @@ export async function generateTags(
       githubToken: provider === 'github' ? llmConfig.token : undefined,
       geminiToken: provider === 'gemini' ? llmConfig.token : undefined,
       anthropicToken: provider === 'anthropic' ? llmConfig.token : undefined,
+      openaiToken: provider === 'openai' ? llmConfig.token : undefined,
     });
 
     const prompt = caption

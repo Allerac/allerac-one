@@ -46,6 +46,7 @@ export interface UserSettings {
   tavily_api_key: string | null;
   google_api_key: string | null;
   anthropic_api_key: string | null;
+  openai_api_key: string | null;
   system_message: string | null;
   is_admin: boolean;
 }
@@ -227,6 +228,7 @@ export class WorkerRunRepository {
       tavily_api_key:    user.tavily_api_key    || sys.tavily_api_key    || null,
       google_api_key:    user.google_api_key    || sys.google_api_key    || null,
       anthropic_api_key: user.anthropic_api_key || sys.anthropic_api_key || null,
+      openai_api_key:    user.openai_api_key    || sys.openai_api_key    || null,
       system_message:    user.system_message,
       is_admin:          adminResult.rows[0]?.is_admin ?? false,
     };

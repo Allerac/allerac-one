@@ -22,6 +22,7 @@ export interface RunChatPipelineInput {
   githubToken: string;
   googleApiKey: string;
   anthropicApiKey: string;
+  openaiApiKey: string;
   tavilyApiKey?: string;
   user: User;
   conversationId: string;
@@ -72,6 +73,7 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
     githubToken: input.githubToken,
     geminiToken: input.googleApiKey,
     anthropicToken: input.anthropicApiKey,
+    openaiToken: input.openaiApiKey,
   });
   let fallbackActivated = false;
   const activateFallback = () => {
@@ -88,6 +90,7 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
         githubToken: input.githubToken,
         geminiToken: input.googleApiKey,
         anthropicToken: input.anthropicApiKey,
+        openaiToken: input.openaiApiKey,
       },
     );
     input.emit({ type: 'model_fallback', model: fallback.id, provider: fallback.provider });

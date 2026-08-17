@@ -16,6 +16,7 @@ export interface CapabilityMap {
     github: CapabilityStatus;
     gemini: CapabilityStatus;
     anthropic: CapabilityStatus;
+    openai: CapabilityStatus;
     ollama: CapabilityStatus;
   };
   search: {
@@ -125,6 +126,7 @@ export class CapabilitiesService {
       || configured(systemSettings.anthropic_api_key);
     const openaiConfigured = configured(systemSettings.openai_api_key)
       || configured(process.env.OPENAI_API_KEY);
+    const openaiLlmConfigured = configured(userSettings?.openai_api_key) || openaiConfigured;
     const tavilyConfigured = configured(userSettings?.tavily_api_key)
       || configured(systemSettings.tavily_api_key)
       || configured(process.env.TAVILY_API_KEY);
@@ -148,6 +150,7 @@ export class CapabilitiesService {
           github: status(githubConfigured),
           gemini: status(geminiConfigured),
           anthropic: status(anthropicConfigured),
+          openai: status(openaiLlmConfigured),
           ollama: status(true, ollamaConnected),
         },
         search: {

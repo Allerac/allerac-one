@@ -200,11 +200,12 @@ export class ScheduledJobsService {
       const tavilyApiKey = settings?.tavily_api_key || systemSettings.tavily_api_key || process.env.TAVILY_API_KEY || undefined;
       const googleApiKey = settings?.google_api_key || systemSettings.google_api_key || '';
       const anthropicApiKey = settings?.anthropic_api_key || systemSettings.anthropic_api_key || '';
+      const openaiApiKey = settings?.openai_api_key || systemSettings.openai_api_key || process.env.OPENAI_API_KEY || '';
 
       const { selectedModel, modelProvider, modelBaseUrl } = resolveJobModel(
         job.llm_model,
         job.llm_provider,
-        { githubToken, googleApiKey, anthropicApiKey },
+        { githubToken, googleApiKey, anthropicApiKey, openaiApiKey },
       );
 
       const userResult = await pool.query<{ name: string | null }>(
@@ -236,6 +237,7 @@ export class ScheduledJobsService {
         githubToken,
         geminiToken: googleApiKey || undefined,
         anthropicToken: anthropicApiKey || undefined,
+        openaiToken: openaiApiKey || undefined,
         tavilyApiKey,
         selectedModel,
         modelProvider,

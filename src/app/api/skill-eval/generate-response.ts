@@ -2,9 +2,10 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 
-export const ALLOWED_PROVIDERS = new Set(['github', 'ollama', 'anthropic', 'gemini']);
+export const ALLOWED_PROVIDERS = new Set(['github', 'ollama', 'anthropic', 'gemini', 'openai']);
 
 export async function generateResponse(
   systemPrompt: string,
@@ -15,6 +16,7 @@ export async function generateResponse(
   anthropicToken: string,
   googleApiKey: string,
   options: { temperature?: number; maxTokens?: number } = {},
+  openaiApiKey: string = '',
 ): Promise<string> {
   const temperature = options.temperature ?? 0.7;
   const maxTokens = options.maxTokens ?? 1000;
@@ -55,6 +57,29 @@ export async function generateResponse(
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
       .map(block => block.text)
       .join('');
+  } else if (provider === 'openai') {
+    const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`OpenAI error ${res.status}: ${text.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? '';
   } else if (provider === 'ollama') {
     const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
       method: 'POST',

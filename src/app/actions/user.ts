@@ -26,13 +26,14 @@ export async function loadProviderConfigurationStatus() {
         githubConfigured: Boolean(settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN),
         googleConfigured: Boolean(settings?.google_api_key || systemSettings.google_api_key),
         anthropicConfigured: Boolean(settings?.anthropic_api_key || systemSettings.anthropic_api_key),
+        openaiConfigured: Boolean(settings?.openai_api_key || systemSettings.openai_api_key || process.env.OPENAI_API_KEY),
         tavilyConfigured: Boolean(settings?.tavily_api_key || systemSettings.tavily_api_key || process.env.TAVILY_API_KEY),
     };
 }
 
-export async function saveUserSettings(githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string) {
+export async function saveUserSettings(githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string, openaiApiKey?: string) {
     const user = await requireCurrentUser();
-    return await userSettingsService.saveUserSettings(user.id, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location, timezone);
+    return await userSettingsService.saveUserSettings(user.id, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location, timezone, openaiApiKey);
 }
 
 export async function setGoogleKeyPreference(preference: 'personal' | 'allerac') {

@@ -66,6 +66,7 @@ export async function POST(request: Request) {
   const githubToken = settings?.github_token || '';
   const anthropicToken = settings?.anthropic_api_key || '';
   const googleApiKey = settings?.google_api_key || '';
+  const openaiApiKey = settings?.openai_api_key || '';
 
   // Load failing cases for this run — model/provider come from the run itself,
   // so the improvement analysis uses the same LLM the eval was run with.
@@ -88,12 +89,14 @@ export async function POST(request: Request) {
     github: githubToken,
     anthropic: anthropicToken,
     gemini: googleApiKey,
+    openai: openaiApiKey,
     ollama: '',
   };
   const missingTokenLabel: Record<string, string> = {
     github: 'GitHub token',
     anthropic: 'Anthropic API key',
     gemini: 'Google API key',
+    openai: 'OpenAI API key',
   };
   if (runProvider !== 'ollama' && !tokenByProvider[runProvider]) {
     return new Response(JSON.stringify({
@@ -161,7 +164,7 @@ Return ONLY valid JSON, no markdown fences, no explanation outside the JSON:
   try {
     content = await generateResponse(
       '', improvePrompt, runModel, runProvider, githubToken, anthropicToken, googleApiKey,
-      { temperature: 0.2, maxTokens: 1500 },
+      { temperature: 0.2, maxTokens: 1500 }, openaiApiKey,
     );
   } catch (err: any) {
     return new Response(JSON.stringify({ error: `LLM error: ${err.message ?? err}` }), { status: 500 });

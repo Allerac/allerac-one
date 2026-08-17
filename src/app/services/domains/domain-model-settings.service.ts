@@ -1,7 +1,7 @@
 import pool from '@/app/clients/db';
 import { MODELS } from '@/app/services/llm/models';
 
-type Provider = 'github' | 'ollama' | 'gemini' | 'anthropic';
+type Provider = 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai';
 
 export interface DomainModelSettings {
   domainSlug: string;

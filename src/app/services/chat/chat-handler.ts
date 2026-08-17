@@ -33,9 +33,10 @@ export interface ChatHandlerConfig {
   githubToken: string;
   geminiToken?: string;
   anthropicToken?: string;
+  openaiToken?: string;
   tavilyApiKey?: string;
   selectedModel: string;
-  modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic';
+  modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai';
   modelBaseUrl: string;
   systemMessage: string;
   botId?: string;  // For Telegram bot skill assignment
@@ -72,7 +73,7 @@ export async function handleChatMessage(
   config: ChatHandlerConfig,
   imageAttachments?: ChatImageAttachment[]
 ): Promise<ChatHandlerResult> {
-  const { userId, githubToken, geminiToken, anthropicToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId, domainSlug, language } = config;
+  const { userId, githubToken, geminiToken, anthropicToken, openaiToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId, domainSlug, language } = config;
 
   // 1. Create conversation if needed
   let convId = conversationId;
@@ -255,7 +256,7 @@ export async function handleChatMessage(
   }
 
   // 5. Call LLM
-  const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken, geminiToken, anthropicToken });
+  const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken, geminiToken, anthropicToken, openaiToken });
 
   // If the active skill forces a specific tool, use it on the first call.
   // Otherwise, auto-force search_web for real-time queries (weather, news, prices)

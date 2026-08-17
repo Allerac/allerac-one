@@ -232,6 +232,7 @@ export class AlleracTelegramBot {
       githubToken: settings?.github_token || '',
       geminiToken: settings?.google_api_key || '',
       anthropicToken: settings?.anthropic_api_key || '',
+      openaiToken: settings?.openai_api_key || '',
       tavilyApiKey: settings?.tavily_api_key || '',
       selectedModel: activeModel.id,
       modelProvider: activeModel.provider,

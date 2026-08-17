@@ -74,6 +74,7 @@ async function judgeResponse(
   githubToken: string,
   anthropicToken: string,
   googleApiKey: string,
+  openaiApiKey: string,
 ): Promise<CriterionResult[]> {
   const criteriaList = criteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
 
@@ -97,7 +98,7 @@ Return ONLY a valid JSON array with exactly ${criteria.length} objects, no other
   // Judge with the same model/provider used for generation — no separate provider dependency.
   const content = await generateResponse(
     '', judgePrompt, model, provider, githubToken, anthropicToken, googleApiKey,
-    { temperature: 0.1, maxTokens: 800 },
+    { temperature: 0.1, maxTokens: 800 }, openaiApiKey,
   );
 
   // Extract JSON from response (model may add markdown fences)
@@ -148,6 +149,7 @@ export async function POST(request: Request) {
   const githubToken = settings?.github_token || '';
   const anthropicToken = settings?.anthropic_api_key || '';
   const googleApiKey = settings?.google_api_key || '';
+  const openaiApiKey = settings?.openai_api_key || '';
   if (provider === 'github' && !githubToken) {
     return Response.json({ error: 'GitHub token not configured' }, { status: 422 });
   }
@@ -156,6 +158,9 @@ export async function POST(request: Request) {
   }
   if (provider === 'gemini' && !googleApiKey) {
     return Response.json({ error: 'Google API key not configured' }, { status: 422 });
+  }
+  if (provider === 'openai' && !openaiApiKey) {
+    return Response.json({ error: 'OpenAI API key not configured' }, { status: 422 });
   }
   const userId = user.id;
 
@@ -212,6 +217,8 @@ export async function POST(request: Request) {
               githubToken,
               anthropicToken,
               googleApiKey,
+              {},
+              openaiApiKey,
             );
 
             // Step 2: Judge the response
@@ -226,6 +233,7 @@ export async function POST(request: Request) {
               githubToken,
               anthropicToken,
               googleApiKey,
+              openaiApiKey,
             );
 
             const passed = criteriaResults.filter(c => c.pass).length;

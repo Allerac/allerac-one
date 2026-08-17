@@ -16,7 +16,7 @@ const createJobSchema = z.object({
   enabled: z.boolean().optional(),
   domainSlug: z.string().trim().min(1).nullable().optional(),
   llmModel: z.string().trim().min(1).nullable().optional(),
-  llmProvider: z.enum(['github', 'ollama', 'gemini', 'anthropic']).nullable().optional(),
+  llmProvider: z.enum(['github', 'ollama', 'gemini', 'anthropic', 'openai']).nullable().optional(),
 }).superRefine((data, context) => {
   const error = validateJobModelSelection(data.llmModel, data.llmProvider);
   if (error) context.addIssue({ code: 'custom', message: error });

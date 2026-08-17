@@ -26,17 +26,19 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const MAX_IMAGE_INPUT_LENGTH = 8 * 1024 * 1024;
 
 interface VisionModel {
   model: string;
-  provider: 'ollama' | 'github' | 'gemini' | 'anthropic';
+  provider: 'ollama' | 'github' | 'gemini' | 'anthropic' | 'openai';
   label: string;
 }
 
 const VISION_MODELS: VisionModel[] = [
   { model: 'gpt-4o', provider: 'github', label: 'GPT-4o (GitHub)' },
   { model: 'gemini-2.5-flash', provider: 'gemini', label: 'Gemini 2.5 Flash' },
+  { model: 'gpt-5.6-sol', provider: 'openai', label: 'GPT-5.6 Sol (OpenAI)' },
 ];
 
 function encode(obj: object): Uint8Array {
@@ -296,6 +298,7 @@ export async function POST(request: Request) {
   const githubToken = settings?.github_token || '';
   const geminiToken = settings?.google_api_key || '';
   const anthropicToken = settings?.anthropic_api_key || '';
+  const openaiToken = settings?.openai_api_key || '';
 
   const limitResult = acquireOperationLimit('benchmark', user.id);
   if (!limitResult.allowed) {
@@ -338,6 +341,14 @@ export async function POST(request: Request) {
               result = await testOpenAIVision(
                 GEMINI_BASE_URL,
                 geminiToken,
+                visionModel.model,
+                imageUrl,
+                abortCtrl.signal,
+              );
+            } else if (visionModel.provider === 'openai') {
+              result = await testOpenAIVision(
+                OPENAI_BASE_URL,
+                openaiToken,
                 visionModel.model,
                 imageUrl,
                 abortCtrl.signal,

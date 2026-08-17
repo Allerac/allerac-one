@@ -15,7 +15,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, google_key_preference, anthropic_api_key, location, timezone, onboarding_completed, selected_model, language FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, google_key_preference, anthropic_api_key, openai_api_key, location, timezone, onboarding_completed, selected_model, language FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -30,6 +30,7 @@ export class UserSettingsService {
         google_api_key: row.google_api_key ? safeDecrypt(row.google_api_key) : null,
         google_key_preference: row.google_key_preference || 'personal',
         anthropic_api_key: row.anthropic_api_key ? safeDecrypt(row.anthropic_api_key) : null,
+        openai_api_key: row.openai_api_key ? safeDecrypt(row.openai_api_key) : null,
         location: row.location || null,
         timezone: row.timezone || null,
         onboarding_completed: row.onboarding_completed ?? false,
@@ -64,13 +65,14 @@ export class UserSettingsService {
     return { success: true };
   }
 
-  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string) {
+  async saveUserSettings(userId: string, githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string, openaiApiKey?: string) {
     try {
       const encryptedGithubToken = githubToken ? encrypt(githubToken) : undefined;
       const encryptedTavilyKey = tavilyApiKey ? encrypt(tavilyApiKey) : undefined;
       const encryptedTelegramToken = telegramBotToken ? encrypt(telegramBotToken) : undefined;
       const encryptedGoogleKey = googleApiKey ? encrypt(googleApiKey) : undefined;
       const encryptedAnthropicKey = anthropicApiKey ? encrypt(anthropicApiKey) : undefined;
+      const encryptedOpenaiKey = openaiApiKey ? encrypt(openaiApiKey) : undefined;
 
       const existingCheck = await pool.query(
         'SELECT 1 FROM user_settings WHERE user_id = $1',
@@ -104,6 +106,10 @@ export class UserSettingsService {
           updateFields.push(`anthropic_api_key = $${paramCount++}`);
           values.push(encryptedAnthropicKey);
         }
+        if (encryptedOpenaiKey !== undefined) {
+          updateFields.push(`openai_api_key = $${paramCount++}`);
+          values.push(encryptedOpenaiKey);
+        }
         if (location !== undefined) {
           updateFields.push(`location = $${paramCount++}`);
           values.push(location || null);
@@ -124,9 +130,9 @@ export class UserSettingsService {
         await pool.query(
           `INSERT INTO user_settings (
              user_id, github_token, tavily_api_key, telegram_bot_token,
-             google_api_key, google_key_preference, anthropic_api_key
+             google_api_key, google_key_preference, anthropic_api_key, openai_api_key
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             userId,
             encryptedGithubToken || '',
@@ -135,6 +141,7 @@ export class UserSettingsService {
             encryptedGoogleKey || '',
             encryptedGoogleKey ? 'personal' : 'allerac',
             encryptedAnthropicKey || '',
+            encryptedOpenaiKey || '',
           ]
         );
       }
@@ -145,6 +152,7 @@ export class UserSettingsService {
       writeAuditLog(userId, 'telegram_bot_token', telegramBotToken);
       writeAuditLog(userId, 'google_api_key', googleApiKey);
       writeAuditLog(userId, 'anthropic_api_key', anthropicApiKey);
+      writeAuditLog(userId, 'openai_api_key', openaiApiKey);
 
       return { success: true };
     } catch (error) {

@@ -21,11 +21,13 @@ export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', us
   const [tavilyApiKey, setTavilyApiKey]   = useState('');
   const [googleApiKey, setGoogleApiKey]   = useState('');
   const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
 
   const [tokenInput, setTokenInput]           = useState('');
   const [tavilyKeyInput, setTavilyKeyInput]   = useState('');
   const [googleKeyInput, setGoogleKeyInput]   = useState('');
   const [anthropicKeyInput, setAnthropicKeyInput] = useState('');
+  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
   const [locationInput, setLocationInput]     = useState('');
   const [timezoneInput, setTimezoneInput]     = useState('');
   const [selectedModel, setSelectedModel]         = useState('gemini-2.5-flash');
@@ -42,6 +44,7 @@ export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', us
           setTavilyApiKey(!savedTavilyKey && settings.tavily_api_key ? settings.tavily_api_key : savedTavilyKey);
           if (settings.google_api_key)    setGoogleApiKey(settings.google_api_key);
           if (settings.anthropic_api_key) setAnthropicApiKey(settings.anthropic_api_key);
+          if (settings.openai_api_key)    setOpenaiApiKey(settings.openai_api_key);
           if (settings.location)          setLocationInput(settings.location);
           if (settings.timezone)          setTimezoneInput(settings.timezone);
           if (settings.selected_model)    setSelectedModel(settings.selected_model);
@@ -61,6 +64,7 @@ export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', us
     const newTavilyKey    = tavilyKeyInput.trim();
     const newGoogleKey    = googleKeyInput.trim();
     const newAnthropicKey = anthropicKeyInput.trim();
+    const newOpenaiKey    = openaiKeyInput.trim();
     const newLocation     = locationInput.trim();
     const newTimezone     = timezoneInput.trim();
 
@@ -69,6 +73,7 @@ export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', us
       if (newTavilyKey)    { localStorage.setItem('tavily_api_key', newTavilyKey); setTavilyApiKey(newTavilyKey); setTavilyKeyInput(''); }
       if (newGoogleKey)    { setGoogleApiKey(newGoogleKey); setGoogleKeyInput(''); }
       if (newAnthropicKey) { setAnthropicApiKey(newAnthropicKey); setAnthropicKeyInput(''); }
+      if (newOpenaiKey)    { setOpenaiApiKey(newOpenaiKey); setOpenaiKeyInput(''); }
 
       const result = await userActions.saveUserSettings(
         newGithubToken || undefined,
@@ -78,6 +83,7 @@ export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', us
         newAnthropicKey || undefined,
         newLocation || undefined,
         newTimezone || undefined,
+        newOpenaiKey || undefined,
       );
       if (!result?.success) alert('Error saving settings to database.');
     } catch (err) {
@@ -104,6 +110,7 @@ export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', us
       googleApiKey={googleApiKey}
       setGoogleApiKey={setGoogleApiKey}
       anthropicApiKey={anthropicApiKey}
+      openaiApiKey={openaiApiKey}
       tokenInput={tokenInput}
       setTokenInput={setTokenInput}
       tavilyKeyInput={tavilyKeyInput}
@@ -112,6 +119,8 @@ export default function ConfigModal({ isOpen, onClose, displayMode = 'modal', us
       setGoogleKeyInput={setGoogleKeyInput}
       anthropicKeyInput={anthropicKeyInput}
       setAnthropicKeyInput={setAnthropicKeyInput}
+      openaiKeyInput={openaiKeyInput}
+      setOpenaiKeyInput={setOpenaiKeyInput}
       locationInput={locationInput}
       setLocationInput={setLocationInput}
       timezoneInput={timezoneInput}

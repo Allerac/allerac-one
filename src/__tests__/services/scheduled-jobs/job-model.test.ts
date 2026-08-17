@@ -4,6 +4,7 @@ const noCredentials = {
   githubToken: '',
   googleApiKey: '',
   anthropicApiKey: '',
+  openaiApiKey: '',
 };
 
 describe('scheduled job model selection', () => {

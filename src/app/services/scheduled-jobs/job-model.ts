@@ -1,11 +1,12 @@
 import { MODELS } from '@/app/services/llm/models';
 
-export type JobModelProvider = 'github' | 'ollama' | 'gemini' | 'anthropic';
+export type JobModelProvider = 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai';
 
 export interface JobModelCredentials {
   githubToken: string;
   googleApiKey: string;
   anthropicApiKey: string;
+  openaiApiKey: string;
 }
 
 export interface ResolvedJobModel {
@@ -20,7 +21,7 @@ export function validateJobModelSelection(model: string | null | undefined, prov
 
   const configured = MODELS.find((candidate) => candidate.id === model);
   if (!configured || configured.provider !== provider) return 'Invalid model selection';
-  if (!['github', 'ollama', 'gemini', 'anthropic'].includes(provider)) return 'Unsupported model provider';
+  if (!['github', 'ollama', 'gemini', 'anthropic', 'openai'].includes(provider)) return 'Unsupported model provider';
   return null;
 }
 
@@ -36,6 +37,7 @@ export function resolveJobModel(
     if (requestedProvider === 'github' && !credentials.githubToken) throw new Error('The selected GitHub model requires a configured GitHub token');
     if (requestedProvider === 'gemini' && !credentials.googleApiKey) throw new Error('The selected Gemini model requires a configured Google API key');
     if (requestedProvider === 'anthropic' && !credentials.anthropicApiKey) throw new Error('The selected Anthropic model requires a configured Anthropic API key');
+    if (requestedProvider === 'openai' && !credentials.openaiApiKey) throw new Error('The selected OpenAI model requires a configured OpenAI API key');
 
     const configured = MODELS.find((candidate) => candidate.id === requestedModel)!;
     return {
@@ -55,6 +57,9 @@ export function resolveJobModel(
   }
   if (credentials.anthropicApiKey) {
     return { selectedModel: 'claude-haiku-4-5-20251001', modelProvider: 'anthropic', modelBaseUrl: 'https://api.anthropic.com' };
+  }
+  if (credentials.openaiApiKey) {
+    return { selectedModel: 'gpt-5.6-luna', modelProvider: 'openai', modelBaseUrl: 'https://api.openai.com/v1' };
   }
   return { selectedModel: 'qwen2.5:3b', modelProvider: 'ollama', modelBaseUrl: process.env.OLLAMA_BASE_URL || 'http://ollama:11434' };
 }

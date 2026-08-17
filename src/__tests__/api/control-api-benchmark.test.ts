@@ -61,7 +61,7 @@ describe('Control API v1 benchmark', () => {
 
   it('lists model availability with benchmark:read', async () => {
     mockAvailability.mockResolvedValueOnce({
-      providers: { github: true, gemini: false, anthropic: false, ollama: true },
+      providers: { github: true, gemini: false, anthropic: false, openai: false, ollama: true },
       ollamaModels: ['qwen2.5:3b'],
     });
     const response = await listModels(new Request('http://localhost/api/v1/benchmark/models'));

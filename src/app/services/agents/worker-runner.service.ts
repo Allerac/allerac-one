@@ -7,6 +7,7 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.inter
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
 const STALE_RUN_MAX_AGE_MINUTES = 5;
 const POLL_INTERVAL_MS = parseInt(process.env.AGENT_WORKER_POLL_MS || '3000', 10);
@@ -160,7 +161,9 @@ export class WorkerRunnerService {
             ? GEMINI_BASE_URL
             : modelProvider === 'anthropic'
               ? ANTHROPIC_BASE_URL
-              : GITHUB_BASE_URL;
+              : modelProvider === 'openai'
+                ? OPENAI_BASE_URL
+                : GITHUB_BASE_URL;
 
       // Skill-based runs always bypass the orchestrator
       if (run.skill_id) {
@@ -197,6 +200,7 @@ export class WorkerRunnerService {
             githubToken: settings.github_repo_token || undefined,
             geminiToken: settings.google_api_key || undefined,
             anthropicToken: settings.anthropic_api_key || undefined,
+            openaiToken: settings.openai_api_key || undefined,
           });
 
       const plan = await orchestrator.createPlan(run.prompt, modelName, modelProvider, modelBaseUrl);
@@ -300,6 +304,7 @@ export class WorkerRunnerService {
       githubToken: settings.github_repo_token || '',
       geminiToken: settings.google_api_key || undefined,
       anthropicToken: settings.anthropic_api_key || '',
+      openaiToken: settings.openai_api_key || undefined,
       tavilyApiKey: settings.tavily_api_key || undefined,
       selectedModel: modelName,
       modelProvider: modelProvider as any,

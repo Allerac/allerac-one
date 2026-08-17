@@ -42,7 +42,7 @@ export interface Model {
   name: string;
   icon: string;
   description?: string;
-  provider: 'github' | 'ollama' | 'gemini' | 'anthropic';
+  provider: 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai';
   baseUrl?: string;
   requiresToken?: boolean;
   category: 'Fast' | 'Thinking' | 'Pro';
@@ -73,7 +73,7 @@ export interface ScheduledJob {
   webhookUrl: string | null;
   domainSlug: string | null;
   llmModel: string | null;
-  llmProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | null;
+  llmProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai' | null;
   enabled: boolean;
   lastRunAt: string | null;
   createdAt: string;
