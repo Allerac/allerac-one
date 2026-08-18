@@ -583,11 +583,17 @@ export class LLMService {
 
   /**
    * OpenAI's newer models (o1/o3/gpt-5.x reasoning family) reject the legacy
-   * `max_tokens` param and require `max_completion_tokens` instead.
+   * `max_tokens` param and require `max_completion_tokens` instead. They also
+   * reject function tools combined with a non-'none' reasoning_effort on
+   * /v1/chat/completions, so force it off whenever tools are present.
    */
   private toOpenAIRequestBody(apiRequest: Record<string, any>): Record<string, any> {
     const { max_tokens, ...rest } = apiRequest;
-    return max_tokens !== undefined ? { ...rest, max_completion_tokens: max_tokens } : rest;
+    const body = max_tokens !== undefined ? { ...rest, max_completion_tokens: max_tokens } : rest;
+    if (body.tools?.length && body.reasoning_effort === undefined) {
+      return { ...body, reasoning_effort: 'none' };
+    }
+    return body;
   }
 
   /**
