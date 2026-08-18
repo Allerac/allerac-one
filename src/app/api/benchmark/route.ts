@@ -32,6 +32,9 @@ const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const ALLOWED_PROVIDERS = new Set(['ollama', 'github', 'gemini', 'anthropic', 'openai']);
 const MODEL_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$/;
+// OpenAI's reasoning family (o1/o3/gpt-5.x) only accepts the default
+// temperature and requires max_completion_tokens instead of max_tokens.
+const OPENAI_REASONING_MODEL_PATTERN = /^(o\d|gpt-5)/;
 
 interface BenchmarkPrompt {
   name: string;
@@ -143,22 +146,24 @@ async function runOpenAICompatiblePrompt(
   let content = '';
   let completionTokens: number | null = null;
 
+  const isOpenAIReasoning = baseUrl === OPENAI_BASE_URL && OPENAI_REASONING_MODEL_PATTERN.test(modelId);
+  const body: Record<string, unknown> = {
+    model: modelId,
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant. Be concise.' },
+      { role: 'user', content: prompt },
+    ],
+    stream: true,
+    ...(isOpenAIReasoning ? { max_completion_tokens: 400 } : { temperature: 0.1, max_tokens: 400 }),
+  };
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      model: modelId,
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant. Be concise.' },
-        { role: 'user', content: prompt },
-      ],
-      stream: true,
-      temperature: 0.1,
-      max_tokens: 400,
-    }),
+    body: JSON.stringify(body),
     signal,
   });
 
