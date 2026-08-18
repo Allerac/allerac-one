@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import * as skillActions from '@/app/actions/skills';
 import * as domainActions from '@/app/actions/domains';
 import { useTheme } from '@/app/context/ThemeContext';
-import DomainSkillEditor, { type EditingState, type Skill } from '@/app/components/domains/DomainSkillEditor';
+import { DomainToolbar, SystemPromptPanel, ToolsPanel, type EditingState, type Skill } from '@/app/components/domains/DomainSkillEditor';
 import DomainSkillChatPanel from '@/app/components/domains/DomainSkillChatPanel';
 
 interface DomainBinding {
@@ -35,7 +35,7 @@ const DOMAINS = [
   { slug: 'sales',   label: 'Sales',   icon: '📣' },
 ];
 
-type MobileTab = 'list' | 'editor' | 'assistant';
+type MobileTab = 'prompt' | 'tools' | 'assistant';
 
 export default function DomainsPageClient() {
   const router = useRouter();
@@ -44,14 +44,14 @@ export default function DomainsPageClient() {
   const [bindings, setBindings] = useState<DomainBinding[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [selectedSlug, setSelectedSlug] = useState<string>(DOMAINS[0].slug);
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [globalModelId] = useState<string | null>(
     () => typeof window !== 'undefined' ? localStorage.getItem('selected_model') : null
   );
-  const [mobileTab, setMobileTab] = useState<MobileTab>('list');
+  const [mobileTab, setMobileTab] = useState<MobileTab>('prompt');
 
   const load = async () => {
     setLoading(true);
@@ -72,7 +72,6 @@ export default function DomainsPageClient() {
 
   const loadDomain = async (domain: typeof DOMAINS[0]) => {
     setSelectedSlug(domain.slug);
-    setMobileTab('editor');
     const binding = getBinding(domain.slug);
     const skillId = binding?.skill_id ?? null;
     setLoadingEdit(true);
@@ -84,6 +83,15 @@ export default function DomainsPageClient() {
     setEditing({ domain, skillId, content: skill?.content || '', tools, modelSettings });
     setLoadingEdit(false);
   };
+
+  // Load the first domain once bindings/skills have arrived.
+  useEffect(() => {
+    if (!loading && !editing) {
+      const domain = DOMAINS.find(dm => dm.slug === selectedSlug) ?? DOMAINS[0];
+      loadDomain(domain);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   const handleSkillChange = async (newSkillId: string) => {
     if (!editing) return;
@@ -147,105 +155,97 @@ export default function DomainsPageClient() {
         </button>
       </div>
 
-      {/* Mobile tab bar */}
-      <div className={`lg:hidden flex border-b flex-shrink-0 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-        {(['list', 'editor', 'assistant'] as MobileTab[]).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setMobileTab(tab)}
-            className={`flex-1 py-2 text-xs font-medium capitalize ${
-              mobileTab === tab
-                ? 'text-indigo-500 border-b-2 border-indigo-500'
-                : d ? 'text-gray-500' : 'text-gray-400'
-            }`}
-          >
-            {tab === 'list' ? 'Domains' : tab === 'editor' ? 'Editor' : 'Assistant'}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Domain list */}
-        <div className={`${mobileTab === 'list' ? 'flex' : 'hidden'} lg:flex flex-col w-full lg:w-64 flex-shrink-0 border-r overflow-y-auto ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" />
-            </div>
-          ) : (
-            <div className="p-2 flex flex-col gap-1">
-              {DOMAINS.map(domain => {
-                const binding = getBinding(domain.slug);
-                const active = selectedSlug === domain.slug;
-                return (
-                  <button
-                    key={domain.slug}
-                    onClick={() => loadDomain(domain)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors ${
-                      active
-                        ? 'bg-indigo-600 text-white'
-                        : d ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    <span className="text-base">{domain.icon}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">{domain.label}</div>
-                      <div className={`text-xs truncate ${active ? 'text-indigo-200' : d ? 'text-gray-500' : 'text-gray-400'}`}>
-                        {binding?.display_name ?? 'No skill'}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+      {loading || !editing ? (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
         </div>
+      ) : (
+        <>
+          <DomainToolbar
+            domains={DOMAINS}
+            selectedSlug={selectedSlug}
+            onSelectDomain={slug => {
+              const domain = DOMAINS.find(dm => dm.slug === slug);
+              if (domain) loadDomain(domain);
+            }}
+            skills={skills}
+            editing={editing}
+            globalModelId={globalModelId}
+            isDark={d}
+            saving={saving}
+            loading={loadingEdit}
+            onChange={setEditing}
+            onSkillChange={handleSkillChange}
+            onSave={handleSave}
+            onRevert={handleRevert}
+          />
 
-        {/* Editor */}
-        <div className={`${mobileTab === 'editor' ? 'flex' : 'hidden'} lg:flex flex-1 overflow-y-auto p-4 sm:p-5`}>
+          {/* Mobile tab bar */}
+          <div className={`lg:hidden flex border-b flex-shrink-0 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+            {(['prompt', 'tools', 'assistant'] as MobileTab[]).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setMobileTab(tab)}
+                className={`flex-1 py-2 text-xs font-medium capitalize ${
+                  mobileTab === tab
+                    ? 'text-indigo-500 border-b-2 border-indigo-500'
+                    : d ? 'text-gray-500' : 'text-gray-400'
+                }`}
+              >
+                {tab === 'prompt' ? 'System Prompt' : tab === 'tools' ? 'Tools' : 'Assistant'}
+              </button>
+            ))}
+          </div>
+
           {loadingEdit ? (
-            <div className="flex justify-center py-12 w-full">
+            <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
             </div>
-          ) : editing ? (
-            <DomainSkillEditor
-              editing={editing}
-              skills={skills}
-              globalModelId={globalModelId}
-              isDark={d}
-              saving={saving}
-              loading={loadingEdit}
-              onChange={setEditing}
-              onSkillChange={handleSkillChange}
-              onSave={handleSave}
-              onRevert={handleRevert}
-            />
           ) : (
-            <p className={`text-sm ${d ? 'text-gray-400' : 'text-gray-500'}`}>
-              Select a domain from the list to configure its model, skill, prompt, and tools.
-            </p>
-          )}
-        </div>
+            <div className="flex flex-1 overflow-hidden">
+              {/* System prompt */}
+              <div className={`${mobileTab === 'prompt' ? 'flex' : 'hidden'} lg:flex flex-col flex-1 min-w-0`}>
+                <SystemPromptPanel
+                  content={editing.content}
+                  disabled={!editing.skillId}
+                  isDark={d}
+                  onChange={content => setEditing({ ...editing, content })}
+                />
+              </div>
 
-        {/* Assistant */}
-        <div className={`${mobileTab === 'assistant' ? 'flex' : 'hidden'} lg:flex flex-col w-full lg:w-[420px] flex-shrink-0 border-l ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-          {editing?.skillId && selectedSkill ? (
-            <DomainSkillChatPanel
-              skillId={editing.skillId}
-              skillName={selectedSkill.display_name}
-              domainSlug={editing.domain.slug}
-              defaultModelId={globalModelId}
-              isDark={d}
-              onApplied={handleApplied}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full p-6">
-              <p className={`text-xs text-center ${d ? 'text-gray-500' : 'text-gray-400'}`}>
-                Select a domain with a skill assigned to chat with the prompt assistant.
-              </p>
+              {/* Tools */}
+              <div className={`${mobileTab === 'tools' ? 'flex' : 'hidden'} lg:flex flex-col w-full lg:w-72 flex-shrink-0 border-l ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+                <ToolsPanel
+                  tools={editing.tools}
+                  disabled={!editing.skillId}
+                  isDark={d}
+                  onChange={tools => setEditing({ ...editing, tools })}
+                />
+              </div>
+
+              {/* Assistant */}
+              <div className={`${mobileTab === 'assistant' ? 'flex' : 'hidden'} lg:flex flex-col w-full lg:w-[420px] flex-shrink-0 border-l ${d ? 'border-gray-700' : 'border-gray-200'}`}>
+                {editing.skillId && selectedSkill ? (
+                  <DomainSkillChatPanel
+                    skillId={editing.skillId}
+                    skillName={selectedSkill.display_name}
+                    domainSlug={editing.domain.slug}
+                    defaultModelId={globalModelId}
+                    isDark={d}
+                    onApplied={handleApplied}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full p-6">
+                    <p className={`text-xs text-center ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+                      Select a skill to chat with the prompt assistant.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
