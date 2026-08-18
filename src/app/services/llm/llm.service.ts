@@ -582,18 +582,30 @@ export class LLMService {
   }
 
   /**
+   * True for OpenAI's reasoning-family models (o1/o3/gpt-5.x), which have
+   * quirks that regular chat models (gpt-4o, gpt-4.1, ...) don't share.
+   */
+  private isOpenAIReasoningModel(model: string): boolean {
+    return /^(o\d|gpt-5)/.test(model);
+  }
+
+  /**
    * OpenAI's newer models (o1/o3/gpt-5.x reasoning family) reject the legacy
    * `max_tokens` param and require `max_completion_tokens` instead. They also
    * reject function tools combined with a non-'none' reasoning_effort on
-   * /v1/chat/completions, so force it off whenever tools are present.
+   * /v1/chat/completions (so force it off whenever tools are present), and
+   * only accept the default `temperature` of 1 (so drop any override).
    */
   private toOpenAIRequestBody(apiRequest: Record<string, any>): Record<string, any> {
     const { max_tokens, ...rest } = apiRequest;
     const body = max_tokens !== undefined ? { ...rest, max_completion_tokens: max_tokens } : rest;
-    if (body.tools?.length && body.reasoning_effort === undefined) {
-      return { ...body, reasoning_effort: 'none' };
+    if (!this.isOpenAIReasoningModel(body.model)) return body;
+
+    const { temperature: _temperature, ...reasoningBody } = body;
+    if (reasoningBody.tools?.length && reasoningBody.reasoning_effort === undefined) {
+      return { ...reasoningBody, reasoning_effort: 'none' };
     }
-    return body;
+    return reasoningBody;
   }
 
   /**
