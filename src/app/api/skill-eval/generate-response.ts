@@ -7,6 +7,11 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 
 export const ALLOWED_PROVIDERS = new Set(['github', 'ollama', 'anthropic', 'gemini', 'openai']);
 
+// OpenAI's reasoning family (o1/o3/gpt-5.x) rejects a custom temperature
+// (only the default of 1 is accepted) and requires max_completion_tokens
+// instead of max_tokens.
+const OPENAI_REASONING_MODEL_PATTERN = /^(o\d|gpt-5)/;
+
 export async function generateResponse(
   systemPrompt: string,
   userPrompt: string,
@@ -58,6 +63,7 @@ export async function generateResponse(
       .map(block => block.text)
       .join('');
   } else if (provider === 'openai') {
+    const isReasoningModel = OPENAI_REASONING_MODEL_PATTERN.test(model);
     const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -70,8 +76,7 @@ export async function generateResponse(
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: userPrompt },
         ],
-        temperature,
-        max_tokens: maxTokens,
+        ...(isReasoningModel ? { max_completion_tokens: maxTokens } : { temperature, max_tokens: maxTokens }),
       }),
     });
     if (!res.ok) {

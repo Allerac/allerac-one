@@ -221,7 +221,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEm
                     <div style={{ height: 1, background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
                     <StartMenuItem icon="📡" label="Monitor" onClick={() => { setStartOpen(false); window.open('/logs', 'allerac-monitor', 'width=860,height=640,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
                     <StartMenuItem icon="⚙️" label="Configuration" onClick={() => { setStartOpen(false); window.open('/config', 'allerac-config', 'width=900,height=700,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
-                    <StartMenuItem icon="🌐" label="Domains" onClick={() => { setStartOpen(false); window.open('/domains', 'allerac-domains', 'width=800,height=680,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
+                    <StartMenuItem icon="🌐" label="Domains" onClick={() => navigate('/domains')} />
                     <StartMenuItem icon="🔧" label="Admin" onClick={() => { setStartOpen(false); window.open('/admin', 'allerac-admin', 'width=1100,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
                     <StartMenuItem icon="🧾" label="Expenses" onClick={() => { setStartOpen(false); window.open('/expenses', 'allerac-expenses', 'width=1000,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes'); }} />
                     <div style={{ height: 1, background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />
