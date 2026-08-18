@@ -582,6 +582,15 @@ export class LLMService {
   }
 
   /**
+   * OpenAI's newer models (o1/o3/gpt-5.x reasoning family) reject the legacy
+   * `max_tokens` param and require `max_completion_tokens` instead.
+   */
+  private toOpenAIRequestBody(apiRequest: Record<string, any>): Record<string, any> {
+    const { max_tokens, ...rest } = apiRequest;
+    return max_tokens !== undefined ? { ...rest, max_completion_tokens: max_tokens } : rest;
+  }
+
+  /**
    * Call OpenAI API (OpenAI-compatible endpoint)
    */
   private async openaiChatCompletion(request: LLMRequest): Promise<LLMResponse> {
@@ -599,7 +608,7 @@ export class LLMService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.openaiToken}`,
         },
-        body: JSON.stringify(apiRequest),
+        body: JSON.stringify(this.toOpenAIRequestBody(apiRequest)),
       });
 
       statusCode = response.status;
@@ -665,7 +674,7 @@ export class LLMService {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.openaiToken}`,
       },
-      body: JSON.stringify({ ...apiRequest, stream: true }),
+      body: JSON.stringify({ ...this.toOpenAIRequestBody(apiRequest), stream: true }),
     });
 
     if (!response.ok) {
