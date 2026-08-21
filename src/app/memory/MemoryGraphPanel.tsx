@@ -234,7 +234,7 @@ function GraphCanvas({
       renderer.domElement.remove();
     };
   }, [nodes, edges, selectedId, hoveredId, onSelect, isDark]);
-  return <div ref={mountRef} className="absolute inset-0" />;
+  return <div ref={mountRef} className="absolute inset-0" style={{ touchAction: 'none' }} />;
 }
 
 type TypeFilter = 'all' | KnowledgeNodeType | 'crawler';
@@ -305,41 +305,47 @@ export default function MemoryGraphPanel() {
   };
 
   return (
-    <section className={`relative flex-1 overflow-hidden ${isDark ? 'bg-[#080b12]' : 'bg-slate-50'}`}>
-      <div className={`absolute z-10 top-0 inset-x-0 min-h-16 flex flex-wrap items-center gap-3 px-5 py-2 border-b backdrop-blur-xl ${
+    <section className={`flex flex-col flex-1 overflow-hidden ${isDark ? 'bg-[#080b12]' : 'bg-slate-50'}`}>
+      <div className={`z-10 flex-shrink-0 flex flex-col gap-2 px-4 sm:px-5 py-2.5 border-b backdrop-blur-xl ${
         isDark ? 'border-white/10 bg-[#080b12]/75' : 'border-slate-200 bg-white/75'
       }`}>
-        <div>
-          <h1 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Knowledge</h1>
-          <p className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-            {nodes.length} nodes · {edges.length} explained connections
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="min-w-0">
+            <h1 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Knowledge</h1>
+            <p className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+              {nodes.length} nodes · {edges.length} explained connections
+            </p>
+          </div>
+          <div className="flex-1" />
+          <a href="/memory/crawlers"
+            className="flex-shrink-0 rounded-lg border border-cyan-500/30 px-3 py-2 text-xs text-cyan-500 hover:bg-cyan-500/10">
+            Crawlers
+          </a>
+          <button onClick={load} className="flex-shrink-0 rounded-lg border border-slate-500/20 px-3 py-2 text-xs">Refresh</button>
         </div>
-        <div className="flex-1" />
-        <input value={query} onChange={event => setQuery(event.target.value)}
-          placeholder="Search your knowledge…"
-          className={`w-40 xl:w-56 rounded-lg border px-3 py-1.5 text-xs outline-none ${
-            isDark ? 'border-white/10 bg-white/5 text-slate-200' : 'border-slate-200 bg-white text-slate-700'
-          }`} />
-        <select value={type} onChange={event => setType(event.target.value as TypeFilter)}
-          className={`rounded-lg border px-2 py-1.5 text-xs ${isDark ? 'border-white/10 bg-[#111827]' : 'border-slate-200 bg-white'}`}>
-          <option value="all">All types</option>
-          <option value="memory">Memories</option>
-          <option value="document">Documents</option>
-          <option value="crawler">Crawler documents</option>
-        </select>
-        <select value={domain} onChange={event => setDomain(event.target.value)}
-          className={`rounded-lg border px-2 py-1.5 text-xs ${isDark ? 'border-white/10 bg-[#111827]' : 'border-slate-200 bg-white'}`}>
-          <option value="all">All domains</option>
-          {domains.map(item => <option key={item} value={item}>{item}</option>)}
-        </select>
-        <a href="/memory/crawlers"
-          className="rounded-lg border border-cyan-500/30 px-3 py-1.5 text-xs text-cyan-500 hover:bg-cyan-500/10">
-          Crawlers
-        </a>
-        <button onClick={load} className="rounded-lg border border-slate-500/20 px-3 py-1.5 text-xs">Refresh</button>
+        {/* Horizontally scrollable on narrow screens instead of wrapping, so
+            the header always has a predictable height. */}
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <input value={query} onChange={event => setQuery(event.target.value)}
+            placeholder="Search your knowledge…"
+            className={`w-44 flex-shrink-0 rounded-lg border px-3 py-2 text-xs outline-none ${
+              isDark ? 'border-white/10 bg-white/5 text-slate-200' : 'border-slate-200 bg-white text-slate-700'
+            }`} />
+          <select value={type} onChange={event => setType(event.target.value as TypeFilter)}
+            className={`flex-shrink-0 rounded-lg border px-2 py-2 text-xs ${isDark ? 'border-white/10 bg-[#111827]' : 'border-slate-200 bg-white'}`}>
+            <option value="all">All types</option>
+            <option value="memory">Memories</option>
+            <option value="document">Documents</option>
+            <option value="crawler">Crawler documents</option>
+          </select>
+          <select value={domain} onChange={event => setDomain(event.target.value)}
+            className={`flex-shrink-0 rounded-lg border px-2 py-2 text-xs ${isDark ? 'border-white/10 bg-[#111827]' : 'border-slate-200 bg-white'}`}>
+            <option value="all">All domains</option>
+            {domains.map(item => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </div>
       </div>
-      <div className="absolute inset-0 top-16">
+      <div className="relative flex-1 overflow-hidden">
         {loading ? (
           <div className="h-full flex items-center justify-center text-sm text-slate-500">Building your knowledge graph…</div>
         ) : nodes.length ? (
@@ -354,15 +360,14 @@ export default function MemoryGraphPanel() {
         ) : (
           <div className="h-full flex items-center justify-center text-sm text-slate-500">No knowledge matches these filters.</div>
         )}
-      </div>
-      <div className="absolute z-10 bottom-4 left-4 flex gap-3 text-[10px] text-slate-500">
-        <span>● Conversation memory — remembered from a chat</span>
-        <span>■ Document — uploaded or collected by the crawler</span>
-      </div>
-      {selected && (
-        <aside className={`absolute z-20 top-20 right-4 w-[min(350px,calc(100%-2rem))] rounded-2xl border p-4 shadow-2xl backdrop-blur-xl ${
-          isDark ? 'border-white/10 bg-[#111827]/90 text-slate-200' : 'border-slate-200 bg-white/90 text-slate-700'
-        }`}>
+        <div className="absolute z-10 bottom-4 left-4 right-4 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
+          <span>● Conversation memory — remembered from a chat</span>
+          <span>■ Document — uploaded or collected by the crawler</span>
+        </div>
+        {selected && (
+          <aside className={`absolute z-20 top-4 right-4 w-[min(350px,calc(100%-2rem))] max-h-[calc(100%-2rem)] overflow-y-auto rounded-2xl border p-4 shadow-2xl backdrop-blur-xl ${
+            isDark ? 'border-white/10 bg-[#111827]/90 text-slate-200' : 'border-slate-200 bg-white/90 text-slate-700'
+          }`}>
           <button onClick={() => setSelected(null)} className="float-right text-slate-400">×</button>
           <div className="text-[10px] uppercase tracking-widest text-slate-500">
             {selected.sourceType === 'conversation' ? 'Conversation memory'
@@ -426,7 +431,8 @@ export default function MemoryGraphPanel() {
             <button onClick={deleteSelected} className="text-red-400">Delete {selected.type}</button>
           </div>
         </aside>
-      )}
+        )}
+      </div>
     </section>
   );
 }

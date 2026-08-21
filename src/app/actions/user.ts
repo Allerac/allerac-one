@@ -51,6 +51,11 @@ export async function saveSelectedModel(modelId: string) {
     return await userSettingsService.saveSelectedModel(user.id, modelId);
 }
 
+export async function saveCliPreferences(domainSlug: string | null, modelId: string | null) {
+    const user = await requireCurrentUser();
+    return await userSettingsService.saveCliPreferences(user.id, domainSlug, modelId);
+}
+
 export async function completeOnboarding() {
     const user = await requireCurrentUser();
     return await userSettingsService.completeOnboarding(user.id);

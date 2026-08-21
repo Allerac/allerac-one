@@ -216,6 +216,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEm
                 {ALLERAC_DOMAINS.filter(d => allowedDomains.includes(d.key)).map(d => (
                   <StartMenuItem key={d.key} icon={d.icon} label={d.name} onClick={() => navigate(d.path)} />
                 ))}
+                <StartMenuItem icon="⌨️" label="CLI" onClick={() => navigate('/cli')} />
                 {isAdmin && (
                   <>
                     <div style={{ height: 1, background: '#808080', margin: '4px 8px', borderBottom: '1px solid #fff' }} />

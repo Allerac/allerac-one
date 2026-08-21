@@ -15,7 +15,7 @@ export class UserSettingsService {
   async loadUserSettings(userId: string) {
     try {
       const res = await pool.query(
-        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, google_key_preference, anthropic_api_key, openai_api_key, location, timezone, onboarding_completed, selected_model, language FROM user_settings WHERE user_id = $1',
+        'SELECT github_token, tavily_api_key, telegram_bot_token, system_message, google_api_key, google_key_preference, anthropic_api_key, openai_api_key, location, timezone, onboarding_completed, selected_model, language, cli_domain_slug, cli_model_id FROM user_settings WHERE user_id = $1',
         [userId]
       );
 
@@ -36,6 +36,8 @@ export class UserSettingsService {
         onboarding_completed: row.onboarding_completed ?? false,
         selected_model: row.selected_model || null,
         language: row.language || 'en',
+        cli_domain_slug: row.cli_domain_slug || null,
+        cli_model_id: row.cli_model_id || null,
       };
     } catch (error) {
       console.error('Error loading user settings:', error);
@@ -172,6 +174,21 @@ export class UserSettingsService {
       return { success: true };
     } catch (error) {
       console.error('Error saving selected model:', error);
+      return { success: false, error };
+    }
+  }
+
+  async saveCliPreferences(userId: string, domainSlug: string | null, modelId: string | null) {
+    try {
+      await pool.query(
+        `INSERT INTO user_settings (user_id, cli_domain_slug, cli_model_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE SET cli_domain_slug = $2, cli_model_id = $3`,
+        [userId, domainSlug, modelId]
+      );
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving CLI preferences:', error);
       return { success: false, error };
     }
   }

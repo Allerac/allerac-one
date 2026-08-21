@@ -15,8 +15,10 @@ import { ChatProviderConfigurationError } from '@/app/services/chat/chat-runtime
 import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
 import { PUBLIC_DOMAINS } from '@/app/services/chat/chat-tool-registry';
+import { UserSettingsService } from '@/app/services/user/user-settings.service';
 
 const chatService = new ChatService();
+const userSettingsService = new UserSettingsService();
 
 // Anonymous website visitors share one service account per public domain — cap how
 // long a single conversation can run so no visitor can turn one thread into an
@@ -162,10 +164,20 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     }
 
     const cookieStore = await cookies();
+    // API-key callers (e.g. the CLI) send no session cookies at all, so the
+    // locale cookie is never present for them — fall back to the account's
+    // saved language (user_settings.language, set via the Hub's language
+    // picker) before defaulting to English, so non-browser clients still get
+    // the right language instead of silently always landing on 'en'.
+    const cookieLocale = cookieStore.get('locale')?.value;
+    let rawLocale = parsed.data.locale || cookieLocale;
+    if (!rawLocale) {
+      const settings = await userSettingsService.loadUserSettings(user.id);
+      rawLocale = settings?.language || 'en';
+    }
     // prompt-builder.ts only recognizes bare 2-letter codes (LANGUAGE_NAMES) — strip any
     // region suffix (e.g. the website's 'pt-BR' -> 'pt') or the language instruction silently
     // falls back to English.
-    const rawLocale = parsed.data.locale || cookieStore.get('locale')?.value || 'en';
     const locale = rawLocale.split('-')[0];
     const events: Array<Record<string, any>> = [];
     const result = await executeChatMessage({
