@@ -14,6 +14,15 @@
 //   ALLERAC_API_KEY=allerac_xxx node scripts/allerac-chat.mjs
 //   ALLERAC_API_KEY=allerac_xxx ALLERAC_DOMAIN=code node scripts/allerac-chat.mjs
 //
+// Points at http://localhost:8080 by default — set ALLERAC_API_URL to talk
+// to a remote/hosted instance instead:
+//   ALLERAC_API_URL=https://allerac.example.com ALLERAC_API_KEY=allerac_xxx node scripts/allerac-chat.mjs
+//
+// In a real terminal, startup shows an interactive model picker (↑/↓ +
+// Enter, Esc to keep the pre-selected default) before the chat opens —
+// skipped automatically when ALLERAC_MODEL is set, since that's already an
+// explicit choice for this run.
+//
 // Mid-session commands: "/domains" lists domains you have access to;
 // "/domain <slug>" switches to one without restarting (starts a fresh
 // conversation there — the server ties one conversation to one domain for
@@ -28,10 +37,24 @@
 // line-by-line readline prompt with no fixed positioning.
 
 import readline from 'node:readline';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const baseUrl = (process.env.ALLERAC_API_URL || 'http://localhost:8080').replace(/\/$/, '');
 const apiKey = process.env.ALLERAC_API_KEY;
 const interactive = Boolean(process.stdout.isTTY && process.stdin.isTTY);
+
+// Best-effort — falls back to 0.0.0 if run outside the repo (e.g. copied
+// standalone) rather than failing the whole CLI over a cosmetic version tag.
+let VERSION = '0.0.0';
+try {
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const pkg = JSON.parse(readFileSync(path.join(scriptDir, '..', 'package.json'), 'utf8'));
+  VERSION = pkg.version || VERSION;
+} catch {
+  // non-fatal
+}
 
 // Resolved at startup by resolvePreferences() — env vars win when set,
 // otherwise fall back to the account's saved CLI settings (/cli), then 'chat'.
@@ -272,6 +295,142 @@ const ALLERAC_GLYPH = [
   '███     ███',
 ];
 
+// Truncates in the middle (keeping both ends visible) so a long path like
+// C:\Users\...\allerac-one still reads as identifiable inside a narrow box.
+function truncateMiddle(str, maxLen) {
+  if (str.length <= maxLen) return str;
+  if (maxLen <= 1) return str.slice(0, maxLen);
+  const headLen = Math.ceil((maxLen - 1) / 2);
+  const tailLen = Math.floor((maxLen - 1) / 2);
+  return `${str.slice(0, headLen)}…${str.slice(str.length - tailLen)}`;
+}
+
+// Boxed startup info panel (à la Codex/Claude Code CLIs): title, then
+// label/value rows for the session's domain, model, and working directory.
+// Sized to content and capped to the terminal width; recomputed on every
+// call so it always reflects the live domainSlug/cliModel (see redraw()).
+function buildInfoBox(termWidth, indentWidth) {
+  const title = `>_ Allerac CLI (v${VERSION})`;
+  const rows = [
+    { label: 'domain:', value: domainSlug },
+    { label: 'model:', value: cliModel ? `${cliModel}${cliProvider ? ` (${cliProvider})` : ''}` : 'domain default', hint: '/model to change' },
+    { label: 'directory:', value: process.cwd() },
+  ];
+  const labelWidth = Math.max(...rows.map(r => r.label.length));
+  const budget = Math.max(20, termWidth - indentWidth - 4); // 4 = both borders + both inner paddings
+
+  const plainRows = rows.map(r => {
+    const label = r.label.padEnd(labelWidth);
+    let hint = r.hint || '';
+    let available = budget - label.length - 1 - (hint ? hint.length + 3 : 0);
+    if (hint && available < 8) { hint = ''; available = budget - label.length - 1; } // drop hint first — value wins the remaining space
+    available = Math.max(available, 1);
+    const value = r.value.length > available ? truncateMiddle(r.value, available) : r.value;
+    return { label, value, hint };
+  });
+
+  const plainLines = [title, '', ...plainRows.map(r => `${r.label} ${r.value}${r.hint ? `   ${r.hint}` : ''}`)];
+  const innerWidth = Math.min(budget, Math.max(...plainLines.map(l => l.length)));
+  const pad = (plain) => ' '.repeat(Math.max(0, innerWidth - plain.length));
+  const border = (left, right) => paint(c.violet, `${left}${'─'.repeat(innerWidth + 2)}${right}`);
+  const side = paint(c.violet, '│');
+
+  const lines = [border('╭', '╮')];
+  lines.push(`${side} ${paint(c.bold + c.indigo, title)}${pad(title)} ${side}`);
+  lines.push(`${side} ${pad('')} ${side}`);
+  for (const r of plainRows) {
+    const plain = `${r.label} ${r.value}${r.hint ? `   ${r.hint}` : ''}`;
+    const colored = `${paint(c.gray, r.label)} ${r.value}${r.hint ? `   ${paint(c.gray, r.hint)}` : ''}`;
+    lines.push(`${side} ${colored}${pad(plain)} ${side}`);
+  }
+  lines.push(border('╰', '╯'));
+  return lines;
+}
+
+// Interactive startup picker — arrow keys + Enter to choose the model for
+// this session, Esc to keep whatever resolvePreferences() already resolved.
+// Runs on the normal screen buffer (before the alternate-screen chat UI
+// takes over), so it just clears itself when done rather than restoring
+// anything. Non-fatal on any failure — worst case the pre-resolved default
+// from resolvePreferences() is used, same as before this existed.
+async function pickModelInteractive() {
+  let models;
+  try {
+    models = await listModels();
+  } catch {
+    return;
+  }
+  if (!models.length) return;
+
+  const options = [
+    { id: null, provider: null, plainLabel: "— domain's configured model —" },
+    ...models.map(m => ({ id: m.id, provider: m.provider, plainLabel: `${m.name} (${m.provider})` })),
+  ];
+  let selected = Math.max(0, options.findIndex(o => o.id === (cliModel || null)));
+
+  const write = (s) => process.stdout.write(s);
+  const maxWidth = Math.max(24, (process.stdout.columns || 80) - 6);
+
+  // Box geometry is fixed for the picker's lifetime (no resize handling here),
+  // so re-render doesn't need a full-screen clear — it just overwrites the
+  // same rows in place. Redrawing via one batched write (instead of one
+  // write() syscall per line, with a full \x1b[2J wipe in front) is what
+  // keeps arrow-key navigation feeling instant instead of visibly flickering.
+  function render() {
+    const title = 'Select a model';
+    const rowLabels = options.map(o => truncateMiddle(o.plainLabel, maxWidth));
+    const innerWidth = Math.max(title.length, ...rowLabels.map(l => l.length + 2));
+    const side = paint(c.violet, '│');
+    const border = (l, r) => paint(c.violet, `${l}${'─'.repeat(innerWidth + 2)}${r}`);
+
+    const lines = [`  ${border('╭', '╮')}`];
+    lines.push(`  ${side} ${paint(c.bold + c.indigo, title)}${' '.repeat(innerWidth - title.length)} ${side}`);
+    rowLabels.forEach((label, i) => {
+      const marker = i === selected ? paint(c.violet, '› ') : '  ';
+      const text = i === selected ? paint(c.bold, label) : label;
+      lines.push(`  ${side} ${marker}${text}${' '.repeat(innerWidth - 2 - label.length)} ${side}`);
+    });
+    lines.push(`  ${border('╰', '╯')}`);
+    lines.push('');
+    lines.push(`  ${paint(c.gray, '↑↓ navigate · Enter confirm · Esc keep default')}`);
+
+    write(lines.map((line, i) => `\x1b[${i + 1};1H\x1b[2K${line}`).join(''));
+  }
+
+  write('\x1b[2J\x1b[H\x1b[?25l'); // one-time clear + hide cursor; render() only touches its own rows from here on
+  render();
+
+  await new Promise((resolve) => {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+
+    const onData = (chunk) => {
+      if (chunk === '\x03') { // Ctrl+C
+        write('\x1b[?25h');
+        process.exit(0);
+      } else if (chunk === '\x1b[A' || chunk === '\x1bOA') {
+        selected = (selected - 1 + options.length) % options.length;
+        render();
+      } else if (chunk === '\x1b[B' || chunk === '\x1bOB') {
+        selected = (selected + 1) % options.length;
+        render();
+      } else if (chunk === '\r' || chunk === '\n') {
+        finish(options[selected]);
+      } else if (chunk === '\x1b') { // plain Esc — arrow sequences are matched whole above
+        finish(null);
+      }
+    };
+    const finish = (choice) => {
+      process.stdin.off('data', onData);
+      write('\x1b[?25h\x1b[2J\x1b[H');
+      if (choice) { cliModel = choice.id; cliProvider = choice.provider; }
+      resolve();
+    };
+    process.stdin.on('data', onData);
+  });
+}
+
 const COMMANDS = [
   { cmd: '/domains', hint: 'list domains you can access' },
   { cmd: '/domain', hint: '<slug>  switch domain' },
@@ -306,9 +465,9 @@ async function runInteractive() {
 
   function printHeader() {
     for (const line of ALLERAC_GLYPH) appendLine(`${HEADER_INDENT}${paint(c.violet, line)}`);
-    appendLine(`${HEADER_INDENT}${paint(c.bold + c.indigo, 'Allerac CLI')}`);
-    appendLine(`${HEADER_INDENT}${paint(c.gray, `domain "${domainSlug}" — ${baseUrl}`)}`);
-    appendLine(`${HEADER_INDENT}${paint(c.gray, 'Type / for commands · Ctrl+C to quit')}`);
+    appendLine();
+    for (const line of buildInfoBox(cols, HEADER_INDENT.length)) appendLine(`${HEADER_INDENT}${line}`);
+    appendLine(`${HEADER_INDENT}${paint(c.gray, `${baseUrl} · Type / for commands · Ctrl+C to quit`)}`);
     appendLine();
   }
 
@@ -622,7 +781,10 @@ async function runInteractive() {
 // Plain fallback for non-TTY environments (piped/redirected stdio).
 // ---------------------------------------------------------------------------
 async function runPlain() {
-  console.log(`Allerac CLI — domain "${domainSlug}" — ${baseUrl}`);
+  console.log(`Allerac CLI (v${VERSION}) — ${baseUrl}`);
+  console.log(`domain:    ${domainSlug}`);
+  console.log(`model:     ${cliModel ? `${cliModel} (${cliProvider})` : 'domain default'}`);
+  console.log(`directory: ${process.cwd()}`);
   let conversationId = await createConversation();
   console.log(`Conversation ${conversationId} started. Type your message, "/domains" to list, "/domain <slug>" to switch, or "exit" to quit.\n`);
 
@@ -723,6 +885,7 @@ async function runPlain() {
 
 async function main() {
   await resolvePreferences();
+  if (interactive && !process.env.ALLERAC_MODEL) await pickModelInteractive();
   return interactive ? runInteractive() : runPlain();
 }
 

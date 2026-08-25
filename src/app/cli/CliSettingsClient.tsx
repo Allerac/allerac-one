@@ -107,6 +107,16 @@ export default function CliSettingsClient({ domains, cliDomainSlug, cliModelId }
 {`$env:ALLERAC_API_KEY="allerac_xxx..."
 node scripts/allerac-chat.mjs`}
           </pre>
+          <p className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>
+            Talking to a remote instance instead of your own machine? Set{' '}
+            <code className={d ? 'text-gray-300' : 'text-gray-700'}>ALLERAC_API_URL</code> too — it
+            defaults to <code className={d ? 'text-gray-300' : 'text-gray-700'}>http://localhost:8080</code>.
+          </p>
+          <pre className={`text-xs p-3 rounded-lg overflow-x-auto ${d ? 'bg-black text-gray-200 border border-gray-700' : 'bg-gray-50 text-gray-800 border border-gray-200'}`}>
+{`$env:ALLERAC_API_URL="https://allerac.example.com"
+$env:ALLERAC_API_KEY="allerac_xxx..."
+node scripts/allerac-chat.mjs`}
+          </pre>
         </div>
       </div>
     </div>
