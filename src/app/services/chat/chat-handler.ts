@@ -172,7 +172,7 @@ export async function handleChatMessage(
   const todayTime = now.toTimeString().split(' ')[0];
   const todayWeekday = weekdays[now.getDay()];
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const LANGUAGE_NAMES: Record<string, string> = { en: 'English', pt: 'Portuguese', es: 'Spanish', ca: 'Catalan', fr: 'French', de: 'German', it: 'Italian' };
+  const LANGUAGE_NAMES: Record<string, string> = { en: 'English', pt: 'Portuguese', es: 'Spanish', ca: 'Catalan', fr: 'French', de: 'German', it: 'Italian', zh: 'Chinese' };
   const languageName = language ? (LANGUAGE_NAMES[language] ?? language) : null;
   enrichedSystemMessage += `\n\n## Context\n- Current date & time: ${todayDate} ${todayWeekday}, ${todayTime} (${timezone})`;
   if (languageName) enrichedSystemMessage += `\n- Language: ${languageName} — always reply in this language`;

@@ -36,7 +36,18 @@ const DOMAIN_TOOL_NAMES = [
 // notes vault, even though every other domain does by default below. Also
 // used outside this file (e.g. the messages route) to apply extra abuse
 // limits — anonymous website visitors get less trust than logged-in users.
-export const PUBLIC_DOMAINS = ['sales'];
+export const PUBLIC_DOMAINS = ['sales', 'openworld'];
+
+// Domains that must get literally zero tools, not just the domain/personal
+// ones withheld from every PUBLIC_DOMAINS entry below. Deliberately NOT
+// implemented via an empty skill_tools list for the domain's skill — an
+// empty list means "unrestricted" (falls through to the full general-
+// purpose TOOLS array, including execute_shell), not "no tools". See
+// docs/domains/expose-agent-to-website.md ("Tool scoping is deny-by-default
+// in intent, not in code"). openworld is FAQ-answering only, with no
+// create_ticket/lead-capture equivalent — visitors are told to reach out
+// via WhatsApp/e-mail directly instead (see skills/openworld.md).
+export const NO_TOOL_DOMAINS = ['openworld'];
 
 // The sales domain only ever needs to create a ticket (lead capture) — never
 // list, read, or update tickets, which would let one website visitor read
@@ -51,6 +62,10 @@ export async function resolveChatTools(
   skillId: string | null | undefined,
   domain: string,
 ): Promise<any[]> {
+  if (NO_TOOL_DOMAINS.includes(domain)) {
+    return [];
+  }
+
   let tools: any[] = TOOLS;
 
   if (skillId) {

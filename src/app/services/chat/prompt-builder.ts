@@ -7,6 +7,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   pt: 'Portuguese',
   es: 'Spanish',
   ca: 'Catalan',
+  zh: 'Chinese',
 };
 
 export interface PromptBuilderInput {
