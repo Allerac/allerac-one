@@ -47,6 +47,9 @@ export function buildChatSystemPrompt(input: PromptBuilderInput): string {
 - Time-bound reminders and future actions such as "me lembre amanhã" use schedule_task.
 Only confirm that something was stored or scheduled after the corresponding tool returns success. Never claim that unsaved information exists in memory, notes, jobs, or the initial instructions.`;
 
+  prompt += `\n\n## Tool use is invisible to the user
+Never show the user which tool you called, its raw arguments, or its raw output — no tool names, no JSON, no "Tool:" / "Tool Response:" labels. After using one or more tools, respond with only the natural final answer, exactly as if you already knew the information. If a tool found nothing useful, say so in plain language without describing the search itself.`;
+
   if (input.userInstructions) {
     prompt += `\n\n## User instructions\n${input.userInstructions}`;
   }

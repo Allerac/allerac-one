@@ -61,7 +61,13 @@ export function installLogInterceptor(
    * Example: console.log('[Telegram] message') → context='Telegram', message='message'
    */
   function parseLogArgs(args: any[]): { context: string; message: string } | null {
-    const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    // Error objects have non-enumerable message/stack — JSON.stringify(error) is
+    // always '{}', which is exactly the unhelpful output this was masking.
+    const msg = args.map(a => {
+      if (typeof a === 'string') return a;
+      if (a instanceof Error) return a.stack || a.message;
+      return JSON.stringify(a);
+    }).join(' ');
     const match = msg.match(/^\[([^\]]+)\]/);
     if (match) {
       const context = match[1];

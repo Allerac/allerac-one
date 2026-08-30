@@ -27,6 +27,7 @@ sequence of implementation.
 | [Detailed Health Activities and Maps](health-detailed-activities.md) | Proposed | Import complete Garmin activity metrics, routes, time series, and privacy-safe maps |
 | [Strava Integration for Health](health-strava-integration.md) | Proposed | Add OAuth, webhooks, streams, and Garmin/Strava activity reconciliation to Health |
 | [Provider-Independent Local Embeddings](provider-independent-local-embeddings.md) | Completed | Replace the retired GitHub Models integration with benchmarked local embeddings behind a provider-neutral contract |
+| [GitHub Models Chat Retirement](github-models-chat-retirement.md) | Proposed | Migrate the still-unmigrated chat-completions side of the GitHub Models retirement (`gpt-4o`, `ministral-3b`) — likely to an Azure AI Foundry project |
 | [n8n Workflow Integration](n8n-workflow-integration.md) | Completed | Run n8n self-hosted alongside Allerac as an optional automation layer for multi-step logic and external-service integration |
 
 ## Long-Term Architecture

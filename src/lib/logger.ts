@@ -49,6 +49,9 @@ export const logBuffer: LogBuffer = g.__allerac_log_buffer;
 function parseArgs(args: any[]): { context: string; message: string } {
   const parts = args.map(a => {
     if (typeof a === 'string') return a;
+    // Error objects have non-enumerable message/stack — JSON.stringify(error) is
+    // always '{}', which is exactly the unhelpful output this was masking.
+    if (a instanceof Error) return a.stack || a.message;
     try { return JSON.stringify(a); } catch { return String(a); }
   });
   const raw = parts.join(' ');
