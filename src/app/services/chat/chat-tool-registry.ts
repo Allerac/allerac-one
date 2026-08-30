@@ -44,10 +44,14 @@ export const PUBLIC_DOMAINS = ['sales', 'openworld'];
 // empty list means "unrestricted" (falls through to the full general-
 // purpose TOOLS array, including execute_shell), not "no tools". See
 // docs/domains/expose-agent-to-website.md ("Tool scoping is deny-by-default
-// in intent, not in code"). openworld is FAQ-answering only, with no
-// create_ticket/lead-capture equivalent — visitors are told to reach out
-// via WhatsApp/e-mail directly instead (see skills/openworld.md).
-export const NO_TOOL_DOMAINS = ['openworld'];
+// in intent, not in code").
+//
+// openworld used to be here (FAQ-answering only), but now has search_web
+// explicitly granted via skill_tools (migration 130_openworld_search_web_tool.sql)
+// so it can look up current foreign-trade news — still no create_ticket/lead-capture
+// equivalent; visitors are told to reach out via WhatsApp/e-mail directly instead
+// (see skills/openworld.md).
+export const NO_TOOL_DOMAINS: string[] = [];
 
 // The sales domain only ever needs to create a ticket (lead capture) — never
 // list, read, or update tickets, which would let one website visitor read

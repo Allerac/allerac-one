@@ -129,9 +129,9 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       temperature: input.temperature ?? 0.7,
       max_tokens: input.maxTokens ?? 2000,
       // Some providers reject an explicit empty tools array outright (only
-      // omitting the field or a non-empty array is valid) — domains like
-      // openworld that intentionally have zero tools (NO_TOOL_DOMAINS in
-      // chat-tool-registry.ts) would otherwise 500 on every message.
+      // omitting the field or a non-empty array is valid) — a domain with zero
+      // tools (NO_TOOL_DOMAINS in chat-tool-registry.ts) would otherwise 500
+      // on every message.
       ...(input.activeTools.length > 0 && { tools: input.activeTools }),
       ...(initialToolChoice !== undefined && { tool_choice: initialToolChoice }),
       userId: input.user.id,
