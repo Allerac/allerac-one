@@ -171,6 +171,14 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       provider = domainDefault.provider;
     }
 
+    // Tagged '[ChatRoute]' (same context the internal /api/chat route uses) so this
+    // shows up under the /logs viewer's existing "CHAT" filter — previously this
+    // endpoint (used by the CLI and public-facing domains like sales/openworld)
+    // logged nothing at all, making it impossible to see which model actually
+    // answered a given request.
+    const providerLabel = provider === 'ollama' ? `● LOCAL · ${modelId}` : `◌ ${provider} · ${modelId}`;
+    console.log(`[ChatRoute] ► ${domain} — ${providerLabel} (api-v1)`);
+
     const cookieStore = await cookies();
     // API-key callers (e.g. the CLI) send no session cookies at all, so the
     // locale cookie is never present for them — fall back to the account's

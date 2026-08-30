@@ -189,7 +189,12 @@ export function RateLimitPanel({ domainSlug, isDark }: { domainSlug: string; isD
     setError(null);
     setStatus(null);
     try {
-      await domainActions.sendTestRateLimitAlert(domainSlug);
+      // Test whatever is currently typed, even if not saved yet — falls back
+      // to the saved values (in the action) for any field left blank here.
+      await domainActions.sendTestRateLimitAlert(domainSlug, {
+        telegramBotToken: botToken.trim() || undefined,
+        telegramChatId: chatId.trim() || undefined,
+      });
       setStatus('Alerta de teste enviado — confira o Telegram.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send test alert.');
@@ -260,6 +265,43 @@ export function RateLimitPanel({ domainSlug, isDark }: { domainSlug: string; isD
               </button>
             )}
           </div>
+
+          <details className={`mb-3 text-xs rounded-md ${isDark ? 'bg-gray-900/40' : 'bg-white'} border ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <summary className={`cursor-pointer select-none px-2.5 py-1.5 font-medium ${text}`}>
+              Como conseguir o bot token e o Chat ID?
+            </summary>
+            <ol className={`px-2.5 pb-2.5 pt-1 space-y-1.5 list-decimal list-inside ${muted}`}>
+              <li>
+                Abra o{' '}
+                <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="underline">
+                  @BotFather
+                </a>{' '}
+                no Telegram, envie <code>/newbot</code> e siga as instruções. Ao final ele te dá o{' '}
+                <strong>bot token</strong> — cole no campo acima.
+              </li>
+              <li>
+                Abra uma conversa com o bot que você acabou de criar e mande qualquer mensagem pra
+                ele (ex: &quot;oi&quot;). Se quiser que o alerta caia num grupo, adicione o bot ao
+                grupo e mande a mensagem lá.
+              </li>
+              <li>
+                No navegador, acesse{' '}
+                <code className="break-all">https://api.telegram.org/bot&lt;SEU_TOKEN&gt;/getUpdates</code>{' '}
+                (troque <code>&lt;SEU_TOKEN&gt;</code> pelo token do passo 1).
+              </li>
+              <li>
+                Procure por <code>&quot;chat&quot;:&#123;&quot;id&quot;: ...&#125;</code> na resposta —
+                esse número é o <strong>Chat ID</strong>. Numa conversa privada é o mesmo número do
+                seu usuário do Telegram; num grupo é um número diferente (geralmente negativo).
+              </li>
+              <li>
+                Cole esse número no campo Chat ID abaixo e use &quot;Enviar alerta de teste&quot;
+                para confirmar — não precisa clicar em Salvar antes, o teste usa o que estiver
+                digitado nos campos. Depois de confirmar, clique em Salvar para manter a configuração.
+              </li>
+            </ol>
+          </details>
+
           <div className="space-y-2">
             <input
               type="password"

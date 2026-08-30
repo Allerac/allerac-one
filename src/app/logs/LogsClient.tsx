@@ -8,6 +8,7 @@ import type { Model } from '@/app/types';
 
 // Lazy-load heavy tabs
 const MetricsTab      = dynamic(() => import('./MetricsTab'),    { ssr: false });
+const BotsTab         = dynamic(() => import('./BotsTab'),       { ssr: false });
 const BenchmarkPanel  = dynamic(() => import('@/app/components/system/BenchmarkPanel'), { ssr: false });
 const SkillEvalPanel  = dynamic(() => import('@/app/components/system/SkillEvalPanel'), { ssr: false });
 const AgentRunsTab    = dynamic(() => import('@/app/components/agents/AgentRunsTab'),   { ssr: false });
@@ -83,7 +84,7 @@ interface LogsClientProps {
 
 export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientProps) {
   const router = useRouter();
-  const [tab, setTab] = useState<'logs' | 'metrics' | 'benchmark' | 'evals' | 'agents'>('logs');
+  const [tab, setTab] = useState<'logs' | 'metrics' | 'bots' | 'benchmark' | 'evals' | 'agents'>('logs');
 
   // Logs state
   const [entries, setEntries]       = useState<LogEntry[]>([]);
@@ -226,6 +227,9 @@ export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientP
         <button style={tabBtnStyle(tab === 'metrics')}    onClick={() => setTab('metrics')}>
           📊 METRICS
         </button>
+        <button style={tabBtnStyle(tab === 'bots')}       onClick={() => setTab('bots')}>
+          🌐 BOTS
+        </button>
         <button style={tabBtnStyle(tab === 'benchmark')}  onClick={() => setTab('benchmark')}>
           🏃 BENCHMARK
         </button>
@@ -311,6 +315,13 @@ export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientP
       {tab === 'metrics' && (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           <MetricsTab />
+        </div>
+      )}
+
+      {/* ── BOTS tab ── */}
+      {tab === 'bots' && (
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <BotsTab />
         </div>
       )}
 

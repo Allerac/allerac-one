@@ -61,16 +61,26 @@ export async function getDomainRateLimitUsage(domainSlug: string) {
   return domainRateLimitSettingsService.getUsage(domainSlug, user.id);
 }
 
-export async function sendTestRateLimitAlert(domainSlug: string) {
+/**
+ * Tests whatever is currently typed in the form (`override`), falling back to
+ * the already-saved settings for any field left blank — so clicking "test"
+ * works whether or not the user has clicked "save" yet.
+ */
+export async function sendTestRateLimitAlert(
+  domainSlug: string,
+  override?: { telegramBotToken?: string; telegramChatId?: string },
+) {
   const user = await requireCurrentUser();
   await assertDomainAccess(user, domainSlug);
-  const settings = await domainRateLimitSettingsService.get(domainSlug);
-  if (!settings.telegramBotToken || !settings.telegramChatId) {
+  const saved = await domainRateLimitSettingsService.get(domainSlug);
+  const telegramBotToken = override?.telegramBotToken || saved.telegramBotToken;
+  const telegramChatId = override?.telegramChatId || saved.telegramChatId;
+  if (!telegramBotToken || !telegramChatId) {
     throw new Error('Configure o bot token e o chat id antes de enviar um teste.');
   }
   await sendTelegramAlert(
-    settings.telegramBotToken,
-    settings.telegramChatId,
+    telegramBotToken,
+    telegramChatId,
     `✅ Teste de alerta para o domínio *${domainSlug}* — configuração funcionando.`,
   );
   return { success: true };
