@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as domainActions from '@/app/actions/domains';
 import * as externalAgentActions from '@/app/actions/external-agents';
+import { validateApiKey } from '@/app/actions/api-keys';
 import { MODELS } from '@/app/services/llm/models';
 import type { DomainTestChatEvent } from '@/app/services/domains/domain-test-chat.service';
 import type { DomainModelSettings } from '@/app/services/domains/domain-model-settings.service';
@@ -91,6 +92,119 @@ export function ModelPicker({ domainSlug, description, isDark }: { domainSlug: s
           ))}
         </select>
       )}
+    </div>
+  );
+}
+
+/**
+ * The domain's bot account is a restricted, non-admin account with no access
+ * to the general Settings screen — so this is the only place it can configure
+ * its own Tavily key (used by search_web). Write-only like the Telegram bot
+ * token in RateLimitPanel: the key is never sent back from the server, only a
+ * "configured" boolean — see actions/domains.ts's getDomainTavilyKeyStatus.
+ */
+export function TavilyKeyPanel({ domainSlug, isDark }: { domainSlug: string; isDark: boolean }) {
+  const [configured, setConfigured] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    void domainActions.getDomainTavilyKeyStatus(domainSlug).then(result => setConfigured(result.configured));
+  }, [domainSlug]);
+
+  const muted = isDark ? 'text-gray-400' : 'text-gray-500';
+  const text = isDark ? 'text-gray-200' : 'text-gray-800';
+  const inputCls = `w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${
+    isDark ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+  }`;
+
+  const handleSave = async () => {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    setError(null);
+    setStatus(null);
+    try {
+      await domainActions.saveDomainTavilyKey(domainSlug, apiKey.trim());
+      setApiKey('');
+      setStatus('Chave da Tavily salva.');
+      setConfigured(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save Tavily key.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    if (!apiKey.trim()) {
+      setError('Digite a chave no campo abaixo pra testar (o teste usa o que está digitado, não a chave já salva).');
+      return;
+    }
+    setTesting(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const result = await validateApiKey('tavily', apiKey.trim());
+      if (result.valid) setStatus('Chave válida.');
+      else setError(result.error ?? 'Chave inválida.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to test key.');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className={`p-4 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xl">🔍</span>
+        <div>
+          <h3 className={`text-sm font-semibold ${text}`}>Tavily Search Key</h3>
+          <p className={`text-xs ${muted}`}>
+            Usada pelo search_web deste domínio. {configured ? 'Configurada — isolada deste domínio, não afeta outros.' : 'Ainda não configurada — cai na chave global do sistema, se houver.'}
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className={`mb-3 p-2.5 rounded-md text-sm ${isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'}`}>
+          {error}
+        </div>
+      )}
+      {status && (
+        <div className={`mb-3 p-2.5 rounded-md text-sm ${isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'}`}>
+          {status}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <input
+          type="password"
+          className={inputCls}
+          placeholder={configured ? 'Chave configurada — deixe em branco pra manter' : 'Chave da API da Tavily'}
+          value={apiKey}
+          onChange={e => setApiKey(e.target.value)}
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={() => void handleSave()}
+            disabled={saving || !apiKey.trim()}
+            className={`text-sm px-3 py-1.5 rounded-md ${isDark ? 'bg-brand-600 text-white hover:bg-brand-500' : 'bg-brand-600 text-white hover:bg-brand-700'} disabled:opacity-50`}
+          >
+            {saving ? 'Salvando…' : 'Salvar'}
+          </button>
+          <button
+            onClick={() => void handleTest()}
+            disabled={testing}
+            className={`text-sm px-3 py-1.5 rounded-md ${isDark ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'} disabled:opacity-50`}
+          >
+            {testing ? 'Testando…' : 'Testar chave'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
