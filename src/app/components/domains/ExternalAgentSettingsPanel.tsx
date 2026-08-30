@@ -25,6 +25,7 @@ export function ModelPicker({ domainSlug, description, isDark }: { domainSlug: s
   const [settings, setSettings] = useState<DomainModelSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
     void domainActions.getDomainModelSettings(domainSlug).then(setSettings);
@@ -40,10 +41,13 @@ export function ModelPicker({ domainSlug, description, isDark }: { domainSlug: s
     if (!settings) return;
     setSaving(true);
     setError(null);
+    setStatus(null);
     const next: DomainModelSettings = { ...settings, inheritGlobal: false, modelId };
     try {
       await domainActions.saveDomainModelSettings(next);
       setSettings(next);
+      const model = MODELS.find(m => m.id === modelId);
+      setStatus(`Modelo salvo: ${model?.name ?? modelId}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save model.');
     } finally {
@@ -64,6 +68,11 @@ export function ModelPicker({ domainSlug, description, isDark }: { domainSlug: s
       {error && (
         <div className={`mb-3 p-2.5 rounded-md text-sm ${isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'}`}>
           {error}
+        </div>
+      )}
+      {status && (
+        <div className={`mb-3 p-2.5 rounded-md text-sm ${isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'}`}>
+          {status}
         </div>
       )}
 

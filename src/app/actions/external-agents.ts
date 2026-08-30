@@ -1,6 +1,6 @@
 'use server';
 
-import { requireCurrentAdmin } from '@/app/lib/auth-session';
+import { assertDomainAccess, requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
 import { PUBLIC_DOMAINS } from '@/app/services/chat/chat-tool-registry';
 import {
   externalAgentMetricsService,
@@ -37,7 +37,12 @@ export async function sendPublicAgentTestMessage(input: {
   conversationId?: string | null;
   modelId?: string | null;
 }) {
-  await requireCurrentAdmin();
+  // Unlike the BOTS dashboard actions above (admin-only, viewed from /logs), this is
+  // invoked from the domain's own self-service screen (/openworld, /sales) — reachable
+  // by that domain's non-admin bot account, not just an admin. Same check as the
+  // model/rate-limit settings actions on that same screen.
+  const user = await requireCurrentUser();
+  await assertDomainAccess(user, input.domainSlug);
   assertPublicDomain(input.domainSlug);
   return sendDomainTestMessage(input);
 }
