@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from '@/app/context/ThemeContext';
 import * as authActions from '@/app/actions/auth';
 import AgentAccessPanel from '@/app/components/settings/AgentAccessPanel';
-import { ModelPicker, RateLimitPanel } from '@/app/components/domains/ExternalAgentSettingsPanel';
+import { ModelPicker, RateLimitPanel, TestChatPanel } from '@/app/components/domains/ExternalAgentSettingsPanel';
 
 // This domain is UI-less by design: the openworld-bot account it belongs to
 // has no access to any other domain, so it can't reach a normal Settings
@@ -59,6 +59,8 @@ export default function OpenWorldAgentClient({ userName, userEmail }: OpenWorldA
         <ModelPicker domainSlug="openworld" description="Which model answers in the OpenWorld FAQ chat." isDark={isDark} />
 
         <RateLimitPanel domainSlug="openworld" isDark={isDark} />
+
+        <TestChatPanel domainSlug="openworld" isDark={isDark} />
 
         <AgentAccessPanel
           isDarkMode={isDark}

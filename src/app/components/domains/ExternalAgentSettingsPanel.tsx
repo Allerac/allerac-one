@@ -9,9 +9,11 @@
 // become a second copy per domain. Both live here once, parameterized by domainSlug,
 // so a third external-agent domain doesn't mean a third copy.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as domainActions from '@/app/actions/domains';
+import * as externalAgentActions from '@/app/actions/external-agents';
 import { MODELS } from '@/app/services/llm/models';
+import type { DomainTestChatEvent } from '@/app/services/domains/domain-test-chat.service';
 import type { DomainModelSettings } from '@/app/services/domains/domain-model-settings.service';
 import type {
   DomainRateLimitSettingsView,
@@ -346,6 +348,160 @@ export function RateLimitPanel({ domainSlug, isDark }: { domainSlug: string; isD
             {testing ? 'Enviando…' : 'Enviar alerta de teste'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface TestChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+  events?: DomainTestChatEvent[];
+}
+
+/**
+ * Lets whoever manages this domain talk to the bot through the exact same
+ * pipeline a real visitor hits (same skill/tools/model resolution), without
+ * touching the public site or counting against the public rate limit — and,
+ * unlike the real widget, shows the raw tool_call/tool_result events. Built
+ * specifically after chasing a model that faked tool calls as plain text
+ * instead of using the API's tool-calling — this is the fast way to catch
+ * that again without a round trip through the live site.
+ */
+export function TestChatPanel({ domainSlug, isDark }: { domainSlug: string; isDark: boolean }) {
+  const [modelId, setModelId] = useState('');
+  const [turns, setTurns] = useState<TestChatTurn[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedEvents, setExpandedEvents] = useState<number | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [turns]);
+
+  const muted = isDark ? 'text-gray-400' : 'text-gray-500';
+  const text = isDark ? 'text-gray-200' : 'text-gray-800';
+  const inputCls = `w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${
+    isDark ? 'border-gray-600 bg-gray-700 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+  }`;
+
+  const handleReset = () => {
+    conversationIdRef.current = null;
+    setTurns([]);
+    setError(null);
+  };
+
+  const handleSend = async () => {
+    const message = input.trim();
+    if (!message || sending) return;
+    setInput('');
+    setError(null);
+    setTurns(prev => [...prev, { role: 'user', content: message }]);
+    setSending(true);
+    try {
+      const result = await externalAgentActions.sendPublicAgentTestMessage({
+        domainSlug,
+        message,
+        conversationId: conversationIdRef.current,
+        modelId: modelId || null,
+      });
+      conversationIdRef.current = result.conversationId;
+      setTurns(prev => [...prev, { role: 'assistant', content: result.content, events: result.events }]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send test message.');
+      setTurns(prev => prev.slice(0, -1));
+      setInput(message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className={`p-4 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🧪</span>
+          <div>
+            <h3 className={`text-sm font-semibold ${text}`}>Test Chat</h3>
+            <p className={`text-xs ${muted}`}>Fala com o bot como um visitante — sem contar no rate limit público, e mostra as chamadas de tool.</p>
+          </div>
+        </div>
+        <button onClick={handleReset} className={`text-xs underline flex-shrink-0 ${muted}`}>Nova conversa</button>
+      </div>
+
+      <div className="mb-3">
+        <select value={modelId} onChange={e => setModelId(e.target.value)} className={inputCls}>
+          <option value="">— usar modelo configurado do domínio —</option>
+          {MODELS.map(model => (
+            <option key={model.id} value={model.id}>{model.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {error && (
+        <div className={`mb-3 p-2.5 rounded-md text-sm ${isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'}`}>
+          {error}
+        </div>
+      )}
+
+      <div ref={scrollRef} className={`h-80 overflow-y-auto rounded-md border p-3 mb-3 space-y-3 ${isDark ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-white'}`}>
+        {turns.length === 0 && (
+          <p className={`text-xs ${muted}`}>Manda uma mensagem de teste pra ver a resposta real do bot.</p>
+        )}
+        {turns.map((turn, i) => (
+          <div key={i} className={`flex flex-col gap-1 ${turn.role === 'user' ? 'items-end' : 'items-start'}`}>
+            <div className={`max-w-[85%] px-3 py-2 rounded-lg text-sm whitespace-pre-wrap ${
+              turn.role === 'user'
+                ? 'bg-brand-600 text-white'
+                : isDark ? 'bg-gray-800 text-gray-100' : 'bg-gray-100 text-gray-900'
+            }`}>
+              {turn.content}
+            </div>
+            {turn.role === 'assistant' && !!turn.events?.length && (
+              <button onClick={() => setExpandedEvents(expandedEvents === i ? null : i)} className={`text-[10px] underline ${muted}`}>
+                {expandedEvents === i ? 'esconder' : 'ver'} {turn.events.filter(e => e.type === 'tool_call').length} chamada(s) de tool
+              </button>
+            )}
+            {turn.role === 'assistant' && expandedEvents === i && turn.events && (
+              <div className={`w-full text-[10px] font-mono rounded p-2 space-y-1 break-words ${isDark ? 'bg-gray-950 text-gray-400' : 'bg-gray-50 text-gray-600'}`}>
+                {turn.events.filter(e => e.type === 'tool_call' || e.type === 'tool_result').map((event, j) => (
+                  <div key={j}>
+                    <span className={event.type === 'tool_call' ? 'text-amber-500' : event.success ? 'text-green-500' : 'text-red-500'}>
+                      {event.type}
+                    </span>
+                    {' '}{event.name}
+                    {!!event.args && <span> — {JSON.stringify(event.args)}</span>}
+                    {event.data !== undefined && (
+                      <div className="pl-3 opacity-75">{JSON.stringify(event.data).slice(0, 400)}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        {sending && <p className={`text-xs ${muted}`}>Pensando…</p>}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
+          placeholder="Mensagem de teste..."
+          disabled={sending}
+          className={inputCls}
+        />
+        <button
+          onClick={() => void handleSend()}
+          disabled={sending || !input.trim()}
+          className={`text-sm px-4 py-2 rounded-md whitespace-nowrap ${isDark ? 'bg-brand-600 text-white hover:bg-brand-500' : 'bg-brand-600 text-white hover:bg-brand-700'} disabled:opacity-50`}
+        >
+          Enviar
+        </button>
       </div>
     </div>
   );
