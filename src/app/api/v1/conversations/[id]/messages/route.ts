@@ -16,6 +16,7 @@ import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
 import { PUBLIC_DOMAINS } from '@/app/services/chat/chat-tool-registry';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { domainRateLimitSettingsService } from '@/app/services/domains/domain-rate-limit-settings.service';
 
 const chatService = new ChatService();
 const userSettingsService = new UserSettingsService();
@@ -131,8 +132,11 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     // Extra daily volume cap for public domains — every anonymous visitor shares this
     // one service account, so 'chat's per-minute window alone doesn't stop sustained
     // abuse (VPN/IP rotation) from running up real LLM spend over a day.
+    let domainRateLimitSettings: Awaited<ReturnType<typeof domainRateLimitSettingsService.get>> | null = null;
     if (isPublicDomain) {
-      publicLimitResult = acquireOperationLimit('public-chat', user.id);
+      domainRateLimitSettings = await domainRateLimitSettingsService.get(domain);
+      const override = domainRateLimitSettingsService.toOverride(domainRateLimitSettings);
+      publicLimitResult = acquireOperationLimit('public-chat', user.id, Date.now(), override);
       if (!publicLimitResult.allowed) {
         // `finally` below releases the already-acquired 'chat' lease.
         return Response.json(
@@ -146,6 +150,10 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
           { status: 429, headers: publicLimitResult.headers },
         );
       }
+
+      // Fire-and-forget: never let alert delivery affect the chat response.
+      const usage = domainRateLimitSettingsService.usageFromSettings(domainRateLimitSettings, user.id);
+      void domainRateLimitSettingsService.checkAndAlert(domain, usage, domainRateLimitSettings);
     }
 
     let modelId = parsed.data.model;

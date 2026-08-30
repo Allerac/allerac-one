@@ -176,6 +176,24 @@ cost) without bound. See
 [public-agent-security-considerations.md](./public-agent-security-considerations.md) for the full
 threat model this is addressing, and what's still open.
 
+### Per-domain override + Telegram alerting
+
+The `public-chat` limit's *value* (300 requests/24h by default) used to be one env var shared by
+every domain in `PUBLIC_DOMAINS` — raising it for `openworld` would have raised it for `sales` too.
+`domain_rate_limit_settings` (migration 129) lets each domain override its own
+`daily_requests`/`daily_window_seconds`, resolved in `messages/route.ts` via
+`domainRateLimitSettingsService.get(domain)` → `toOverride()` → passed as `acquireOperationLimit`'s
+4th argument. No row for a domain = falls back to the global env vars, unchanged.
+
+The same table can hold a Telegram bot token + chat id (token stored encrypted, see
+`encryption.service.ts`) and a list of usage-percent thresholds (default `[50, 90]`).
+`checkAndAlert` fires a one-off `sendTelegramAlert` (plain Bot API `sendMessage` call, not the
+polling conversational bot in `telegram-bot.service.ts`) the first time usage crosses each
+threshold, tracked in an in-memory per-domain set — same "resets on restart" caveat as the limiter
+itself. Configured from the domain's own self-service screen (see `RateLimitPanel` in
+`OpenWorldAgentClient.tsx`), which also shows current usage via the new, non-consuming
+`peekOperationLimit`.
+
 ## Windows/PowerShell shell gotchas hit while operating this
 
 - `wrangler login`'s browser OAuth flow can hang forever on a remote/VM host if the browser that

@@ -3,6 +3,7 @@
 import {
   acquireOperationLimit,
   operationLimitResponse,
+  peekOperationLimit,
   resetOperationLimitsForTests,
 } from '@/app/lib/operation-limiter';
 
@@ -102,5 +103,32 @@ describe('operation limiter', () => {
 
     if (first.allowed) first.lease.release();
     expect(acquireOperationLimit('model-download', 'admin-b', 1_002).allowed).toBe(true);
+  });
+
+  it('applies a per-call override to requests and window, ignoring the env default', () => {
+    process.env.RATE_LIMIT_PUBLIC_CHAT_REQUESTS = '300';
+    process.env.RATE_LIMIT_PUBLIC_CHAT_WINDOW_SECONDS = '86400';
+
+    const override = { requests: 1, windowMs: 5_000 };
+    const first = acquireOperationLimit('public-chat', 'bot-openworld', 1_000, override);
+    expect(first.allowed).toBe(true);
+
+    const denied = acquireOperationLimit('public-chat', 'bot-openworld', 1_001, override);
+    expect(denied).toMatchObject({ allowed: false, reason: 'rate' });
+
+    // A different account (e.g. the sales bot) is unaffected by openworld's override.
+    expect(acquireOperationLimit('public-chat', 'bot-sales', 1_002).allowed).toBe(true);
+  });
+
+  it('peekOperationLimit reports usage without consuming a slot', () => {
+    const override = { requests: 5, windowMs: 10_000 };
+    acquireOperationLimit('public-chat', 'bot-openworld', 1_000, override);
+    acquireOperationLimit('public-chat', 'bot-openworld', 1_001, override);
+
+    const first = peekOperationLimit('public-chat', 'bot-openworld', override, 1_002);
+    expect(first).toMatchObject({ used: 2, limit: 5, windowSeconds: 10 });
+
+    const second = peekOperationLimit('public-chat', 'bot-openworld', override, 1_003);
+    expect(second.used).toBe(2);
   });
 });
