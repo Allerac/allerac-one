@@ -64,6 +64,37 @@ describe('runChatPipeline', () => {
     expect(emit).toHaveBeenCalledWith({ type: 'token', content: 'hello' });
   });
 
+  test('never sends tool_choice when there are no tools available (e.g. NO_TOOL_DOMAINS)', async () => {
+    // OpenAI rejects the whole request with 'tool_choice is only allowed when tools are
+    // specified' if tool_choice is present without tools — regressed for domains with
+    // zero tools (like openworld) on any non-gemini provider.
+    chatCompletion.mockResolvedValue({ choices: [{ message: { role: 'assistant', content: '' } }] });
+    streamChatCompletion.mockReturnValue(asyncTokens(['ok']));
+
+    await runChatPipeline({
+      provider: 'openai',
+      modelBaseUrl: 'https://api.openai.com/v1',
+      modelId: 'gpt-5.6-sol',
+      githubToken: '',
+      googleApiKey: '',
+      anthropicApiKey: '',
+      openaiApiKey: 'key',
+      user,
+      conversationId: 'conv-1',
+      message: 'hi',
+      locale: 'en',
+      activeSkill: null,
+      activeTools: [],
+      messages: [{ role: 'user', content: 'hi' }],
+      emit: jest.fn(),
+      keepalive: jest.fn(),
+    });
+
+    const callArgs = chatCompletion.mock.calls[0][0];
+    expect(callArgs.tool_choice).toBeUndefined();
+    expect(callArgs.tools).toBeUndefined();
+  });
+
   test('executes tools before streaming', async () => {
     chatCompletion
       .mockResolvedValueOnce({

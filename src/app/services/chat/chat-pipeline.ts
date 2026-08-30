@@ -110,7 +110,11 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
     && input.activeTools.some(tool => tool.function?.name === requestedPersistenceTool)
     ? requestedPersistenceTool
     : null;
-  const initialToolChoice = availableRequestedTool
+  // tool_choice is only meaningful (and, for OpenAI, only accepted at all) when there's
+  // at least one tool to choose from — domains with zero tools (e.g. NO_TOOL_DOMAINS)
+  // must never send it, or the OpenAI provider rejects the whole request outright.
+  const initialToolChoice = input.activeTools.length === 0 ? undefined
+    : availableRequestedTool
     ? { type: 'function', function: { name: availableRequestedTool } }
     : forceTool
     ? { type: 'function', function: { name: forceTool } }
