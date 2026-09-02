@@ -7,6 +7,7 @@ import * as domainActions from '@/app/actions/domains';
 import { useTheme } from '@/app/context/ThemeContext';
 import { DomainToolbar, SystemPromptPanel, ToolsPanel, type EditingState, type Skill } from '@/app/components/domains/DomainSkillEditor';
 import DomainSkillChatPanel from '@/app/components/domains/DomainSkillChatPanel';
+import SkillImprovementsPanel from '@/app/components/domains/SkillImprovementsPanel';
 
 interface DomainBinding {
   domain_slug: string;
@@ -53,6 +54,7 @@ export default function DomainsPageClient() {
     () => typeof window !== 'undefined' ? localStorage.getItem('selected_model') : null
   );
   const [mobileTab, setMobileTab] = useState<MobileTab>('prompt');
+  const [improvementsOpen, setImprovementsOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -129,6 +131,22 @@ export default function DomainsPageClient() {
     setSkills(prev => prev.map(s => s.id === editing?.skillId ? { ...s, content: updatedContent } : s));
   };
 
+  const jumpToSkill = async (domainSlug: string, skillId: string) => {
+    const domain = DOMAINS.find(dm => dm.slug === domainSlug);
+    if (!domain) return;
+    setImprovementsOpen(false);
+    setSelectedSlug(domainSlug);
+    setLoadingEdit(true);
+    const skill = skills.find(s => s.id === skillId);
+    const [tools, modelSettings] = await Promise.all([
+      skillActions.getSkillTools(skillId),
+      domainActions.getDomainModelSettings(domainSlug),
+    ]);
+    setEditing({ domain, skillId, content: skill?.content || '', tools, modelSettings });
+    setLoadingEdit(false);
+    setMobileTab('assistant');
+  };
+
   const leaveDomains = () => {
     if (window.history.length > 1) {
       router.back();
@@ -146,15 +164,31 @@ export default function DomainsPageClient() {
           <span className="text-lg">🌐</span>
           <h1 className={`text-base font-semibold ${d ? 'text-gray-100' : 'text-gray-900'}`}>Domain Configuration</h1>
         </div>
-        <button
-          onClick={leaveDomains}
-          className={`p-1.5 rounded-lg transition-colors ${d ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setImprovementsOpen(true)}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${d ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}
+          >
+            🕘 Improvements
+          </button>
+          <button
+            onClick={leaveDomains}
+            className={`p-1.5 rounded-lg transition-colors ${d ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
+
+      {improvementsOpen && (
+        <SkillImprovementsPanel
+          isDark={d}
+          onClose={() => setImprovementsOpen(false)}
+          onJumpToSkill={jumpToSkill}
+        />
+      )}
 
       {loading || !editing ? (
         <div className="flex justify-center py-12">

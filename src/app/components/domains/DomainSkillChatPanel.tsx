@@ -10,10 +10,18 @@ interface ProposedChange {
   approved: boolean;
 }
 
+interface AppliedChange {
+  old: string;
+  new: string;
+  rationale: string;
+}
+
 interface ChatTurn {
   role: 'user' | 'assistant';
   content: string;
+  messageId?: string;
   changes?: ProposedChange[];
+  appliedChanges?: AppliedChange[];
   skipped?: number;
 }
 
@@ -28,6 +36,7 @@ interface Props {
 
 export default function DomainSkillChatPanel({ skillId, skillName, domainSlug, defaultModelId, isDark: d, onApplied }: Props) {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [applyingTurn, setApplyingTurn] = useState<number | null>(null);
@@ -35,9 +44,39 @@ export default function DomainSkillChatPanel({ skillId, skillName, domainSlug, d
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Rehydrate this skill's persisted conversation — it survives skill
+  // switches and page reloads instead of resetting every time.
   useEffect(() => {
+    let cancelled = false;
     setTurns([]);
     setError(null);
+    setLoadingHistory(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/domains/skill-chat/history?skillId=${skillId}`);
+        const data = await res.json();
+        if (cancelled || !res.ok) return;
+        setTurns((data.messages ?? []).map((m: {
+          id: string; role: 'user' | 'assistant'; content: string;
+          changes: AppliedChange[] | null; applied_changes: AppliedChange[] | null;
+        }): ChatTurn => m.role === 'user'
+          ? { role: 'user', content: m.content }
+          : {
+            role: 'assistant',
+            content: m.content,
+            messageId: m.id,
+            appliedChanges: m.applied_changes ?? undefined,
+            changes: !m.applied_changes && m.changes
+              ? m.changes.map(c => ({ ...c, approved: true }))
+              : undefined,
+          }));
+      } catch {
+        // Non-fatal — chat still works without prior history.
+      } finally {
+        if (!cancelled) setLoadingHistory(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [skillId]);
 
   useEffect(() => {
@@ -71,6 +110,7 @@ export default function DomainSkillChatPanel({ skillId, skillName, domainSlug, d
       setTurns(prev => [...prev, {
         role: 'assistant',
         content: data.reply,
+        messageId: data.messageId ?? undefined,
         changes: (data.changes ?? []).map((c: { old: string; new: string; rationale: string }) => ({ ...c, approved: true })),
         skipped: data.skipped ?? 0,
       }]);
@@ -97,15 +137,16 @@ export default function DomainSkillChatPanel({ skillId, skillName, domainSlug, d
     setApplyingTurn(turnIndex);
     setError(null);
     try {
+      const appliedPayload = approved.map(({ old, new: next, rationale }) => ({ old, new: next, rationale }));
       const res = await fetch('/api/domains/skill-chat/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillId, changes: approved.map(({ old, new: next, rationale }) => ({ old, new: next, rationale })) }),
+        body: JSON.stringify({ skillId, changes: appliedPayload, messageId: turn.messageId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Apply failed');
       onApplied(data.updatedContent);
-      setTurns(prev => prev.map((t, i) => i !== turnIndex ? t : { ...t, changes: [] }));
+      setTurns(prev => prev.map((t, i) => i !== turnIndex ? t : { ...t, changes: undefined, appliedChanges: appliedPayload }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Apply failed');
     } finally {
@@ -130,7 +171,7 @@ export default function DomainSkillChatPanel({ skillId, skillName, domainSlug, d
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
-        {turns.length === 0 && (
+        {!loadingHistory && turns.length === 0 && (
           <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>
             Describe what you&rsquo;d like to change about this skill&rsquo;s behavior — tone, rules, format — and I&rsquo;ll propose targeted edits to its system prompt for you to review.
           </p>
@@ -185,8 +226,24 @@ export default function DomainSkillChatPanel({ skillId, skillName, domainSlug, d
                 )}
               </div>
             )}
+
+            {turn.appliedChanges && turn.appliedChanges.length > 0 && (
+              <div className="w-full flex flex-col gap-1.5">
+                <span className={`text-[10px] uppercase tracking-wide ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+                  ✓ Applied {turn.appliedChanges.length} change(s)
+                </span>
+                {turn.appliedChanges.map((change, j) => (
+                  <div key={j} className={`px-2.5 py-1.5 rounded-lg border ${d ? 'border-gray-800 bg-gray-800/40' : 'border-gray-100 bg-gray-50'}`}>
+                    <span className={`text-[11px] ${d ? 'text-gray-400' : 'text-gray-500'}`}>{change.rationale}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
+        {loadingHistory && (
+          <div className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>Loading history…</div>
+        )}
         {sending && (
           <div className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>Thinking…</div>
         )}

@@ -8,8 +8,12 @@
  * whose stricter ownership check (no admin bypass) is a deliberate, tested
  * security boundary for that separate surface.
  *
- * POST body: { skillId: string, changes: [{old, new, rationale}] }
+ * POST body: { skillId: string, changes: [{old, new, rationale}], messageId?: string }
  * Response: { ok: true, updatedContent: string }
+ *
+ * `messageId` (the skill-chat assistant turn these changes came from, if any)
+ * is optional so this endpoint stays usable by any future caller that applies
+ * changes outside that chat flow.
  */
 
 import {
@@ -17,10 +21,12 @@ import {
   requireCurrentAdmin,
 } from '@/app/lib/auth-session';
 import { SkillsService } from '@/app/services/skills/skills.service';
+import { skillChatHistoryService } from '@/app/services/skills/skill-chat-history.service';
 
 const skillsService = new SkillsService();
 
 const SKILL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f-]{27,35}$/i;
+const MESSAGE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f-]{27,35}$/i;
 const MAX_CHANGES = 6;
 const MAX_CHANGE_TEXT_LENGTH = 20_000;
 
@@ -40,13 +46,13 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Authentication failed' }, { status: 500 });
   }
 
-  let body: { skillId?: string; changes?: Change[] };
+  let body: { skillId?: string; changes?: Change[]; messageId?: string };
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-  const { skillId, changes } = body;
+  const { skillId, changes, messageId } = body;
   if (
     !skillId
     || !SKILL_ID_PATTERN.test(skillId)
@@ -60,8 +66,9 @@ export async function POST(request: Request) {
       || change.old.length > MAX_CHANGE_TEXT_LENGTH
       || change.new.length > MAX_CHANGE_TEXT_LENGTH
     ))
+    || (messageId !== undefined && !MESSAGE_ID_PATTERN.test(messageId))
   ) {
-    return Response.json({ error: 'Invalid skillId or changes' }, { status: 400 });
+    return Response.json({ error: 'Invalid skillId, changes, or messageId' }, { status: 400 });
   }
 
   const skill = await skillsService.getSkillForUser(skillId, user.id);
@@ -71,6 +78,7 @@ export async function POST(request: Request) {
 
   let updatedContent = skill.content;
   const applied: string[] = [];
+  const appliedChanges: Change[] = [];
   const failed: string[] = [];
 
   for (const change of changes) {
@@ -80,6 +88,7 @@ export async function POST(request: Request) {
     }
     updatedContent = updatedContent.replace(change.old, change.new);
     applied.push(change.rationale);
+    appliedChanges.push(change);
   }
 
   if (applied.length === 0) {
@@ -91,6 +100,14 @@ export async function POST(request: Request) {
   });
   if (!updated) {
     return Response.json({ error: 'Skill could not be updated' }, { status: 403 });
+  }
+
+  if (messageId) {
+    try {
+      await skillChatHistoryService.recordAppliedChanges(messageId, user.id, appliedChanges);
+    } catch (err) {
+      console.error('[SkillChatApply] Failed to record applied changes:', err);
+    }
   }
 
   return Response.json({

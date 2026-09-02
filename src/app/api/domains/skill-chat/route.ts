@@ -15,6 +15,7 @@ import {
 } from '@/app/lib/auth-session';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SkillsService } from '@/app/services/skills/skills.service';
+import { skillChatHistoryService } from '@/app/services/skills/skill-chat-history.service';
 import { generateResponse } from '../../skill-eval/generate-response';
 
 const userSettingsService = new UserSettingsService();
@@ -182,9 +183,22 @@ Return ONLY valid JSON, no markdown fences, no explanation outside the JSON:
     return true;
   }).slice(0, MAX_CHANGES);
 
+  // Persist the turn so it survives a skill switch/reload, and so applied
+  // changes can be browsed later across skills (see skill-chat/improvements).
+  let messageId: string | null = null;
+  try {
+    await skillChatHistoryService.logUserMessage(skillId, user.id, domainSlug, message);
+    messageId = await skillChatHistoryService.logAssistantReply(
+      skillId, user.id, domainSlug, result.reply ?? '', validChanges,
+    );
+  } catch (err) {
+    console.error('[SkillChat] Failed to persist chat history:', err);
+  }
+
   return Response.json({
     reply: result.reply ?? '',
     changes: validChanges,
     skipped: (result.changes ?? []).length - validChanges.length,
+    messageId,
   });
 }
