@@ -4,7 +4,7 @@ import { VectorSearchService } from '@/app/services/rag/vector-search.service';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
-import { resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { PUBLIC_DOMAINS, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
 import { loadChatRuntimeContext } from '@/app/services/chat/chat-runtime-context';
@@ -63,6 +63,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
 
   const history = await chatService.loadMessages(input.conversationId, input.user.id);
   const isNewConversation = history.length === 0;
+  const isPublicDomain = PUBLIC_DOMAINS.includes(input.domain);
   const processedImages = await processChatImages(input.imageAttachments);
   const runtimeContext = await loadChatRuntimeContext(input.user.id, input.domain, input.provider);
   const {
@@ -84,6 +85,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     isNewConversation,
     preSelectedSkillId: input.preSelectedSkillId,
     defaultSkillName: input.defaultSkillName,
+    publicDomain: isPublicDomain,
     emit,
   });
 
@@ -102,31 +104,37 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
   }
 
   let relevantContext = '';
-  try {
-    const embeddingService = new EmbeddingService();
-    const vectorService = new VectorSearchService(embeddingService);
-    relevantContext = await vectorService.getRelevantContext(input.message, input.user.id, { domainSlug: input.domain });
-  } catch (error) {
-    console.log('[ChatExecution] RAG search failed:', error);
+  if (!isPublicDomain) {
+    try {
+      const embeddingService = new EmbeddingService();
+      const vectorService = new VectorSearchService(embeddingService);
+      relevantContext = await vectorService.getRelevantContext(input.message, input.user.id, { domainSlug: input.domain });
+    } catch (error) {
+      console.log('[ChatExecution] RAG search failed:', error);
+    }
   }
 
   let skillContent = '';
   if (activeSkill) {
     try {
-      skillContent = await skillsService.getEnrichedSkillContent(activeSkill.id, input.user.id, input.message);
+      // Public skills get only their reviewed static content. Enrichment can
+      // append account-scoped learned memories or documents.
+      skillContent = isPublicDomain
+        ? activeSkill.content
+        : await skillsService.getEnrichedSkillContent(activeSkill.id, input.user.id, input.message);
     } catch (error) {
       console.error('[ChatExecution] Skill content failed:', error);
     }
   }
 
   const enrichedSystemMessage = buildChatSystemPrompt({
-    user: input.user,
+    user: isPublicDomain ? { ...input.user, name: '' } : input.user,
     locale: input.locale,
     domain: input.domain,
-    userLocation,
+    userLocation: isPublicDomain ? null : userLocation,
     tavilyConfigured: Boolean(tavilyApiKey),
-    userInstructions,
-    postContext: input.postContext,
+    userInstructions: isPublicDomain ? '' : userInstructions,
+    postContext: isPublicDomain ? undefined : input.postContext,
     activeSkill,
     skillContent,
     relevantContext,

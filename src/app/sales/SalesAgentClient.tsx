@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from '@/app/context/ThemeContext';
 import * as authActions from '@/app/actions/auth';
 import AgentAccessPanel from '@/app/components/settings/AgentAccessPanel';
-import { ModelPicker, RateLimitPanel, TestChatPanel, TavilyKeyPanel } from '@/app/components/domains/ExternalAgentSettingsPanel';
+import { ModelPicker, RateLimitPanel, TestChatPanel } from '@/app/components/domains/ExternalAgentSettingsPanel';
 
 // This domain is UI-less by design: the sales-bot account it belongs to has
 // no access to any other domain, so it can't reach a normal Settings page.
@@ -55,8 +55,6 @@ export default function SalesAgentClient({ userName, userEmail }: SalesAgentClie
         </p>
 
         <ModelPicker domainSlug="sales" description="Which model answers in the sales chat widget." isDark={isDark} />
-
-        <TavilyKeyPanel domainSlug="sales" isDark={isDark} />
 
         <RateLimitPanel domainSlug="sales" isDark={isDark} />
 

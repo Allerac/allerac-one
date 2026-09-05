@@ -57,4 +57,13 @@ describe('resolveChatTools', () => {
     expect(chatNames).not.toContain('search_memory');
     expect(chatNames).not.toContain('delete_memory');
   });
+
+  test('gives sales exactly zero tools even when its skill assignment is missing', async () => {
+    mockedGetSkillTools.mockResolvedValue([]);
+
+    const tools = await resolveChatTools('sales-skill', 'sales');
+
+    expect(tools).toEqual([]);
+    expect(mockedGetSkillTools).not.toHaveBeenCalled();
+  });
 });

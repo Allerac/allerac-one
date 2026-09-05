@@ -100,6 +100,18 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
 
     const isPublicDomain = PUBLIC_DOMAINS.includes(domain);
 
+    if (isPublicDomain && (
+      parsed.data.preSelectedSkillId
+      || parsed.data.defaultSkillName
+      || parsed.data.postContext
+    )) {
+      return apiError(
+        'validation_error',
+        'Skill selection and post context are not allowed for public domains',
+        400,
+      );
+    }
+
     if (isPublicDomain) {
       const existingCount = await chatService.countMessages(id);
       if (existingCount >= PUBLIC_DOMAIN_MAX_MESSAGES_PER_CONVERSATION) {

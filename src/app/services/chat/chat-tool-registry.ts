@@ -53,19 +53,17 @@ export const PUBLIC_DOMAINS = ['sales', 'openworld'];
 // (see skills/openworld.md).
 export const NO_TOOL_DOMAINS: string[] = [];
 
-// The sales domain only ever needs to create a ticket (lead capture) — never
-// list, read, or update tickets, which would let one website visitor read
-// another visitor's captured lead (tickets are scoped by the calling
-// account, and every visitor shares the same sales-bot account/conversation
-// history model).
-const SALES_TICKET_TOOL_DEFINITIONS = TICKETS_TOOL_DEFINITIONS.filter(
-  (tool: any) => tool.function.name === 'create_ticket',
-);
-
 export async function resolveChatTools(
   skillId: string | null | undefined,
   domain: string,
 ): Promise<any[]> {
+  // Sales is deliberately text-only. Check the domain before querying its
+  // skill: missing tool rows must not fall through to the unrestricted base
+  // registry below.
+  if (domain === 'sales') {
+    return [];
+  }
+
   if (NO_TOOL_DOMAINS.includes(domain)) {
     return [];
   }
@@ -96,6 +94,5 @@ export async function resolveChatTools(
     ...(domain === 'email' ? EMAIL_TOOL_DEFINITIONS : []),
     ...(domain === 'jobs' ? JOBS_TOOL_DEFINITIONS : []),
     ...(domain === 'tickets' ? TICKETS_TOOL_DEFINITIONS : []),
-    ...(domain === 'sales' ? SALES_TICKET_TOOL_DEFINITIONS : []),
   ];
 }

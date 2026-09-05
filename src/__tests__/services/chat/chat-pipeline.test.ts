@@ -128,7 +128,7 @@ describe('runChatPipeline', () => {
       message: 'news',
       locale: 'en',
       activeSkill: null,
-      activeTools: [],
+      activeTools: [{ type: 'function', function: { name: 'search_web' } }],
       messages,
       emit,
       keepalive: jest.fn(),
@@ -142,6 +142,56 @@ describe('runChatPipeline', () => {
     expect(messages).toContainEqual(expect.objectContaining({
       role: 'tool',
       tool_call_id: 'call-1',
+    }));
+  });
+
+  test('refuses a tool call that was not in the active allowlist', async () => {
+    chatCompletion
+      .mockResolvedValueOnce({
+        choices: [{
+          message: {
+            role: 'assistant',
+            tool_calls: [{
+              id: 'call-1',
+              function: { name: 'execute_shell', arguments: '{"command":"whoami"}' },
+            }],
+          },
+        }],
+      })
+      .mockResolvedValueOnce({ choices: [{ message: { role: 'assistant', content: '' } }] });
+    streamChatCompletion.mockReturnValue(asyncTokens(['denied']));
+    const messages: any[] = [{ role: 'user', content: 'run this' }];
+    const emit = jest.fn();
+
+    await expect(runChatPipeline({
+      provider: 'openai',
+      modelBaseUrl: 'https://api.openai.com/v1',
+      modelId: 'model',
+      githubToken: '',
+      googleApiKey: '',
+      anthropicApiKey: '',
+      openaiApiKey: 'key',
+      user,
+      conversationId: 'conv-1',
+      domain: 'sales',
+      message: 'run this',
+      locale: 'en',
+      activeSkill: null,
+      activeTools: [],
+      messages,
+      emit,
+      keepalive: jest.fn(),
+    })).resolves.toBe('denied');
+
+    expect(executeChatTool).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledWith({
+      type: 'tool_result',
+      name: 'execute_shell',
+      success: false,
+    });
+    expect(messages).toContainEqual(expect.objectContaining({
+      role: 'tool',
+      content: expect.stringContaining('not allowed'),
     }));
   });
 

@@ -68,6 +68,9 @@ function explicitlyRequestedPersistenceTool(message: string): string | null {
 }
 
 export async function runChatPipeline(input: RunChatPipelineInput): Promise<string> {
+  const allowedToolNames = new Set(
+    input.activeTools.map(tool => tool.function?.name).filter(Boolean),
+  );
   let activeModelId = input.modelId;
   let llmService = new LLMService(input.provider, input.modelBaseUrl, {
     githubToken: input.githubToken,
@@ -151,6 +154,19 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       const toolArgs = parseToolArguments(toolCall.function.arguments);
       input.emit({ type: 'tool_call', name: toolName, args: toolArgs });
 
+      // Treat the active tool list as an authorization boundary, not merely a
+      // hint sent to the model. Providers can return malformed or unexpected
+      // tool calls and those must never reach the runner.
+      if (!allowedToolNames.has(toolName)) {
+        input.emit({ type: 'tool_result', name: toolName, success: false });
+        input.messages.push({
+          role: 'tool',
+          tool_call_id: toolCallId,
+          content: JSON.stringify({ error: `Tool ${toolName} is not allowed` }),
+        });
+        continue;
+      }
+
       try {
         const toolResult = await executeChatTool(toolName, toolArgs, {
           user: input.user,
@@ -189,8 +205,8 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       model: activeModelId,
       temperature: input.temperature ?? 0.7,
       max_tokens: input.maxTokens ?? 2000,
-      tools: input.activeTools,
-      tool_choice: 'auto',
+      ...(input.activeTools.length > 0 && { tools: input.activeTools }),
+      ...(input.activeTools.length > 0 && input.provider !== 'gemini' && { tool_choice: 'auto' }),
       userId: input.user.id,
       conversationId: input.conversationId,
     });

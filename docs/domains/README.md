@@ -32,7 +32,7 @@ Allerac One
 | [tickets](tickets.md) | Tickets | Active | 🎫 | tickets | GitHub API |
 | [recipes](recipes.md) | Recipes | Inactive | 🍳 | chef | None |
 | [finance](finance.md) | Finance | Inactive | 💰 | finance | None |
-| sales | Sales | Active | 📣 | sales | None (public, restricted — see [expose-agent-to-website.md](./expose-agent-to-website.md)) |
+| sales | Sales | Active | 📣 | sales | None (public, text-only — see [public-domain-isolation-review.md](./public-domain-isolation-review.md)) |
 
 ## What a domain owns
 

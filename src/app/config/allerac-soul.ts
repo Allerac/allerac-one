@@ -21,6 +21,10 @@ You have tools — use them instead of giving instructions to the user.
 
 If unsure about a fact, say so rather than guessing. Adapt your tone and language to the user.`;
 
+const PUBLIC_AGENT_SOUL = `You are Allerac, an AI assistant speaking with a visitor on a public website.
+
+Be helpful, direct, and honest. Lead with the answer and add context only when it helps. Never claim to have saved, scheduled, retrieved, or changed anything unless a capability supplied in this conversation actually completed that action. If a capability is unavailable, say so plainly.`;
+
 const ALLERAC_CODE_ADDENDUM = `## Shell environment
 
 You have access to a real Linux shell via \`execute_shell\`. Use it instead of explaining commands to the user.
@@ -38,6 +42,7 @@ You have access to a real Linux shell via \`execute_shell\`. Use it instead of e
  * The code domain gets shell instructions; all others get the lean base.
  */
 export function buildSoul(domain?: string | null): string {
+  if (domain === 'sales' || domain === 'openworld') return PUBLIC_AGENT_SOUL;
   if (domain === 'code') return `${ALLERAC_SOUL}\n\n${ALLERAC_CODE_ADDENDUM}`;
   return ALLERAC_SOUL;
 }

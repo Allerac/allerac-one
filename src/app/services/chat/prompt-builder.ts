@@ -34,14 +34,15 @@ export function buildChatSystemPrompt(input: PromptBuilderInput): string {
   const time = now.toTimeString().split(' ')[0];
   const timezone = input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const contextLines: string[] = [];
+  const isPublicDomain = input.domain === 'sales' || input.domain === 'openworld';
 
-  if (input.user.name) contextLines.push(`- Name: ${input.user.name}`);
+  if (!isPublicDomain && input.user.name) contextLines.push(`- Name: ${input.user.name}`);
   contextLines.push(`- Language: ${language} — always reply in this language`);
   contextLines.push(`- Current date & time: ${date} ${weekdays[now.getDay()]}, ${time} (${timezone})`);
-  if (input.userLocation) contextLines.push(`- Location: ${input.userLocation}`);
+  if (!isPublicDomain && input.userLocation) contextLines.push(`- Location: ${input.userLocation}`);
 
   let prompt = `${buildSoul(input.domain)}\n\n## User context\n${contextLines.join('\n')}`;
-  prompt += `\n\n## Memory, notes, and reminders
+  if (!isPublicDomain) prompt += `\n\n## Memory, notes, and reminders
 - Durable memory is for stable facts, preferences, corrections, relationships, and decisions that should shape future conversations. Use create_memory.
 - Notes are user-authored information to keep for later reference. Requests such as "anote isso" or "crie uma nota" use save_note.
 - Time-bound reminders and future actions such as "me lembre amanhã" use schedule_task.
@@ -50,27 +51,27 @@ Only confirm that something was stored or scheduled after the corresponding tool
   prompt += `\n\n## Tool use is invisible to the user
 Never show the user which tool you called, its raw arguments, or its raw output — no tool names, no JSON, no "Tool:" / "Tool Response:" labels. After using one or more tools, respond with only the natural final answer, exactly as if you already knew the information. If a tool found nothing useful, say so in plain language without describing the search itself.`;
 
-  if (input.userInstructions) {
+  if (!isPublicDomain && input.userInstructions) {
     prompt += `\n\n## User instructions\n${input.userInstructions}`;
   }
 
-  if (input.userLocation) {
+  if (!isPublicDomain && input.userLocation) {
     prompt += '\n\nWhen the user asks about weather, temperature, or anything requiring real-time local information, use the search_web tool to find current data for their location.';
-  } else if (input.tavilyConfigured) {
+  } else if (input.domain !== 'sales' && input.tavilyConfigured) {
     prompt += '\n\nWhen the user asks about current weather, news, prices, or any real-time information, use the search_web tool.';
   }
 
-  if (input.postContext) prompt += `\n\n${input.postContext}`;
+  if (!isPublicDomain && input.postContext) prompt += `\n\n${input.postContext}`;
 
   if (input.activeSkill && input.skillContent) {
     prompt = `# Active Skill: ${input.activeSkill.display_name}\n\n${input.skillContent}\n\n---\n\n${prompt}`;
   }
 
-  if (input.conversationMemories) {
+  if (!isPublicDomain && input.conversationMemories) {
     prompt = `${input.conversationMemories}\n\n${prompt}`;
   }
 
-  if (input.relevantContext && !input.relevantContext.includes('No relevant documents found')) {
+  if (!isPublicDomain && input.relevantContext && !input.relevantContext.includes('No relevant documents found')) {
     prompt += `\n\n${input.relevantContext}`;
   }
 

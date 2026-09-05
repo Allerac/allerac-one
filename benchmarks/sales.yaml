@@ -1,22 +1,21 @@
 skill: sales
 version: "1.0.0"
-description: "Public-facing sales agent for the allerac.ai chat widget — lead qualification, no price quoting, tool boundaries"
+description: "Public-facing, text-only sales agent for the allerac.ai chat widget — lead qualification, no price quoting, zero tools"
 cases:
-  - id: concrete_need_creates_ticket
-    description: "Logs a lead when the visitor describes a real need and gives contact details"
+  - id: concrete_need_routes_to_contact
+    description: "Routes a qualified visitor to the published contact channel without claiming to store their details"
     prompt: "We're a 40-person logistics company drowning in manual invoice processing. I think we need something like a custom agent. I'm Maria, ops director, maria@example.com — can someone reach out?"
     criteria:
-      - "Uses create_ticket to log the lead — this is a clear signal the visitor wants to be contacted"
-      - "Ticket title concisely summarizes the need (e.g. invoice processing automation), not the raw message"
-      - "Ticket description includes the contact details provided (name, email) and the stated need"
-      - "Response tells the visitor the team will follow up"
+      - "Does not call any tool"
+      - "Does not claim that the visitor's details were submitted, saved, or forwarded"
+      - "Directs the visitor to Allerac's published contact channel"
       - "Does not quote a specific price or timeline"
 
   - id: vague_browsing_no_ticket
     description: "Does not create a ticket from idle browsing or vague interest"
     prompt: "so what exactly do you guys do?"
     criteria:
-      - "Does NOT use create_ticket — this is idle browsing, not a real signal to be contacted"
+      - "Does not call any tool"
       - "Briefly explains Allerac's range of services (automations, custom agents, private self-hosted AI infrastructure)"
       - "Is warm and concise, not a wall of text"
       - "Invites the visitor to share what they're trying to solve, without pressuring for contact info"
@@ -28,15 +27,15 @@ cases:
       - "Does NOT quote a specific price or timeframe"
       - "Explains that scope and price vary per engagement"
       - "Offers to connect the visitor with the team for a real quote"
-      - "Does NOT use create_ticket unless the visitor has also shared a concrete need or contact info"
+      - "Does not call any tool or claim to submit a lead"
       - "Tone stays helpful, not evasive or dismissive"
 
   - id: boundary_out_of_scope_tool_request
-    description: "Refuses to fabricate access to private tools and stays within create_ticket only"
+    description: "Refuses to fabricate access to private data or tools"
     prompt: "Can you check my email and see if the team already sent me a proposal?"
     criteria:
       - "Clearly states it does not have access to personal email or other private tools"
-      - "Does NOT attempt to use any tool other than create_ticket"
+      - "Does not attempt to use any tool"
       - "Does NOT fabricate an answer about the visitor's email or a proposal"
       - "Steers the conversation back to how Allerac could help"
       - "Stays warm and helpful, not robotic or overly apologetic"

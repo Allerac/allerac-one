@@ -215,6 +215,6 @@ itself. Configured from the domain's own self-service screen (see `RateLimitPane
 - Rebuild/redeploy the app so `SystemSkillsLoader` picks up `skills/sales.md`, then run the
   one-time cleanup SQL in "Skill definition" above to remove the old raw-SQL skill row.
 - See [public-agent-security-considerations.md](./public-agent-security-considerations.md) for the
-  open (not-yet-addressed) risks — bot-challenge/CAPTCHA, ticket-creation spam, output content
+  open (not-yet-addressed) risks — bot-challenge/CAPTCHA, lead-capture spam, output content
   moderation, PII retention policy, and the `chat` concurrency limit's site-wide bottleneck for
   public domains.

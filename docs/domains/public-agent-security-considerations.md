@@ -53,12 +53,12 @@ browser*; a script hitting the Worker directly ignores it entirely. If per-IP/pe
 insufficient in practice, adding Cloudflare Turnstile (or similar) in front of the widget is the
 next layer.
 
-### 3. Lead/ticket spam
+### 3. Lead/ticket spam (mitigated for `sales`)
 
-`create_ticket` is the only tool the public agent can call, so it can't leak data across visitors
-— but nothing stops a visitor (or a script) from getting the agent to file many junk tickets. Each
-one costs a human a moment to triage. Consider a lightweight per-account or per-day cap on ticket
-creation specifically, separate from the chat message limits above.
+`create_ticket` has been removed from `sales`, which is now text-only. If tool-based lead capture is
+introduced in another public domain, nothing inherently stops a visitor or script from filing junk
+tickets. Prefer a validated website form, or add a dedicated per-visitor and per-day cap separate
+from chat message limits.
 
 ### 4. No output-side content moderation
 
@@ -71,10 +71,10 @@ transcripts, especially early on.
 
 ### 5. PII collected without a defined retention/deletion process
 
-`create_ticket` captures whatever the visitor shares — name, email, what they need. Once a public
-agent is live, this is personal data from an anonymous visitor, not from someone who signed a
-contract. Before this scales past one domain, define: how long tickets from public domains are
-kept, and how a deletion request (LGPD/GDPR) would actually be fulfilled.
+A public conversation can contain whatever the visitor shares — name, email, and what they need —
+even when no ticket tool exists. This is personal data from an anonymous visitor, not from someone
+who signed a contract. Define how long public conversations are kept and how a deletion request
+(LGPD/GDPR) would actually be fulfilled.
 
 ### 6. File upload is a separate decision, not a natural extension
 

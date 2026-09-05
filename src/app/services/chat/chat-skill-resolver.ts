@@ -9,6 +9,7 @@ export interface ResolveChatSkillInput {
   isNewConversation: boolean;
   preSelectedSkillId?: string;
   defaultSkillName?: string;
+  publicDomain?: boolean;
   emit: (event: object) => void;
 }
 
@@ -16,6 +17,22 @@ export async function resolveActiveChatSkill(
   input: ResolveChatSkillInput,
 ): Promise<Skill | null> {
   let activeSkill = await skillsService.getActiveSkill(input.conversationId);
+
+  // Public callers may only use the skill bound to their conversation domain.
+  // Never retain a stale active skill or run cross-domain intent routing.
+  if (input.publicDomain && input.domain) {
+    const domainSkill = await skillsService.getDefaultDomainSkill(input.domain);
+    if (domainSkill && activeSkill?.id !== domainSkill.id) {
+      await skillsService.activateSkill(
+        domainSkill.id,
+        input.conversationId,
+        input.userId,
+        'manual',
+        'Public domain policy',
+      );
+    }
+    return domainSkill;
+  }
 
   if (!activeSkill && input.isNewConversation) {
     if (input.preSelectedSkillId) {
