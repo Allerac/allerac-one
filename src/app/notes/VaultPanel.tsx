@@ -556,7 +556,7 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
       </div>
 
       {/* Editor — full width on mobile when note selected, flex-1 on desktop */}
-      <div className={`${selectedNote ? 'flex flex-1' : 'hidden lg:flex lg:flex-1'} flex-col overflow-hidden`}>
+      <div className={`${selectedNote ? 'flex flex-1' : 'hidden'} flex-col overflow-hidden`}>
         {selectedNote ? (
           <NoteEditor
             note={selectedNote}

@@ -156,8 +156,9 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
             {/* Vault + Chat */}
             <div className="flex flex-1 overflow-hidden">
 
-              {/* Notes panel — full screen on mobile when notes tab, flex-1 on desktop */}
-              <div className={`${mobileTab === 'notes' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-1 overflow-hidden`}>
+              {/* Notes panel — full screen on mobile when notes tab. On desktop, only as
+                  wide as the note list until a note is opened, then it grows to fit the editor. */}
+              <div className={`${mobileTab === 'notes' ? 'flex flex-1' : 'hidden'} lg:flex ${editorOpen ? 'lg:flex-1' : 'lg:flex-none'} overflow-hidden`}>
                 <VaultPanel
                   userId={userId}
                   isDarkMode={d}
@@ -166,8 +167,9 @@ export default function NotesClient({ userId, userName, userEmail, isAdmin, defa
                 />
               </div>
 
-              {/* Chat panel — fixed width on the right */}
-              <div className={`${mobileTab === 'chat' ? 'flex flex-1' : 'hidden'} lg:flex lg:w-[360px] lg:flex-shrink-0 flex-col overflow-hidden border-l ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+              {/* Chat panel — fixed width while a note is open (editor needs the room),
+                  expands to fill the remaining space when no note is open. */}
+              <div className={`${mobileTab === 'chat' ? 'flex flex-1' : 'hidden'} lg:flex ${editorOpen ? 'lg:w-[360px] lg:flex-shrink-0' : 'lg:flex-1'} flex-col overflow-hidden border-l ${d ? 'border-gray-800' : 'border-gray-200'}`}>
                 {messages.length === 0 && !sending ? (
                   <div className={`flex-1 flex flex-col items-center justify-center px-4 ${d ? 'bg-gray-900' : 'bg-white'}`}>
                     <div className="w-full max-w-lg">
