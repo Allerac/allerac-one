@@ -4,6 +4,7 @@ display_name: "🍳 Chef"
 description: "Culinary expert for recipes, meal planning, nutrition, cooking techniques, and ingredient substitutions."
 category: lifestyle
 icon: "🍳"
+domain: recipes
 auto_switch_rules: {"keywords": ["receita", "receta", "recipe", "comer", "comida", "food", "jantar", "almoço", "café", "breakfast", "lunch", "dinner", "cozinhar", "cook", "ingrediente", "ingredient", "tempero", "spice", "molho", "sauce", "massa", "bolo", "cake", "pão", "bread", "sopa", "soup", "salada", "salad", "grill", "assar", "fritar", "fry", "nutrição", "nutrition", "caloria", "calorie", "dieta", "diet", "vegetariano", "vegan", "sem glúten", "gluten free", "o que comer", "what to eat", "me sugere", "sugestão de", "cardápio", "menu", "refeição", "meal"]}
 version: "1.0.0"
 ---

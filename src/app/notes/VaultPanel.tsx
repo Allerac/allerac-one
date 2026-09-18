@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { listNotes, searchNotes, createNote, updateNote, deleteNote, getAllTags } from '@/app/actions/notes';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
+import ExternalSourcesPanel from './ExternalSourcesPanel';
 
 interface Note {
   id: string;
@@ -22,6 +23,7 @@ interface Props {
   isDarkMode: boolean;
   refreshTrigger?: number;
   onEditorToggle?: (open: boolean) => void;
+  onContextUpdate?: (ctx: string) => void;
 }
 
 function TagBadge({ tag, active, onClick, d }: { tag: string; active?: boolean; onClick?: () => void; d: boolean }) {
@@ -89,11 +91,14 @@ function NoteRow({ note, selected, onSelect, onDelete, d }: {
         </span>
         <button
           onClick={e => { e.stopPropagation(); onDelete(note.id); }}
-          className={`flex-shrink-0 text-xs opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 ${
+          className={`flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 ${
             d ? 'text-gray-600 hover:text-red-400' : 'text-gray-300 hover:text-red-500'
           }`}
+          title="Delete note"
         >
-          ✕
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9.5 4h5a1 1 0 011 1v2h-7V5a1 1 0 011-1z" />
+          </svg>
         </button>
       </div>
       <div className={`flex items-center gap-1.5 mt-0.5`}>
@@ -167,12 +172,14 @@ function toDateInputValue(due_date: string | null): string {
   return d.toISOString().slice(0, 10);
 }
 
-function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete }: {
+function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListCollapsed, onExpandList }: {
   note: Note;
   isDarkMode: boolean;
   onSave: (id: string, content: string, title: string, tags: string[], due_date: string | null) => Promise<void>;
   onClose: () => void;
   onDelete?: (id: string) => void;
+  isListCollapsed?: boolean;
+  onExpandList?: () => void;
 }) {
   const [content, setContent]     = useState(note.content);
   const [title, setTitle]         = useState(note.title ?? '');
@@ -269,6 +276,18 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete }: {
             </svg>
             Notes
           </button>
+          {/* Expand list — desktop only, shown when the list is collapsed */}
+          {isListCollapsed && onExpandList && (
+            <button
+              onClick={onExpandList}
+              title="Show notes list"
+              className={`hidden lg:flex items-center flex-shrink-0 p-1 rounded transition-colors ${d ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
           <input
             value={title}
             onChange={e => handleTitleChange(e.target.value)}
@@ -279,7 +298,7 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete }: {
           />
           {onDelete && (
             <button
-              onClick={() => { if (window.confirm('Delete this note?')) onDelete(note.id); }}
+              onClick={() => onDelete(note.id)}
               className={`flex-shrink-0 p-1 rounded transition-colors ${d ? 'text-gray-600 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}
               title="Delete note"
             >
@@ -380,7 +399,7 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete }: {
   );
 }
 
-export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEditorToggle }: Props) {
+export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEditorToggle, onContextUpdate }: Props) {
   const [notes, setNotes]               = useState<Note[]>([]);
   const [tags, setTags]                 = useState<string[]>([]);
   const [activeTag, setActiveTag]       = useState<string | null>(null);
@@ -390,11 +409,36 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   const [quickNote, setQuickNote]       = useState('');
   const [saving, setSaving]             = useState(false);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [listCollapsed, setListCollapsed] = useState(false);
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState<Note | null>(null);
+
+  // Let the chat see whatever note is open, so the user can ask about "this
+  // note" without pasting it in. Re-runs whenever the selected note or its
+  // content changes (open, edit/save, or an external connector sync/resolve
+  // updating it) — same onContextUpdate pattern as Email/Finance.
+  useEffect(() => {
+    if (!onContextUpdate) return;
+    if (!selectedNote) { onContextUpdate(''); return; }
+    const title = selectedNote.title || '(untitled)';
+    const ctx = `## Note context\n**Title:** ${title}\n**Tags:** ${selectedNote.tags.join(', ') || 'none'}\n\n${selectedNote.content.slice(0, 4000)}\n\nThe user is viewing this note and may ask questions about it.`;
+    onContextUpdate(ctx);
+  }, [selectedNote, onContextUpdate]);
 
   const loadNotes = useCallback(async (tag?: string) => {
     setLoading(true);
     const res = await listNotes({ limit: 50, tag });
-    if (res.success) setNotes(res.notes as unknown as Note[]);
+    if (res.success) {
+      const freshNotes = res.notes as unknown as Note[];
+      setNotes(freshNotes);
+      // Keep the open editor in sync with external changes (connector sync/import,
+      // conflict resolution) without clobbering it on every reload — only swap in
+      // the fresh note when its updated_at actually moved.
+      setSelectedNote(prev => {
+        if (!prev) return prev;
+        const fresh = freshNotes.find(n => n.id === prev.id);
+        return fresh && fresh.updated_at !== prev.updated_at ? fresh : prev;
+      });
+    }
     const tagRes = await getAllTags();
     if (tagRes.success) setTags(tagRes.tags);
     setLoading(false);
@@ -436,6 +480,13 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
     if (tagRes.success) setTags(tagRes.tags);
   };
 
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteNote) return;
+    const id = confirmDeleteNote.id;
+    setConfirmDeleteNote(null);
+    await handleDelete(id);
+  };
+
   const handleSelectNote = (note: Note) => {
     setSelectedNote(note);
     onEditorToggle?.(true);
@@ -448,40 +499,59 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
 
   const handleSave = async (id: string, content: string, title: string, tags: string[], due_date: string | null) => {
     await updateNote(id, { content, title: title || null, tags, due_date });
+    const updated_at = new Date().toISOString();
     setNotes(prev => prev.map(n =>
-      n.id === id ? { ...n, content, title: title || null, tags, due_date, updated_at: new Date().toISOString() } : n
+      n.id === id ? { ...n, content, title: title || null, tags, due_date, updated_at } : n
     ));
-    setSelectedNote(prev => prev?.id === id ? { ...prev, content, title: title || null, tags, due_date } : prev);
+    setSelectedNote(prev => prev?.id === id ? { ...prev, content, title: title || null, tags, due_date, updated_at } : prev);
     const tagRes = await getAllTags();
     if (tagRes.success) setTags(tagRes.tags);
   };
 
   return (
+    <>
     <div className="flex flex-1 overflow-hidden">
 
-      {/* Notes list — full width on mobile when no note selected, fixed 56 on desktop */}
-      <div className={`${selectedNote ? 'hidden lg:flex' : 'flex flex-1'} lg:flex-none lg:w-56 flex-col border-r overflow-hidden ${d ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+      {/* Notes list — full width on mobile when no note selected, fixed 56 on
+          desktop. Collapsible (desktop only) once a note is open, so editing
+          isn't cramped by a list you don't need to see at that moment —
+          forced back open whenever no note is selected so browsing/picking a
+          note always stays reachable. */}
+      <div className={`${selectedNote ? 'hidden lg:flex' : 'flex flex-1'} ${listCollapsed && selectedNote ? 'lg:hidden' : 'lg:flex-none lg:w-56'} flex-col border-r overflow-hidden ${d ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
 
         {/* Header */}
         <div className={`flex-shrink-0 px-3 py-2.5 border-b flex items-center justify-between ${d ? 'border-gray-800' : 'border-gray-200'}`}>
           <span className={`text-xs font-semibold uppercase tracking-wider ${d ? 'text-gray-500' : 'text-gray-400'}`}>
             Notes · {notes.length}
           </span>
-          <button
-            onClick={async () => {
-              setSaving(true);
-              const res = await createNote({ content: '', source: 'manual' });
-              if (res.success && res.note) {
-                await loadNotes(activeTag ?? undefined);
-                handleSelectNote(res.note as unknown as Note);
-              }
-              setSaving(false);
-            }}
-            disabled={saving}
-            className={`text-xs px-2 py-0.5 rounded transition-colors ${d ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500'}`}
-          >
-            + New
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={async () => {
+                setSaving(true);
+                const res = await createNote({ content: '', source: 'manual' });
+                if (res.success && res.note) {
+                  await loadNotes(activeTag ?? undefined);
+                  handleSelectNote(res.note as unknown as Note);
+                }
+                setSaving(false);
+              }}
+              disabled={saving}
+              className={`text-xs px-2 py-0.5 rounded transition-colors ${d ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500'}`}
+            >
+              + New
+            </button>
+            {selectedNote && (
+              <button
+                onClick={() => setListCollapsed(true)}
+                title="Hide notes list"
+                className={`hidden lg:flex items-center p-1 rounded transition-colors ${d ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Search */}
@@ -497,6 +567,9 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
             }`}
           />
         </div>
+
+        {/* External sources (OneNote, Google Drive) */}
+        <ExternalSourcesPanel isDarkMode={d} onImported={() => loadNotes(activeTag ?? undefined)} />
 
         {/* Tags */}
         {tags.length > 0 && (
@@ -524,7 +597,7 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
               note={note}
               selected={selectedNote?.id === note.id}
               onSelect={handleSelectNote}
-              onDelete={handleDelete}
+              onDelete={() => setConfirmDeleteNote(note)}
               d={d}
             />
           ))}
@@ -556,14 +629,17 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
       </div>
 
       {/* Editor — full width on mobile when note selected, flex-1 on desktop */}
-      <div className={`${selectedNote ? 'flex flex-1' : 'hidden lg:flex lg:flex-1'} flex-col overflow-hidden`}>
+      <div className={`${selectedNote ? 'flex flex-1' : 'hidden'} flex-col overflow-hidden`}>
         {selectedNote ? (
           <NoteEditor
+            key={`${selectedNote.id}:${selectedNote.updated_at}`}
             note={selectedNote}
             isDarkMode={d}
             onSave={handleSave}
             onClose={handleCloseEditor}
-            onDelete={handleDelete}
+            onDelete={() => setConfirmDeleteNote(selectedNote)}
+            isListCollapsed={listCollapsed}
+            onExpandList={() => setListCollapsed(false)}
           />
         ) : (
           <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${d ? 'bg-gray-900' : 'bg-white'}`}>
@@ -590,5 +666,38 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
         )}
       </div>
     </div>
+
+    {/* Delete confirmation modal */}
+    {confirmDeleteNote && (
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        onClick={() => setConfirmDeleteNote(null)}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          className={`rounded-lg shadow-xl max-w-sm w-full p-5 border ${d ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+        >
+          <h3 className={`text-sm font-semibold mb-1.5 ${d ? 'text-gray-100' : 'text-gray-900'}`}>Delete note?</h3>
+          <p className={`text-xs mb-4 leading-relaxed ${d ? 'text-gray-400' : 'text-gray-500'}`}>
+            "{confirmDeleteNote.title || confirmDeleteNote.content.slice(0, 60) || 'Untitled'}" will be permanently deleted. This can't be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setConfirmDeleteNote(null)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${d ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmDelete}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

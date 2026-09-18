@@ -44,6 +44,7 @@ src/telegram-multi-bot.ts # Entry for the telegram container
 
 ## Rules
 
+- **NEVER run `git commit`, `git cherry-pick`, `git merge`, `git rebase`, or any other command that creates or applies a commit — for any reason, even if explicitly asked to "go ahead" with one.** Always just print the exact command and let the user run it themselves. This applies even mid-task when it seems like the obvious next step.
 - Never commit `.env` files or secrets
 - Use existing patterns before creating new abstractions
 - All AI features must work offline with local Ollama models

@@ -28,6 +28,14 @@ import SkillsLibrary from '../components/skills/SkillsLibrary';
 import UserSettingsModal from '../components/auth/UserSettingsModal';
 import SystemDashboard from '../components/system/SystemDashboard';
 import HealthDashboard from '../components/health/HealthDashboard';
+import { formatPace } from '../components/health/ActivityCharts';
+import type { ActivityChatContext } from '../components/health/RecentActivity';
+import VaultPanel from '../notes/VaultPanel';
+import EmailPanel from '../components/email/EmailPanel';
+import JobsPanel from '../jobs/JobsPanel';
+import MemoryGraphPanel from '../memory/MemoryGraphPanel';
+import MusicDashboard from '../components/music/MusicDashboard';
+import TelegramBotSettings from '../components/settings/TelegramBotSettings';
 import InstagramDMPanel from '../components/social/InstagramDMPanel';
 import InstagramPostModal from '../components/instagram/InstagramPostModal';
 import SocialPostStudio from '../components/social/SocialPostStudio';
@@ -46,12 +54,91 @@ function buildHealthViewContext(period: HealthPeriod, selectedDate: string): str
   return `## Health dashboard context\nThe user is currently viewing their health dashboard for the last ${days} days (${fmt(startDate)} → ${fmt(endDate)}). Use this as the default date range for health queries unless they specify otherwise.`;
 }
 
+function fmtDuration(seconds: number | null): string {
+  if (!seconds || seconds <= 0) return '—';
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Mirrors exactly what ActivityDetailPanel.tsx renders on screen for the
+// selected day's activity (header stats, dynamics, laps, zones), so the
+// assistant can answer questions grounded in what the user is looking at —
+// deliberately excludes route/GPS data (see ActivityChatContext's docstring).
+function buildActivityContext(ctx: ActivityChatContext | null): string {
+  if (!ctx) return '';
+  const a = ctx.activity;
+  const lines: string[] = ['## Currently viewed activity'];
+  lines.push(`${a.activity_name ?? a.activity_type ?? 'Activity'} (${a.activity_type ?? 'unknown'}) on ${a.date}`);
+
+  const stats = [
+    a.duration_seconds ? `duration ${fmtDuration(a.duration_seconds)}` : null,
+    a.distance_meters ? `distance ${(a.distance_meters / 1000).toFixed(2)}km` : null,
+    a.calories ? `${Math.round(a.calories)}kcal` : null,
+    a.avg_heart_rate ? `avg HR ${Math.round(a.avg_heart_rate)}bpm` : null,
+    a.max_heart_rate ? `max HR ${Math.round(a.max_heart_rate)}bpm` : null,
+    a.average_pace_seconds_per_km ? `pace ${formatPace(a.average_pace_seconds_per_km)}` : null,
+    a.average_power_watts ? `power ${Math.round(a.average_power_watts)}W` : null,
+    a.elevation_gain ? `elevation +${Math.round(a.elevation_gain)}m` : null,
+  ].filter(Boolean);
+  if (stats.length > 0) lines.push(stats.join(', '));
+
+  const dynamics = [
+    a.average_cadence_spm ? `cadence ${Math.round(Number(a.average_cadence_spm))}spm` : null,
+    a.average_stride_length_meters ? `stride ${Number(a.average_stride_length_meters).toFixed(2)}m` : null,
+    a.average_vertical_oscillation_cm ? `vertical oscillation ${Number(a.average_vertical_oscillation_cm).toFixed(1)}cm` : null,
+    a.average_vertical_ratio_percent ? `vertical ratio ${Number(a.average_vertical_ratio_percent).toFixed(1)}%` : null,
+    a.average_ground_contact_time_ms ? `ground contact ${Math.round(Number(a.average_ground_contact_time_ms))}ms` : null,
+    a.vo2_max ? `VO2 max ${Number(a.vo2_max).toFixed(1)}` : null,
+    a.training_effect_aerobic ? `training effect aerobic ${Number(a.training_effect_aerobic).toFixed(1)}` : null,
+    a.training_effect_anaerobic ? `anaerobic ${Number(a.training_effect_anaerobic).toFixed(1)}` : null,
+    a.training_benefit ? `benefit ${a.training_benefit}` : null,
+    a.exercise_load ? `exercise load ${Math.round(Number(a.exercise_load))}` : null,
+    a.estimated_sweat_loss_ml ? `sweat loss ${Math.round(Number(a.estimated_sweat_loss_ml))}ml` : null,
+  ].filter(Boolean);
+  if (dynamics.length > 0) lines.push(dynamics.join(', '));
+
+  if (ctx.exercises && ctx.exercises.length > 0) {
+    lines.push('Exercises: ' + ctx.exercises.map((ex) => {
+      const parts = [ex.sets ? `${ex.sets} sets` : null, ex.reps ? `${ex.reps} reps` : null, ex.maxWeight ? `${ex.maxWeight}kg` : null].filter(Boolean).join(' × ');
+      return `${ex.category}${parts ? ` (${parts})` : ''}`;
+    }).join('; '));
+  }
+
+  // Cap laps shown — ultra-endurance activities can have hundreds of
+  // auto-laps, which would otherwise flood the prompt for little benefit.
+  const MAX_LAPS = 20;
+  if (ctx.laps.length > 0) {
+    const shown = ctx.laps.slice(0, MAX_LAPS);
+    lines.push('Laps: ' + shown.map((l) =>
+      `#${l.lap_index} ${fmtDuration(l.duration_seconds)}${l.distance_meters ? ` ${(l.distance_meters / 1000).toFixed(2)}km` : ''}${l.pace_seconds_per_km ? ` ${formatPace(l.pace_seconds_per_km)}` : ''}${l.average_heart_rate ? ` ${Math.round(l.average_heart_rate)}bpm` : ''}`
+    ).join('; ') + (ctx.laps.length > MAX_LAPS ? ` (+${ctx.laps.length - MAX_LAPS} more)` : ''));
+  }
+
+  if (ctx.zones.length > 0) {
+    const byMetric = new Map<string, typeof ctx.zones>();
+    for (const z of ctx.zones) byMetric.set(z.metric_type, [...(byMetric.get(z.metric_type) ?? []), z]);
+    for (const [metric, zones] of byMetric) {
+      const sorted = zones.slice().sort((x, y) => x.zone_number - y.zone_number);
+      lines.push(`${metric} zones: ` + sorted.map((z) => `Z${z.zone_number} ${Math.round(z.percent ?? 0)}%`).join(', '));
+    }
+  }
+
+  return lines.join('\n');
+}
+
 export default function AdminChat({
   defaultSkillName,
   domainSlug,
   domainName,
   showWorkspace = false,
   showHealth = false,
+  showNotes = false,
+  showEmail = false,
+  showJobs = false,
+  showMemory = false,
+  showMusic = false,
+  showChannels = false,
   showInstagramDM = false,
   showInstagramPost = false,
   defaultSidebarCollapsed = false,
@@ -65,6 +152,12 @@ export default function AdminChat({
   domainName?: string;
   showWorkspace?: boolean;
   showHealth?: boolean;
+  showNotes?: boolean;
+  showEmail?: boolean;
+  showJobs?: boolean;
+  showMemory?: boolean;
+  showMusic?: boolean;
+  showChannels?: boolean;
   showInstagramDM?: boolean;
   showInstagramPost?: boolean;
   defaultSidebarCollapsed?: boolean;
@@ -209,6 +302,23 @@ export default function AdminChat({
   const [isMyAlleracOpen, setIsMyAlleracOpen] = useState(false);
   const [isSkillsLibraryOpen, setIsSkillsLibraryOpen] = useState(false);
   const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(showHealth);
+  const [isHealthDashboardCollapsed, setIsHealthDashboardCollapsed] = useState(false);
+  const [isNotesOpen] = useState(showNotes);
+  const [isNotesCollapsed, setIsNotesCollapsed] = useState(false);
+  const [notesEditorOpen, setNotesEditorOpen] = useState(false);
+  const [vaultRefresh, setVaultRefresh] = useState(0);
+  const [mobileNotesTab, setMobileNotesTab] = useState<'notes' | 'chat'>('notes');
+  const [isEmailCollapsed, setIsEmailCollapsed] = useState(false);
+  const [mobileEmailTab, setMobileEmailTab] = useState<'component' | 'chat'>('component');
+  const [isJobsCollapsed, setIsJobsCollapsed] = useState(false);
+  const [mobileJobsTab, setMobileJobsTab] = useState<'jobs' | 'chat'>('jobs');
+  const [isMemoryCollapsed, setIsMemoryCollapsed] = useState(false);
+  const [mobileMemoryTab, setMobileMemoryTab] = useState<'knowledge' | 'chat'>('knowledge');
+  const [isMusicCollapsed, setIsMusicCollapsed] = useState(false);
+  const [mobileMusicTab, setMobileMusicTab] = useState<'dashboard' | 'chat'>('dashboard');
+  const [isChannelsCollapsed, setIsChannelsCollapsed] = useState(false);
+  const [mobileChannelsTab, setMobileChannelsTab] = useState<'channels' | 'chat'>('channels');
+  const [isInstagramCollapsed, setIsInstagramCollapsed] = useState(false);
 
   const [isInstagramDMOpen, setIsInstagramDMOpen] = useState(false);
   const [isInstagramPostOpen, setIsInstagramPostOpen] = useState(showInstagramPost ?? false);
@@ -217,6 +327,7 @@ export default function AdminChat({
   const [studioExternalUpdate, setStudioExternalUpdate] = useState<{ platform?: 'instagram' | 'tiktok'; caption?: string; tags?: string; price?: string; isProduct?: boolean; imageUrl?: string; tiktokTitle?: string; timestamp: number } | null>(null);
   const postContextRef = useRef<string>('');
   const healthViewContextRef = useRef<string>('');
+  const activityContextRef = useRef<string>('');
   const [isSystemDashboardOpen, setIsSystemDashboardOpen] = useState(false);
   const [terminalTeachContent, setTerminalTeachContent] = useState<string | null>(null);
   const [instagramDraft, setInstagramDraft] = useState<{ caption: string; tags: string } | null>(null);
@@ -654,11 +765,15 @@ const savedModel = localStorage.getItem('selected_model');
     setIsSending(true);
     isSendingRef.current = true;
     try {
-      const extraContext = [postContextRef.current, healthViewContextRef.current].filter(Boolean).join('\n\n') || undefined;
+      const extraContext = [postContextRef.current, healthViewContextRef.current, activityContextRef.current].filter(Boolean).join('\n\n') || undefined;
       await chatMessageService.sendMessage(message, images, activeSkill, extraContext, controller.signal, tChat('stoppedByUser'));
     } finally {
       chatAbortRef.current = null;
       isSendingRef.current = false;
+      // Notes has no per-tool-call hook here (unlike useDomainChat) — cheaply
+      // re-fetch the vault list after every turn instead, since a save/delete/
+      // update tool call may have happened during it.
+      if (isNotesOpen) setVaultRefresh(v => v + 1);
       const next = chatQueueRef.current.shift();
       if (next) {
         await executeChatMessage(next, []);
@@ -839,6 +954,53 @@ const savedModel = localStorage.getItem('selected_model');
     if (userId) await loadConversations(userId);
   };
 
+  // Whichever side panel is active on this domain page (at most one is ever
+  // true) — drives the sidebar's "full screen chat" toggle generically
+  // instead of one boolean/handler pair per domain.
+  const sidePanel = showHealth
+    ? { active: true, collapsed: isHealthDashboardCollapsed, toggle: () => setIsHealthDashboardCollapsed(v => !v), label: 'dashboard' }
+    : showNotes
+    ? { active: true, collapsed: isNotesCollapsed, toggle: () => setIsNotesCollapsed(v => !v), label: 'notas' }
+    : showEmail
+    ? { active: true, collapsed: isEmailCollapsed, toggle: () => setIsEmailCollapsed(v => !v), label: 'inbox' }
+    : showJobs
+    ? { active: true, collapsed: isJobsCollapsed, toggle: () => setIsJobsCollapsed(v => !v), label: 'jobs' }
+    : showMemory
+    ? { active: true, collapsed: isMemoryCollapsed, toggle: () => setIsMemoryCollapsed(v => !v), label: 'conhecimento' }
+    : showMusic
+    ? { active: true, collapsed: isMusicCollapsed, toggle: () => setIsMusicCollapsed(v => !v), label: 'dashboard' }
+    : showChannels
+    ? { active: true, collapsed: isChannelsCollapsed, toggle: () => setIsChannelsCollapsed(v => !v), label: 'canais' }
+    : isInstagramPostOpen
+    ? { active: true, collapsed: isInstagramCollapsed, toggle: () => setIsInstagramCollapsed(v => !v), label: 'estúdio' }
+    : { active: false, collapsed: false, toggle: () => {}, label: 'painel' };
+
+  // Chat column width — splits 40/60 with the side panel (chat flex-grow 2,
+  // panel flex-grow 3, both basis 0), giving panel-heavy domains like notes
+  // a bit more breathing room than an even 50/50. When the panel is collapsed
+  // (sidebar toggle) or, for notes, when no note is open, the panel's own
+  // wrapper switches to 'hidden'/'lg:flex-none', leaving chat as the only
+  // flex child so it naturally takes the full width — no separate width
+  // class needed here for that case.
+  const panelChatClass = (isChatTab: boolean) => isChatTab ? 'flex-1 lg:flex-[2_2_0%]' : 'hidden lg:flex lg:flex-[2_2_0%]';
+  const chatColumnClassName = isHealthDashboardOpen
+    ? panelChatClass(mobileHealthTab === 'chat')
+    : isNotesOpen
+    ? panelChatClass(mobileNotesTab === 'chat')
+    : showEmail
+    ? panelChatClass(mobileEmailTab === 'chat')
+    : showJobs
+    ? panelChatClass(mobileJobsTab === 'chat')
+    : showMemory
+    ? panelChatClass(mobileMemoryTab === 'chat')
+    : showMusic
+    ? panelChatClass(mobileMusicTab === 'chat')
+    : showChannels
+    ? panelChatClass(mobileChannelsTab === 'chat')
+    : isInstagramPostOpen
+    ? panelChatClass(mobileTab === 'chat')
+    : 'flex-1';
+
   if (isLoading) {
     return (
       <div className={`min-h-dvh flex items-center justify-center ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
@@ -899,6 +1061,10 @@ const savedModel = localStorage.getItem('selected_model');
             renameConversation={handleRenameConversation}
             showWorkspace={showWorkspace}
             showHealth={showHealth}
+            hasSidePanel={sidePanel.active}
+            isSidePanelCollapsed={sidePanel.collapsed}
+            onToggleSidePanel={sidePanel.toggle}
+            sidePanelLabel={sidePanel.label}
             showInstagramDM={showInstagramDM}
             instagramConnected={showInstagramPost}
             isAdmin={isAdmin}
@@ -913,27 +1079,25 @@ const savedModel = localStorage.getItem('selected_model');
         {/* Content wrapper — owns header + all columns */}
         <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
-          {/* Chat Header — title only (hidden on social domain, moved inside chat column) */}
-          {!isInstagramPostOpen && (
-            <ChatHeader
-              isSidebarOpen={isSidebarOpen}
-              setIsSidebarOpen={setIsSidebarOpen}
-              isDarkMode={isDarkMode}
-              toggleTheme={toggleTheme}
-              clearChat={clearChat}
-              domainName={domainName}
-              activeSkill={activeSkill}
-              currentConversationId={currentConversationId}
-              currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
-              isTerminalMode={effectiveChatMode === 'terminal'}
-              onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
-              hideHomeButton={!isAdmin}
-              userName={userName}
-              userEmail={userEmail}
-              onLogout={handleLogout}
-              titleOnly
-            />
-          )}
+          {/* Chat Header — title only, same as every other domain */}
+          <ChatHeader
+            isSidebarOpen={isSidebarOpen}
+            setIsSidebarOpen={setIsSidebarOpen}
+            isDarkMode={isDarkMode}
+            toggleTheme={toggleTheme}
+            clearChat={clearChat}
+            domainName={domainName}
+            activeSkill={activeSkill}
+            currentConversationId={currentConversationId}
+            currentConversationTitle={conversations.find(c => c.id === currentConversationId)?.title}
+            isTerminalMode={effectiveChatMode === 'terminal'}
+            onToggleChatMode={terminalTheme && !showInstagramPost ? toggleChatMode : undefined}
+            hideHomeButton={!isAdmin}
+            userName={userName}
+            userEmail={userEmail}
+            onLogout={handleLogout}
+            titleOnly
+          />
 
           {/* Mobile tab bar — social page */}
           {isInstagramPostOpen && (
@@ -981,84 +1145,111 @@ const savedModel = localStorage.getItem('selected_model');
             </div>
           )}
 
+          {/* Mobile tab bar — notes page */}
+          {showNotes && (
+            <div className={`lg:hidden flex-shrink-0 flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {(['notes', 'chat'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setMobileNotesTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
+                    mobileNotesTab === tab
+                      ? `border-b-2 border-brand-500 ${isDarkMode ? 'text-white' : 'text-gray-900'}`
+                      : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab === 'notes' ? 'Notes' : 'Chat'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mobile tab bar — email page */}
+          {showEmail && (
+            <div className={`lg:hidden flex-shrink-0 flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {(['component', 'chat'] as const).map((tab) => (
+                <button key={tab} onClick={() => setMobileEmailTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                    mobileEmailTab === tab
+                      ? `border-b-2 border-brand-500 ${isDarkMode ? 'text-white' : 'text-gray-900'}`
+                      : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {tab === 'component' ? 'Inbox' : 'Chat'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mobile tab bar — jobs page */}
+          {showJobs && (
+            <div className={`lg:hidden flex-shrink-0 flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {(['jobs', 'chat'] as const).map((tab) => (
+                <button key={tab} onClick={() => setMobileJobsTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
+                    mobileJobsTab === tab
+                      ? `border-b-2 border-brand-500 ${isDarkMode ? 'text-white' : 'text-gray-900'}`
+                      : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {tab === 'jobs' ? 'Jobs' : 'Chat'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mobile tab bar — memory page */}
+          {showMemory && (
+            <div className={`lg:hidden flex-shrink-0 flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {(['knowledge', 'chat'] as const).map((tab) => (
+                <button key={tab} onClick={() => setMobileMemoryTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
+                    mobileMemoryTab === tab
+                      ? `border-b-2 border-brand-500 ${isDarkMode ? 'text-white' : 'text-gray-900'}`
+                      : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {tab === 'knowledge' ? 'Knowledge' : 'Chat'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mobile tab bar — music page */}
+          {showMusic && (
+            <div className={`lg:hidden flex-shrink-0 flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {(['dashboard', 'chat'] as const).map((tab) => (
+                <button key={tab} onClick={() => setMobileMusicTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
+                    mobileMusicTab === tab
+                      ? `border-b-2 border-brand-500 ${isDarkMode ? 'text-white' : 'text-gray-900'}`
+                      : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {tab === 'dashboard' ? 'Dashboard' : 'Chat'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mobile tab bar — channels page */}
+          {showChannels && (
+            <div className={`lg:hidden flex-shrink-0 flex border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              {(['channels', 'chat'] as const).map((tab) => (
+                <button key={tab} onClick={() => setMobileChannelsTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
+                    mobileChannelsTab === tab
+                      ? `border-b-2 border-brand-500 ${isDarkMode ? 'text-white' : 'text-gray-900'}`
+                      : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {tab === 'channels' ? 'Channels' : 'Chat'}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Columns row */}
           <div className="flex flex-1 overflow-hidden">
 
-          {/* Health Dashboard — mobile inline (tab: dashboard) */}
-          {showHealth && mobileHealthTab === 'dashboard' && (
-            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
-              <HealthDashboard
-                isOpen
-                onClose={() => setMobileHealthTab('chat')}
-                isDarkMode={isDarkMode}
-                userId={userId || undefined}
-                inline
-                onViewChange={(period, date) => {
-                  healthViewContextRef.current = buildHealthViewContext(period, date);
-                }}
-              />
-            </div>
-          )}
-
-          {/* Health Dashboard — desktop LEFT side */}
-          {isHealthDashboardOpen && (
-            <div className={`hidden lg:flex flex-1 flex-col overflow-hidden border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-              <HealthDashboard
-                isOpen={isHealthDashboardOpen}
-                onClose={() => setIsHealthDashboardOpen(false)}
-                isDarkMode={isDarkMode}
-                userId={userId || undefined}
-                inline
-                onViewChange={(period, date) => {
-                  healthViewContextRef.current = buildHealthViewContext(period, date);
-                }}
-              />
-            </div>
-          )}
-
-          {/* Instagram Post Studio — left column (desktop), fullscreen tab (mobile) */}
-          {isInstagramPostOpen && userId && (
-            <div className={`${mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'} flex-1 min-w-0 overflow-hidden border-r ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-              <SocialPostStudio
-                userId={userId}
-                conversationId={currentConversationId}
-                mobileView={mobileTab === 'preview' ? 'preview' : 'editor'}
-                isDarkMode={isDarkMode}
-                externalUpdate={studioExternalUpdate}
-                onClose={showInstagramPost ? undefined : () => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
-                onSuccess={() => {
-                  if (!showInstagramPost) { setIsInstagramPostOpen(false); setInstagramPreFill(null); }
-                  setInstagramDraft(null);
-                }}
-                onPostStateChange={(state) => {
-                  const parts: string[] = [];
-                  parts.push(`Platform: ${state.platform}`);
-                  if (state.caption) parts.push(`Caption: "${state.caption}"`);
-                  if (state.tags) parts.push(`Hashtags: ${state.tags}`);
-                  if (state.isProduct && state.price) parts.push(`Preço: €${state.price}`);
-                  if (state.platform === 'tiktok' && state.tiktokTitle) parts.push(`TikTok title: "${state.tiktokTitle}"`);
-                  const stateStr = parts.length ? `\n${parts.join('\n')}` : ' (empty)';
-                  const langMap: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English' };
-                  const lang = langMap[locale] ?? 'English';
-                  postContextRef.current = `## Social Post Studio is open${stateStr}\n\nLANGUAGE: Generate all captions and hashtags in ${lang}.\n\nRULES:\n- Whenever the user asks you to generate, write, or improve post content, call \`update_social_form\` immediately.\n- Include the active platform in the tool call.\n- When the user sends an image and asks to generate a post, call \`update_social_form\` ONCE with image_url + caption + tags all filled in a single call.\n- For TikTok, also provide a short editable title.\n- Never write caption or hashtags only in the chat; always update the form.`;
-                }}
-                initialCaption={instagramPreFill?.caption}
-                initialTags={instagramPreFill?.tags}
-                initialImageBase64={instagramPreFill?.imageBase64}
-                initialImagePreview={instagramPreFill?.imagePreview}
-                initialImageUrl={instagramPreFill?.imageUrl}
-              />
-            </div>
-          )}
-
-          {/* Chat column — right, fixed width when Instagram studio is open */}
-          <div className={`flex flex-col overflow-hidden ${
-            isHealthDashboardOpen
-              ? mobileHealthTab === 'chat'
-                ? 'flex-1 lg:w-[560px] lg:flex-shrink-0'
-                : 'hidden lg:flex lg:w-[560px] flex-shrink-0'
-              : isInstagramPostOpen ? `${mobileTab === 'chat' ? 'flex-1' : 'hidden lg:flex'} lg:w-[400px] lg:flex-shrink-0` : 'flex-1'
-          }`}>
+          {/* Chat column — left, fixed width when a side panel is open (chat is the
+              constant/primary element; the side panel is the one that collapses) */}
+          <div className={`flex flex-col overflow-hidden ${chatColumnClassName}`}>
 
           {/* ── Terminal mode — full area replacement ── */}
           {effectiveChatMode === 'terminal' ? (
@@ -1083,13 +1274,13 @@ const savedModel = localStorage.getItem('selected_model');
           ) : messages.length === 0 ? (
             /* Empty State — greeting + input centered in the remaining space */
             <div className={`flex-1 flex flex-col items-center justify-center px-4 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-              <div className={`w-full ${isInstagramPostOpen ? 'max-w-lg' : 'max-w-2xl'}`}>
+              <div className="w-full max-w-2xl">
                 <div className="text-center mb-8">
                   <div className="w-fit mx-auto mb-6">
-                    <AlleracIcon size={isInstagramPostOpen ? 64 : 80} />
+                    <AlleracIcon size={80} />
                   </div>
-                  <h2 className={`font-bold mb-2 ${isInstagramPostOpen ? 'text-xl' : 'text-3xl'} ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
-                  <h3 className={`font-medium ${isInstagramPostOpen ? 'text-sm' : 'text-xl'} ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
+                  <h2 className={`font-bold mb-2 text-3xl ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{t('greeting', { name: userName })}</h2>
+                  <h3 className={`font-medium text-xl ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('helpText')}</h3>
                 </div>
                 <ChatInput
                   inputMessage={inputMessage}
@@ -1151,7 +1342,7 @@ const savedModel = localStorage.getItem('selected_model');
                 />
               </div>
               <div data-name="input-area-wrapper" className={`flex-shrink-0 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-                <div className={`${isInstagramPostOpen ? 'px-3 sm:px-4' : 'max-w-3xl mx-auto px-3 sm:px-4'} pt-3 pb-2`}>
+                <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-3 pb-2">
                   <ChatInput
                     inputMessage={inputMessage}
                     setInputMessage={setInputMessage}
@@ -1196,6 +1387,171 @@ const savedModel = localStorage.getItem('selected_model');
             </>
           )}
         </div>
+
+          {/* Health Dashboard — mobile inline (tab: dashboard) */}
+          {showHealth && mobileHealthTab === 'dashboard' && (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+              <HealthDashboard
+                isOpen
+                onClose={() => setMobileHealthTab('chat')}
+                isDarkMode={isDarkMode}
+                userId={userId || undefined}
+                inline
+                onViewChange={(period, date) => {
+                  healthViewContextRef.current = buildHealthViewContext(period, date);
+                }}
+                onActivityContextChange={(ctx) => {
+                  activityContextRef.current = buildActivityContext(ctx);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Health Dashboard — desktop RIGHT side */}
+          {isHealthDashboardOpen && (
+            <div className={`${isHealthDashboardCollapsed ? 'hidden' : 'hidden lg:flex'} lg:flex-[3_3_0%] flex-col overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <HealthDashboard
+                isOpen={isHealthDashboardOpen}
+                onClose={() => setIsHealthDashboardOpen(false)}
+                isDarkMode={isDarkMode}
+                userId={userId || undefined}
+                inline
+                onViewChange={(period, date) => {
+                  healthViewContextRef.current = buildHealthViewContext(period, date);
+                }}
+                onActivityContextChange={(ctx) => {
+                  activityContextRef.current = buildActivityContext(ctx);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Notes vault — mobile inline (tab: notes) */}
+          {showNotes && userId && mobileNotesTab === 'notes' && (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+              <VaultPanel
+                userId={userId}
+                isDarkMode={isDarkMode}
+                refreshTrigger={vaultRefresh}
+                onEditorToggle={setNotesEditorOpen}
+                onContextUpdate={(ctx) => { postContextRef.current = ctx; }}
+              />
+            </div>
+          )}
+
+          {/* Notes vault — desktop RIGHT side (width follows whether a note is open) */}
+          {isNotesOpen && userId && (
+            <div className={`${isNotesCollapsed ? 'hidden' : 'hidden lg:flex'} ${notesEditorOpen ? 'lg:flex-[3_3_0%]' : 'lg:flex-none'} flex-col overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <VaultPanel
+                userId={userId}
+                isDarkMode={isDarkMode}
+                refreshTrigger={vaultRefresh}
+                onEditorToggle={setNotesEditorOpen}
+                onContextUpdate={(ctx) => { postContextRef.current = ctx; }}
+              />
+            </div>
+          )}
+
+          {/* Email — mobile inline (tab: component) */}
+          {showEmail && mobileEmailTab === 'component' && (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+              <EmailPanel isDarkMode={isDarkMode} onContextUpdate={(ctx) => { postContextRef.current = ctx; }} />
+            </div>
+          )}
+          {/* Email — desktop RIGHT side */}
+          {showEmail && (
+            <div className={`${isEmailCollapsed ? 'hidden' : 'hidden lg:flex'} lg:flex-[3_3_0%] flex-col overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <EmailPanel isDarkMode={isDarkMode} onContextUpdate={(ctx) => { postContextRef.current = ctx; }} />
+            </div>
+          )}
+
+          {/* Jobs — mobile inline (tab: jobs) */}
+          {showJobs && userId && mobileJobsTab === 'jobs' && (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+              <JobsPanel userId={userId} isDarkMode={isDarkMode} domainSlug="jobs" />
+            </div>
+          )}
+          {/* Jobs — desktop RIGHT side */}
+          {showJobs && userId && (
+            <div className={`${isJobsCollapsed ? 'hidden' : 'hidden lg:flex'} lg:flex-[3_3_0%] flex-col overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <JobsPanel userId={userId} isDarkMode={isDarkMode} domainSlug="jobs" />
+            </div>
+          )}
+
+          {/* Memory graph — mobile inline (tab: knowledge) */}
+          {showMemory && mobileMemoryTab === 'knowledge' && (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+              <MemoryGraphPanel />
+            </div>
+          )}
+          {/* Memory graph — desktop RIGHT side */}
+          {showMemory && (
+            <div className={`${isMemoryCollapsed ? 'hidden' : 'hidden lg:flex'} lg:flex-[3_3_0%] flex-col overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <MemoryGraphPanel />
+            </div>
+          )}
+
+          {/* Music dashboard — mobile inline (tab: dashboard) */}
+          {showMusic && mobileMusicTab === 'dashboard' && (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+              <MusicDashboard isDarkMode={isDarkMode} onViewChange={(context) => { postContextRef.current = context; }} />
+            </div>
+          )}
+          {/* Music dashboard — desktop RIGHT side */}
+          {showMusic && (
+            <div className={`${isMusicCollapsed ? 'hidden' : 'hidden lg:flex'} lg:flex-[3_3_0%] flex-col overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <MusicDashboard isDarkMode={isDarkMode} onViewChange={(context) => { postContextRef.current = context; }} />
+            </div>
+          )}
+
+          {/* Channels (Telegram settings) — mobile inline (tab: channels) */}
+          {showChannels && userId && mobileChannelsTab === 'channels' && (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+              <TelegramBotSettings userId={userId} displayMode="page" isDarkMode={isDarkMode} />
+            </div>
+          )}
+          {/* Channels (Telegram settings) — desktop RIGHT side */}
+          {showChannels && userId && (
+            <div className={`${isChannelsCollapsed ? 'hidden' : 'hidden lg:flex'} lg:flex-[3_3_0%] flex-col overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <TelegramBotSettings userId={userId} displayMode="page" isDarkMode={isDarkMode} />
+            </div>
+          )}
+
+          {/* Instagram Post Studio — right column (desktop), fullscreen tab (mobile) */}
+          {isInstagramPostOpen && userId && (
+            <div className={`${mobileTab === 'chat' ? 'hidden' : 'flex'} ${isInstagramCollapsed ? 'lg:hidden' : 'lg:flex'} lg:flex-[3_3_0%] min-w-0 overflow-hidden border-l ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <SocialPostStudio
+                userId={userId}
+                conversationId={currentConversationId}
+                mobileView={mobileTab === 'preview' ? 'preview' : 'editor'}
+                isDarkMode={isDarkMode}
+                externalUpdate={studioExternalUpdate}
+                onClose={showInstagramPost ? undefined : () => { setIsInstagramPostOpen(false); setInstagramPreFill(null); }}
+                onSuccess={() => {
+                  if (!showInstagramPost) { setIsInstagramPostOpen(false); setInstagramPreFill(null); }
+                  setInstagramDraft(null);
+                }}
+                onPostStateChange={(state) => {
+                  const parts: string[] = [];
+                  parts.push(`Platform: ${state.platform}`);
+                  if (state.caption) parts.push(`Caption: "${state.caption}"`);
+                  if (state.tags) parts.push(`Hashtags: ${state.tags}`);
+                  if (state.isProduct && state.price) parts.push(`Preço: €${state.price}`);
+                  if (state.platform === 'tiktok' && state.tiktokTitle) parts.push(`TikTok title: "${state.tiktokTitle}"`);
+                  const stateStr = parts.length ? `\n${parts.join('\n')}` : ' (empty)';
+                  const langMap: Record<string, string> = { pt: 'Portuguese', es: 'Spanish', en: 'English' };
+                  const lang = langMap[locale] ?? 'English';
+                  postContextRef.current = `## Social Post Studio is open${stateStr}\n\nLANGUAGE: Generate all captions and hashtags in ${lang}.\n\nRULES:\n- Whenever the user asks you to generate, write, or improve post content, call \`update_social_form\` immediately.\n- Include the active platform in the tool call.\n- When the user sends an image and asks to generate a post, call \`update_social_form\` ONCE with image_url + caption + tags all filled in a single call.\n- For TikTok, also provide a short editable title.\n- Never write caption or hashtags only in the chat; always update the form.`;
+                }}
+                initialCaption={instagramPreFill?.caption}
+                initialTags={instagramPreFill?.tags}
+                initialImageBase64={instagramPreFill?.imageBase64}
+                initialImagePreview={instagramPreFill?.imagePreview}
+                initialImageUrl={instagramPreFill?.imageUrl}
+              />
+            </div>
+          )}
+
 
 
 

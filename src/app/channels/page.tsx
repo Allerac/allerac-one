@@ -1,6 +1,6 @@
 import { requireDomainAccess } from '@/app/lib/domain-access';
 import { getDomainSkillDefault } from '@/app/actions/skills';
-import ChannelsClient from './ChannelsClient';
+import ChatClient from '../chat/ChatClient';
 
 export default async function ChannelsPage() {
   const [user, skill] = await Promise.all([
@@ -9,12 +9,13 @@ export default async function ChannelsPage() {
   ]);
 
   return (
-    <ChannelsClient
-      userId={user.id}
-      userName={user.name}
-      userEmail={user.email}
-      isAdmin={user.is_admin}
+    <ChatClient
+      domainSlug="channels"
+      domainName="Channels"
       defaultSkillName={skill?.skill_name}
+      defaultSidebarCollapsed
+      showChannels
+      isAdmin={user.is_admin}
     />
   );
 }

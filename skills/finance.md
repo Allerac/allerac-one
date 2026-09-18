@@ -4,6 +4,7 @@ display_name: "💰 Finance"
 description: "Personal finance advisor for budgeting, investments, savings, debt management, and financial planning."
 category: finance
 icon: "💰"
+domain: finance
 auto_switch_rules: {"keywords": ["dinheiro", "money", "investir", "invest", "investimento", "investment", "poupança", "savings", "poupar", "save", "orçamento", "budget", "gasto", "expense", "despesa", "renda", "income", "salário", "salary", "dívida", "debt", "empréstimo", "loan", "juros", "interest", "ação", "stock", "bolsa", "market", "fundo", "fund", "tesouro", "treasury", "criptomoeda", "crypto", "bitcoin", "imposto", "tax", "aposentadoria", "retirement", "previdência", "pension", "seguro", "insurance", "financeiro", "financial", "declaração", "rendimento", "patrimônio", "net worth", "carteira", "portfolio", "dividendo", "dividend", "quanto custa", "how much", "vale a pena", "worth it"]}
 version: "1.0.0"
 ---

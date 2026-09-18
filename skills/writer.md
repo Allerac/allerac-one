@@ -4,6 +4,7 @@ display_name: "✍️ Content"
 description: "Content creator specialized in LinkedIn — technical articles, product storytelling, and thought leadership for Allerac and tech founders."
 category: productivity
 icon: "✍️"
+domain: write
 auto_switch_rules: {"keywords": ["escrever", "escreve", "redação", "redige", "texto", "text", "artigo", "article", "linkedin", "post", "publicar", "publish", "caption", "legenda", "copy", "slogan", "título", "headline", "resumo", "summary", "blog", "newsletter", "comunicado", "press release", "currículo", "resume", "cv", "bio", "descrição", "description", "reescreve", "rewrite", "melhora esse", "improve this", "revisa", "review", "edita", "edit", "correção", "correction", "tom", "tone", "formal", "informal", "criativo", "creative", "conteudo", "content creator", "founder", "pensamento", "thought leadership"]}
 version: "2.0.0"
 ---

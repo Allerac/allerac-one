@@ -68,7 +68,7 @@ interface RouteData {
   redacted: boolean;
 }
 
-// What gets handed up to the chat's context (see HealthClient.tsx's
+// What gets handed up to the chat's context (see ChatClient.tsx's
 // buildActivityContext) — deliberately excludes `route`/`series`. Per
 // docs/roadmap/health-detailed-activities.md's "Assistant access"/"Privacy
 // and security" sections: exact GPS coordinates must never reach chat
