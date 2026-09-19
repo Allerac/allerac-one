@@ -9,6 +9,7 @@
 
 import pool from '@/app/clients/db';
 import { EmbeddingService } from './embedding.service';
+import { extractPdfText } from './pdf-text';
 
 // Configuration for text chunking
 const CHUNK_SIZE = 1000; // Characters per chunk
@@ -112,20 +113,8 @@ export class DocumentService {
    * Extracts text from a PDF file using pdf-parse library (Node.js compatible).
    */
   private async extractTextFromPDF(file: File): Promise<string> {
-    try {
-      // Get file content as Buffer (works in Server Actions)
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      // Use pdf-parse for server-side PDF extraction
-      const pdfParse = (await import('pdf-parse')).default;
-      const pdfData = await pdfParse(buffer);
-
-      return pdfData.text;
-    } catch (error) {
-      console.error('Error extracting text from PDF:', error);
-      throw new Error(`Failed to extract text from PDF: ${(error as Error).message}`);
-    }
+    const arrayBuffer = await file.arrayBuffer();
+    return extractPdfText(Buffer.from(arrayBuffer));
   }
 
   /**

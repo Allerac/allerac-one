@@ -2,6 +2,7 @@
 
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 import { GoogleDriveConnectorService } from '@/app/services/notes-connectors/google-drive-connector.service';
+import { OneNoteConnectorService } from '@/app/services/notes-connectors/onenote-connector.service';
 import { NotesConnectorCredentialsService } from '@/app/services/notes-connectors/notes-connector-credentials.service';
 import { NotesConnectorItemsService } from '@/app/services/notes-connectors/notes-connector-items.service';
 import type { NotesConnectorItem } from '@/app/services/notes-connectors/types';
@@ -13,6 +14,14 @@ const googleDriveCredentials = new NotesConnectorCredentialsService(
   t => googleDrive.refreshToken(t),
 );
 const googleDriveItems = new NotesConnectorItemsService('google_drive', googleDrive);
+
+const oneNote = new OneNoteConnectorService();
+const oneNoteCredentials = new NotesConnectorCredentialsService(
+  'onenote',
+  () => oneNote.isConfigured(),
+  t => oneNote.refreshToken(t),
+);
+const oneNoteItems = new NotesConnectorItemsService('onenote', oneNote);
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
@@ -111,6 +120,93 @@ export async function disconnectGoogleDrive() {
     return { success: true };
   } catch (err) {
     console.error('[notes-connectors] disconnectGoogleDrive error:', err);
+    return { success: false, error: getErrorMessage(err) };
+  }
+}
+
+export async function getOneNoteStatus() {
+  try {
+    return { success: true, status: await oneNoteCredentials.getStatus(await notesUserId()) };
+  } catch (err) {
+    console.error('[notes-connectors] getOneNoteStatus error:', err);
+    return { success: false, error: getErrorMessage(err) };
+  }
+}
+
+/** Powers the notebook/section/page checkbox tree — OneNote has no client-side picker equivalent to Google's. */
+export async function getOneNoteItems() {
+  try {
+    const userId = await notesUserId();
+    const token = await oneNoteCredentials.getValidAccessToken(userId);
+    if (!token) return { success: false, items: [] as NotesConnectorItem[], error: 'OneNote is not connected' };
+    const items: NotesConnectorItem[] = [];
+    for await (const item of oneNote.listItems(token.accessToken)) items.push(item);
+    return { success: true, items };
+  } catch (err) {
+    console.error('[notes-connectors] getOneNoteItems error:', err);
+    return { success: false, items: [] as NotesConnectorItem[], error: getErrorMessage(err) };
+  }
+}
+
+/** Selected items already carry full metadata from getOneNoteItems — no per-item lookup needed, unlike Google's Picker result. */
+export async function importOneNoteSelection(items: NotesConnectorItem[]) {
+  try {
+    const userId = await notesUserId();
+    const token = await oneNoteCredentials.getValidAccessToken(userId);
+    if (!token) return { success: false, error: 'OneNote is not connected' };
+    const summary = await oneNoteItems.importSelected(userId, token.credentialId, token.accessToken, items);
+    return { success: true, summary };
+  } catch (err) {
+    console.error('[notes-connectors] importOneNoteSelection error:', err);
+    return { success: false, error: getErrorMessage(err) };
+  }
+}
+
+export async function resyncOneNote() {
+  try {
+    const userId = await notesUserId();
+    const token = await oneNoteCredentials.getValidAccessToken(userId);
+    if (!token) return { success: false, error: 'OneNote is not connected' };
+    const summary = await oneNoteItems.resync(userId, token.credentialId, token.accessToken);
+    return { success: true, summary };
+  } catch (err) {
+    console.error('[notes-connectors] resyncOneNote error:', err);
+    return { success: false, error: getErrorMessage(err) };
+  }
+}
+
+export async function listOneNoteConflicts() {
+  try {
+    const userId = await notesUserId();
+    const token = await oneNoteCredentials.getValidAccessToken(userId);
+    if (!token) return { success: false, conflicts: [], error: 'OneNote is not connected' };
+    const conflicts = await oneNoteItems.listConflicts(token.credentialId);
+    return { success: true, conflicts };
+  } catch (err) {
+    console.error('[notes-connectors] listOneNoteConflicts error:', err);
+    return { success: false, conflicts: [], error: getErrorMessage(err) };
+  }
+}
+
+export async function resolveOneNoteConflict(externalId: string, resolution: 'keep_local' | 'use_source') {
+  try {
+    const userId = await notesUserId();
+    const token = await oneNoteCredentials.getValidAccessToken(userId);
+    if (!token) return { success: false, error: 'OneNote is not connected' };
+    await oneNoteItems.resolveConflict(userId, token.credentialId, token.accessToken, externalId, resolution);
+    return { success: true };
+  } catch (err) {
+    console.error('[notes-connectors] resolveOneNoteConflict error:', err);
+    return { success: false, error: getErrorMessage(err) };
+  }
+}
+
+export async function disconnectOneNote() {
+  try {
+    await oneNoteCredentials.disconnect(await notesUserId());
+    return { success: true };
+  } catch (err) {
+    console.error('[notes-connectors] disconnectOneNote error:', err);
     return { success: false, error: getErrorMessage(err) };
   }
 }

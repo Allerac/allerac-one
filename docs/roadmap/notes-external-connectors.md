@@ -347,14 +347,16 @@ CREATE TABLE notes_connector_items (
 ### Google Drive specifics
 
 - Selection: Google Picker (`DocsView` filtered to Google Docs, plain text,
-  and markdown files — PDFs excluded from this connector; PDF import is
-  tracked as the existing "file upload" open question in the Notes domain
-  doc, not duplicated here).
+  markdown, and PDF files).
 - Fetch: Google Docs via `files.export` (`text/markdown` or `text/plain`);
-  native text/markdown files via `files.get?alt=media`. `parentLabel` = the
-  immediate parent folder name, fetched via `files.get(fields=parents)` +
-  one `files.get` per parent id (small, bounded — at most once per imported
-  file per sync).
+  native text/markdown files via `files.get?alt=media`; PDFs via the same
+  `alt=media` download, piped through `extractPdfText`
+  (`src/app/services/rag/pdf-text.ts`) — the same `pdf-parse`-based extraction
+  already used for manual document upload/RAG, shared rather than
+  reimplemented. Text-based PDFs only; scanned/image PDFs need OCR, not
+  attempted. `parentLabel` = the immediate parent folder name, fetched via
+  `files.get(fields=parents)` + one `files.get` per parent id (small,
+  bounded — at most once per imported file per sync).
 - Scope: `drive.file` only. This is why Drive has no server-side `listItems`:
   the app can only ever see files the user explicitly granted through the
   Picker, so "list what's importable" and "let the user select" are the same
@@ -422,6 +424,23 @@ running without a browser open). Treat 1–4 as "get all of these right before
 debugging further," not as a proven-minimal list — and see `resyncGoogleDrive`
 in production use for whether the server-stored token path needs the same
 live-token treatment as import.
+
+**Duplicate folders and empty folder contents in the Picker** (found on real
+VM usage, not local testing — the account used locally apparently had no
+overlapping Recent/Shared-with-me folders to expose it). `DocsView(ViewId.DOCS)`
+by default merges "My Drive," "Shared with me," and "Recent" into one corpus;
+a folder indexed by both hierarchy and recent-activity shows up twice with the
+same name but different underlying references, and navigating into the
+Recent-sourced duplicate doesn't resolve to a real children query, so it looks
+empty. Fix: `.setOwnedByMe(true)` on the `DocsView`, which restricts it to the
+real My Drive hierarchy and eliminates both symptoms. Tried and reverted:
+`.setParent('root')` alongside it — this pins the entire view to root-level
+items only and breaks navigating into subfolders at all; don't add it back.
+Trade-off worth knowing: `setOwnedByMe(true)` also hides folders/files merely
+shared with the user (not owned) from folder browsing — they're still
+reachable via the Picker's search box, just not by navigating a shared
+folder's tree. Acceptable for now; revisit only if "browse a folder someone
+else shared with me" becomes an actual ask.
 
 ## API surface
 
@@ -520,19 +539,16 @@ drift (a note edited locally + the source file changed).
 4. Reuse the Phase 2 import job/progress UI (provider-parameterized, not
    rebuilt).
 
-**Bundled into the same session: PDF text extraction.** The Google Drive
-Picker currently filters PDFs out entirely (`PICKER_MIME_TYPES` has no
-`application/pdf`) because nothing in the pipeline can turn a PDF into
-text/markdown yet — this isn't a Drive-specific gap, it's the same "File
-upload" open question already on the Notes domain doc
-(`docs/domains/notes.md`, "Paste a PDF or `.md` file directly into the vault").
-Solving text extraction once (a PDF-to-text/markdown step, OCR only if scanned
-PDFs turn out to matter) benefits both: manual PDF upload in `VaultPanel`, and
-adding `application/pdf` to the Drive Picker's mime filter. Scope this as its
-own small piece of work next session rather than folding it silently into the
-OneNote connector's `normalizeToMarkdown` — the two have nothing in common
-technically (HTML→MD vs. binary PDF parsing) beyond both feeding the same
-`user_notes.content` field.
+**PDF text extraction ✅** — done ahead of Phase 3, for Google Drive only.
+`extractPdfText` (`src/app/services/rag/pdf-text.ts`) was pulled out of
+`DocumentService`'s existing `pdf-parse`-based extraction (previously private,
+used only for manual document upload/RAG) into a shared function, then wired
+into `GoogleDriveConnectorService.fetchContent` and added to the Picker's
+`PICKER_MIME_TYPES`. Text-based PDFs only — scanned/image PDFs need OCR,
+not attempted. Manual "paste a PDF directly into the Notes vault" (the
+original open question on `docs/domains/notes.md`) is a separate, still-open
+UI feature (a file input in `VaultPanel` calling this same helper) — the
+extraction work it needed is now done, just not wired to that UI.
 
 ### Phase 4 — Re-sync and conflict handling
 1. `resync` endpoint and job using the hash-comparison algorithm above.

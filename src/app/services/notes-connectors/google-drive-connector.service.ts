@@ -1,4 +1,5 @@
 import type { NotesConnector, NotesConnectorContent, NotesConnectorTokens } from './types';
+import { extractPdfText } from '@/app/services/rag/pdf-text';
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -142,14 +143,22 @@ export class GoogleDriveConnectorService implements NotesConnector {
       const body = await response.text().catch(() => '');
       throw new Error(`Google Drive file download failed (${response.status}): ${body.slice(0, 300)}`);
     }
+
+    if (meta.mimeType === 'application/pdf') {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const text = await extractPdfText(buffer);
+      return { raw: text, mimeType: 'application/pdf' };
+    }
+
     const raw = await response.text();
     return { raw, mimeType: meta.mimeType === 'text/markdown' ? 'text/markdown' : 'text/plain' };
   }
 
   normalizeToMarkdown(content: NotesConnectorContent): string {
-    // Plain text and markdown both pass through unchanged — Drive never
-    // hands this connector HTML (Google Docs are exported straight to
-    // markdown/plain text via the Docs export endpoint).
+    // Plain text, markdown, and PDF-extracted text all pass through
+    // unchanged — Drive never hands this connector HTML (Google Docs are
+    // exported straight to markdown/plain text via the Docs export endpoint),
+    // and pdf-parse already returns plain text, not markup.
     return content.raw;
   }
 

@@ -9,7 +9,16 @@ import {
   listGoogleDriveConflicts,
   resolveGoogleDriveConflict,
   disconnectGoogleDrive,
+  getOneNoteStatus,
+  getOneNoteItems,
+  importOneNoteSelection,
+  resyncOneNote,
+  listOneNoteConflicts,
+  resolveOneNoteConflict,
+  disconnectOneNote,
 } from '@/app/actions/notes-connectors';
+import ConnectorConflictModal from './ConnectorConflictModal';
+import OneNoteSelectionModal from './OneNoteSelectionModal';
 
 interface Props {
   isDarkMode: boolean;
@@ -31,10 +40,19 @@ interface ConflictItem {
   title: string | null;
 }
 
+interface OneNoteItem {
+  externalId: string;
+  title: string;
+  sourceUrl: string;
+  parentLabel: string;
+  modifiedAt: string;
+}
+
 // Google Picker/gapi ship no first-party types; these are the only shapes this file touches.
 interface GooglePickerDocsView {
   setMimeTypes: (m: string) => GooglePickerDocsView;
   setIncludeFolders: (v: boolean) => GooglePickerDocsView;
+  setOwnedByMe: (v: boolean) => GooglePickerDocsView;
 }
 
 interface GooglePickerBuilder {
@@ -76,7 +94,7 @@ declare global {
   }
 }
 
-const PICKER_MIME_TYPES = 'application/vnd.google-apps.document,text/plain,text/markdown';
+const PICKER_MIME_TYPES = 'application/vnd.google-apps.document,text/plain,text/markdown,application/pdf';
 
 export default function ExternalSourcesPanel({ isDarkMode: d, onImported }: Props) {
   const [status, setStatus] = useState<ConnectorStatus | null>(null);
@@ -88,6 +106,15 @@ export default function ExternalSourcesPanel({ isDarkMode: d, onImported }: Prop
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+
+  const [oneNoteStatus, setOneNoteStatus] = useState<ConnectorStatus | null>(null);
+  const [oneNoteBusy, setOneNoteBusy] = useState<'items' | 'import' | 'sync' | null>(null);
+  const [oneNoteMessage, setOneNoteMessage] = useState<string | null>(null);
+  const [oneNoteItems, setOneNoteItems] = useState<OneNoteItem[]>([]);
+  const [showOneNoteSelection, setShowOneNoteSelection] = useState(false);
+  const [oneNoteConflicts, setOneNoteConflicts] = useState<ConflictItem[]>([]);
+  const [showOneNoteConflictModal, setShowOneNoteConflictModal] = useState(false);
+  const [oneNoteResolvingId, setOneNoteResolvingId] = useState<string | null>(null);
 
   const loadStatus = useCallback(async () => {
     const res = await getGoogleDriveStatus();
@@ -102,17 +129,34 @@ export default function ExternalSourcesPanel({ isDarkMode: d, onImported }: Prop
   useEffect(() => { loadStatus(); }, [loadStatus]);
   useEffect(() => { if (status?.isConnected) loadConflicts(); }, [status?.isConnected, loadConflicts]);
 
-  // Pick up ?connector=google_drive&status=... left by the OAuth redirect.
+  const loadOneNoteStatus = useCallback(async () => {
+    const res = await getOneNoteStatus();
+    if (res.success && res.status) setOneNoteStatus(res.status);
+  }, []);
+
+  const loadOneNoteConflicts = useCallback(async () => {
+    const res = await listOneNoteConflicts();
+    if (res.success) setOneNoteConflicts(res.conflicts as ConflictItem[]);
+  }, []);
+
+  useEffect(() => { loadOneNoteStatus(); }, [loadOneNoteStatus]);
+  useEffect(() => { if (oneNoteStatus?.isConnected) loadOneNoteConflicts(); }, [oneNoteStatus?.isConnected, loadOneNoteConflicts]);
+
+  // Pick up ?connector=<provider>&status=... left by either OAuth redirect.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('connector') !== 'google_drive') return;
+    const connector = params.get('connector');
+    if (connector !== 'google_drive' && connector !== 'onenote') return;
     const outcome = params.get('status');
-    if (outcome === 'connected') { setMessage('Google Drive conectado.'); setExpanded(true); }
-    else if (outcome === 'error') setMessage('Falha ao conectar ao Google Drive. Tente novamente.');
-    else if (outcome === 'not_configured') setMessage('Google Drive não está configurado neste servidor.');
+    const label = connector === 'google_drive' ? 'Google Drive' : 'OneNote';
+    const setMsg = connector === 'google_drive' ? setMessage : setOneNoteMessage;
+    if (outcome === 'connected') { setMsg(`${label} conectado.`); setExpanded(true); }
+    else if (outcome === 'error') setMsg(`Falha ao conectar ao ${label}. Tente novamente.`);
+    else if (outcome === 'not_configured') setMsg(`${label} não está configurado neste servidor.`);
     window.history.replaceState({}, '', window.location.pathname);
     loadStatus();
-  }, [loadStatus]);
+    loadOneNoteStatus();
+  }, [loadStatus, loadOneNoteStatus]);
 
   const launchPicker = useCallback((accessToken: string) => {
     const google = window.google;
@@ -127,9 +171,18 @@ export default function ExternalSourcesPanel({ isDarkMode: d, onImported }: Prop
     // the live API: listing a picked folder's children returns empty even
     // though the folder itself is accessible). So folders are for
     // navigation only; import individual files (multi-select works).
+    //
+    // setOwnedByMe(true): without it, DocsView(DOCS) shows a merged "My
+    // Drive + Shared with me + Recent" corpus, producing duplicate folder
+    // entries (the same folder indexed both by hierarchy and by
+    // recent-activity) — confirmed fixed on real-world VM usage.
+    // NOTE: setParent('root') was tried alongside this to also fix empty
+    // folder contents, but it pins the view to root-level items only and
+    // breaks navigating into subfolders — removed.
     const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
       .setMimeTypes(PICKER_MIME_TYPES)
-      .setIncludeFolders(true);
+      .setIncludeFolders(true)
+      .setOwnedByMe(true);
 
     // The numeric prefix of a Google OAuth client_id is the GCP project
     // number by convention — reused here instead of adding a separate env
@@ -240,10 +293,72 @@ export default function ExternalSourcesPanel({ isDarkMode: d, onImported }: Prop
     await loadStatus();
   }, [loadStatus]);
 
-  // Instance has no Google OAuth app configured — nothing to show.
-  if (status && !status.configured) return null;
+  const handleOpenOneNoteSelection = useCallback(async () => {
+    setOneNoteMessage(null);
+    setShowOneNoteSelection(true);
+    setOneNoteBusy('items');
+    const res = await getOneNoteItems();
+    if (res.success) setOneNoteItems(res.items as OneNoteItem[]);
+    else setOneNoteMessage(res.error ?? 'Falha ao listar notebooks.');
+    setOneNoteBusy(null);
+  }, []);
 
-  const linkClass = d ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500';
+  const handleImportOneNote = useCallback(async (selected: OneNoteItem[]) => {
+    setOneNoteBusy('import');
+    const res = await importOneNoteSelection(selected);
+    if (res.success && res.summary) {
+      const s = res.summary;
+      setOneNoteMessage(`Importado: ${s.imported} nova(s), ${s.updated} atualizada(s)${s.failed.length ? `, ${s.failed.length} falha(s)` : ''}.`);
+      onImported?.();
+    } else {
+      setOneNoteMessage(res.error ?? 'Falha ao importar.');
+    }
+    setOneNoteBusy(null);
+    setShowOneNoteSelection(false);
+  }, [onImported]);
+
+  const handleOneNoteResync = useCallback(async () => {
+    setOneNoteBusy('sync');
+    setOneNoteMessage(null);
+    const res = await resyncOneNote();
+    if (res.success && res.summary) {
+      const s = res.summary;
+      setOneNoteMessage(`Sincronizado: ${s.updated} atualizada(s), ${s.unchanged} sem mudança, ${s.conflicts} conflito(s).`);
+      await loadOneNoteConflicts();
+      if (s.conflicts > 0) setShowOneNoteConflictModal(true);
+      onImported?.();
+    } else {
+      setOneNoteMessage(res.error ?? 'Falha ao sincronizar.');
+    }
+    setOneNoteBusy(null);
+  }, [loadOneNoteConflicts, onImported]);
+
+  const handleOneNoteResolve = useCallback(async (externalId: string, resolution: 'keep_local' | 'use_source') => {
+    setOneNoteResolvingId(externalId);
+    setOneNoteMessage(null);
+    const resolveRes = await resolveOneNoteConflict(externalId, resolution);
+    if (!resolveRes.success) {
+      setOneNoteMessage(resolveRes.error ?? 'Falha ao resolver o conflito.');
+      setOneNoteResolvingId(null);
+      return;
+    }
+    const res = await listOneNoteConflicts();
+    const remaining = res.success ? (res.conflicts as ConflictItem[]) : [];
+    setOneNoteConflicts(remaining);
+    if (remaining.length === 0) setShowOneNoteConflictModal(false);
+    setOneNoteMessage(resolution === 'use_source' ? 'Atualizado com a versão da fonte.' : 'Sua versão local foi mantida.');
+    setOneNoteResolvingId(null);
+    onImported?.();
+  }, [onImported]);
+
+  const handleOneNoteDisconnect = useCallback(async () => {
+    if (!window.confirm('Desconectar o OneNote? As notas já importadas continuam no seu vault.')) return;
+    await disconnectOneNote();
+    await loadOneNoteStatus();
+  }, [loadOneNoteStatus]);
+
+  // Instance has neither connector configured — nothing to show.
+  if (status && !status.configured && oneNoteStatus && !oneNoteStatus.configured) return null;
 
   return (
     <div className={`flex-shrink-0 border-b px-2 py-2 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
@@ -261,115 +376,153 @@ export default function ExternalSourcesPanel({ isDarkMode: d, onImported }: Prop
         onClick={() => setExpanded(v => !v)}
         className={`w-full flex items-center justify-between text-xs font-medium ${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
       >
-        <span>External sources{status?.isConnected ? ' · Google Drive' : ''}</span>
+        <span>
+          External sources
+          {[status?.isConnected && 'Google Drive', oneNoteStatus?.isConnected && 'OneNote'].filter(Boolean).length > 0
+            && ` · ${[status?.isConnected && 'Google Drive', oneNoteStatus?.isConnected && 'OneNote'].filter(Boolean).join(', ')}`}
+        </span>
         <span>{expanded ? '−' : '+'}</span>
       </button>
 
       {expanded && (
-        <div className="mt-2 space-y-2">
-          {!status?.isConnected ? (
-            <a
-              href="/api/notes-connectors/google_drive/connect"
-              className={`inline-block text-xs px-2 py-1 rounded border transition-colors ${d ? 'border-gray-700 text-gray-300 hover:border-gray-500' : 'border-gray-300 text-gray-600 hover:border-gray-400'}`}
-            >
-              Connect Google Drive
-            </a>
-          ) : (
+        <div className="mt-2 space-y-3">
+          {status?.configured !== false && (
             <div className="space-y-2">
-              <div className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>
-                {status.accountLabel ?? 'Connected'}
-                {status.lastSyncAt && ` · synced ${new Date(status.lastSyncAt).toLocaleString()}`}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={openPicker}
-                  disabled={busy !== null || !pickerReady || !gisReady}
-                  className={`text-xs px-2 py-1 rounded transition-colors disabled:opacity-40 ${d ? 'bg-indigo-700 hover:bg-indigo-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+              <div className={`text-xs font-semibold ${d ? 'text-gray-500' : 'text-gray-400'}`}>Google Drive</div>
+              {!status?.isConnected ? (
+                <a
+                  href="/api/notes-connectors/google_drive/connect"
+                  className={`inline-block text-xs px-2 py-1 rounded border transition-colors ${d ? 'border-gray-700 text-gray-300 hover:border-gray-500' : 'border-gray-300 text-gray-600 hover:border-gray-400'}`}
                 >
-                  {!pickerReady || !gisReady ? 'Carregando…' : busy === 'import' ? 'Importando…' : 'Selecionar e importar'}
-                </button>
-                <button
-                  onClick={handleResync}
-                  disabled={busy !== null}
-                  className={`text-xs px-2 py-1 rounded border transition-colors disabled:opacity-40 ${d ? 'border-gray-700 text-gray-300 hover:border-gray-500' : 'border-gray-300 text-gray-600 hover:border-gray-400'}`}
-                >
-                  {busy === 'sync' ? 'Sincronizando…' : 'Sincronizar'}
-                </button>
-                <button onClick={handleDisconnect} className={`text-xs px-2 py-1 ${d ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}>
-                  Desconectar
-                </button>
-              </div>
+                  Connect Google Drive
+                </a>
+              ) : (
+                <div className="space-y-2">
+                  <div className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+                    {status.accountLabel ?? 'Connected'}
+                    {status.lastSyncAt && ` · synced ${new Date(status.lastSyncAt).toLocaleString()}`}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={openPicker}
+                      disabled={busy !== null || !pickerReady || !gisReady}
+                      className={`text-xs px-2 py-1 rounded transition-colors disabled:opacity-40 ${d ? 'bg-indigo-700 hover:bg-indigo-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+                    >
+                      {!pickerReady || !gisReady ? 'Carregando…' : busy === 'import' ? 'Importando…' : 'Selecionar e importar'}
+                    </button>
+                    <button
+                      onClick={handleResync}
+                      disabled={busy !== null}
+                      className={`text-xs px-2 py-1 rounded border transition-colors disabled:opacity-40 ${d ? 'border-gray-700 text-gray-300 hover:border-gray-500' : 'border-gray-300 text-gray-600 hover:border-gray-400'}`}
+                    >
+                      {busy === 'sync' ? 'Sincronizando…' : 'Sincronizar'}
+                    </button>
+                    <button onClick={handleDisconnect} className={`text-xs px-2 py-1 ${d ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}>
+                      Desconectar
+                    </button>
+                  </div>
 
-              {conflicts.length > 0 && (
-                <button
-                  onClick={() => setShowConflictModal(true)}
-                  className={`w-full text-left rounded border px-2 py-1.5 text-xs font-medium transition-colors ${d ? 'border-yellow-900/50 bg-yellow-900/10 text-yellow-500 hover:bg-yellow-900/20' : 'border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
-                >
-                  ⚠ {conflicts.length} nota(s) com atualização pendente — revisar
-                </button>
+                  {conflicts.length > 0 && (
+                    <button
+                      onClick={() => setShowConflictModal(true)}
+                      className={`w-full text-left rounded border px-2 py-1.5 text-xs font-medium transition-colors ${d ? 'border-yellow-900/50 bg-yellow-900/10 text-yellow-500 hover:bg-yellow-900/20' : 'border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
+                    >
+                      ⚠ {conflicts.length} nota(s) com atualização pendente — revisar
+                    </button>
+                  )}
+                </div>
               )}
+
+              {message && <div className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>{message}</div>}
+              {status?.lastError && <div className="text-xs text-red-500">{status.lastError}</div>}
             </div>
           )}
 
-          {message && <div className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>{message}</div>}
-          {status?.lastError && <div className="text-xs text-red-500">{status.lastError}</div>}
-        </div>
-      )}
-
-      {showConflictModal && conflicts.length > 0 && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className={`rounded-xl shadow-xl w-full max-w-lg max-h-[85dvh] flex flex-col ${d ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-            <div className={`px-5 py-4 border-b ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-              <div className={`text-sm font-semibold ${d ? 'text-gray-100' : 'text-gray-900'}`}>
-                ⚠ Atualizações pendentes do Google Drive
-              </div>
-              <p className={`text-xs mt-1 ${d ? 'text-gray-400' : 'text-gray-500'}`}>
-                Estas notas foram editadas aqui no Allerac e também mudaram na fonte.
-                Escolha qual versão manter para cada uma — nada é sobrescrito automaticamente.
-              </p>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-              {conflicts.map(c => (
-                <div key={c.externalId} className={`rounded-lg border px-3 py-3 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-                  <div className={`text-sm font-medium mb-2 truncate ${d ? 'text-gray-100' : 'text-gray-900'}`}>
-                    {c.title || c.externalId}
+          {oneNoteStatus?.configured !== false && (
+            <div className={`space-y-2 ${status?.configured !== false ? `pt-3 border-t ${d ? 'border-gray-800' : 'border-gray-200'}` : ''}`}>
+              <div className={`text-xs font-semibold ${d ? 'text-gray-500' : 'text-gray-400'}`}>OneNote</div>
+              {!oneNoteStatus?.isConnected ? (
+                <a
+                  href="/api/notes-connectors/onenote/connect"
+                  className={`inline-block text-xs px-2 py-1 rounded border transition-colors ${d ? 'border-gray-700 text-gray-300 hover:border-gray-500' : 'border-gray-300 text-gray-600 hover:border-gray-400'}`}
+                >
+                  Connect OneNote
+                </a>
+              ) : (
+                <div className="space-y-2">
+                  <div className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+                    {oneNoteStatus.accountLabel ?? 'Connected'}
+                    {oneNoteStatus.lastSyncAt && ` · synced ${new Date(oneNoteStatus.lastSyncAt).toLocaleString()}`}
                   </div>
-                  <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer" className={`text-xs underline ${linkClass}`}>
-                    Abrir no Google Drive
-                  </a>
-                  <div className="flex gap-2 mt-3">
+                  <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={() => handleResolve(c.externalId, 'keep_local')}
-                      disabled={resolvingId !== null}
-                      className={`flex-1 text-xs px-3 py-2 rounded-lg border transition-colors disabled:opacity-40 ${d ? 'border-gray-600 text-gray-200 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                      onClick={handleOpenOneNoteSelection}
+                      disabled={oneNoteBusy !== null}
+                      className={`text-xs px-2 py-1 rounded transition-colors disabled:opacity-40 ${d ? 'bg-indigo-700 hover:bg-indigo-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
                     >
-                      Manter minha versão
+                      Selecionar e importar
                     </button>
                     <button
-                      onClick={() => handleResolve(c.externalId, 'use_source')}
-                      disabled={resolvingId !== null}
-                      className={`flex-1 text-xs px-3 py-2 rounded-lg transition-colors disabled:opacity-40 ${d ? 'bg-indigo-700 hover:bg-indigo-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+                      onClick={handleOneNoteResync}
+                      disabled={oneNoteBusy !== null}
+                      className={`text-xs px-2 py-1 rounded border transition-colors disabled:opacity-40 ${d ? 'border-gray-700 text-gray-300 hover:border-gray-500' : 'border-gray-300 text-gray-600 hover:border-gray-400'}`}
                     >
-                      {resolvingId === c.externalId ? 'Aplicando…' : 'Usar versão da fonte'}
+                      {oneNoteBusy === 'sync' ? 'Sincronizando…' : 'Sincronizar'}
+                    </button>
+                    <button onClick={handleOneNoteDisconnect} className={`text-xs px-2 py-1 ${d ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}>
+                      Desconectar
                     </button>
                   </div>
+
+                  {oneNoteConflicts.length > 0 && (
+                    <button
+                      onClick={() => setShowOneNoteConflictModal(true)}
+                      className={`w-full text-left rounded border px-2 py-1.5 text-xs font-medium transition-colors ${d ? 'border-yellow-900/50 bg-yellow-900/10 text-yellow-500 hover:bg-yellow-900/20' : 'border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100'}`}
+                    >
+                      ⚠ {oneNoteConflicts.length} nota(s) com atualização pendente — revisar
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
+              )}
 
-            <div className={`px-5 py-3 border-t flex items-center justify-between gap-3 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
-              {message && <span className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>{message}</span>}
-              <button
-                onClick={() => setShowConflictModal(false)}
-                className={`text-xs px-3 py-1.5 rounded transition-colors ml-auto ${d ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Revisar depois
-              </button>
+              {oneNoteMessage && <div className={`text-xs ${d ? 'text-gray-400' : 'text-gray-500'}`}>{oneNoteMessage}</div>}
+              {oneNoteStatus?.lastError && <div className="text-xs text-red-500">{oneNoteStatus.lastError}</div>}
             </div>
-          </div>
+          )}
         </div>
       )}
+
+      <ConnectorConflictModal
+        isDarkMode={d}
+        isOpen={showConflictModal}
+        providerLabel="Google Drive"
+        conflicts={conflicts}
+        resolvingId={resolvingId}
+        message={message}
+        onResolve={handleResolve}
+        onClose={() => setShowConflictModal(false)}
+      />
+
+      <ConnectorConflictModal
+        isDarkMode={d}
+        isOpen={showOneNoteConflictModal}
+        providerLabel="OneNote"
+        conflicts={oneNoteConflicts}
+        resolvingId={oneNoteResolvingId}
+        message={oneNoteMessage}
+        onResolve={handleOneNoteResolve}
+        onClose={() => setShowOneNoteConflictModal(false)}
+      />
+
+      <OneNoteSelectionModal
+        isDarkMode={d}
+        isOpen={showOneNoteSelection}
+        loading={oneNoteBusy === 'items'}
+        items={oneNoteItems}
+        importing={oneNoteBusy === 'import'}
+        onImport={handleImportOneNote}
+        onClose={() => setShowOneNoteSelection(false)}
+      />
     </div>
   );
 }
