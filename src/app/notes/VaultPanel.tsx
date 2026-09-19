@@ -5,7 +5,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { listNotes, searchNotes, createNote, updateNote, deleteNote, getAllTags } from '@/app/actions/notes';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
-import ExternalSourcesPanel from './ExternalSourcesPanel';
 
 interface Note {
   id: string;
@@ -567,9 +566,6 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
             }`}
           />
         </div>
-
-        {/* External sources (OneNote, Google Drive) */}
-        <ExternalSourcesPanel isDarkMode={d} onImported={() => loadNotes(activeTag ?? undefined)} />
 
         {/* Tags */}
         {tags.length > 0 && (

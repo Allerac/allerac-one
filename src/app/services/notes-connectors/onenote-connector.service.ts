@@ -100,6 +100,10 @@ export class OneNoteConnectorService implements NotesConnector {
       response_type: 'code',
       response_mode: 'query',
       scope: SCOPES,
+      // Force the account chooser instead of silently reusing the active
+      // Microsoft session — otherwise reconnecting after disconnect goes
+      // straight through with whichever account was used last.
+      prompt: 'select_account',
       state,
     });
     return `${AUTH_URL}?${params.toString()}`;

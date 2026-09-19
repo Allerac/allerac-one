@@ -80,9 +80,13 @@ export class GoogleDriveConnectorService implements NotesConnector {
       response_type: 'code',
       scope: SCOPE,
       access_type: 'offline',
-      // Always show consent so a refresh_token is returned even on a
-      // re-connect (Google omits it by default once already granted).
-      prompt: 'consent',
+      // consent: always show consent so a refresh_token is returned even on
+      // a re-connect (Google omits it by default once already granted).
+      // select_account: force the account chooser instead of silently
+      // reusing the active Google session — otherwise reconnecting after
+      // disconnect goes straight through with whichever account was used
+      // last, with no way to switch.
+      prompt: 'select_account consent',
       state,
     });
     return `${AUTH_URL}?${params.toString()}`;

@@ -1,7 +1,6 @@
 import { createHash } from 'crypto';
 import pool from '@/app/clients/db';
 import { NotesService } from '@/app/services/notes/notes.service';
-import { upsertConnection } from '@/app/services/integrations/integration-connections.service';
 import type { NotesConnector, NotesConnectorItem, NotesConnectorProvider } from './types';
 
 function hash(content: string): string {
@@ -92,7 +91,6 @@ export class NotesConnectorItemsService {
       }
     }
 
-    await upsertConnection(userId, this.provider, { lastSyncAt: new Date(), lastError: summary.failed.length ? `${summary.failed.length} item(s) failed to import` : null });
     return summary;
   }
 
@@ -146,7 +144,6 @@ export class NotesConnectorItemsService {
       }
     }
 
-    await upsertConnection(userId, this.provider, { lastSyncAt: new Date(), lastError: summary.failed.length ? `${summary.failed.length} item(s) failed to sync` : null });
     return summary;
   }
 

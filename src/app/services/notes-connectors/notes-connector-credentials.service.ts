@@ -1,133 +1,145 @@
 import pool from '@/app/clients/db';
 import { encrypt, safeDecrypt } from '@/app/services/crypto/encryption.service';
-import { getConnection, upsertConnection } from '@/app/services/integrations/integration-connections.service';
 import type { NotesConnectorProvider, NotesConnectorTokens } from './types';
 
 const REFRESH_MARGIN_SECONDS = 10 * 60;
 
 interface CredentialRow {
   id: string;
+  user_id: string;
   access_token_encrypted: string;
   refresh_token_encrypted: string;
   access_token_expires_at: Date | string | null;
 }
 
-export interface NotesConnectorStatus {
-  configured: boolean;
-  isConnected: boolean;
+export interface NotesConnectorConnection {
+  credentialId: string;
   accountId: string | null;
   accountLabel: string | null;
   scopes: string | null;
+  status: 'active' | 'revoked' | 'error';
   lastSyncAt: string | Date | null;
   lastError: string | null;
 }
 
 /**
  * Generic, provider-parameterized credential store for Notes connectors.
- * Connection status (is_connected/last_sync_at/last_error) lives in the
- * shared integration_connections table; this service owns only the
- * encrypted secrets in notes_connector_credentials.
+ *
+ * Supports multiple simultaneous accounts per (user, provider) — e.g.
+ * personal + work Google Drive — so status/secrets both live directly on
+ * notes_connector_credentials (one row per account), not in the shared
+ * integration_connections table used by Garmin/Strava/Spotify, which only
+ * models one connection per (user, provider). See
+ * docs/roadmap/notes-external-connectors.md and migration 133.
  */
 export class NotesConnectorCredentialsService {
   constructor(
     private readonly provider: NotesConnectorProvider,
-    private readonly isConfigured: () => boolean,
-    private readonly refreshToken: (refreshToken: string) => Promise<NotesConnectorTokens>,
+    readonly isConfigured: () => boolean,
+    private readonly refreshTokenFn: (refreshToken: string) => Promise<NotesConnectorTokens>,
   ) {}
 
-  async getStatus(userId: string): Promise<NotesConnectorStatus> {
-    const [credential, connection] = await Promise.all([
-      pool.query<{ provider_account_id: string | null; provider_account_label: string | null; granted_scopes: string | null }>(
-        `SELECT provider_account_id, provider_account_label, granted_scopes
-         FROM notes_connector_credentials WHERE user_id = $1 AND provider = $2`,
-        [userId, this.provider],
-      ),
-      getConnection(userId, this.provider),
-    ]);
-    const row = credential.rows[0];
-    return {
-      configured: this.isConfigured(),
-      isConnected: Boolean(connection?.isConnected && row),
-      accountId: row?.provider_account_id ?? null,
-      accountLabel: row?.provider_account_label ?? null,
-      scopes: row?.granted_scopes ?? null,
-      lastSyncAt: connection?.lastSyncAt ?? null,
-      lastError: connection?.lastError ?? null,
-    };
+  async listConnections(userId: string): Promise<NotesConnectorConnection[]> {
+    const result = await pool.query<{
+      id: string;
+      provider_account_id: string | null;
+      provider_account_label: string | null;
+      granted_scopes: string | null;
+      status: 'active' | 'revoked' | 'error';
+      last_synced_at: string | Date | null;
+      last_error: string | null;
+    }>(
+      `SELECT id, provider_account_id, provider_account_label, granted_scopes, status, last_synced_at, last_error
+       FROM notes_connector_credentials
+       WHERE user_id = $1 AND provider = $2 AND status != 'revoked'
+       ORDER BY created_at ASC`,
+      [userId, this.provider],
+    );
+    return result.rows.map(row => ({
+      credentialId: row.id,
+      accountId: row.provider_account_id,
+      accountLabel: row.provider_account_label,
+      scopes: row.granted_scopes,
+      status: row.status,
+      lastSyncAt: row.last_synced_at,
+      lastError: row.last_error,
+    }));
   }
 
-  async save(userId: string, tokens: NotesConnectorTokens): Promise<void> {
+  /** Upserts by (user, provider, account) — connecting a new account adds a row; reconnecting the same account updates it in place. */
+  async save(userId: string, tokens: NotesConnectorTokens): Promise<{ credentialId: string }> {
     if (!tokens.accessToken || !tokens.refreshToken) {
       throw new Error(`${this.provider} token exchange returned incomplete credentials`);
     }
-    await pool.query(
+    const result = await pool.query<{ id: string }>(
       `INSERT INTO notes_connector_credentials (
          user_id, provider, provider_account_id, provider_account_label,
-         access_token_encrypted, refresh_token_encrypted, access_token_expires_at, granted_scopes
-       ) VALUES ($1,$2,$3,$4,$5,$6,to_timestamp($7),$8)
-       ON CONFLICT (user_id, provider) DO UPDATE SET
-         provider_account_id=EXCLUDED.provider_account_id,
+         access_token_encrypted, refresh_token_encrypted, access_token_expires_at, granted_scopes, status, last_error
+       ) VALUES ($1,$2,$3,$4,$5,$6,to_timestamp($7),$8,'active',NULL)
+       ON CONFLICT (user_id, provider, provider_account_id) DO UPDATE SET
          provider_account_label=EXCLUDED.provider_account_label,
          access_token_encrypted=EXCLUDED.access_token_encrypted,
          refresh_token_encrypted=EXCLUDED.refresh_token_encrypted,
          access_token_expires_at=EXCLUDED.access_token_expires_at,
          granted_scopes=EXCLUDED.granted_scopes,
-         updated_at=NOW()`,
+         status='active',
+         last_error=NULL,
+         updated_at=NOW()
+       RETURNING id`,
       [
         userId, this.provider, tokens.accountId ?? null, tokens.accountLabel ?? null,
         encrypt(tokens.accessToken), encrypt(tokens.refreshToken), tokens.expiresAt, tokens.scopes ?? null,
       ],
     );
-    await upsertConnection(userId, this.provider, { isConnected: true, dataMode: 'cached', syncEnabled: true, lastError: null });
+    return { credentialId: result.rows[0].id };
   }
 
-  async getCredentialId(userId: string): Promise<string | null> {
-    const result = await pool.query<{ id: string }>(
-      `SELECT id FROM notes_connector_credentials WHERE user_id = $1 AND provider = $2`,
-      [userId, this.provider],
-    );
-    return result.rows[0]?.id ?? null;
-  }
-
-  /** Returns the credential row id (needed by notes_connector_items) plus a valid access token, refreshing if needed. */
-  async getValidAccessToken(userId: string): Promise<{ credentialId: string; accessToken: string } | null> {
+  /** Verifies credentialId belongs to userId and this provider, then returns a valid access token, refreshing if needed. */
+  async getValidAccessToken(userId: string, credentialId: string): Promise<{ accessToken: string } | null> {
     const result = await pool.query<CredentialRow>(
-      `SELECT id, access_token_encrypted, refresh_token_encrypted, access_token_expires_at
-       FROM notes_connector_credentials WHERE user_id = $1 AND provider = $2`,
-      [userId, this.provider],
+      `SELECT id, user_id, access_token_encrypted, refresh_token_encrypted, access_token_expires_at
+       FROM notes_connector_credentials WHERE id = $1 AND user_id = $2 AND provider = $3`,
+      [credentialId, userId, this.provider],
     );
     const row = result.rows[0];
     if (!row?.access_token_encrypted) return null;
 
     const expiresAt = row.access_token_expires_at ? new Date(row.access_token_expires_at).getTime() / 1000 : 0;
     if (expiresAt > Date.now() / 1000 + REFRESH_MARGIN_SECONDS) {
-      return { credentialId: row.id, accessToken: safeDecrypt(row.access_token_encrypted) };
+      return { accessToken: safeDecrypt(row.access_token_encrypted) };
     }
 
     try {
-      const refreshed = await this.refreshToken(safeDecrypt(row.refresh_token_encrypted));
+      const refreshed = await this.refreshTokenFn(safeDecrypt(row.refresh_token_encrypted));
       await pool.query(
         `UPDATE notes_connector_credentials
          SET access_token_encrypted=$2, refresh_token_encrypted=$3, access_token_expires_at=to_timestamp($4), updated_at=NOW()
          WHERE id=$1`,
         [row.id, encrypt(refreshed.accessToken), encrypt(refreshed.refreshToken), refreshed.expiresAt],
       );
-      return { credentialId: row.id, accessToken: refreshed.accessToken };
+      return { accessToken: refreshed.accessToken };
     } catch (error) {
-      await upsertConnection(userId, this.provider, {
-        lastError: error instanceof Error ? error.message : 'Token refresh failed',
-      });
+      await pool.query(
+        `UPDATE notes_connector_credentials SET status='error', last_error=$2, updated_at=NOW() WHERE id=$1`,
+        [row.id, error instanceof Error ? error.message : 'Token refresh failed'],
+      );
       return null;
     }
   }
 
-  async disconnect(userId: string): Promise<void> {
+  async recordSyncResult(credentialId: string, error: string | null): Promise<void> {
+    await pool.query(
+      `UPDATE notes_connector_credentials SET last_synced_at=NOW(), last_error=$2, status=CASE WHEN $2 IS NULL THEN 'active' ELSE status END, updated_at=NOW() WHERE id=$1`,
+      [credentialId, error],
+    );
+  }
+
+  async disconnect(userId: string, credentialId: string): Promise<void> {
     await pool.query(
       `UPDATE notes_connector_credentials
-       SET access_token_encrypted='', refresh_token_encrypted='', access_token_expires_at=NULL, updated_at=NOW()
-       WHERE user_id=$1 AND provider=$2`,
-      [userId, this.provider],
+       SET status='revoked', access_token_encrypted='', refresh_token_encrypted='', access_token_expires_at=NULL, updated_at=NOW()
+       WHERE id=$1 AND user_id=$2 AND provider=$3`,
+      [credentialId, userId, this.provider],
     );
-    await upsertConnection(userId, this.provider, { isConnected: false, syncEnabled: false, lastError: null });
   }
 }

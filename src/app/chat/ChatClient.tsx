@@ -31,6 +31,7 @@ import HealthDashboard from '../components/health/HealthDashboard';
 import { formatPace } from '../components/health/ActivityCharts';
 import type { ActivityChatContext } from '../components/health/RecentActivity';
 import VaultPanel from '../notes/VaultPanel';
+import NotesConnectorsModal from '../notes/NotesConnectorsModal';
 import EmailPanel from '../components/email/EmailPanel';
 import JobsPanel from '../jobs/JobsPanel';
 import MemoryGraphPanel from '../memory/MemoryGraphPanel';
@@ -307,6 +308,14 @@ export default function AdminChat({
   const [isNotesCollapsed, setIsNotesCollapsed] = useState(false);
   const [notesEditorOpen, setNotesEditorOpen] = useState(false);
   const [vaultRefresh, setVaultRefresh] = useState(0);
+  const [isNotesConnectorsOpen, setIsNotesConnectorsOpen] = useState(false);
+
+  // Auto-open the Connections modal after either notes connector's OAuth
+  // redirect (?connector=google_drive|onenote&status=...) lands back here.
+  useEffect(() => {
+    const connector = new URLSearchParams(window.location.search).get('connector');
+    if (connector === 'google_drive' || connector === 'onenote') setIsNotesConnectorsOpen(true);
+  }, []);
   const [mobileNotesTab, setMobileNotesTab] = useState<'notes' | 'chat'>('notes');
   const [isEmailCollapsed, setIsEmailCollapsed] = useState(false);
   const [mobileEmailTab, setMobileEmailTab] = useState<'component' | 'chat'>('component');
@@ -1066,6 +1075,8 @@ const savedModel = localStorage.getItem('selected_model');
             onToggleSidePanel={sidePanel.toggle}
             sidePanelLabel={sidePanel.label}
             showInstagramDM={showInstagramDM}
+            showNotesConnectors={showNotes}
+            onOpenNotesConnectors={() => setIsNotesConnectorsOpen(true)}
             instagramConnected={showInstagramPost}
             isAdmin={isAdmin}
             onNewConversation={clearChat}
@@ -1569,6 +1580,15 @@ const savedModel = localStorage.getItem('selected_model');
         userName={userName}
         domainSlug={domainSlug}
       />
+
+      {showNotes && (
+        <NotesConnectorsModal
+          isDarkMode={isDarkMode}
+          isOpen={isNotesConnectorsOpen}
+          onClose={() => setIsNotesConnectorsOpen(false)}
+          onImported={() => setVaultRefresh(v => v + 1)}
+        />
+      )}
 
       {/* Skills Library Modal */}
       <SkillsLibrary

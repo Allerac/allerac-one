@@ -79,7 +79,7 @@ provider.
 | Connector UI placement | Inside the Notes domain (`VaultPanel`), not a shared cross-domain Integrations screen | Mirrors the existing Strava-in-Health precedent; each domain owns its own connectors. |
 | Re-sync conflict rule | Local edits are never silently overwritten | If the user edited an imported note and the source also changed, flag a conflict and let the user resolve it explicitly. |
 | OAuth app registration | One app per self-hosted instance, credentials via env vars (`ONENOTE_CLIENT_ID`/`SECRET`, `GOOGLE_CLIENT_ID`/`SECRET`) | Same model already used for `STRAVA_CLIENT_ID`/`SECRET`/`REDIRECT_URI`. |
-| Accounts per provider | One connection per `(user_id, provider)`, same as every other existing connector (Garmin, Strava, Spotify) | Matches the established `integration_connections` model (`UNIQUE(user_id, provider)`, see `docs/architecture/allerac-bridge.md`); no existing connector supports multiple accounts of the same provider, so introducing that here would be a one-off inconsistency for a need nobody has asked for. Reconnecting a different account replaces the existing connection. |
+| Accounts per provider | **Superseded** — see "Multiple accounts per provider" below. Originally one connection per `(user_id, provider)` (migration 132); migration 133 lifted this once a real need (personal + work account) showed up. |
 | OneNote HTML → Markdown | New small conversion step (e.g. `turndown`) | `react-markdown`/`remark-gfm` only render markdown, they don't produce it from HTML. |
 | Auto-tagging | Imported notes get the source notebook/section (or Drive parent folder) name as a tag, in addition to `source` | Keeps the existing tag-based grouping useful for imported content without building folders. |
 
@@ -442,9 +442,75 @@ reachable via the Picker's search box, just not by navigating a shared
 folder's tree. Acceptable for now; revisit only if "browse a folder someone
 else shared with me" becomes an actual ask.
 
+## Multiple accounts per provider
+
+A real need (connect a personal *and* a work Google Drive account
+simultaneously) showed up after Phase 2 shipped, reversing the original "one
+connection per `(user_id, provider)`" decision. What changed (migration 133,
+`docs/architecture/allerac-bridge.md`'s `integration_connections` convention
+no longer applies here):
+
+- `notes_connector_credentials` unique constraint moved from
+  `(user_id, provider)` to `(user_id, provider, provider_account_id)` — one
+  row per connected account, not per provider.
+- Status (`status`, `last_error`, `last_synced_at`) moved onto
+  `notes_connector_credentials` itself instead of the shared
+  `integration_connections` table, which structurally can't represent more
+  than one connection per `(user, provider)` and is relied on as such by
+  Garmin/Strava/Spotify. This is a deliberate, one-off exception for this
+  domain, not a precedent to copy elsewhere without the same justification.
+- Every credentials-service method that used to take `userId` now takes
+  `(userId, credentialId)` — `getValidAccessToken`, `disconnect`. `save`
+  upserts by `(user, provider, account)`, so connecting a *new* account adds a
+  row and reconnecting an *existing* one updates it in place, returning
+  `{ credentialId }`.
+- Every server action (`resyncGoogleDrive`, `importOneNoteSelection`,
+  `resolveGoogleDriveConflict`, etc.) now takes an explicit `credentialId` —
+  the client always knows which connected account's card a button belongs to.
+- `notes_connector_items` needed no change — it was already scoped by
+  `credential_id`, not `(user, provider)`, so multiple accounts' imported
+  items were already naturally separated.
+- `buildAuthUrl` for both providers now forces `prompt=select_account`
+  (Google: `select_account consent`) so reconnecting doesn't silently reuse
+  whatever account has an active browser session — the user gets an account
+  chooser every time, needed both to add a *different* account and to switch
+  which one a stale "Connect" click lands on.
+- The Google Picker's own account choice is **not cross-checked** against the
+  `credentialId` the user clicked "Selecionar e importar" on. If they pick the
+  wrong Google account in that popup, the import call still succeeds against
+  the clicked card's stored connection, but `describeSelectedFile`/`fetchContent`
+  will fail (wrong account can't see the picked file). Acceptable for now —
+  revisit only if this trips people up in practice.
+
+## Connections UI lives in a global sidebar modal, not the Notes vault panel
+
+Originally `ExternalSourcesPanel` was embedded inline in `VaultPanel`'s ~224px
+list column — cramped, and every button wrapped. It's been replaced by
+`NotesConnectorsModal`, opened from a "Connections" button in
+`SidebarDesktop.tsx` (same place/pattern as the existing "My Allerac" button:
+a fixed action button under the collapse toggle, rendered from
+`ChatClient.tsx` — the shared, multi-domain client that now backs the Notes
+page instead of a bespoke `NotesClient.tsx`). The button only shows when
+`showNotes` is true.
+
+The modal lists every connected account per provider as its own card
+(status line, action buttons, per-card conflict access), plus a
+"+ Conectar outra conta" action per provider. `ChatClient.tsx` auto-opens it
+when it sees `?connector=google_drive|onenote` from either OAuth redirect,
+and passes `onImported` through to the same `vaultRefresh` counter the chat's
+`save_note`/`update_note`/`delete_note` tool-call handling already bumps —
+`VaultPanel` didn't need any new prop for this.
+
+`ConnectorConflictModal` (provider-agnostic) and `OneNoteSelectionModal` were
+extracted as shared/standalone components during this move rather than
+duplicated per provider inside the connections modal.
+
+Mobile has no equivalent entry point yet — `SidebarMobile.tsx` was not wired
+up. Revisit if mobile use of the connectors turns out to matter.
+
 ## API surface
 
-Following the actual Strava precedent (`src/app/api/strava/*` + `src/app/actions/strava.ts`), not the versioned `/api/v1` Control API: OAuth's browser redirect dance is the only part that needs real HTTP routes (cookies + redirects aren't expressible as a server action); everything else is a `'use server'` action called directly by `VaultPanel`/`ExternalSourcesPanel`, per the top-level rule that "all data mutations go through `actions/` files."
+Following the actual Strava precedent (`src/app/api/strava/*` + `src/app/actions/strava.ts`), not the versioned `/api/v1` Control API: OAuth's browser redirect dance is the only part that needs real HTTP routes (cookies + redirects aren't expressible as a server action); everything else is a `'use server'` action called directly by `NotesConnectorsModal`, per the top-level rule that "all data mutations go through `actions/` files."
 
 ```text
 GET  /api/notes-connectors/{provider}/connect     -- start OAuth (redirects to provider)
@@ -452,18 +518,24 @@ GET  /api/notes-connectors/{provider}/callback    -- OAuth callback (redirects b
 ```
 
 ```ts
-// src/app/actions/notes-connectors.ts
-getGoogleDriveStatus()
-importGoogleDriveSelection(files: { id, name }[])             // Picker result -> fetch + normalize + upsert
-resyncGoogleDrive()
-listGoogleDriveConflicts()
-resolveGoogleDriveConflict(externalId, resolution)
-disconnectGoogleDrive()
-```
+// src/app/actions/notes-connectors.ts — Google Drive
+listGoogleDriveConnections()                                              // one row per connected account
+importGoogleDriveSelection(credentialId, files: { id, name }[], accessToken) // Picker result -> fetch + normalize + upsert
+resyncGoogleDrive(credentialId)
+listGoogleDriveConflicts(credentialId)
+resolveGoogleDriveConflict(credentialId, externalId, resolution)
+disconnectGoogleDrive(credentialId)
 
-OneNote (Phase 3) adds one more action, `getOneNoteSelectionTree()`, to power its
-checkbox tree — Google Drive has no equivalent since `drive.file` selection
-happens entirely client-side via the Picker.
+// OneNote — same shape, plus getOneNoteItems for the checkbox tree (no
+// Google-Picker equivalent since drive.file selection is client-side there)
+listOneNoteConnections()
+getOneNoteItems(credentialId)
+importOneNoteSelection(credentialId, items: NotesConnectorItem[])
+resyncOneNote(credentialId)
+listOneNoteConflicts(credentialId)
+resolveOneNoteConflict(credentialId, externalId, resolution)
+disconnectOneNote(credentialId)
+```
 
 **The Picker's OAuth token is minted live in the browser, not reused from the
 server connection.** Originally this project had a `getGoogleDrivePickerToken`
