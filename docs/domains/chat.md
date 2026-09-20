@@ -4,7 +4,7 @@
 **Route:** `/chat`  
 **Icon:** 💬  
 **Status:** Active  
-**Default Skill:** None (general assistant — skill is auto-detected or user-selected)
+**Default Skill:** `chat` (general-purpose assistant, defined in `skills/chat.md`)
 
 ## Purpose
 
@@ -33,5 +33,8 @@ Health tools are also injected here when `HEALTH_WORKER_SECRET` is set.
 ## Notes
 
 - Chat is the only domain that can see **all** conversations across domains in the sidebar (admin only).
-- No forced skill — the skill system auto-activates based on message keywords or user selection.
+- The system skill loader binds `skills/chat.md` to `chat` through its `domain: chat` frontmatter on startup, using the same `domain_skill_defaults` mechanism as other domains.
 - Acts as the default landing domain for users with no specific domain assignment.
+
+- New conversations activate the domain default unless the user explicitly selects another skill. The domain default is locked against automatic keyword switching, keeping the general-purpose persona stable.
+- Existing conversations retain their active skill. The new default becomes available after system skill synchronization on startup.

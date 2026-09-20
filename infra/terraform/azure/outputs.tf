@@ -35,11 +35,6 @@ output "grafana_url" {
   value       = "https://grafana.app.${var.domain}"
 }
 
-# --- Storage ---
-output "storage_account_name" {
-  description = "Storage account name"
-  value       = azurerm_storage_account.main.name
-}
 
 # --- Cloudflare Outputs ---
 output "tunnel_id" {
