@@ -177,19 +177,9 @@ export class ImapService {
     try {
       const lock = await client.getMailboxLock('INBOX');
       try {
-        const trashFolders = ['[Gmail]/Trash', 'Deleted Items', 'Deleted Messages', 'Trash'];
-        let moved = false;
-        for (const folder of trashFolders) {
-          try {
-            await client.messageMove(String(uid), folder, { uid: true });
-            moved = true;
-            break;
-          } catch { /* try next */ }
-        }
-        if (!moved) {
-          await client.messageFlagsAdd(String(uid), ['\\Deleted'], { uid: true });
-          await client.messageDelete(String(uid), { uid: true });
-        }
+        // Let the server resolve its configured special-use Trash mailbox instead
+        // of guessing provider-specific folder names.
+        await client.messageDelete(String(uid), { uid: true });
       } finally {
         lock.release();
       }
