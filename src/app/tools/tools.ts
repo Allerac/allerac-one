@@ -172,7 +172,7 @@ const MUSIC_TOOLS = process.env.SPOTIFY_CLIENT_ID ? [
         properties: {
           limit: {
             type: 'number',
-            description: 'Number of recommendations to return (default 10, max 50).',
+            description: 'Number of recommendations to return (default 10, max 100).',
           },
         },
         required: [],

@@ -105,7 +105,7 @@ export class MusicTool {
     return true; // Always available — reads from local PostgreSQL
   }
 
-  async getRecommendations(user: MusicUser, limit: number = 10): Promise<RecommendationsResult> {
+  async getRecommendations(user: MusicUser, limit: number = 50): Promise<RecommendationsResult> {
     try {
       const connected = await this._isConnected(user.id);
       if (!connected) return { spotify_connected: false };
