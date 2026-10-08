@@ -12,8 +12,13 @@ RUN addgroup -S -g 10001 executor \
 
 # System-level git identity: works for the non-root user and with a
 # read-only root filesystem (no ~/.gitconfig write needed).
+# The credential helper hands $GH_TOKEN (set by server.js from the optional
+# EXECUTOR_GITHUB_TOKEN) to git for https://github.com only, so clone/pull/push
+# work without storing the token on disk. No token -> no credentials.
 RUN git config --system user.name "Allerac User" && \
-    git config --system user.email "allerac@developer"
+    git config --system user.email "allerac@developer" && \
+    git config --system credential.https://github.com.helper \
+      '!f() { test "$1" = get && test -n "$GH_TOKEN" && printf "username=x-access-token\npassword=%s\n" "$GH_TOKEN"; }; f'
 
 WORKDIR /app
 COPY server.js .

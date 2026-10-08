@@ -30,6 +30,22 @@ const CHILD_ENV = { ...process.env };
 delete CHILD_ENV.EXECUTOR_SECRET;
 delete process.env.EXECUTOR_SECRET;
 
+// GitHub access for shell commands comes ONLY from the dedicated, optional
+// EXECUTOR_GITHUB_TOKEN (meant to be a fine-grained token limited to
+// Contents + Pull requests on specific repos). It is exposed to commands as
+// GH_TOKEN / GITHUB_TOKEN (curl, gh, and the git credential helper configured
+// in the Dockerfile). Any other GitHub token variable is dropped.
+const EXECUTOR_GITHUB_TOKEN = (CHILD_ENV.EXECUTOR_GITHUB_TOKEN || '').trim();
+for (const name of ['EXECUTOR_GITHUB_TOKEN', 'GITHUB_PAT', 'GITHUB_TOKEN', 'GH_TOKEN']) {
+  delete CHILD_ENV[name];
+}
+if (EXECUTOR_GITHUB_TOKEN) {
+  CHILD_ENV.GH_TOKEN = EXECUTOR_GITHUB_TOKEN;
+  CHILD_ENV.GITHUB_TOKEN = EXECUTOR_GITHUB_TOKEN;
+}
+// Never let git block waiting for a password prompt.
+CHILD_ENV.GIT_TERMINAL_PROMPT = '0';
+
 // HOME may live on a fresh bind mount (EXECUTOR_WORKSPACE); make sure it exists.
 if (CHILD_ENV.HOME) {
   try { fs.mkdirSync(CHILD_ENV.HOME, { recursive: true }); } catch { /* best effort */ }
@@ -239,4 +255,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('[executor] Auth: enabled');
   console.log(`[executor] Running as uid=${typeof process.getuid === 'function' ? process.getuid() : 'n/a'}`);
   console.log(`[executor] Default cwd: ${DEFAULT_CWD}`);
+  console.log(`[executor] GitHub token for commands: ${EXECUTOR_GITHUB_TOKEN ? 'configured (EXECUTOR_GITHUB_TOKEN)' : 'none'}`);
 });

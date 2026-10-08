@@ -73,6 +73,13 @@ export class WorkerService {
       if (!shellAllowed) {
         availableTools = withoutShellTools(availableTools);
       }
+      // GitHub tools act on the repository with the system-wide repo token
+      // (github_repo_token). They back the tickets -> PR flow, which is
+      // admin-only: non-admin (or unknown-role) runs neither see nor run them.
+      const githubAllowed = config.isAdmin === true;
+      if (!githubAllowed) {
+        availableTools = availableTools.filter((t) => !GITHUB_TOOL_NAMES.includes(t.function.name));
+      }
 
       // Initial message: just the worker task
       const messages: Array<{ role: string; content: string | any[]; tool_call_id?: string; tool_calls?: any }> = [
@@ -160,7 +167,9 @@ export class WorkerService {
                 toolResult = await shellTool.execute(scopedCommand, safeCwd, toolArgs.timeout);
               }
             } else if (GITHUB_TOOL_NAMES.includes(toolName)) {
-              if (!githubToken) {
+              if (!githubAllowed) {
+                toolResult = { error: 'GitHub tools are restricted to administrators on this instance.' };
+              } else if (!githubToken) {
                 toolResult = { error: 'GitHub token not configured.' };
               } else {
                 const githubHandlers = buildGithubTools(githubToken);

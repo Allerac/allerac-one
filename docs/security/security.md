@@ -256,6 +256,8 @@ Allerac One currently has:
 - **Closed registration by default.** After the first account exists, new accounts can only be created by an administrator, through an admin invite, or — only if `ALLOW_REGISTRATION=true` — by open sign-up
 - **Admin-only shell.** The shell executor (workspace UI, `execute_shell` / `edit_file` tools, agent runs, Telegram and scheduled jobs) is limited to administrators. Specific non-admin users can be allowed with `SHELL_ALLOWED_USER_IDS` (comma-separated user UUIDs)
 - The executor runs as a non-root user without host mounts; see `infra/executor/README.md`
+- **Admin-only GitHub tools in agent runs.** Agent runs (including the tickets -> PR flow with the bug-hunter / programmer skills) only get the `github_*` tools, which use the system `github_repo_token`, when the run belongs to an administrator
+- Shell commands only get GitHub credentials from the optional, dedicated `EXECUTOR_GITHUB_TOKEN` (use a fine-grained token: Contents + Pull requests on specific repos)
 
 > **Warning:** on a fresh install, whoever creates the first account becomes the administrator. Finish setup before exposing the instance to a network you do not control.
 
@@ -554,6 +556,9 @@ ALLOW_REGISTRATION=false
 
 # Non-admin user IDs allowed to use the shell (default: none = admins only)
 SHELL_ALLOWED_USER_IDS=
+
+# Optional: fine-grained GitHub token for shell git/curl (Contents + Pull requests, specific repos)
+EXECUTOR_GITHUB_TOKEN=
 
 # Optional: Force HTTPS
 FORCE_HTTPS=true
