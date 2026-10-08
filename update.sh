@@ -261,6 +261,16 @@ docker volume create allerac_backups_data > /dev/null 2>&1 || true
 echo -e "${GREEN}✓ Volumes ready${NC}"
 echo ""
 
+# Executor hardening notice: HOST_WORKSPACE (host /home mounted read-write into
+# the shell executor) is no longer used. Warn so nobody silently loses files.
+if grep -q "^HOST_WORKSPACE=" .env 2>/dev/null; then
+    echo -e "${YELLOW}  Note: HOST_WORKSPACE in .env is no longer used. The AI shell now works in the${NC}"
+    echo -e "${YELLOW}  Docker volume allerac_executor_workspace (or EXECUTOR_WORKSPACE). Existing${NC}"
+    echo -e "${YELLOW}  projects under <HOST_WORKSPACE>/projects must be copied once — see${NC}"
+    echo -e "${YELLOW}  infra/executor/README.md (\"Upgrading\").${NC}"
+    echo ""
+fi
+
 # Step 5: Run database migrations
 echo -e "${YELLOW}[5/9]${NC} Running database migrations..."
 MIGRATIONS_STARTED=true
@@ -272,11 +282,12 @@ echo ""
 # Step 6: Rebuild app images
 echo -e "${YELLOW}[6/9]${NC} Rebuilding application images..."
 if [ "$PRODUCT_LINE" = "cloud" ]; then
-    docker compose -f "$COMPOSE_FILE" build app allerac-telegram notifier \
+    docker compose -f "$COMPOSE_FILE" build app allerac-telegram notifier executor agent-worker \
         || fail_update "image build" "Failed to rebuild application images."
 else
     # Only rebuild images that exist in this deployment
-    BUILD_TARGETS="app health-worker"
+    # executor and agent-worker carry the shell-hardening changes; rebuild them too.
+    BUILD_TARGETS="app health-worker executor agent-worker"
     docker ps --format '{{.Names}}' | grep -q "allerac-telegram" && BUILD_TARGETS="$BUILD_TARGETS allerac-telegram"
     docker ps --format '{{.Names}}' | grep -q "allerac-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
     docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS build $BUILD_TARGETS \

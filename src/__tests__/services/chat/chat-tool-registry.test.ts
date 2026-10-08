@@ -66,4 +66,29 @@ describe('resolveChatTools', () => {
     expect(tools).toEqual([]);
     expect(mockedGetSkillTools).not.toHaveBeenCalled();
   });
+
+  test('omits executor-backed tools unless shell access is explicitly allowed', async () => {
+    mockedGetSkillTools.mockResolvedValue([]);
+
+    const defaultNames = (await resolveChatTools(null, 'code')).map((tool) => tool.function.name);
+    expect(defaultNames).not.toContain('execute_shell');
+    expect(defaultNames).not.toContain('edit_file');
+
+    const deniedNames = (await resolveChatTools(null, 'code', { allowShell: false }))
+      .map((tool) => tool.function.name);
+    expect(deniedNames).not.toContain('execute_shell');
+
+    const allowedNames = (await resolveChatTools(null, 'code', { allowShell: true }))
+      .map((tool) => tool.function.name);
+    expect(allowedNames).toContain('execute_shell');
+    expect(allowedNames).toContain('edit_file');
+  });
+
+  test('a skill that lists execute_shell does not bypass the shell check', async () => {
+    mockedGetSkillTools.mockResolvedValue(['execute_shell', 'search_web']);
+
+    const names = (await resolveChatTools('programmer', 'code')).map((tool) => tool.function.name);
+    expect(names).toContain('search_web');
+    expect(names).not.toContain('execute_shell');
+  });
 });

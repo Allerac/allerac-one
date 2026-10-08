@@ -16,6 +16,13 @@
 # Required environment variables:
 #   ENCRYPTION_KEY                   - AES key for token encryption
 #   TELEGRAM_TOKEN_ENCRYPTION_KEY    - AES key for Telegram token encryption
+#   EXECUTOR_SECRET                  - Shell executor shared secret (>= 32 chars)
+#
+# Access control (optional, secure defaults):
+#   ALLOW_REGISTRATION               - Public sign-up (default false: first admin + invites only)
+#   SHELL_ALLOWED_USER_IDS           - Non-admin user IDs allowed to use the shell (default: none)
+#   EXECUTOR_WORKSPACE               - Host folder for the executor workspace (default: named volume)
+#   EXECUTOR_DEV_PORTS_BIND          - Interface for workspace dev ports (default 127.0.0.1)
 #
 # Optional (but useful for cloud/tunnel access):
 #   TUNNEL_TOKEN                     - Cloudflare Tunnel token (for remote access)
@@ -82,27 +89,40 @@ services:
   # Core Services
   # ============================================
 
+  # Shell executor (admin-only in the app). Hardened: non-root user, no host
+  # mounts (no /home, no project dir / .env), read-only root filesystem, all
+  # capabilities dropped. Its control port 3001 is never published.
   executor:
     build:
       context: ./infra/executor
       dockerfile: Dockerfile
     container_name: allerac-executor
     restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
     environment:
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:?EXECUTOR_SECRET is required}
       - DEFAULT_CWD=/workspace
+      - HOME=/workspace/.home
       - ALLERAC_PRODUCT_LINE=${ALLERAC_PRODUCT_LINE:-local}
-      - GITHUB_PAT=${GITHUB_PAT:-}
-      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     volumes:
-      - ${HOST_WORKSPACE:-/home}:/workspace
-      - ${COMPOSE_DIR:-.}:/project
-      - /home:/home:ro
+      # Dedicated workspace. Defaults to the named volume below. To use a host
+      # directory instead, set EXECUTOR_WORKSPACE to an absolute path that is
+      # owned by uid 10001 — never /home, / or the Allerac install folder.
+      - ${EXECUTOR_WORKSPACE:-executor_workspace}:/workspace
       - ./infra/executor/workspace-ports:/usr/local/bin/workspace-ports:ro
       - ./infra/executor/workspace-kill-port:/usr/local/bin/workspace-kill-port:ro
     ports:
-      - "3000:3000"
-      - "3002-3010:3002-3010"
+      # Dev-server preview ports for workspace projects. Loopback only by
+      # default; set EXECUTOR_DEV_PORTS_BIND=0.0.0.0 to expose them on the LAN.
+      - "${EXECUTOR_DEV_PORTS_BIND:-127.0.0.1}:3000:3000"
+      - "${EXECUTOR_DEV_PORTS_BIND:-127.0.0.1}:3002-3010:3002-3010"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -115,6 +135,7 @@ services:
       resources:
         limits:
           memory: 256M
+          pids: 512
 
   health-worker:
     build:
@@ -254,6 +275,8 @@ services:
       - STRAVA_REDIRECT_URI=${STRAVA_REDIRECT_URI:-}
       - EXECUTOR_URL=http://executor:3001
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:?EXECUTOR_SECRET is required}
+      # Non-admin user IDs allowed to use the shell (default: admins only)
+      - SHELL_ALLOWED_USER_IDS=${SHELL_ALLOWED_USER_IDS:-}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
       - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
@@ -555,7 +578,8 @@ services:
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
       - TELEGRAM_DEFAULT_USER=${TELEGRAM_DEFAULT_USER:-}
       - EXECUTOR_URL=http://executor:3001
-      - EXECUTOR_SECRET=${EXECUTOR_SECRET:-}
+      - EXECUTOR_SECRET=${EXECUTOR_SECRET:?EXECUTOR_SECRET is required}
+      - SHELL_ALLOWED_USER_IDS=${SHELL_ALLOWED_USER_IDS:-}
       - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
       - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
     extra_hosts:
@@ -701,6 +725,8 @@ services:
 volumes:
   db_data:
     name: allerac_db_data
+  executor_workspace:
+    name: allerac_executor_workspace
   ollama_data:
     name: allerac_ollama_data
   backups_data:

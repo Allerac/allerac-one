@@ -1,12 +1,13 @@
 import { ShellTool } from '@/app/tools/shell.tool';
-import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { authenticationErrorResponse } from '@/app/lib/auth-session';
+import { requireShellUser } from '@/app/lib/shell-access';
 import { getUserWorkspaceRoot, resolveShellCwd } from '@/app/lib/workspace-paths';
 
 const DEFAULT_TIMEOUT = 15000;
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const user = await requireCurrentUser();
+    const user = await requireShellUser();
 
     const { command, cwd, timeout } = await request.json();
     if (!command || typeof command !== 'string') {

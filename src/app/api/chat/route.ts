@@ -35,6 +35,7 @@ import {
 } from '@/app/services/chat/sse-writer';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
 import { resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { isShellAllowedFor } from '@/app/lib/shell-access';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
 import {
@@ -225,7 +226,9 @@ export async function POST(request: Request): Promise<Response> {
           relevantContext,
         });
 
-        const activeTools = await resolveChatTools(activeSkill?.id, effectiveDomain);
+        const activeTools = await resolveChatTools(activeSkill?.id, effectiveDomain, {
+          allowShell: isShellAllowedFor(user),
+        });
 
         // Load conversation history and build messages array
         const history = await chatService.loadMessages(convId, userId);

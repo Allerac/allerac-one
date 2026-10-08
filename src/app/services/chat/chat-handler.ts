@@ -27,6 +27,7 @@ import { buildSoul } from '@/app/config/allerac-soul';
 import pool from '@/app/clients/db';
 import { normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
 import { instructionDistillerService } from '@/app/services/memory/instruction-distiller.service';
+import { canUserIdUseShell, SHELL_ACCESS_DENIED_MESSAGE, withoutShellTools } from '@/app/lib/shell-access';
 
 export interface ChatHandlerConfig {
   userId: string;
@@ -145,6 +146,13 @@ export async function handleChatMessage(
     ...(domainSlug === 'memory' ? MEMORY_DOMAIN_TOOL_DEFINITIONS : []),
   ];
 
+  // Shell access is admin-only by default. This path (Telegram, scheduled
+  // jobs) only knows the user id, so the role is looked up; fails closed.
+  const shellAllowed = await canUserIdUseShell(userId);
+  if (!shellAllowed) {
+    activeTools = withoutShellTools(activeTools);
+  }
+
   // Save user message (with image indicator if present)
   const messageToSave = imageAttachments && imageAttachments.length > 0
     ? `${message} [Image attached: ${imageAttachments.length} file(s)]`
@@ -261,7 +269,10 @@ export async function handleChatMessage(
   // If the active skill forces a specific tool, use it on the first call.
   // Otherwise, auto-force search_web for real-time queries (weather, news, prices)
   // when Tavily is available — unreliable models ignore tool_choice:'auto' for these.
-  const forceTool = activeSkill?.force_tool ?? null;
+  const skillForceTool = activeSkill?.force_tool ?? null;
+  const forceTool = skillForceTool && activeTools.some(t => t.function.name === skillForceTool)
+    ? skillForceTool
+    : null;
   const REALTIME_KEYWORDS = [
     'weather', 'forecast', 'temperature', 'rain', 'snow', 'wind', 'humidity', 'storm',
     'news', 'latest', 'current', 'today', 'tonight', 'right now', 'price', 'stock',
@@ -367,12 +378,14 @@ export async function handleChatMessage(
             }
           }
         } else if (toolName === 'execute_shell') {
-          const shellTool = new ShellTool();
           const safeCwd = resolveShellCwd(userId, toolArgs.cwd);
-          if (!safeCwd) {
+          if (!shellAllowed) {
+            toolResult = { error: SHELL_ACCESS_DENIED_MESSAGE };
+          } else if (!safeCwd) {
             toolResult = { error: 'Invalid cwd. Shell commands must run inside your workspace.' };
           } else {
             const scopedCommand = normalizeWorkspaceReferences(userId, String(toolArgs.command || ''));
+            const shellTool = new ShellTool();
             toolResult = await shellTool.execute(scopedCommand, safeCwd, toolArgs.timeout);
           }
         } else {

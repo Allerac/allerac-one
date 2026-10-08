@@ -250,9 +250,14 @@ ssh -L 8080:localhost:8080 user@your-server-ip
 ### Current State
 
 Allerac One currently has:
-- User accounts with email/password
-- Session-based authentication
-- No mandatory authentication on first access
+- User accounts with email/password (and optional Google sign-in)
+- Session-based authentication, plus API keys for the Control API
+- First-run setup: the first account created becomes the administrator
+- **Closed registration by default.** After the first account exists, new accounts can only be created by an administrator, through an admin invite, or — only if `ALLOW_REGISTRATION=true` — by open sign-up
+- **Admin-only shell.** The shell executor (workspace UI, `execute_shell` / `edit_file` tools, agent runs, Telegram and scheduled jobs) is limited to administrators. Specific non-admin users can be allowed with `SHELL_ALLOWED_USER_IDS` (comma-separated user UUIDs)
+- The executor runs as a non-root user without host mounts; see `infra/executor/README.md`
+
+> **Warning:** on a fresh install, whoever creates the first account becomes the administrator. Finish setup before exposing the instance to a network you do not control.
 
 ### Recommended Improvements (Phase 2)
 
@@ -503,6 +508,8 @@ interface SharingPolicy {
 - [ ] Change all default passwords
 - [ ] Enable HTTPS/TLS
 - [ ] Configure authentication
+- [ ] Keep `ALLOW_REGISTRATION` unset/false unless open sign-up is intended
+- [ ] Keep `SHELL_ALLOWED_USER_IDS` empty or limited to trusted users
 - [ ] Set up rate limiting
 - [ ] Review firewall rules
 - [ ] Enable audit logging
@@ -538,6 +545,15 @@ interface SharingPolicy {
 
 # Required: Encryption key for database
 ENCRYPTION_KEY=<generate with: openssl rand -base64 32>
+
+# Required: shell executor secret (>= 32 chars; executor refuses to start without it)
+EXECUTOR_SECRET=<generate with: openssl rand -hex 32>
+
+# Public sign-up (default false: first admin + invites only)
+ALLOW_REGISTRATION=false
+
+# Non-admin user IDs allowed to use the shell (default: none = admins only)
+SHELL_ALLOWED_USER_IDS=
 
 # Optional: Force HTTPS
 FORCE_HTTPS=true

@@ -95,6 +95,38 @@ describe('runChatPipeline', () => {
     expect(callArgs.tools).toBeUndefined();
   });
 
+  test('does not force a skill tool that was not offered (e.g. shell for non-admins)', async () => {
+    chatCompletion.mockResolvedValue({ choices: [{ message: { role: 'assistant', content: '' } }] });
+    streamChatCompletion.mockReturnValue(asyncTokens(['ok']));
+    const baseInput = {
+      provider: 'ollama' as const,
+      modelBaseUrl: 'http://ollama',
+      modelId: 'model',
+      githubToken: '',
+      googleApiKey: '',
+      anthropicApiKey: '',
+      openaiApiKey: '',
+      user,
+      conversationId: 'conv-1',
+      message: 'hi',
+      locale: 'en',
+      activeSkill: { force_tool: 'execute_shell' } as unknown as Parameters<typeof runChatPipeline>[0]['activeSkill'],
+      messages: [{ role: 'user', content: 'hi' }],
+      emit: jest.fn(),
+      keepalive: jest.fn(),
+    };
+
+    await runChatPipeline({ ...baseInput, activeTools: [{ function: { name: 'search_web' } }] });
+    expect(chatCompletion.mock.calls[0][0].tool_choice).toBe('auto');
+
+    chatCompletion.mockClear();
+    await runChatPipeline({ ...baseInput, activeTools: [{ function: { name: 'execute_shell' } }] });
+    expect(chatCompletion.mock.calls[0][0].tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'execute_shell' },
+    });
+  });
+
   test('executes tools before streaming', async () => {
     chatCompletion
       .mockResolvedValueOnce({
