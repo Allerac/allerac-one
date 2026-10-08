@@ -101,7 +101,8 @@ The executor runs arbitrary shell commands. The controls, from outermost to inne
    - `cap_drop: [ALL]` and `no-new-privileges`;
    - read-only root filesystem; writable paths are only `/workspace` (volume) and `/tmp` (tmpfs, 128 MB);
    - memory limit 256 MB and `pids: 512`;
-   - **no host mounts**: the host `/home`, the install folder (with `.env`) and the Docker socket are not mounted. No GitHub tokens in its environment.
+   - **no host mounts**: the host `/home`, the install folder (with `.env`) and the Docker socket are not mounted. The broad `GITHUB_TOKEN` / `GITHUB_PAT` are not passed in (and are stripped if present).
+   - optional `EXECUTOR_GITHUB_TOKEN`: a dedicated fine-grained token (Contents + Pull requests on specific repos) exposed to commands as `GH_TOKEN` / `GITHUB_TOKEN`. A system git credential helper uses it for `https://github.com` only, so `git clone/pull/push` work without writing the token to disk. `GIT_TERMINAL_PROMPT=0` so git never hangs on a password prompt. Anyone with shell access can read this token — keep its scope minimal.
 6. **Command blocklist.** `server.js` still has a regex blocklist (`rm -rf`, `sudo`, `docker`, ...). It is **defense in depth only** and easy to bypass; do not rely on it.
 7. **Working directory.** The app pins `cwd` to `/workspace/projects/<userId>`. This is a convenience boundary, not isolation: all users of the shell share one container and one uid, and a command can `cd` anywhere inside it.
 
@@ -133,6 +134,7 @@ All commands are logged to stdout (`[executor][<time>] cmd="..."`). **Never put 
 - [ ] `docker port allerac-executor` shows only `127.0.0.1:` bindings (or nothing)
 - [ ] `docker exec allerac-executor id` shows `uid=10001(executor)`
 - [ ] `EXECUTOR_WORKSPACE` is unset (named volume) or a dedicated folder — never `/home`
+- [ ] `EXECUTOR_GITHUB_TOKEN` is unset or a fine-grained token limited to specific repos (Contents + Pull requests)
 
 ## Upgrading from the old setup (host `/home` mount)
 

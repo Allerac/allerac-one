@@ -635,6 +635,10 @@ SHELL_ALLOWED_USER_IDS=
 # (never /home or this install folder), e.g. /srv/allerac-workspace
 # EXECUTOR_WORKSPACE=
 
+# Optional: fine-grained GitHub token for git/curl inside the AI shell
+# (Contents + Pull requests on specific repos only). Seen by commands as GH_TOKEN.
+# EXECUTOR_GITHUB_TOKEN=
+
 # --------------------------------------------
 # GPU acceleration (auto-detected by install.sh)
 # --------------------------------------------

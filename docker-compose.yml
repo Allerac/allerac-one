@@ -22,6 +22,7 @@
 #   SHELL_ALLOWED_USER_IDS           - Non-admin user IDs allowed to use the shell (default: none)
 #   EXECUTOR_WORKSPACE               - Host folder for the executor workspace (default: named volume)
 #   EXECUTOR_DEV_PORTS_BIND          - Interface for workspace dev ports (default 127.0.0.1)
+#   EXECUTOR_GITHUB_TOKEN            - Fine-grained GitHub token for shell git/curl (default: none)
 #
 # Optional (but useful for cloud/tunnel access):
 #   TUNNEL_TOKEN                     - Cloudflare Tunnel token (for remote access)
@@ -110,6 +111,12 @@ services:
       - DEFAULT_CWD=/workspace
       - HOME=/workspace/.home
       - ALLERAC_PRODUCT_LINE=${ALLERAC_PRODUCT_LINE:-local}
+      # Optional, least-privilege GitHub token for shell commands (git/curl/gh):
+      # a fine-grained PAT with only Contents + Pull requests (read/write) on
+      # the repos the agent may touch (+ Issues: write if you want the
+      # bug-hunter skill to open issues). Exposed to commands as GH_TOKEN/GITHUB_TOKEN.
+      # The broad GITHUB_TOKEN / GITHUB_PAT are intentionally NOT passed here.
+      - EXECUTOR_GITHUB_TOKEN=${EXECUTOR_GITHUB_TOKEN:-}
     volumes:
       # Dedicated workspace. Defaults to the named volume below. To use a host
       # directory instead, set EXECUTOR_WORKSPACE to an absolute path that is

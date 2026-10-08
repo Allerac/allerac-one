@@ -42,7 +42,7 @@ Each shell user gets a directory at `/workspace/projects/<userId>/`. The `progra
 ## External Integrations
 
 - **Git** — clone, commit, push, branch operations
-- **GitHub** — via the app's GitHub tools. `GITHUB_PAT` / `GITHUB_TOKEN` are no longer passed into the executor, so shell commands cannot use them.
+- **GitHub** — via the app's GitHub tools (`github_*`, REST API from the app/agent-worker; in agent runs, including tickets, they are admin-only and use the system `github_repo_token`). `GITHUB_PAT` / `GITHUB_TOKEN` are no longer passed into the executor. For `git`/`curl` from the shell, set the optional `EXECUTOR_GITHUB_TOKEN` (fine-grained, Contents + Pull requests on specific repos); commands see it as `GH_TOKEN`/`GITHUB_TOKEN` and git uses it for github.com automatically.
 - **Node.js / npm / Python** — available inside the executor container
 
 ## Security Notes
