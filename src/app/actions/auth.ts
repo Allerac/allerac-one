@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { requireCurrentUser } from '@/app/lib/auth-session';
 import { validateInviteToken } from '@/app/actions/invites';
+import { isOpenRegistrationEnabled } from '@/app/lib/registration-policy';
 
 const authService = new AuthService();
 const sysSettings = new SystemSettingsService();
@@ -81,7 +82,9 @@ export async function registerWithInvite(
 
   // Register without the default 'chat' grant — consumeInviteToken below
   // grants exactly the domain the admin invited this user to.
-  const result = await authService.register(email, password, name, true);
+  // The invite was validated above (token + email), so this registration is
+  // allowed even when public sign-up is closed.
+  const result = await authService.register(email, password, name, true, { invited: true });
   if (!result.success) {
     return { success: false, error: result.error };
   }
@@ -234,7 +237,10 @@ export async function getLoginRedirect(): Promise<string> {
  * Check if this is the first run (no users exist)
  * Used to show setup wizard on initial installation
  */
-export async function checkFirstRun(): Promise<{ isFirstRun: boolean; userCount: number }> {
+export async function checkFirstRun(): Promise<{ isFirstRun: boolean; userCount: number; registrationOpen: boolean }> {
+  // Only drives UI (hiding "Create account"); the server enforces the policy
+  // in AuthService.register / loginWithGoogle.
+  const registrationOpen = isOpenRegistrationEnabled();
   try {
     const pool = (await import('@/app/clients/db')).default;
     const result = await pool.query(
@@ -243,10 +249,10 @@ export async function checkFirstRun(): Promise<{ isFirstRun: boolean; userCount:
        WHERE email <> 'dev@local.host'`
     );
     const userCount = parseInt(result.rows[0].count, 10);
-    return { isFirstRun: userCount === 0, userCount };
+    return { isFirstRun: userCount === 0, userCount, registrationOpen };
   } catch (error) {
     console.error('Error checking first run:', error);
-    return { isFirstRun: true, userCount: 0 };
+    return { isFirstRun: true, userCount: 0, registrationOpen };
   }
 }
 

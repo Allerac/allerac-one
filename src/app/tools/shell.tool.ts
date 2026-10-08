@@ -31,11 +31,24 @@ export class ShellTool {
       };
     }
 
+    // Never call the executor unauthenticated. The executor itself also
+    // refuses to start without a secret; this keeps the client fail-closed.
+    if (!this.executorSecret) {
+      return {
+        stdout: '',
+        stderr: 'Executor secret not configured. Set EXECUTOR_SECRET environment variable.',
+        exitCode: 1,
+        success: false,
+        command,
+        duration_ms: Date.now() - startTime,
+      };
+    }
+
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (this.executorSecret) {
-        headers['x-executor-secret'] = this.executorSecret;
-      }
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-executor-secret': this.executorSecret,
+      };
 
       const response = await fetch(`${this.executorUrl}/execute`, {
         method: 'POST',

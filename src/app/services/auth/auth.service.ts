@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import pool from '@/app/clients/db';
 import { apiKeyService } from '@/app/services/api-keys/api-key.service';
+import { isOpenRegistrationEnabled, REGISTRATION_CLOSED_MESSAGE } from '@/app/lib/registration-policy';
 
 const BCRYPT_COST_FACTOR = 12;
 const SESSION_EXPIRY_DAYS = 7;
@@ -80,6 +81,7 @@ export class AuthService {
     password: string,
     name?: string,
     skipDefaultDomain: boolean = false,
+    options: { invited?: boolean } = {},
   ): Promise<{ success: true; user: User; session: { token: string; expiresAt: Date } } | { success: false; error: string }> {
     try {
       // Check if user already exists
@@ -98,6 +100,12 @@ export class AuthService {
       // First real user becomes admin automatically. Ignore the seeded dev user
       // created by init.sql so first-run setup works on fresh Docker installs.
       const isFirstUser = await this.isFirstRealUser();
+
+      // Public sign-up is closed by default (ALLOW_REGISTRATION). The first
+      // user (setup) and holders of a validated invite can still register.
+      if (!isFirstUser && !options.invited && !isOpenRegistrationEnabled()) {
+        return { success: false, error: REGISTRATION_CLOSED_MESSAGE };
+      }
 
       // Create user
       const result = await pool.query(
@@ -332,6 +340,7 @@ export class AuthService {
     email: string,
     name: string | null,
     skipDefaultDomain: boolean = false,
+    options: { invited?: boolean } = {},
   ): Promise<
     { success: true; user: User; session: { token: string; expiresAt: Date } } |
     { success: false; error: string }
@@ -363,6 +372,12 @@ export class AuthService {
         } else {
           // Brand-new user via Google
           const isFirstUser = await this.isFirstRealUser();
+
+          // Same policy as register(): no new accounts unless first user,
+          // validated invite, or ALLOW_REGISTRATION=true.
+          if (!isFirstUser && !options.invited && !isOpenRegistrationEnabled()) {
+            return { success: false, error: REGISTRATION_CLOSED_MESSAGE };
+          }
 
           const created = await pool.query(
             `INSERT INTO users (email, name, is_admin, google_id)

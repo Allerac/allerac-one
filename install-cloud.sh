@@ -244,6 +244,14 @@ TELEGRAM_ALLOWED_USERS=
 TELEGRAM_DEFAULT_USER=
 
 # --------------------------------------------
+# Access control
+# --------------------------------------------
+# Public sign-up (false = first admin + admin invites only)
+ALLOW_REGISTRATION=false
+# Non-admin user IDs (UUIDs) allowed to use the shell/workspace, comma-separated
+SHELL_ALLOWED_USER_IDS=
+
+# --------------------------------------------
 # Self-update: project directory (leave as-is)
 # --------------------------------------------
 COMPOSE_DIR=${INSTALL_DIR}

@@ -1,6 +1,7 @@
 import { ShellTool } from '@/app/tools/shell.tool';
 import path from 'path';
-import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { authenticationErrorResponse } from '@/app/lib/auth-session';
+import { requireShellUser } from '@/app/lib/shell-access';
 import { resolveUserWorkspaceFilePath } from '@/app/lib/workspace-paths';
 
 const MAX_BYTES = 500 * 1024; // 500 KB
@@ -21,7 +22,7 @@ const EXT_LANG: Record<string, string> = {
 
 export async function GET(request: Request): Promise<Response> {
   try {
-    const user = await requireCurrentUser();
+    const user = await requireShellUser();
 
     const url = new URL(request.url);
     const inputPath = url.searchParams.get('path') || '';
@@ -62,7 +63,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function PUT(request: Request): Promise<Response> {
   try {
-    const user = await requireCurrentUser();
+    const user = await requireShellUser();
 
     const { path: inputPath, content } = await request.json();
     if (typeof content !== 'string') return Response.json({ error: 'Missing content' }, { status: 400 });

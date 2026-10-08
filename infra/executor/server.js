@@ -1,8 +1,47 @@
 'use strict';
+/* eslint-disable @typescript-eslint/no-require-imports -- plain CommonJS service, no build step */
 
 const http = require('http');
+const crypto = require('crypto');
+const fs = require('fs');
 const { exec } = require('child_process');
-const path = require('path');
+
+// ---------------------------------------------------------------------------
+// Configuration. EXECUTOR_SECRET is mandatory: the executor runs arbitrary
+// shell commands, so it refuses to start without authentication.
+// ---------------------------------------------------------------------------
+const PORT = parseInt(process.env.EXECUTOR_PORT || '3001', 10);
+const SECRET = (process.env.EXECUTOR_SECRET || '').trim();
+const DEFAULT_CWD = process.env.DEFAULT_CWD || '/tmp';
+const MIN_SECRET_LENGTH = 32;
+
+if (SECRET.length < MIN_SECRET_LENGTH) {
+  console.error(
+    `[executor] FATAL: EXECUTOR_SECRET is missing or shorter than ${MIN_SECRET_LENGTH} characters. ` +
+    'Refusing to start an unauthenticated shell service. Generate one with: openssl rand -hex 32'
+  );
+  process.exit(1);
+}
+
+// Commands must not inherit the executor's own credential. (A determined
+// shell user running as the same uid can still read /proc/1/environ, which is
+// why shell access is admin-only in the app; this just stops trivial `env` leaks.)
+const CHILD_ENV = { ...process.env };
+delete CHILD_ENV.EXECUTOR_SECRET;
+delete process.env.EXECUTOR_SECRET;
+
+// HOME may live on a fresh bind mount (EXECUTOR_WORKSPACE); make sure it exists.
+if (CHILD_ENV.HOME) {
+  try { fs.mkdirSync(CHILD_ENV.HOME, { recursive: true }); } catch { /* best effort */ }
+}
+
+function secretMatches(provided) {
+  if (typeof provided !== 'string' || provided.length === 0) return false;
+  // Hash both sides so timingSafeEqual gets equal-length buffers.
+  const a = crypto.createHash('sha256').update(provided).digest();
+  const b = crypto.createHash('sha256').update(SECRET).digest();
+  return crypto.timingSafeEqual(a, b);
+}
 
 // Install log interceptor to send logs to centralized API
 function installLogInterceptor(apiUrl, serviceName) {
@@ -25,7 +64,7 @@ function installLogInterceptor(apiUrl, serviceName) {
   }
 
   function sendLogToAPI(context, message, level) {
-    const serviceSecret = process.env.EXECUTOR_SECRET || '';
+    const serviceSecret = SECRET;
     fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -58,11 +97,11 @@ function installLogInterceptor(apiUrl, serviceName) {
 const LOG_API_URL = process.env.LOG_API_URL || 'http://allerac-app:3000/api/log-submit';
 installLogInterceptor(LOG_API_URL);
 
-const PORT = parseInt(process.env.EXECUTOR_PORT || '3001', 10);
-const SECRET = process.env.EXECUTOR_SECRET || '';
-const DEFAULT_CWD = process.env.DEFAULT_CWD || '/tmp';
-
-// Security: Blocked command patterns (dangerous operations)
+// Defense in depth ONLY. This regex blocklist is trivially bypassed
+// (`rm --recursive`, `find -delete`, `node -e`, base64, ...). It is not a
+// sandbox and must not be relied on. The real controls are: admin-only shell
+// access in the app, a non-root container user, no host mounts, dropped
+// capabilities and a read-only root filesystem (see docker-compose.yml).
 const BLOCKED_PATTERNS = [
   /\brm\s+(-\w*\s+)*-[rf]/,           // rm -rf, rm -fr, rm -r
   /\bmkfs\b/,                          // format filesystem
@@ -105,12 +144,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (SECRET) {
-    const provided = req.headers['x-executor-secret'];
-    if (provided !== SECRET) {
-      respond(res, 401, { error: 'Unauthorized' });
-      return;
-    }
+  // Always authenticate (SECRET is guaranteed non-empty at startup).
+  if (!SECRET || !secretMatches(req.headers['x-executor-secret'])) {
+    respond(res, 401, { error: 'Unauthorized' });
+    return;
   }
 
   let body = '';
@@ -177,6 +214,7 @@ const server = http.createServer((req, res) => {
       timeout: timeout || 30000,
       maxBuffer: 1024 * 1024 * 10,
       shell: '/bin/bash',
+      env: CHILD_ENV,
     }, (error, stdout, stderr) => {
       const result = {
         stdout: (stdout || '').trim(),
@@ -198,6 +236,7 @@ server.requestTimeout = 30_000;   // 30 seconds to receive the full request body
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[executor] Listening on :${PORT}`);
-  console.log(`[executor] Auth: ${SECRET ? 'enabled' : 'disabled (set EXECUTOR_SECRET to enable)'}`);
+  console.log('[executor] Auth: enabled');
+  console.log(`[executor] Running as uid=${typeof process.getuid === 'function' ? process.getuid() : 'n/a'}`);
   console.log(`[executor] Default cwd: ${DEFAULT_CWD}`);
 });

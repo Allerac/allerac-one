@@ -79,7 +79,13 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       return llmService.chatCompletion({ ...request, model: activeModelId });
     }
   };
-  const forceTool = input.activeSkill?.force_tool ?? null;
+  // Only force a tool the model was actually offered (e.g. execute_shell is
+  // removed for users without shell access even if the skill forces it).
+  const skillForceTool = input.activeSkill?.force_tool ?? null;
+  const forceTool = skillForceTool
+    && input.activeTools.some(tool => tool?.function?.name === skillForceTool)
+    ? skillForceTool
+    : null;
   const initialToolChoice = forceTool
     ? { type: 'function', function: { name: forceTool } }
     : input.provider !== 'gemini' ? 'auto' : undefined;

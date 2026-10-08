@@ -1,5 +1,6 @@
 import { ShellTool } from '@/app/tools/shell.tool';
-import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { authenticationErrorResponse } from '@/app/lib/auth-session';
+import { requireShellUser } from '@/app/lib/shell-access';
 import { getUserWorkspaceRoot } from '@/app/lib/workspace-paths';
 
 function shellQuote(value: string): string {
@@ -8,7 +9,7 @@ function shellQuote(value: string): string {
 
 export async function GET(): Promise<Response> {
   try {
-    const user = await requireCurrentUser();
+    const user = await requireShellUser();
 
     const userRoot = getUserWorkspaceRoot(user.id);
     const shell = new ShellTool();

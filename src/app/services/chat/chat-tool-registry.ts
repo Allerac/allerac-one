@@ -6,6 +6,7 @@ import { JOBS_TOOL_DEFINITIONS } from '@/app/tools/jobs.tool';
 import { NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
 import { TICKETS_TOOL_DEFINITIONS } from '@/app/tools/tickets.tool';
 import { TOOLS } from '@/app/tools/tools';
+import { withoutShellTools } from '@/app/lib/shell-access';
 
 export { GITHUB_TOOL_NAMES };
 export { LOGS_TOOL_NAMES };
@@ -36,9 +37,19 @@ const SALES_TICKET_TOOL_DEFINITIONS = TICKETS_TOOL_DEFINITIONS.filter(
   (tool: any) => tool.function.name === 'create_ticket',
 );
 
+export interface ResolveChatToolsOptions {
+  /**
+   * Whether executor-backed tools (execute_shell, edit_file) may be offered.
+   * Fails closed: callers must pass `true` explicitly, after checking
+   * `isShellAllowedFor(user)`.
+   */
+  allowShell?: boolean;
+}
+
 export async function resolveChatTools(
   skillId: string | null | undefined,
   domain: string,
+  options: ResolveChatToolsOptions = {},
 ): Promise<any[]> {
   let tools: any[] = TOOLS;
 
@@ -47,6 +58,10 @@ export async function resolveChatTools(
     if (allowedToolNames.length > 0) {
       tools = TOOLS.filter((tool) => allowedToolNames.includes(tool.function.name));
     }
+  }
+
+  if (options.allowShell !== true) {
+    tools = withoutShellTools(tools);
   }
 
   return [
