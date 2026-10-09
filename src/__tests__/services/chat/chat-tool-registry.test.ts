@@ -91,4 +91,24 @@ describe('resolveChatTools', () => {
     expect(names).toContain('search_web');
     expect(names).not.toContain('execute_shell');
   });
+
+  test('public website domains never get shell, GitHub or logs tools, even for admins', async () => {
+    // Empty skill_tools falls through to the full registry; allowShell=true
+    // simulates an admin-owned bot key (the "admin bypass trap").
+    mockedGetSkillTools.mockResolvedValue([]);
+
+    const names = (await resolveChatTools('openworld-skill', 'openworld', { allowShell: true }))
+      .map((tool) => tool.function.name);
+
+    expect(names).toContain('search_web');
+    expect(names).not.toContain('execute_shell');
+    expect(names).not.toContain('edit_file');
+    expect(names.some((name) => name.startsWith('github_'))).toBe(false);
+    expect(names).not.toContain('read_logs');
+
+    const codeNames = (await resolveChatTools('openworld-skill', 'code', { allowShell: true }))
+      .map((tool) => tool.function.name);
+    expect(codeNames).toContain('execute_shell');
+    expect(codeNames).toContain('github_create_pr');
+  });
 });

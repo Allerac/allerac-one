@@ -32,6 +32,7 @@ import {
   MEMORY_TOOL_NAMES,
   SCHEDULE_TASK_TOOL_NAME,
   LEARN_INSTRUCTION_TOOL_NAME,
+  isToolForbiddenInDomain,
 } from './chat-tool-registry';
 
 export interface ChatToolRunnerContext {
@@ -57,6 +58,11 @@ export async function executeChatTool(
   // in tool resolution, because the model can name a tool it was not offered.
   if (SHELL_TOOL_NAMES.includes(toolName) && !isShellAllowedFor(user)) {
     return { error: SHELL_ACCESS_DENIED_MESSAGE };
+  }
+  // Public (website-facing) domains never reach shell, GitHub or logs tools,
+  // even when the calling account is an admin.
+  if (isToolForbiddenInDomain(toolName, domain)) {
+    return { error: `Tool ${toolName} is not available in this domain.` };
   }
 
   if (toolName === 'update_social_form' || toolName === 'update_instagram_form') {

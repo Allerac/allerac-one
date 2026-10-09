@@ -123,3 +123,23 @@ describe('executeChatTool shell access (admin-only by default)', () => {
     expect(mockShellExecute).toHaveBeenCalledWith('pwd', '/workspace/projects/user-1', undefined);
   });
 });
+
+describe('executeChatTool in public (website-facing) domains', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('denies execute_shell even for an admin account', async () => {
+    await expect(executeChatTool('execute_shell', { command: 'id' }, {
+      ...adminContext,
+      domain: 'openworld',
+    })).resolves.toEqual({ error: 'Tool execute_shell is not available in this domain.' });
+    expect(ShellTool).not.toHaveBeenCalled();
+  });
+
+  test('denies GitHub tools even for an admin account with a token', async () => {
+    await expect(executeChatTool('github_create_pr', { title: 'x', head: 'y' }, {
+      ...adminContext,
+      githubToken: 'ghp_system',
+      domain: 'sales',
+    })).resolves.toEqual({ error: 'Tool github_create_pr is not available in this domain.' });
+  });
+});
