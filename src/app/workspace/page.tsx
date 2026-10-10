@@ -1,6 +1,7 @@
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { getUserWorkspaceRoot, quoteShellArg } from '@/app/lib/workspace-paths';
+import { isShellAllowedFor } from '@/app/lib/shell-access';
 import { ShellTool } from '@/app/tools/shell.tool';
 import WorkspaceProjectList from './WorkspaceProjectList';
 
@@ -37,6 +38,8 @@ export default async function WorkspacePage() {
     if (error instanceof UnauthorizedError) redirect('/login');
     throw error;
   }
+  // The workspace lives in the shell executor, which is admin-only by default.
+  if (!isShellAllowedFor(user)) notFound();
 
   const projects = await getProjects(user.id);
   return <WorkspaceProjectList projects={projects} userId={user.id} />;

@@ -21,6 +21,7 @@ import {
   resolveShellCwd,
   resolveUserWorkspaceFilePath,
 } from '@/app/lib/workspace-paths';
+import { isShellAllowedFor, SHELL_ACCESS_DENIED_MESSAGE, SHELL_TOOL_NAMES } from '@/app/lib/shell-access';
 import {
   EMAIL_TOOL_NAMES,
   GITHUB_TOOL_NAMES,
@@ -31,6 +32,7 @@ import {
   MEMORY_TOOL_NAMES,
   SCHEDULE_TASK_TOOL_NAME,
   LEARN_INSTRUCTION_TOOL_NAME,
+  isToolForbiddenInDomain,
 } from './chat-tool-registry';
 
 export interface ChatToolRunnerContext {
@@ -51,6 +53,17 @@ export async function executeChatTool(
 ): Promise<any> {
   const { user, githubToken, tavilyApiKey, message, locale, emit, conversationId, domain } = context;
   const userId = user.id;
+
+  // Executor-backed tools are admin-only by default. Checked here as well as
+  // in tool resolution, because the model can name a tool it was not offered.
+  if (SHELL_TOOL_NAMES.includes(toolName) && !isShellAllowedFor(user)) {
+    return { error: SHELL_ACCESS_DENIED_MESSAGE };
+  }
+  // Public (website-facing) domains never reach shell, GitHub or logs tools,
+  // even when the calling account is an admin.
+  if (isToolForbiddenInDomain(toolName, domain)) {
+    return { error: `Tool ${toolName} is not available in this domain.` };
+  }
 
   if (toolName === 'update_social_form' || toolName === 'update_instagram_form') {
     const { platform, caption, tags, price, is_product, image_url, tiktok_title } = toolArgs;

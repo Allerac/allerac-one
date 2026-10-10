@@ -12,6 +12,7 @@ import { NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
 import { TICKETS_TOOL_DEFINITIONS } from '@/app/tools/tickets.tool';
 import { TOOLS } from '@/app/tools/tools';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '@/app/tools/instructions.tool.definitions';
+import { SHELL_TOOL_NAMES, withoutShellTools } from '@/app/lib/shell-access';
 
 export { GITHUB_TOOL_NAMES };
 export { LOGS_TOOL_NAMES };
@@ -53,9 +54,36 @@ export const PUBLIC_DOMAINS = ['sales', 'openworld'];
 // (see skills/openworld.md).
 export const NO_TOOL_DOMAINS: string[] = [];
 
+// Tools that must never be reachable from a PUBLIC_DOMAINS conversation, no
+// matter who owns the calling account or what the domain's skill_tools say:
+// executor-backed shell tools, GitHub write/read with the system token, and
+// the process-wide log buffer. Guards against the "admin bypass trap"
+// (docs/domains/expose-agent-to-website.md): an admin-owned bot key, or an
+// empty skill_tools list falling through to TOOLS, must not hand a website
+// visitor a shell or repo access.
+export const PUBLIC_DOMAIN_FORBIDDEN_TOOL_NAMES = [
+  ...SHELL_TOOL_NAMES,
+  ...GITHUB_TOOL_NAMES,
+  ...LOGS_TOOL_NAMES,
+];
+
+export function isToolForbiddenInDomain(toolName: string, domain: string | null | undefined): boolean {
+  return PUBLIC_DOMAINS.includes(domain ?? '') && PUBLIC_DOMAIN_FORBIDDEN_TOOL_NAMES.includes(toolName);
+}
+
+export interface ResolveChatToolsOptions {
+  /**
+   * Whether executor-backed tools (execute_shell, edit_file) may be offered.
+   * Fails closed: callers must pass `true` explicitly, after checking
+   * `isShellAllowedFor(user)`.
+   */
+  allowShell?: boolean;
+}
+
 export async function resolveChatTools(
   skillId: string | null | undefined,
   domain: string,
+  options: ResolveChatToolsOptions = {},
 ): Promise<any[]> {
   // Sales is deliberately text-only. Check the domain before querying its
   // skill: missing tool rows must not fall through to the unrestricted base
@@ -75,6 +103,13 @@ export async function resolveChatTools(
     if (allowedToolNames.length > 0) {
       tools = TOOLS.filter((tool) => allowedToolNames.includes(tool.function.name));
     }
+  }
+
+  if (options.allowShell !== true) {
+    tools = withoutShellTools(tools);
+  }
+  if (PUBLIC_DOMAINS.includes(domain)) {
+    tools = tools.filter((tool) => !isToolForbiddenInDomain(tool.function.name, domain));
   }
 
   return [

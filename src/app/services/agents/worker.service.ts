@@ -9,6 +9,7 @@ import { TOOLS } from '../../tools/tools';
 import { WorkerSpec } from './orchestrator.service';
 import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
 import { getUserWorkspaceRoot, normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
+import { isShellAllowedFor, SHELL_ACCESS_DENIED_MESSAGE, withoutShellTools } from '@/app/lib/shell-access';
 
 export interface WorkerExecutionConfig {
   userId: string;
@@ -66,6 +67,18 @@ export class WorkerService {
       let availableTools = spec.tools.length > 0 ? TOOLS.filter((t) => spec.tools.includes(t.function.name)) : TOOLS;
       if (!config.isAdmin) {
         availableTools = availableTools.filter((t) => !LOGS_TOOL_NAMES.includes(t.function.name));
+      }
+      // Shell is admin-only by default (SHELL_ALLOWED_USER_IDS can extend it).
+      const shellAllowed = isShellAllowedFor({ id: userId, is_admin: config.isAdmin });
+      if (!shellAllowed) {
+        availableTools = withoutShellTools(availableTools);
+      }
+      // GitHub tools act on the repository with the system-wide repo token
+      // (github_repo_token). They back the tickets -> PR flow, which is
+      // admin-only: non-admin (or unknown-role) runs neither see nor run them.
+      const githubAllowed = config.isAdmin === true;
+      if (!githubAllowed) {
+        availableTools = availableTools.filter((t) => !GITHUB_TOOL_NAMES.includes(t.function.name));
       }
 
       // Initial message: just the worker task
@@ -143,16 +156,20 @@ export class WorkerService {
               const searchTool = new SearchWebTool(tavilyApiKey);
               toolResult = await searchTool.execute(toolArgs.query);
             } else if (toolName === 'execute_shell') {
-              const shellTool = new ShellTool();
               const safeCwd = resolveShellCwd(userId, toolArgs.cwd);
-              if (!safeCwd) {
+              if (!shellAllowed) {
+                toolResult = { error: SHELL_ACCESS_DENIED_MESSAGE };
+              } else if (!safeCwd) {
                 toolResult = { error: 'Invalid cwd. Shell commands must run inside your workspace.' };
               } else {
                 const scopedCommand = normalizeWorkspaceReferences(userId, String(toolArgs.command || ''));
+                const shellTool = new ShellTool();
                 toolResult = await shellTool.execute(scopedCommand, safeCwd, toolArgs.timeout);
               }
             } else if (GITHUB_TOOL_NAMES.includes(toolName)) {
-              if (!githubToken) {
+              if (!githubAllowed) {
+                toolResult = { error: 'GitHub tools are restricted to administrators on this instance.' };
+              } else if (!githubToken) {
                 toolResult = { error: 'GitHub token not configured.' };
               } else {
                 const githubHandlers = buildGithubTools(githubToken);

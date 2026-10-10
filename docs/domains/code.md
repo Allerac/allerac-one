@@ -33,20 +33,23 @@ The programmer domain. The AI can run shell commands, read and edit files, clone
 
 ## Workspace
 
-Each user gets an isolated directory at `/workspace/projects/<userId>/`. The `programmer` skill injects the correct path into the system prompt at runtime.
+Each shell user gets a directory at `/workspace/projects/<userId>/`. The `programmer` skill injects the correct path into the system prompt at runtime. This keeps commands in the right folder but is not isolation between users (one container, one uid).
 
-Files created by the executor are owned by `root` (the executor runs as root inside the container). To delete them from the host, use `sudo rm -rf`.
+`/workspace` is the Docker volume `allerac_executor_workspace` (or the host folder in `EXECUTOR_WORKSPACE`). Files are owned by uid `10001` (the executor's non-root user).
+
+**Access:** the shell, the workspace panel and the `execute_shell` / `edit_file` tools are admin-only by default. Non-admin users with access to the Code domain can chat, but these tools are not offered to them unless their user ID is listed in `SHELL_ALLOWED_USER_IDS`.
 
 ## External Integrations
 
 - **Git** — clone, commit, push, branch operations
-- **GitHub** — PR creation via `GITHUB_PAT` / `GITHUB_TOKEN`
+- **GitHub** — via the app's GitHub tools (`github_*`, REST API from the app/agent-worker; in agent runs, including tickets, they are admin-only and use the system `github_repo_token`). `GITHUB_PAT` / `GITHUB_TOKEN` are no longer passed into the executor. For `git`/`curl` from the shell, set the optional `EXECUTOR_GITHUB_TOKEN` (fine-grained, Contents + Pull requests on specific repos); commands see it as `GH_TOKEN`/`GITHUB_TOKEN` and git uses it for github.com automatically.
 - **Node.js / npm / Python** — available inside the executor container
 
 ## Security Notes
 
 - The executor does **not** have access to `/var/run/docker.sock` (removed deliberately).
-- Certain commands are blocked by the executor's allowlist/blocklist in `infra/executor/server.js`.
+- The executor runs as a non-root user with no host mounts, all capabilities dropped and a read-only root filesystem (see `infra/executor/README.md`).
+- `infra/executor/server.js` still blocks some commands with a regex blocklist. This is defense in depth only and easy to bypass.
 - The programmer skill workflow is: code in workspace → PR on GitHub → human review → deploy. No auto-deploy path.
 
 ## DB Scope

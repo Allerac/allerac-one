@@ -619,9 +619,25 @@ POSTGRES_DB=allerac
 APP_PORT=8080
 OLLAMA_PORT=11434
 
-# Working directory exposed to the AI agent (your home directory by default)
-# Change this to restrict the agent's file system access, e.g. /home/user/workspace
-HOST_WORKSPACE=/home
+# --------------------------------------------
+# Access control
+# --------------------------------------------
+# Public sign-up. false = only the first (admin) account and users invited by
+# an admin can create accounts. Set to true only if you really want open sign-up.
+ALLOW_REGISTRATION=false
+
+# Shell / workspace (executor) access is admin-only. To allow specific
+# non-admin users, list their user IDs (UUIDs), comma-separated.
+SHELL_ALLOWED_USER_IDS=
+
+# The AI shell works in a dedicated Docker volume (allerac_executor_workspace),
+# not in your home directory. Optional: a host folder instead, owned by uid 10001
+# (never /home or this install folder), e.g. /srv/allerac-workspace
+# EXECUTOR_WORKSPACE=
+
+# Optional: fine-grained GitHub token for git/curl inside the AI shell
+# (Contents + Pull requests on specific repos only). Seen by commands as GH_TOKEN.
+# EXECUTOR_GITHUB_TOKEN=
 
 # --------------------------------------------
 # GPU acceleration (auto-detected by install.sh)
