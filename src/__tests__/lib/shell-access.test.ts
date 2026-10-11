@@ -5,7 +5,10 @@ import pool from '@/app/clients/db';
 import {
   canUserIdUseShell,
   isShellAllowedFor,
+  SHELL_ACCESS_DENIED_MESSAGE,
+  SHELL_EXECUTOR_DISABLED_MESSAGE,
   SHELL_TOOL_NAMES,
+  shellAccessDeniedMessage,
   withoutShellTools,
 } from '@/app/lib/shell-access';
 
@@ -81,5 +84,33 @@ describe('withoutShellTools', () => {
   it('removes every executor-backed tool', () => {
     const tools = [...SHELL_TOOL_NAMES, 'search_web'].map(name => ({ function: { name } }));
     expect(withoutShellTools(tools).map(tool => tool.function.name)).toEqual(['search_web']);
+  });
+});
+
+describe('Units without the executor (EXECUTOR_ENABLED=false)', () => {
+  const original = process.env.EXECUTOR_ENABLED;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.EXECUTOR_ENABLED;
+    else process.env.EXECUTOR_ENABLED = original;
+    mockQuery.mockReset();
+  });
+
+  it('denies everyone, admins and allowlisted users included', () => {
+    const env = { EXECUTOR_ENABLED: 'false', SHELL_ALLOWED_USER_IDS: 'u2' };
+    expect(isShellAllowedFor({ id: 'u1', is_admin: true }, env)).toBe(false);
+    expect(isShellAllowedFor({ id: 'u2', is_admin: false }, env)).toBe(false);
+  });
+
+  it('denies Telegram / scheduled-job users without querying the database', async () => {
+    process.env.EXECUTOR_ENABLED = 'false';
+    mockQuery.mockResolvedValue({ rows: [{ id: 'u1', is_admin: true }] });
+    await expect(canUserIdUseShell('u1')).resolves.toBe(false);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('explains why the shell is refused', () => {
+    expect(shellAccessDeniedMessage({ EXECUTOR_ENABLED: 'false' })).toBe(SHELL_EXECUTOR_DISABLED_MESSAGE);
+    expect(shellAccessDeniedMessage({})).toBe(SHELL_ACCESS_DENIED_MESSAGE);
   });
 });

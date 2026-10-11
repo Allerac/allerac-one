@@ -27,7 +27,7 @@ import { buildSoul } from '@/app/config/allerac-soul';
 import pool from '@/app/clients/db';
 import { normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
 import { instructionDistillerService } from '@/app/services/memory/instruction-distiller.service';
-import { canUserIdUseShell, SHELL_ACCESS_DENIED_MESSAGE, withoutShellTools } from '@/app/lib/shell-access';
+import { canUserIdUseShell, shellAccessDeniedMessage, withoutShellTools } from '@/app/lib/shell-access';
 
 export interface ChatHandlerConfig {
   userId: string;
@@ -380,7 +380,7 @@ export async function handleChatMessage(
         } else if (toolName === 'execute_shell') {
           const safeCwd = resolveShellCwd(userId, toolArgs.cwd);
           if (!shellAllowed) {
-            toolResult = { error: SHELL_ACCESS_DENIED_MESSAGE };
+            toolResult = { error: shellAccessDeniedMessage() };
           } else if (!safeCwd) {
             toolResult = { error: 'Invalid cwd. Shell commands must run inside your workspace.' };
           } else {

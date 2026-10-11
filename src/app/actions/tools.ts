@@ -3,7 +3,7 @@
 import { SearchWebTool } from '@/app/tools/search-web.tool';
 import { requireCurrentUser } from '@/app/lib/auth-session';
 import { normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
-import { isShellAllowedFor, SHELL_ACCESS_DENIED_MESSAGE } from '@/app/lib/shell-access';
+import { isShellAllowedFor, shellAccessDeniedMessage } from '@/app/lib/shell-access';
 
 export async function executeWebSearch(query: string, tavilyApiKey: string) {
     const tool = new SearchWebTool(tavilyApiKey);
@@ -15,7 +15,7 @@ export async function executeShellCommand(command: string, cwd?: string, timeout
     if (!isShellAllowedFor(user)) {
         return {
             stdout: '',
-            stderr: SHELL_ACCESS_DENIED_MESSAGE,
+            stderr: shellAccessDeniedMessage(),
             exitCode: 1,
             success: false,
             command,

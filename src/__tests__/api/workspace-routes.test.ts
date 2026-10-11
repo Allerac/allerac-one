@@ -199,3 +199,37 @@ describe('Workspace shell access (admin-only by default)', () => {
     expect(mockExecute).toHaveBeenCalledWith('pwd', '/workspace/projects/user-b', 15000);
   });
 });
+
+describe('Workspace routes on a Unit without the executor', () => {
+  const original = process.env.EXECUTOR_ENABLED;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.EXECUTOR_ENABLED = 'false';
+  });
+
+  afterAll(() => {
+    if (original === undefined) delete process.env.EXECUTOR_ENABLED;
+    else process.env.EXECUTOR_ENABLED = original;
+  });
+
+  it('returns 403 even to an admin and never constructs a ShellTool', async () => {
+    mockRequireCurrentUser.mockResolvedValue(ADMIN_USER);
+    const root = '/workspace/projects/user-a';
+
+    const responses = await Promise.all([
+      runCommand(jsonRequest('http://localhost/api/workspace/run', 'POST', { command: 'pwd' })),
+      deletePath(jsonRequest('http://localhost/api/workspace/delete', 'DELETE', { path: `${root}/p` })),
+      killProcess(jsonRequest('http://localhost/api/workspace/kill', 'POST', { pid: 123 })),
+      readFile(new Request(`http://localhost/api/workspace/file?path=${root}/p/a.txt`)),
+      writeFile(jsonRequest('http://localhost/api/workspace/file', 'PUT', { path: `${root}/p/a.txt`, content: 'x' })),
+      listProcesses(),
+      listProjects(),
+      readTree(new Request(`http://localhost/api/workspace/tree?path=${root}`)),
+    ]);
+
+    expect(responses.map(response => response.status)).toEqual([403, 403, 403, 403, 403, 403, 403, 403]);
+    expect(ShellTool).not.toHaveBeenCalled();
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+});

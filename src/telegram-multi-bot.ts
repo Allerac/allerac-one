@@ -9,7 +9,7 @@ import { TelegramBotConfigService } from './app/services/telegram/telegram-bot-c
 import { installLogInterceptor } from './lib/log-interceptor';
 
 // Install log interceptor to send all console logs to the API
-const logApiUrl = process.env.LOG_API_URL || 'http://allerac-app:8080/api/log-submit';
+const logApiUrl = process.env.LOG_API_URL || 'http://app:8080/api/log-submit';
 installLogInterceptor(logApiUrl, 'telegram-bot');
 
 interface RunningBot {

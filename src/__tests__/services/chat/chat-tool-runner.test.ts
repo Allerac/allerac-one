@@ -143,3 +143,30 @@ describe('executeChatTool in public (website-facing) domains', () => {
     })).resolves.toEqual({ error: 'Tool github_create_pr is not available in this domain.' });
   });
 });
+
+describe('executeChatTool on a Unit without the executor', () => {
+  const original = process.env.EXECUTOR_ENABLED;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.EXECUTOR_ENABLED = 'false';
+  });
+
+  afterAll(() => {
+    if (original === undefined) delete process.env.EXECUTOR_ENABLED;
+    else process.env.EXECUTOR_ENABLED = original;
+  });
+
+  test('refuses execute_shell and edit_file even for an admin, without constructing a ShellTool', async () => {
+    await expect(executeChatTool('execute_shell', { command: 'pwd' }, adminContext)).resolves.toEqual({
+      error: 'The shell executor is disabled on this instance.',
+    });
+    await expect(executeChatTool('edit_file', {
+      path: '/workspace/projects/admin-1/app/index.js',
+      new_content: 'x',
+    }, adminContext)).resolves.toEqual({
+      error: 'The shell executor is disabled on this instance.',
+    });
+    expect(ShellTool).not.toHaveBeenCalled();
+  });
+});

@@ -74,4 +74,25 @@ describe('WorkerService shell access (agent runs)', () => {
     expect(offered).toContain('execute_shell');
     expect(mockShellExecute).toHaveBeenCalledWith('ls', '/workspace/projects/user-1', undefined);
   });
+
+  it('does not offer or run execute_shell for an admin when the Unit has no executor', async () => {
+    const original = process.env.EXECUTOR_ENABLED;
+    process.env.EXECUTOR_ENABLED = 'false';
+    try {
+      shellCallThenAnswer();
+
+      await new WorkerService().executeWorker(spec, config({ isAdmin: true }));
+
+      const offered = mockChatCompletion.mock.calls[0][0].tools.map((tool: ToolDef) => tool.function.name);
+      expect(offered).not.toContain('execute_shell');
+      expect(ShellTool).not.toHaveBeenCalled();
+      const toolMessage = mockChatCompletion.mock.calls[1][0].messages.find((m: ChatMessage) => m.role === 'tool');
+      expect(JSON.parse(toolMessage.content)).toEqual({
+        error: 'The shell executor is disabled on this instance.',
+      });
+    } finally {
+      if (original === undefined) delete process.env.EXECUTOR_ENABLED;
+      else process.env.EXECUTOR_ENABLED = original;
+    }
+  });
 });
