@@ -50,6 +50,9 @@
 # shellcheck disable=SC2015,SC2016
 
 set -euo pipefail
+# A check that aborts the script (set -e) instead of calling bad() would otherwise
+# end the run with no FAIL line; say where it happened.
+trap 'rc=$?; echo "ABORTED: line $LINENO exited $rc: $BASH_COMMAND" >&2; [ -z "${GITHUB_ACTIONS:-}" ] || echo "::error title=multi-unit-smoke aborted::line $LINENO: $BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -227,12 +230,12 @@ for svc in app agent-worker db migrations; do
 done
 
 # Names, read from the JSON with plain grep/sed (no jq dependency).
-project_name="$(printf '%s' "$config_json" | grep -o '"name": *"[^"]*"' | head -n 1 | sed 's/.*"\([^"]*\)"$/\1/')"
+project_name="$(printf '%s' "$config_json" | grep -o '"name": *"[^"]*"' | head -n 1 | sed 's/.*"\([^"]*\)"$/\1/' || true)"
 [ "$project_name" = "$UNIT" ] && ok "config: project name is '$UNIT'" || bad "config: project name '$project_name' != '$UNIT'"
-cnames="$(printf '%s' "$config_json" | grep -o '"container_name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')"
+cnames="$(printf '%s' "$config_json" | grep -o '"container_name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)"
 if [ -n "$cnames" ] && ! printf '%s\n' "$cnames" | grep -qv "^${UNIT}-"; then ok "config: all container names start with '${UNIT}-'"
 else bad "config: container names outside '${UNIT}-': $(printf '%s\n' "$cnames" | grep -v "^${UNIT}-" | tr '\n' ' ')"; fi
-vnames="$(printf '%s' "$config_json" | grep -o '"name": *"'"${UNIT}"'_[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | sort -u)"
+vnames="$(printf '%s' "$config_json" | grep -o '"name": *"'"${UNIT}"'_[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | sort -u || true)"
 printf '%s\n' "$vnames" | grep -qx "${UNIT}_db_data" && ok "config: database volume is ${UNIT}_db_data" || bad "config: ${UNIT}_db_data not found"
 printf '%s\n' "$vnames" | grep -qx "${UNIT}_default" && ok "config: network is ${UNIT}_default" || bad "config: network ${UNIT}_default not found"
 if printf '%s' "$config_json" | grep -q "\"${DEFAULT_UNIT}_db_data\"\|\"${DEFAULT_UNIT}-app\""; then
@@ -340,4 +343,4 @@ fi
 
 echo ""
 echo "Result: $PASS passed, $FAIL failed."
-[ "$FAIL" -eq 0 ]
+[ "$FAIL" -eq 0 ] || exit 1

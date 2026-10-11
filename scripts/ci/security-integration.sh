@@ -46,6 +46,9 @@
 # shellcheck disable=SC2015,SC2016
 
 set -euo pipefail
+# A check that aborts the script (set -e) instead of calling bad() would otherwise
+# end the run with no FAIL line; say where it happened.
+trap 'rc=$?; echo "ABORTED: line $LINENO exited $rc: $BASH_COMMAND" >&2; [ -z "${GITHUB_ACTIONS:-}" ] || echo "::error title=security-integration aborted::line $LINENO: $BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -233,7 +236,7 @@ const call = h => fetch("http://executor:3001/execute",{method:"POST",headers:{"
 [ "$exec_auth" = "401 401 200" ] && ok "/execute: 401 without secret, 401 with a wrong one, 200 with the right one" || bad "/execute auth from the app container: '$exec_auth' (want '401 401 200')"
 
 public_bad="$(docker ps --filter "label=com.docker.compose.project=${UNIT}" --format '{{.Names}}|{{.Ports}}' | while IFS='|' read -r name ports; do
-    printf '%s\n' "$ports" | tr ',' '\n' | sed 's/^ *//' | grep -- '->' | while read -r p; do
+    printf '%s\n' "$ports" | tr ',' '\n' | sed 's/^ *//' | { grep -- '->' || true; } | while read -r p; do
         host="${p%%->*}"; target="${p##*->}"
         case "$target" in 3001/tcp) echo "$name publishes executor port 3001 ($p)"; continue ;; esac
         case "$host" in 127.0.0.1:*) continue ;; esac
@@ -247,7 +250,10 @@ done)"
 
 if command -v python3 >/dev/null; then
     profiles=(); while IFS= read -r p; do [ -n "$p" ] && profiles+=(--profile "$p"); done < <(dc config --profiles)
-    cfg_json="$(dc "${profiles[@]}" config --format json 2>&1)" || { bad "docker compose config failed: ${cfg_json:0:200}"; cfg_json='{"services":{}}'; }
+    cfg_err="$(mktemp)"
+    cfg_json="$(dc "${profiles[@]}" config --format json 2>"$cfg_err")" || { bad "docker compose config failed: $(head -c 300 "$cfg_err")"; cfg_json=''; }
+    rm -f "$cfg_err"
+    if [ -n "$cfg_json" ]; then
     cfg_bad="$(printf '%s' "$cfg_json" | python3 -c '
 import json, sys
 allowed = {("app", "8080"), ("ollama", "11434"), ("docs", "8000"), ("caddy", "80"), ("caddy", "443"), ("webhook", "9000"), ("garmin-auth-worker", "8787")}
@@ -258,8 +264,9 @@ for name, svc in json.load(sys.stdin)["services"].items():
             print(f"{name}: publishes 3001")
         elif p.get("host_ip") != "127.0.0.1" and (name, target) not in allowed:
             print(name + ": " + str(p.get("host_ip", "0.0.0.0")) + ":" + str(p.get("published")) + "->" + target)
-')"
+')" || cfg_bad="could not parse the resolved config"
     [ -z "$cfg_bad" ] && ok "resolved config with all $(( ${#profiles[@]} / 2 )) profiles: internal ports bound to 127.0.0.1" || bad "config publishes internal ports beyond localhost: $cfg_bad"
+    fi
 else
     skip "python3 not available: config-level port check skipped"
 fi
@@ -295,7 +302,7 @@ PUT|/api/workspace/file|{"path":"ci.txt","content":"x"}
 POST|/api/workspace/kill|{"pid":1}
 DELETE|/api/workspace/delete|{"path":"ci.txt"}
 ROUTES
-[ "$denied" = "8" ] && ok "non-admin: all 8 /api/workspace/* calls (7 routes) -> 403"
+[ "$denied" = "8" ] && ok "non-admin: all 8 /api/workspace/* calls (7 routes) -> 403" || bad "non-admin: only $denied of 8 /api/workspace/* calls returned 403"
 [ "$(http_code -H "Cookie: $USER_COOKIE" "$BASE/workspace")" = "404" ] && ok "non-admin: GET /workspace -> 404" || bad "non-admin: GET /workspace did not return 404"
 [ "$(http_code "$BASE/api/workspace/projects")" = "401" ] && ok "no session: GET /api/workspace/projects -> 401" || bad "no session: /api/workspace/projects did not return 401"
 
@@ -330,4 +337,4 @@ fi
 
 echo ""
 echo "Result: $PASS passed, $FAIL failed, $SKIP skipped."
-[ "$FAIL" -eq 0 ]
+[ "$FAIL" -eq 0 ] || exit 1
