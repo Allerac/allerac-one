@@ -527,8 +527,72 @@ Public agents are the special case where the caller is anonymous.
 - It cannot call other agents unless an explicit allowlist exists, and anything it
   triggers (lead capture, ticket creation) is a typed capability.
 - Its budget and rate limits are separate from members' budgets.
-- High-exposure public agents may later move to a dedicated `public` specialized
-  Unit so the anonymous surface does not share a database with employee data.
+- Public website agents should not stay in the main Unit long-term; they become
+  their own Units. See [Customer and Public Units](#customer-and-public-units).
+
+## Customer and Public Units
+
+Public website agents are the first workloads that should leave the operator's main
+Unit and run as separate Units, linked back through federation.
+
+Today there are two of them, both public domains inside the main Unit:
+
+| Agent | Today | Target | Owned by |
+|---|---|---|---|
+| `sales` | Allerac website bot, public domain | **public Unit** of the operator | the operator |
+| `openworld` | import/export FAQ bot on a customer website, public domain | **customer Unit** | the customer |
+
+Two kinds of Unit:
+
+- **Public Unit** — operated and owned by the operator, serves anonymous visitors on
+  the operator's own sites (for example `sales`).
+- **Customer Unit** — operated for, and ultimately owned by, a customer; serves that
+  customer's visitors and holds that customer's data (for example `openworld`).
+
+### Why Separate Units
+
+- **Data owned by someone else.** A customer's knowledge, conversations, and leads
+  must not share a database with the operator's personal data, nor with other
+  customers' data.
+- **Largest internet-exposed attack surface.** Anonymous callers reach these agents
+  directly. A separate Unit can be built without the capabilities they never need:
+  no shell or executor, no GitHub tools, and no path to the operator's memories,
+  notes, email, or credentials.
+- **Different lifecycle.** Deploys, cost, quotas, and possibly the model differ per
+  customer. A separate Unit is easier to bill, migrate, or hand over to the customer.
+
+### Managed Through Federation
+
+The operator's main Unit manages customer and public Units through federation
+capabilities, never through direct database access:
+
+```text
+operator main Unit
+    |  federation capabilities (Control API)
+    |    skills.publish          publish or update the agent's skill
+    |    metrics.read            usage, cost, rate-limit status
+    |    tickets.receive         failures and escalations arrive as tickets
+    v
+public Unit (sales)        customer Unit (openworld)
+  public agent only          public agent only
+  no executor                no executor
+  no operator memory         customer-owned knowledge
+```
+
+Direction of calls is from the operator Unit to the managed Unit, plus a narrow,
+typed channel back (tickets, metrics events). A managed Unit never receives
+credentials that reach into the operator Unit.
+
+### Transition
+
+1. **Today** — `sales` and `openworld` run as public domains in the main Unit,
+   protected by public-domain isolation (dedicated service accounts, restricted
+   tools, per-domain limits).
+2. **Next** — run a separate Allerac deployment per customer or public Unit, even
+   before federation exists. Skills and metrics are managed manually or through the
+   existing Control API with scoped keys.
+3. **Later** — replace manual management with federation capabilities as they are
+   defined in [Allerac Federation](allerac-federation.md).
 
 ## Quotas and Cost
 
@@ -598,7 +662,37 @@ Each Unit should define:
 
 The rule for moving to a specialized Unit: when a workload needs a different
 database, different secrets, different network exposure, or execution of untrusted
-code, it is not a logical boundary anymore.
+code, it is not a logical boundary anymore. Public website agents and customer data
+meet this rule; see [Customer and Public Units](#customer-and-public-units).
+
+## Co-locating Units on One Host
+
+Several Units may share one physical machine to save cost, as long as nothing is
+shared except the host:
+
+- each Unit is a separate Compose project;
+- its own database and volumes;
+- its own Docker network;
+- its own secrets and `.env`;
+- no shared containers, sockets, or mounts between Units.
+
+Co-location keeps the logical model intact — each Unit is still a separate
+deployment — but adds host-level risks:
+
+| Risk | Mitigation |
+|---|---|
+| Host compromise or container escape affects every Unit | public and customer Units run without the executor, without the Docker socket or Portainer, and with non-root containers |
+| Noisy neighbours | per-stack CPU and memory limits |
+| Home or office network exposure | publish through a tunnel (for example the optional Cloudflare Tunnel profile) with no open inbound ports; put the host on a separate network or VLAN |
+| Availability and backups | per-Unit backups and restore; explicit availability expectations for customer Units |
+
+Recommended path:
+
+1. Start co-located: the operator's personal Unit plus public and customer Units on
+   one host.
+2. Move customer Units to separate hosts (for example a small VPS) when contracts,
+   availability expectations, or the number of customers grow.
+3. The operator's personal Unit may stay on-premises.
 
 ## Stages
 
@@ -657,6 +751,10 @@ This remains the default developer and personal deployment model.
 | Stage 3: Domain Cells | specialized Units cooperating with a main Unit; requires U1 identity |
 | Stage 4: Ephemeral Cells | short-lived specialized Units (sandbox) used by agents for untrusted work |
 
+Customer and public Units do not wait for Stage 3. They can run as separate
+deployments — co-located or on their own hosts — from Stage U0, managed manually
+until federation capabilities exist.
+
 Stages U1–U3 do not require federation. Federation beyond Stage 2 should not start
 before agent identity (U1) is stable, because cross-Unit calls need a principal to
 attribute work to.
@@ -703,6 +801,12 @@ The Unit direction supports the current roadmap:
 - keep Knowledge contracts (`IntelligenceNode`, `IntelligenceEdge`) ready to carry
   visibility and agent provenance;
 - attribute credits and token usage to runs so per-agent budgets are possible later;
+- make `docker-compose.yml` runnable as more than one project per host: the
+  project name (`name: allerac`), every `container_name` (`allerac-*`), named
+  volumes (`allerac_*_data`), and several host ports are fixed today, so two Units
+  cannot run on one host without overrides;
+- provide a reduced profile for public and customer Units: today the executor and
+  Portainer start by default and `app` and `agent-worker` depend on the executor;
 - keep the single-owner deployment healthy.
 
 A first ADR could record the agent identity decision (agents as first-class
@@ -723,8 +827,13 @@ principals bounded by their owner) once the open questions below are settled.
   resumes), and through which channels?
 - Is `parent_run_id` generalized to delegation, or does delegation get its own column?
 - What is the default call policy between personal agents of different members?
-- Should public agents live in the main Unit or in a dedicated public Unit by
-  default?
+- Which federation capabilities does the operator need first to manage customer
+  and public Units (skill publish, metrics, tickets), and over which identity?
+- Who holds the keys and the backups of a customer Unit, and what does handing it
+  over to the customer involve?
+- How are per-Unit Compose projects named and configured on a shared host
+  (project name, container names, volume names, host ports, `.env` per Unit)?
+- What availability is promised for customer Units on a co-located host?
 - How are SSO and external identity providers introduced for company Units?
 - What is the minimal audit log format shared by Units and the federation?
 
