@@ -11,7 +11,8 @@
 #   COMPOSE_PROFILES=local      - Caddy reverse proxy (local HTTPS, e.g. home.allerac)
 #   COMPOSE_PROFILES=cloud      - Cloudflare Tunnel (VM/cloud access, no open ports)
 #   COMPOSE_PROFILES=webhook    - Auto-deploy on git push
-#   COMPOSE_PROFILES=automation - n8n workflow automation (see docs/roadmap/n8n-workflow-integration.md)
+#   COMPOSE_PROFILES=automation - n8n workflow automation (see docs/roadmap/n8n-workflow-integration.md;
+#                                 needs N8N_ENCRYPTION_KEY, checked by update.sh)
 #
 # Required environment variables:
 #   ENCRYPTION_KEY                   - AES key for token encryption
@@ -42,8 +43,17 @@
 # - Management: portainer
 # - Tunnel: cloudflare tunnel (optional, requires TUNNEL_TOKEN)
 # - Webhooks: auto-deploy on git push (optional, requires WEBHOOK_SECRET)
+#
+# Several Units on one host (docs/operations/multi-unit.md):
+#   ALLERAC_UNIT (default allerac) prefixes the project, every container
+#   (allerac-app, ...) and every volume (allerac_db_data, ...); every host port
+#   has an env override (APP_PORT, OLLAMA_PORT, ...). With nothing set, names,
+#   volumes and ports are the same as a classic single-Unit install.
+#   Each extra Unit has its own env file: docker compose --env-file .env.<unit> up -d
+# Lean public Unit (no executor, portainer, host monitoring or docs):
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.public.yml
 
-name: allerac
+name: ${ALLERAC_UNIT:-allerac}
 
 services:
   # ============================================
@@ -52,7 +62,7 @@ services:
 
   db:
     image: pgvector/pgvector:pg16
-    container_name: allerac-db
+    container_name: ${ALLERAC_UNIT:-allerac}-db
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -69,11 +79,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: ${DB_MEM_LIMIT:-512M}
+          cpus: ${DB_CPUS:-0}
 
   migrations:
     image: postgres:16-alpine
-    container_name: allerac-migrations
+    container_name: ${ALLERAC_UNIT:-allerac}-migrations
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -97,7 +108,7 @@ services:
     build:
       context: ./infra/executor
       dockerfile: Dockerfile
-    container_name: allerac-executor
+    container_name: ${ALLERAC_UNIT:-allerac}-executor
     restart: unless-stopped
     user: "10001:10001"
     read_only: true
@@ -128,8 +139,9 @@ services:
     ports:
       # Dev-server preview ports for workspace projects. Loopback only by
       # default; set EXECUTOR_DEV_PORTS_BIND=0.0.0.0 to expose them on the LAN.
-      - "${EXECUTOR_DEV_PORTS_BIND:-127.0.0.1}:3000:3000"
-      - "${EXECUTOR_DEV_PORTS_BIND:-127.0.0.1}:3002-3010:3002-3010"
+      # A second Unit with an executor must pick other host ports (same span).
+      - "${EXECUTOR_DEV_PORTS_BIND:-127.0.0.1}:${EXECUTOR_DEV_PORT:-3000}:3000"
+      - "${EXECUTOR_DEV_PORTS_BIND:-127.0.0.1}:${EXECUTOR_DEV_PORT_RANGE:-3002-3010}:3002-3010"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -148,7 +160,7 @@ services:
     build:
       context: ./services/health-worker
       dockerfile: Dockerfile
-    container_name: allerac-health-worker
+    container_name: ${ALLERAC_UNIT:-allerac}-health-worker
     restart: unless-stopped
     environment:
       - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
@@ -181,9 +193,10 @@ services:
         NEXT_PUBLIC_VISIBLE_DOMAINS: ${NEXT_PUBLIC_VISIBLE_DOMAINS:-}
         NEXT_PUBLIC_GOOGLE_PICKER_API_KEY: ${NEXT_PUBLIC_GOOGLE_PICKER_API_KEY:-}
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
-    container_name: allerac-app
+    container_name: ${ALLERAC_UNIT:-allerac}-app
     restart: unless-stopped
-    env_file: .env
+    # Per-Unit env file (a second Unit sets ALLERAC_ENV_FILE=.env.<unit> in it).
+    env_file: ${ALLERAC_ENV_FILE:-.env}
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
       - POSTGRES_HOST=db
@@ -238,7 +251,7 @@ services:
     volumes:
       - backups_data:/app/backups
       - ./update.sh:/app/update.sh:ro
-      - ./skills:/app/skills
+      - ${SKILLS_DIR:-./skills}:/app/skills
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -259,7 +272,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: ${APP_MEM_LIMIT:-1G}
+          cpus: ${APP_CPUS:-0}
 
   # ============================================
   # Background agent-run worker (Control API architecture Phase 4)
@@ -271,7 +285,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.agent-worker
-    container_name: allerac-agent-worker
+    container_name: ${ALLERAC_UNIT:-allerac}-agent-worker
     restart: unless-stopped
     stop_grace_period: 30s
     environment:
@@ -296,7 +310,7 @@ services:
       - AGENT_WORKER_TIMEOUT_MS=${AGENT_WORKER_TIMEOUT_MS:-600000}
       - AGENT_WORKER_HEALTH_PORT=8090
       # Forward [Context] console lines to the app's /logs UI (same pattern as telegram/executor)
-      - LOG_API_URL=http://allerac-app:8080/api/log-submit
+      - LOG_API_URL=http://${ALLERAC_UNIT:-allerac}-app:8080/api/log-submit
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -321,7 +335,7 @@ services:
 
   docs:
     image: squidfunk/mkdocs-material:9.6.14
-    container_name: allerac-docs
+    container_name: ${ALLERAC_UNIT:-allerac}-docs
     restart: unless-stopped
     working_dir: /docs
     volumes:
@@ -341,7 +355,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     pull_policy: if_not_present
-    container_name: allerac-ollama
+    container_name: ${ALLERAC_UNIT:-allerac}-ollama
     restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
@@ -354,6 +368,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-}
     mem_limit: ${OLLAMA_MEM_LIMIT:-10g}
+    cpus: ${OLLAMA_CPUS:-0}
     runtime: ${OLLAMA_RUNTIME:-runc}
     healthcheck:
       test: ["CMD", "ollama", "list"]
@@ -365,7 +380,7 @@ services:
   ollama-setup:
     image: ollama/ollama:latest
     pull_policy: if_not_present
-    container_name: allerac-ollama-setup
+    container_name: ${ALLERAC_UNIT:-allerac}-ollama-setup
     depends_on:
       ollama:
         condition: service_healthy
@@ -398,7 +413,7 @@ services:
 
   node-exporter:
     image: prom/node-exporter:latest
-    container_name: allerac-node-exporter
+    container_name: ${ALLERAC_UNIT:-allerac}-node-exporter
     restart: unless-stopped
     volumes:
       - /proc:/host/proc:ro
@@ -410,11 +425,11 @@ services:
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     ports:
-      - "9100:9100"
+      - "${MONITORING_BIND:-127.0.0.1}:${NODE_EXPORTER_PORT:-9100}:9100"
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: allerac-prometheus
+    container_name: ${ALLERAC_UNIT:-allerac}-prometheus
     restart: unless-stopped
     volumes:
       - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -425,7 +440,7 @@ services:
       - '--storage.tsdb.retention.time=15d'
       - '--web.enable-lifecycle'
     ports:
-      - "9090:9090"
+      - "${MONITORING_BIND:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     deploy:
@@ -435,14 +450,14 @@ services:
 
   loki:
     image: grafana/loki:latest
-    container_name: allerac-loki
+    container_name: ${ALLERAC_UNIT:-allerac}-loki
     restart: unless-stopped
     user: "0"
     volumes:
       - ./infra/monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
       - loki_data:/tmp/loki
     ports:
-      - "3100:3100"
+      - "${MONITORING_BIND:-127.0.0.1}:${LOKI_PORT:-3100}:3100"
     command: -config.file=/etc/loki/local-config.yaml
     deploy:
       resources:
@@ -451,7 +466,7 @@ services:
 
   promtail:
     image: grafana/promtail:latest
-    container_name: allerac-promtail
+    container_name: ${ALLERAC_UNIT:-allerac}-promtail
     restart: unless-stopped
     volumes:
       - ./infra/monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml
@@ -477,7 +492,7 @@ services:
   #
   # grafana:
   #   image: grafana/grafana:13.1.1
-  #   container_name: allerac-grafana
+  #   container_name: ${ALLERAC_UNIT:-allerac}-grafana
   #   restart: unless-stopped
   #   environment:
   #     - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
@@ -519,7 +534,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: allerac-redis
+    container_name: ${ALLERAC_UNIT:-allerac}-redis
     restart: unless-stopped
     volumes:
       - redis_data:/data
@@ -537,7 +552,7 @@ services:
     build:
       context: ./infra/notifier
       dockerfile: Dockerfile
-    container_name: allerac-notifier
+    container_name: ${ALLERAC_UNIT:-allerac}-notifier
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
@@ -572,10 +587,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.telegram
-    container_name: allerac-telegram
+    container_name: ${ALLERAC_UNIT:-allerac}-telegram
     restart: unless-stopped
     volumes:
-      - ./telegram-bots.json:/app/telegram-bots.json:ro
+      - ${TELEGRAM_BOTS_FILE:-./telegram-bots.json}:/app/telegram-bots.json:ro
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -612,17 +627,20 @@ services:
   n8n:
     image: n8nio/n8n:latest
     pull_policy: if_not_present
-    container_name: allerac-n8n
+    container_name: ${ALLERAC_UNIT:-allerac}-n8n
     restart: unless-stopped
     environment:
       - N8N_PROTOCOL=http
       - N8N_PORT=5678
       - N8N_SECURE_COOKIE=false
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY is required}
+      # Set it before first enabling the automation profile and never change it.
+      # Not enforced with ${VAR:?} because Compose interpolates every service,
+      # even ones whose profile is off; update.sh checks it when automation is on.
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-}
     volumes:
       - n8n_data:/home/node/.n8n
     ports:
-      - "${N8N_PORT:-5678}:5678"
+      - "${N8N_BIND:-127.0.0.1}:${N8N_PORT:-5678}:5678"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     deploy:
@@ -638,13 +656,13 @@ services:
 
   portainer:
     image: portainer/portainer-ce:latest
-    container_name: allerac-portainer
+    container_name: ${ALLERAC_UNIT:-allerac}-portainer
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
     ports:
-      - "9000:9000"
+      - "${PORTAINER_BIND:-127.0.0.1}:${PORTAINER_PORT:-9000}:9000"
 
   # Local profile: Garmin auth worker (home IP bypasses Garmin's cloud IP block)
   # Expose via Cloudflare Tunnel route: garmin-worker.allerac.ai → http://localhost:8787
@@ -652,10 +670,10 @@ services:
     build:
       context: ./services/garmin-auth-worker
       dockerfile: Dockerfile
-    container_name: allerac-garmin-auth-worker
+    container_name: ${ALLERAC_UNIT:-allerac}-garmin-auth-worker
     restart: unless-stopped
     ports:
-      - "8787:8787"
+      - "${GARMIN_WORKER_PORT:-8787}:8787"
     environment:
       - WORKER_SECRET=${GARMIN_WORKER_SECRET:-}
       - PORT=8787
@@ -669,11 +687,11 @@ services:
   # Local profile: Caddy reverse proxy for local HTTPS (e.g. https://home.allerac)
   caddy:
     image: caddy:alpine
-    container_name: allerac-caddy
+    container_name: ${ALLERAC_UNIT:-allerac}-caddy
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./infra/caddy/certs:/etc/caddy/certs:ro
@@ -689,7 +707,7 @@ services:
   # Cloud profile: Cloudflare Tunnel (no open ports needed)
   tunnel:
     image: cloudflare/cloudflared:latest
-    container_name: allerac-tunnel
+    container_name: ${ALLERAC_UNIT:-allerac}-tunnel
     restart: always
     command: tunnel run
     network_mode: host
@@ -705,10 +723,10 @@ services:
     build:
       context: ./infra/webhook
       dockerfile: Dockerfile
-    container_name: allerac-webhook
+    container_name: ${ALLERAC_UNIT:-allerac}-webhook
     restart: unless-stopped
     ports:
-      - "9999:9000"
+      - "${WEBHOOK_PORT:-9999}:9000"
     volumes:
       - ./infra/webhook:/etc/webhook:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -731,22 +749,22 @@ services:
 
 volumes:
   db_data:
-    name: allerac_db_data
+    name: ${ALLERAC_UNIT:-allerac}_db_data
   executor_workspace:
-    name: allerac_executor_workspace
+    name: ${ALLERAC_UNIT:-allerac}_executor_workspace
   ollama_data:
-    name: allerac_ollama_data
+    name: ${ALLERAC_UNIT:-allerac}_ollama_data
   backups_data:
-    name: allerac_backups_data
+    name: ${ALLERAC_UNIT:-allerac}_backups_data
   redis_data:
-    name: allerac_redis_data
+    name: ${ALLERAC_UNIT:-allerac}_redis_data
   prometheus_data:
-    name: allerac_prometheus_data
+    name: ${ALLERAC_UNIT:-allerac}_prometheus_data
   grafana_data:
-    name: allerac_grafana_data
+    name: ${ALLERAC_UNIT:-allerac}_grafana_data
   loki_data:
-    name: allerac_loki_data
+    name: ${ALLERAC_UNIT:-allerac}_loki_data
   portainer_data:
-    name: allerac_portainer_data
+    name: ${ALLERAC_UNIT:-allerac}_portainer_data
   n8n_data:
-    name: allerac_n8n_data
+    name: ${ALLERAC_UNIT:-allerac}_n8n_data

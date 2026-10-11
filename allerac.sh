@@ -35,6 +35,49 @@ set -eo pipefail
 INSTALL_DIR="${INSTALL_DIR:-$HOME/allerac-one}"
 COMPOSE_FILE="docker-compose.yml"
 
+# --------------------------------------------
+# Allerac Unit (see docs/operations/multi-unit.md)
+# --------------------------------------------
+# With nothing set this is the historic single-Unit install: env file .env,
+# containers allerac-*, volumes allerac_*. To manage another Unit on the same
+# host point ALLERAC_ENV_FILE at its env file (ALLERAC_ENV_FILE=.env.<unit>).
+ALLERAC_ENV_FILE="${ALLERAC_ENV_FILE:-.env}"
+case "$ALLERAC_ENV_FILE" in
+    /*) UNIT_ENV_PATH="$ALLERAC_ENV_FILE" ;;
+    *)  UNIT_ENV_PATH="$INSTALL_DIR/$ALLERAC_ENV_FILE" ;;
+esac
+unit_env_value() {
+    { grep -E "^$1=" "$UNIT_ENV_PATH" 2>/dev/null || true; } | tail -n 1 | cut -d= -f2- \
+        | sed -e 's/^["'\'']//' -e 's/["'\'']$//'
+}
+UNIT="${ALLERAC_UNIT:-$(unit_env_value ALLERAC_UNIT)}"
+UNIT="${UNIT:-allerac}"
+if ! [[ "$UNIT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+    echo "Invalid ALLERAC_UNIT '$UNIT' (lowercase letters, digits, '-' and '_' only)." >&2
+    exit 1
+fi
+# Compose files: the Unit's COMPOSE_FILE (e.g. docker-compose.yml:docker-compose.public.yml)
+# or the default file. A non-default env file is passed explicitly.
+COMPOSE_ARGS="-f $COMPOSE_FILE"
+UNIT_COMPOSE_FILES="$(unit_env_value COMPOSE_FILE)"
+if [ -n "$UNIT_COMPOSE_FILES" ]; then
+    COMPOSE_ARGS=""
+    IFS=':' read -ra _unit_compose_files <<< "$UNIT_COMPOSE_FILES"
+    for _unit_compose_file in "${_unit_compose_files[@]}"; do
+        COMPOSE_ARGS="$COMPOSE_ARGS -f $_unit_compose_file"
+    done
+fi
+[ "$ALLERAC_ENV_FILE" = ".env" ] || COMPOSE_ARGS="$COMPOSE_ARGS --env-file $UNIT_ENV_PATH"
+# Database backups: ./backups for the primary Unit (unchanged), ./backups/<unit> otherwise.
+if [ "$UNIT" = "allerac" ]; then
+    UNIT_BACKUP_DIR="$INSTALL_DIR/backups"
+else
+    UNIT_BACKUP_DIR="$INSTALL_DIR/backups/$UNIT"
+fi
+TELEGRAM_BOTS_PATH="$(unit_env_value TELEGRAM_BOTS_FILE)"
+TELEGRAM_BOTS_PATH="${TELEGRAM_BOTS_PATH:-./telegram-bots.json}"
+case "$TELEGRAM_BOTS_PATH" in /*) ;; *) TELEGRAM_BOTS_PATH="$INSTALL_DIR/${TELEGRAM_BOTS_PATH#./}" ;; esac
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -56,23 +99,27 @@ require_install_dir() {
         log_error "Run the installer first: bash ~/allerac-one/install.sh"
         exit 1
     fi
+    if [ ! -f "$UNIT_ENV_PATH" ] && [ "$ALLERAC_ENV_FILE" != ".env" ]; then
+        log_error "Unit env file not found: $UNIT_ENV_PATH"
+        exit 1
+    fi
     cd "$INSTALL_DIR"
 }
 
 get_app_port() {
-    grep "^APP_PORT=" "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "8080"
+    grep "^APP_PORT=" "$UNIT_ENV_PATH" 2>/dev/null | cut -d= -f2 || echo "8080"
 }
 
 compose_flags() {
     local flags=""
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-notifier"  && flags="$flags --profile notifications"
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-prometheus" && flags="$flags --profile monitoring"
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${UNIT}-notifier"  && flags="$flags --profile notifications"
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${UNIT}-prometheus" && flags="$flags --profile monitoring"
     echo "$flags"
 }
 
 create_database_backup() {
     local label="${1:-manual}"
-    local backup_dir="$INSTALL_DIR/backups"
+    local backup_dir="$UNIT_BACKUP_DIR"
     local filename="allerac-${label}-$(date +%Y-%m-%d_%H-%M-%S).sql.gz"
     local filepath="$backup_dir/$filename"
     local tempfile="${filepath}.tmp"
@@ -81,7 +128,7 @@ create_database_backup() {
     rm -f "$tempfile"
 
     log_info "Backing up database..."
-    if ! docker compose -f "$COMPOSE_FILE" exec -T db sh -c \
+    if ! docker compose $COMPOSE_ARGS exec -T db sh -c \
         'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
         | gzip > "$tempfile"; then
         rm -f "$tempfile"
@@ -103,22 +150,22 @@ create_database_backup() {
 }
 
 start_app_after_restore() {
-    docker compose -f "$COMPOSE_FILE" start app 2>/dev/null \
-        || docker compose -f "$COMPOSE_FILE" up -d app
+    docker compose $COMPOSE_ARGS start app 2>/dev/null \
+        || docker compose $COMPOSE_ARGS up -d app
 }
 
 restore_database_dump() {
     local filepath="$1"
 
     log_info "Resetting the public schema..."
-    if ! docker compose -f "$COMPOSE_FILE" exec -T db sh -c \
+    if ! docker compose $COMPOSE_ARGS exec -T db sh -c \
         'PGPASSWORD="$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'; then
         log_error "Could not reset the database schema. Current data was not replaced."
         return 1
     fi
 
     log_info "Restoring database from $filepath..."
-    if ! gzip -cd "$filepath" | docker compose -f "$COMPOSE_FILE" exec -T db sh -c \
+    if ! gzip -cd "$filepath" | docker compose $COMPOSE_ARGS exec -T db sh -c \
         'PGPASSWORD="$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'; then
         log_error "Restore failed."
         return 1
@@ -148,7 +195,7 @@ json_escape() {
 detect_product_line_value() {
     if [ -n "${ALLERAC_PRODUCT_LINE:-}" ]; then
         echo "$ALLERAC_PRODUCT_LINE"
-    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-tunnel"; then
+    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${UNIT}-tunnel"; then
         echo "cloud"
     else
         echo "local"
@@ -157,7 +204,7 @@ detect_product_line_value() {
 
 get_schema_version() {
     local result
-    result=$(docker compose -f "$COMPOSE_FILE" exec -T db sh -c \
+    result=$(docker compose $COMPOSE_ARGS exec -T db sh -c \
         'PGPASSWORD="$POSTGRES_PASSWORD" psql -tAc "SELECT name FROM _migrations ORDER BY applied_at DESC LIMIT 1" -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
         2>/dev/null | tr -d '[:space:]')
     [ -n "$result" ] && echo "$result" || echo "unknown"
@@ -184,7 +231,7 @@ write_required_settings() {
         while IFS= read -r name; do
             [ -z "$name" ] && continue
             local present="false"
-            if [ -f "$INSTALL_DIR/.env" ] && grep -qE "^${name}=.+" "$INSTALL_DIR/.env"; then
+            if [ -f "$UNIT_ENV_PATH" ] && grep -qE "^${name}=.+" "$UNIT_ENV_PATH"; then
                 present="true"
                 echo "$name" >> "$present_file"
             fi
@@ -204,7 +251,7 @@ print_missing_settings_checklist() {
     local missing=()
     while IFS= read -r name; do
         [ -z "$name" ] && continue
-        if [ ! -f "$INSTALL_DIR/.env" ] || ! grep -qE "^${name}=.+" "$INSTALL_DIR/.env"; then
+        if [ ! -f "$UNIT_ENV_PATH" ] || ! grep -qE "^${name}=.+" "$UNIT_ENV_PATH"; then
             missing+=("$name")
         fi
     done < "$src_present"
@@ -221,7 +268,7 @@ print_missing_settings_checklist() {
 write_containers_inventory() {
     local pkg_dir="$1"
     local ids
-    ids=$(docker compose -f "$COMPOSE_FILE" ps -a -q 2>/dev/null)
+    ids=$(docker compose $COMPOSE_ARGS ps -a -q 2>/dev/null)
     if [ -n "$ids" ]; then
         docker inspect $ids > "$pkg_dir/inventories/containers.json" 2>/dev/null \
             || echo "[]" > "$pkg_dir/inventories/containers.json"
@@ -234,7 +281,7 @@ write_volumes_inventory() {
     local pkg_dir="$1"
     local existing_vols=""
     local vol
-    for vol in allerac_db_data allerac_ollama_data allerac_backups_data allerac_redis_data; do
+    for vol in ${UNIT}_db_data ${UNIT}_ollama_data ${UNIT}_backups_data ${UNIT}_redis_data; do
         if docker volume inspect "$vol" >/dev/null 2>&1; then
             existing_vols="$existing_vols $vol"
         fi
@@ -251,7 +298,7 @@ write_ollama_inventory() {
     local pkg_dir="$1"
     local names=()
     local raw
-    raw=$(docker exec allerac-ollama ollama list 2>/dev/null | tail -n +2 | awk '{print $1}')
+    raw=$(docker exec ${UNIT}-ollama ollama list 2>/dev/null | tail -n +2 | awk '{print $1}')
     if [ -n "$raw" ]; then
         while IFS= read -r name; do
             [ -n "$name" ] && names+=("$name")
@@ -356,7 +403,7 @@ cmd_start() {
     flags=$(compose_flags)
 
     log_info "Starting Allerac One..."
-    docker compose -f "$COMPOSE_FILE" $flags up -d
+    docker compose $COMPOSE_ARGS $flags up -d
     log_ok "Services started"
 
     local port
@@ -369,7 +416,7 @@ cmd_start() {
 cmd_stop() {
     require_install_dir
     log_info "Stopping Allerac One..."
-    docker compose -f "$COMPOSE_FILE" --profile notifications --profile monitoring down
+    docker compose $COMPOSE_ARGS --profile notifications --profile monitoring down
     log_ok "Services stopped"
 }
 
@@ -379,7 +426,7 @@ cmd_restart() {
     flags=$(compose_flags)
 
     log_info "Restarting Allerac One..."
-    docker compose -f "$COMPOSE_FILE" $flags restart
+    docker compose $COMPOSE_ARGS $flags restart
     log_ok "Services restarted"
 }
 
@@ -389,7 +436,7 @@ cmd_status() {
     echo -e "${BOLD}Allerac One — Status${NC}"
     echo ""
 
-    local services=("allerac-app" "allerac-db" "allerac-ollama" "allerac-executor" "allerac-telegram" "allerac-health-worker" "allerac-notifier" "allerac-redis" "allerac-prometheus" "allerac-grafana" "allerac-loki" "allerac-promtail" "allerac-portainer" "allerac-node-exporter")
+    local services=("${UNIT}-app" "${UNIT}-db" "${UNIT}-ollama" "${UNIT}-executor" "${UNIT}-telegram" "${UNIT}-health-worker" "${UNIT}-notifier" "${UNIT}-redis" "${UNIT}-prometheus" "${UNIT}-grafana" "${UNIT}-loki" "${UNIT}-promtail" "${UNIT}-portainer" "${UNIT}-node-exporter")
     for svc in "${services[@]}"; do
         local state
         state=$(docker inspect "$svc" --format='{{.State.Status}}' 2>/dev/null || echo "not found")
@@ -416,9 +463,9 @@ cmd_logs() {
     require_install_dir
     local service="${1:-}"
     if [ -n "$service" ]; then
-        docker compose -f "$COMPOSE_FILE" logs -f "$service"
+        docker compose $COMPOSE_ARGS logs -f "$service"
     else
-        docker compose -f "$COMPOSE_FILE" --profile notifications --profile monitoring logs -f
+        docker compose $COMPOSE_ARGS --profile notifications --profile monitoring logs -f
     fi
 }
 
@@ -455,14 +502,14 @@ cmd_restore() {
         echo "Usage: allerac restore <filename>"
         echo ""
         echo "Available backups:"
-        ls -lh "$INSTALL_DIR/backups/"*.sql.gz 2>/dev/null | awk '{print "  " $NF, "(" $5 ")"}' || echo "  (no backups found)"
+        ls -lh "$UNIT_BACKUP_DIR/"*.sql.gz 2>/dev/null | awk '{print "  " $NF, "(" $5 ")"}' || echo "  (no backups found)"
         echo ""
         exit 1
     fi
 
     # Accept bare filename or full path
     local filepath="$file"
-    [ ! -f "$filepath" ] && filepath="$INSTALL_DIR/backups/$file"
+    [ ! -f "$filepath" ] && filepath="$UNIT_BACKUP_DIR/$file"
 
     if [ ! -f "$filepath" ]; then
         log_error "Backup file not found: $file"
@@ -493,7 +540,7 @@ cmd_restore() {
     log_ok "Safety backup saved: $safety_backup"
 
     log_info "Stopping app..."
-    docker compose -f "$COMPOSE_FILE" stop app 2>/dev/null || true
+    docker compose $COMPOSE_ARGS stop app 2>/dev/null || true
 
     if ! restore_database_dump "$filepath"; then
         start_app_after_restore
@@ -515,7 +562,7 @@ cmd_disaster_backup() {
     local timestamp pkg backups_dir stage pkg_dir
     timestamp=$(date -u +%Y-%m-%d_%H-%M-%S)
     pkg="allerac-recovery-${timestamp}"
-    backups_dir="$INSTALL_DIR/backups"
+    backups_dir="$UNIT_BACKUP_DIR"
     stage="$backups_dir/.stage-${pkg}"
     pkg_dir="$stage/$pkg"
 
@@ -535,8 +582,8 @@ cmd_disaster_backup() {
     write_required_settings "$pkg_dir"
 
     log_info "Collecting application files..."
-    if [ -f "$INSTALL_DIR/telegram-bots.json" ]; then
-        cp "$INSTALL_DIR/telegram-bots.json" "$pkg_dir/files/telegram-bots.json"
+    if [ -f "$TELEGRAM_BOTS_PATH" ]; then
+        cp "$TELEGRAM_BOTS_PATH" "$pkg_dir/files/telegram-bots.json"
     fi
 
     log_info "Collecting infrastructure inventory..."
@@ -585,13 +632,13 @@ cmd_disaster_inspect() {
         echo "Usage: allerac disaster-inspect <package.tar.gz>"
         echo ""
         echo "Available packages:"
-        ls -lh "$INSTALL_DIR/backups/"allerac-recovery-*.tar.gz 2>/dev/null | awk '{print "  " $NF, "(" $5 ")"}' || echo "  (none found)"
+        ls -lh "$UNIT_BACKUP_DIR/"allerac-recovery-*.tar.gz 2>/dev/null | awk '{print "  " $NF, "(" $5 ")"}' || echo "  (none found)"
         echo ""
         exit 1
     fi
 
     local filepath="$file"
-    [ ! -f "$filepath" ] && filepath="$INSTALL_DIR/backups/$file"
+    [ ! -f "$filepath" ] && filepath="$UNIT_BACKUP_DIR/$file"
     if [ ! -f "$filepath" ]; then
         log_error "Package not found: $file"
         exit 1
@@ -666,7 +713,7 @@ cmd_disaster_restore() {
     fi
 
     local filepath="$file"
-    [ ! -f "$filepath" ] && filepath="$INSTALL_DIR/backups/$file"
+    [ ! -f "$filepath" ] && filepath="$UNIT_BACKUP_DIR/$file"
     if [ ! -f "$filepath" ]; then
         log_error "Package not found: $file"
         exit 1
@@ -733,7 +780,7 @@ cmd_disaster_restore() {
     fi
 
     log_info "Stopping app..."
-    docker compose -f "$COMPOSE_FILE" stop app 2>/dev/null || true
+    docker compose $COMPOSE_ARGS stop app 2>/dev/null || true
 
     if ! restore_database_dump "$pkg_dir/database/allerac.sql.gz"; then
         start_app_after_restore
@@ -742,10 +789,10 @@ cmd_disaster_restore() {
     fi
 
     if [ -f "$pkg_dir/files/telegram-bots.json" ]; then
-        if [ -f "$INSTALL_DIR/telegram-bots.json" ]; then
-            cp "$INSTALL_DIR/telegram-bots.json" "$INSTALL_DIR/telegram-bots.json.bak"
+        if [ -f "$TELEGRAM_BOTS_PATH" ]; then
+            cp "$TELEGRAM_BOTS_PATH" "$TELEGRAM_BOTS_PATH.bak"
         fi
-        cp "$pkg_dir/files/telegram-bots.json" "$INSTALL_DIR/telegram-bots.json"
+        cp "$pkg_dir/files/telegram-bots.json" "$TELEGRAM_BOTS_PATH"
         log_ok "Restored telegram-bots.json (previous copy saved as .bak, if any)."
     fi
 
@@ -797,7 +844,7 @@ cmd_verify() {
     fi
 
     log_info "Checking backups directory is writable..."
-    if [ -w "$INSTALL_DIR/backups" ] || mkdir -p "$INSTALL_DIR/backups" 2>/dev/null; then
+    if [ -w "$UNIT_BACKUP_DIR" ] || mkdir -p "$UNIT_BACKUP_DIR" 2>/dev/null; then
         log_ok "backups/ is writable."
     else
         log_error "backups/ is not writable."
@@ -810,7 +857,7 @@ cmd_verify() {
     while IFS= read -r name; do
         [ -z "$name" ] && continue
         total=$((total + 1))
-        if [ -f "$INSTALL_DIR/.env" ] && grep -qE "^${name}=.+" "$INSTALL_DIR/.env"; then
+        if [ -f "$UNIT_ENV_PATH" ] && grep -qE "^${name}=.+" "$UNIT_ENV_PATH"; then
             present=$((present + 1))
         fi
     done <<< "$names"
@@ -830,7 +877,7 @@ cmd_models() {
     echo ""
     echo -e "${BOLD}Installed Ollama models:${NC}"
     echo ""
-    docker exec allerac-ollama ollama list 2>/dev/null || log_warn "Ollama container not running."
+    docker exec ${UNIT}-ollama ollama list 2>/dev/null || log_warn "Ollama container not running."
     echo ""
 }
 
@@ -843,7 +890,7 @@ cmd_pull() {
         exit 1
     fi
     log_info "Pulling model: $model"
-    docker exec -it allerac-ollama ollama pull "$model"
+    docker exec -it ${UNIT}-ollama ollama pull "$model"
     log_ok "Model $model ready"
 }
 
@@ -888,7 +935,7 @@ cmd_ports() {
 
     # Get all listening ports from the executor container
     local ports
-    ports=$(docker exec allerac-executor sh -c 'netstat -tuln 2>/dev/null | grep LISTEN | awk "{print \$4}" | sed "s/.*://g" | sort -n -u' 2>/dev/null || true)
+    ports=$(docker exec ${UNIT}-executor sh -c 'netstat -tuln 2>/dev/null | grep LISTEN | awk "{print \$4}" | sed "s/.*://g" | sort -n -u' 2>/dev/null || true)
 
     if [ -z "$ports" ]; then
         echo -e "  ${YELLOW}No ports in use${NC}"
@@ -908,10 +955,10 @@ cmd_ports() {
 
     for port in $executor_ports; do
         local pid
-        pid=$(docker exec allerac-executor sh -c "netstat -tulnp 2>/dev/null | grep :$port | awk '{print \$NF}' | cut -d/ -f1" 2>/dev/null || echo "?")
+        pid=$(docker exec ${UNIT}-executor sh -c "netstat -tulnp 2>/dev/null | grep :$port | awk '{print \$NF}' | cut -d/ -f1" 2>/dev/null || echo "?")
 
         local cmd
-        cmd=$(docker exec allerac-executor sh -c "ps -p $pid -o comm= 2>/dev/null" 2>/dev/null || echo "unknown")
+        cmd=$(docker exec ${UNIT}-executor sh -c "ps -p $pid -o comm= 2>/dev/null" 2>/dev/null || echo "unknown")
 
         echo -e "  ${BLUE}:$port${NC}  PID=$pid  CMD=$cmd"
     done
@@ -944,7 +991,7 @@ cmd_kill_port() {
 
     # Get PID of process on that port
     local pid
-    pid=$(docker exec allerac-executor sh -c "netstat -tulnp 2>/dev/null | grep :$port | awk '{print \$NF}' | cut -d/ -f1" 2>/dev/null || echo "")
+    pid=$(docker exec ${UNIT}-executor sh -c "netstat -tulnp 2>/dev/null | grep :$port | awk '{print \$NF}' | cut -d/ -f1" 2>/dev/null || echo "")
 
     if [ -z "$pid" ] || [ "$pid" = "?" ]; then
         log_warn "No process found on port $port"
@@ -954,7 +1001,7 @@ cmd_kill_port() {
 
     # Get process name
     local cmd
-    cmd=$(docker exec allerac-executor sh -c "ps -p $pid -o comm= 2>/dev/null" || echo "process")
+    cmd=$(docker exec ${UNIT}-executor sh -c "ps -p $pid -o comm= 2>/dev/null" || echo "process")
 
     echo -e "  Found: ${YELLOW}$cmd${NC} (PID $pid)"
     echo ""
@@ -962,7 +1009,7 @@ cmd_kill_port() {
     [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "  Cancelled."; echo ""; exit 0; }
 
     log_info "Killing process $pid..."
-    if docker exec allerac-executor kill $pid 2>/dev/null; then
+    if docker exec ${UNIT}-executor kill $pid 2>/dev/null; then
         log_ok "Process killed"
     else
         log_error "Failed to kill process"

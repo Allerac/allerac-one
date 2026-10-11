@@ -1,0 +1,64 @@
+# Allerac One - lean override for public / customer-facing Units
+#
+# Use it together with docker-compose.yml for a Unit that only serves a
+# public agent (website bot, customer bot) and must not carry host-level
+# tooling:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.public.yml   (in the Unit's env file)
+#   docker compose --env-file .env.<unit> up -d
+#
+# What it changes (nothing else):
+# - executor (arbitrary shell) is moved behind the `executor` profile, and the
+#   app, agent-worker and Telegram bot run with EXECUTOR_ENABLED=false: shell
+#   tools are never offered, the /api/workspace/* routes answer 403 and they
+#   no longer wait for the executor to be healthy.
+# - portainer (Docker socket) is moved behind the `ops` profile.
+# - host-level monitoring (promtail reads the Docker socket, node-exporter
+#   mounts the host root) and its prometheus/loki are moved behind the
+#   `monitoring` profile; the docs server behind `docs`.
+#
+# The base docker-compose.yml is untouched, so a normal (full) install keeps
+# every service without setting anything. See docs/operations/multi-unit.md.
+#
+# Requires Docker Compose v2.24.4+ (for the `!override` tag below).
+
+x-no-executor-env: &no-executor-env
+  EXECUTOR_ENABLED: "false"
+  EXECUTOR_URL: ""
+
+services:
+  executor:
+    profiles: [executor]
+
+  portainer:
+    profiles: [ops]
+
+  promtail:
+    profiles: [monitoring]
+  node-exporter:
+    profiles: [monitoring]
+  prometheus:
+    profiles: [monitoring]
+  loki:
+    profiles: [monitoring]
+
+  docs:
+    profiles: [docs]
+
+  app:
+    environment: *no-executor-env
+    depends_on: !override
+      migrations:
+        condition: service_completed_successfully
+
+  agent-worker:
+    environment: *no-executor-env
+    depends_on: !override
+      migrations:
+        condition: service_completed_successfully
+
+  allerac-telegram:
+    environment: *no-executor-env
+    depends_on: !override
+      migrations:
+        condition: service_completed_successfully
