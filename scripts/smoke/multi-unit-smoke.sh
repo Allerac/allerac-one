@@ -133,11 +133,18 @@ default_unit_snapshot() {
         --format '{{.ID}} {{.Names}} {{.State}}' | sort
 }
 wait_healthy() {
-    local deadline=$((SECONDS + WAIT_TIMEOUT)) c s
+    local deadline=$((SECONDS + WAIT_TIMEOUT)) c s restarts
     for c in "$@"; do
         while :; do
-            s="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$c" 2>/dev/null || echo missing)"
+            s="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}} {{.RestartCount}}' "$c" 2>/dev/null || echo "missing 0")"
+            restarts="${s##* }"; s="${s% *}"
             [ "$s" = "healthy" ] && break
+            # A crash loop never becomes healthy: stop waiting after 3 restarts.
+            if [ "${restarts:-0}" -ge 3 ] 2>/dev/null; then
+                echo "  $c: crash loop ($restarts restarts). Last log lines:" >&2
+                docker logs --tail 30 "$c" 2>&1 | sed 's/^/    /' >&2 || true
+                return 1
+            fi
             if [ "$s" = "exited" ] || [ "$s" = "dead" ] || [ "$SECONDS" -ge "$deadline" ]; then
                 echo "  $c: $s" >&2
                 return 1

@@ -96,11 +96,18 @@ dc() {
 psql_q() { dc exec -T db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -qtA -U "$POSTGRES_USER" -d "$POSTGRES_DB"'; }
 http_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$@" || true; }
 wait_healthy() {
-    local deadline=$((SECONDS + ${HEALTH_TIMEOUT:-240})) c s
+    local deadline=$((SECONDS + ${HEALTH_TIMEOUT:-240})) c s restarts
     for c in "$@"; do
         while :; do
-            s="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$c" 2>/dev/null || echo missing)"
+            s="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}} {{.RestartCount}}' "$c" 2>/dev/null || echo "missing 0")"
+            restarts="${s##* }"; s="${s% *}"
             [ "$s" = "healthy" ] && break
+            # A crash loop never becomes healthy: stop waiting after 3 restarts.
+            if [ "${restarts:-0}" -ge 3 ] 2>/dev/null; then
+                echo "  $c: crash loop ($restarts restarts). Last log lines:" >&2
+                docker logs --tail 30 "$c" 2>&1 | sed 's/^/    /' >&2 || true
+                return 1
+            fi
             if [ "$s" = "exited" ] || [ "$s" = "dead" ] || [ "$SECONDS" -ge "$deadline" ]; then
                 echo "  $c: $s" >&2; return 1
             fi
