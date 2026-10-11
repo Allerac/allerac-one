@@ -5,7 +5,7 @@ import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
 import { PUBLIC_DOMAINS, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
-import { isShellAllowedFor } from '@/app/lib/shell-access';
+import { isShellAllowedFor } from '@/app/lib/shell-policy';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
 import { loadChatRuntimeContext } from '@/app/services/chat/chat-runtime-context';

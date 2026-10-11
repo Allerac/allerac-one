@@ -9,7 +9,7 @@ import { TOOLS } from '../../tools/tools';
 import { WorkerSpec } from './orchestrator.service';
 import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
 import { getUserWorkspaceRoot, normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
-import { isShellAllowedFor, SHELL_ACCESS_DENIED_MESSAGE, withoutShellTools } from '@/app/lib/shell-access';
+import { isShellAllowedFor, SHELL_ACCESS_DENIED_MESSAGE, withoutShellTools } from '@/app/lib/shell-policy';
 
 export interface WorkerExecutionConfig {
   userId: string;
