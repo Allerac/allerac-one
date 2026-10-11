@@ -8,22 +8,29 @@ current release cycle.
 The current priority remains stabilizing Control API v1 inside the existing app
 container. Federation should guide decisions, not force premature service splits.
 
+This document describes cooperation **between** Allerac Units. What happens
+**inside** one Unit — people, teams, agents, scoped memory, and approval gates — is
+described in [Allerac Units](allerac-units.md).
+
 ## Thesis
 
 Allerac One can evolve from a single application into a federated operating system
 for specialized AI domains.
 
-In this model, an Allerac deployment is not only a web app. It is a complete,
-isolated runtime that can expose capabilities, run agents, own data, and cooperate
-with other Allerac runtimes through stable contracts.
+In this model, an Allerac deployment — an **Allerac Unit** — is not only a web app.
+It is a complete, isolated runtime that can expose capabilities, run agents, own
+data, and cooperate with other Allerac runtimes through stable contracts.
 
 ```text
 Allerac Federation
-  A network of autonomous Allerac instances
+  A network of autonomous Allerac Units
   connected through APIs, events, identity, policy, and shared protocols.
 
+Allerac Unit
+  One Allerac instance (deployment) that hosts people and agents.
+
 Isolated Domain Cell
-  One autonomous Allerac runtime focused on a domain, workload, or trust boundary.
+  A specialized Unit focused on a domain, workload, or trust boundary.
 ```
 
 ## Why This Matters
@@ -48,17 +55,22 @@ keeping them interoperable.
 
 ### Federation
 
-A federation is a group of Allerac instances that can discover each other, exchange
+A federation is a group of Allerac Units that can discover each other, exchange
 work, and share selected context without sharing one database.
 
-Each instance keeps its own runtime and data boundary. Cooperation happens through
+Each Unit keeps its own runtime and data boundary. Cooperation happens through
 versioned APIs and events.
 
 ### Isolated Domain Cell
 
-A domain cell is an isolated Allerac runtime specialized for a domain or workload.
-It may run as a Docker Compose stack, a VM deployment, a cloud service, or an
-ephemeral sandbox.
+A domain cell is a specialized Allerac Unit: an isolated runtime focused on a domain
+or workload. It may run as a Docker Compose stack, a VM deployment, a cloud service,
+or an ephemeral sandbox. It follows the same Unit model — principals, agents,
+grants, scoped memory — with a narrower capability surface
+(see [Allerac Units](allerac-units.md)).
+
+Throughout this document, *cell* is shorthand for a specialized Unit, and the
+*home cell* is the main Unit that people use day to day.
 
 Examples:
 
@@ -91,8 +103,9 @@ finance.create_alert
 
 ### Agent Run
 
-`agent_runs` become the durable work contract across the federation. A cell may
-create, accept, execute, delegate, cancel, or report progress on an agent run.
+`agent_runs` are the durable work contract inside a Unit and become the durable
+work contract across the federation. A cell may create, accept, execute, delegate,
+cancel, or report progress on an agent run.
 
 The important property is that work is represented as durable state, not only as an
 in-process function call.
@@ -222,6 +235,10 @@ db
 
 This stage prepares the codebase for clearer responsibility boundaries.
 
+Stages 1 and 2 describe one Unit. A Unit can grow from a single owner to many
+members and agents without leaving these stages; see the Unit stages in
+[Allerac Units](allerac-units.md#stages).
+
 ### Stage 3: Domain Cells
 
 Run selected domains as isolated deployments with their own database and workers.
@@ -233,7 +250,8 @@ docs cell
 code cell
 ```
 
-The home cell can route work to specialized cells using Control API contracts.
+Each domain cell is a specialized Unit. The home cell can route work to specialized
+cells using Control API contracts.
 
 ### Stage 4: Ephemeral Cells
 
@@ -287,6 +305,10 @@ Memory index
 ```
 
 This keeps sensitive domains isolated while still allowing continuity.
+
+Inside a Unit, the same model applies one level down: agent-private, owner, team,
+and Unit visibility, with explicit publication (see
+[Allerac Units](allerac-units.md#memory-model)).
 
 Example:
 
@@ -356,6 +378,7 @@ The federation vision supports the current roadmap:
 
 ## Working Definition
 
-Allerac Federation is the long-term architecture where multiple isolated Allerac
-domain cells cooperate through stable APIs, durable agent runs, scoped identity, and
-explicit capability contracts while preserving local ownership of data and runtime.
+Allerac Federation is the long-term architecture where multiple Allerac Units,
+including specialized domain cells, cooperate through stable APIs, durable agent
+runs, scoped identity, and explicit capability contracts while preserving local
+ownership of data and runtime.
