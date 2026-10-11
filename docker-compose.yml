@@ -251,7 +251,7 @@ services:
     volumes:
       - backups_data:/app/backups
       - ./update.sh:/app/update.sh:ro
-      - ${SKILLS_DIR:-./skills}:/app/skills
+      - ${SKILLS_HOST_DIR:-./skills}:/app/skills
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

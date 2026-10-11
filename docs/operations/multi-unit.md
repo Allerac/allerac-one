@@ -27,7 +27,7 @@ names and services as before, so an existing install is unaffected.
 | `APP_PORT`, `OLLAMA_PORT`, `DOCS_PORT`, `N8N_PORT`, `WEBHOOK_PORT`, `EXECUTOR_DEV_PORT`, `EXECUTOR_DEV_PORT_RANGE`, `NODE_EXPORTER_PORT`, `PROMETHEUS_PORT`, `LOKI_PORT`, `PORTAINER_PORT`, `GARMIN_WORKER_PORT`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT` | today's ports | Host side of every published port. Container ports never change. |
 | `MONITORING_BIND`, `PORTAINER_BIND`, `N8N_BIND`, `EXECUTOR_DEV_PORTS_BIND` | `127.0.0.1` | Host interface for internal tools. |
 | `APP_MEM_LIMIT` / `APP_CPUS`, `DB_MEM_LIMIT` / `DB_CPUS`, `OLLAMA_MEM_LIMIT` / `OLLAMA_CPUS` | `1G` / none, `512M` / none, `10g` / none | Optional resource limits (`0` CPUs = no limit). |
-| `SKILLS_DIR`, `TELEGRAM_BOTS_FILE` | `./skills`, `./telegram-bots.json` | Bind mounts that are otherwise shared by every Unit in the same folder. |
+| `SKILLS_HOST_DIR`, `TELEGRAM_BOTS_FILE` | `./skills`, `./telegram-bots.json` | Bind mounts that are otherwise shared by every Unit in the same folder. |
 
 The Docker network is always `<project>_default`, so Units cannot reach each
 other's containers by name. Internal URLs use Compose service names (`app`,
