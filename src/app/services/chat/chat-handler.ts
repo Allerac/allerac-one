@@ -27,7 +27,7 @@ import { buildSoul } from '@/app/config/allerac-soul';
 import pool from '@/app/clients/db';
 import { normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
 import { instructionDistillerService } from '@/app/services/memory/instruction-distiller.service';
-import { canUserIdUseShell, shellAccessDeniedMessage, withoutShellTools } from '@/app/lib/shell-access';
+import { canUserIdUseShell, shellAccessDeniedMessage, withoutShellTools } from '@/app/lib/shell-policy';
 
 export interface ChatHandlerConfig {
   userId: string;

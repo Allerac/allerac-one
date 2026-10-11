@@ -21,7 +21,7 @@ import {
   resolveShellCwd,
   resolveUserWorkspaceFilePath,
 } from '@/app/lib/workspace-paths';
-import { isShellAllowedFor, shellAccessDeniedMessage, SHELL_TOOL_NAMES } from '@/app/lib/shell-access';
+import { isShellAllowedFor, shellAccessDeniedMessage, SHELL_TOOL_NAMES } from '@/app/lib/shell-policy';
 import {
   EMAIL_TOOL_NAMES,
   GITHUB_TOOL_NAMES,

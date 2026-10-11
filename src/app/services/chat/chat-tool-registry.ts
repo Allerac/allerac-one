@@ -12,7 +12,7 @@ import { NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
 import { TICKETS_TOOL_DEFINITIONS } from '@/app/tools/tickets.tool';
 import { TOOLS } from '@/app/tools/tools';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '@/app/tools/instructions.tool.definitions';
-import { SHELL_TOOL_NAMES, withoutShellTools } from '@/app/lib/shell-access';
+import { SHELL_TOOL_NAMES, withoutShellTools } from '@/app/lib/shell-policy';
 
 export { GITHUB_TOOL_NAMES };
 export { LOGS_TOOL_NAMES };
