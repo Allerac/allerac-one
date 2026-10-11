@@ -18,7 +18,7 @@
 #   4. HTTP: /login 200, /api/v1/version 200, /api/v1/me 401 (no session),
 #      /api/workspace/run 401 (no session).
 #   5. With an ADMIN session (created directly in the throwaway database):
-#      /api/v1/me 200 with is_admin=true, but /api/workspace/run 403 and
+#      /api/v1/me 200 with isAdmin=true, but /api/workspace/run 403 and
 #      /workspace 404, i.e. the shell is refused even for an admin.
 #   6. The default Unit's containers were not touched (same IDs and states).
 #
@@ -39,6 +39,9 @@
 #                            command printed at the end.
 #   SMOKE_KEEP_IMAGES=1      Tear down but keep the built images.
 #   SMOKE_DRY_RUN=1          Only checks 0-1 (config), no containers.
+#   SMOKE_IMAGES_FROM=<unit> Reuse the app/agent-worker images already built for
+#                            another Unit (e.g. "allerac" in CI) instead of
+#                            building: they are tagged <unit>-app etc. (same code).
 #
 # Requirements: docker with Compose >= 2.24.4, curl, openssl (or /dev/urandom).
 
@@ -241,10 +244,19 @@ fi
 # ------------------------------------------------------------------
 before_default="$(default_unit_snapshot)"
 STARTED=true
-info "Building app and agent-worker images (can take several minutes)..."
-dc build app agent-worker || die "image build failed."
+if [ -n "${SMOKE_IMAGES_FROM:-}" ]; then
+    for svc in app agent-worker; do
+        docker image inspect "${SMOKE_IMAGES_FROM}-${svc}" >/dev/null 2>&1 \
+            || die "SMOKE_IMAGES_FROM=${SMOKE_IMAGES_FROM}: image ${SMOKE_IMAGES_FROM}-${svc} not found."
+        docker tag "${SMOKE_IMAGES_FROM}-${svc}" "${UNIT}-${svc}"
+    done
+    info "Reusing images ${SMOKE_IMAGES_FROM}-app / ${SMOKE_IMAGES_FROM}-agent-worker (tagged ${UNIT}-*)."
+else
+    info "Building app and agent-worker images (can take several minutes)..."
+    dc build app agent-worker || die "image build failed."
+fi
 info "Starting app, agent-worker and their dependencies (db, migrations)..."
-dc up -d app agent-worker || bad "docker compose up failed"
+dc up -d --no-build app agent-worker || bad "docker compose up failed"
 if wait_healthy "${UNIT}-app" "${UNIT}-agent-worker"; then
     ok "app and agent-worker are healthy without an executor"
 else
@@ -298,7 +310,7 @@ if printf '%s' "$psql_out" | grep -Eq '^[0-9a-f-]{36}$'; then
     ok "created a throwaway admin session"
     COOKIE="session_token=${TOKEN}"
     me="$(curl -s --max-time 20 -H "Cookie: $COOKIE" "$BASE/api/v1/me" || true)"
-    printf '%s' "$me" | grep -q '"is_admin": *true' && ok "GET /api/v1/me (admin session) -> is_admin=true" || bad "admin session not accepted by /api/v1/me: ${me:0:200}"
+    printf '%s' "$me" | grep -q '"isAdmin": *true' && ok "GET /api/v1/me (admin session) -> isAdmin=true" || bad "admin session not accepted by /api/v1/me: ${me:0:200}"
     resp="$(curl -s --max-time 20 -w '\n%{http_code}' -X POST -H "Cookie: $COOKIE" -H 'Content-Type: application/json' -d '{"command":"id"}' "$BASE/api/workspace/run" || true)"
     code="$(printf '%s' "$resp" | tail -n 1)"
     [ "$code" = "403" ] && ok "POST /api/workspace/run (admin, no executor) -> 403" || bad "POST /api/workspace/run (admin) -> $code: $(printf '%s' "$resp" | head -n 1 | cut -c1-200)"

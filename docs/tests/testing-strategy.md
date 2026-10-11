@@ -9,6 +9,10 @@ quality checks predictable for humans, agents, pull requests, and releases.
 |---|---|---|---|
 | Unit and contract tests | `npm test -- --runInBand` | Jest tests for services, actions, API routes, security boundaries, and React components | Before PR merge and during local feature work |
 | Schema smoke test | `npm run test:schema` | Proves fresh database installs and legacy upgrades produce equivalent schemas | Before PR merge when migrations or database code change; safe to run on every PR |
+| Type check | `npm run typecheck:baseline` | `tsc --noEmit`, no errors beyond `ci/tsc-baseline.txt` | Every PR (CI) and before pushing |
+| Lint | `npm run lint:baseline` | ESLint, no problems beyond `ci/eslint-baseline.txt` | Every PR (CI) and before pushing |
+| Docker security integration | `bash scripts/ci/security-integration.sh` | Real containers: executor hardening, port exposure, shell access policy over HTTP, closed registration | Every PR (CI); locally on a throwaway Unit |
+| Multi-Unit smoke | `bash scripts/smoke/multi-unit-smoke.sh` | A second, lean Unit next to the default one | Every PR (CI); locally before multi-Unit changes |
 | Production build | `npm run build` | Verifies Next.js routes compile and the app can be packaged | Before PR merge and release |
 | Docs build | `docker compose exec -T docs mkdocs build --strict` locally, or MkDocs Material container in CI | Verifies docs navigation and links are buildable | Before PR merge when docs change; safe to run on every PR |
 | API smoke tests | Planned: `npm run test:api` | Real HTTP smoke tests against `/api/v1` | After API key auth foundation is implemented |
@@ -73,8 +77,35 @@ npm run build
 The current Next.js build skips TypeScript validation. Treat `npm run build` as a
 packaging and route-compilation check, not as a full type gate.
 
-TypeScript currently has known failures outside the active Control API slice. Do not
-make `npx tsc --noEmit` a required CI gate until those are fixed and documented.
+## Type Check and Lint (baselines)
+
+TypeScript and ESLint still have known problems, so CI gates on "no new
+problems" against committed baselines (`ci/tsc-baseline.txt`,
+`ci/eslint-baseline.txt`):
+
+```bash
+npm run typecheck:baseline
+npm run lint:baseline
+npm run baseline:update   # after fixing debt: shrink the baselines and commit them
+```
+
+A new error fails the job with its file, line and message. Fixed errors keep the
+job green but print a reminder to shrink the baseline. See
+`docs/tests/ci-and-versioning.md` for the format.
+
+## Docker Integration
+
+`scripts/ci/security-integration.sh` runs against real containers and is what
+the `Integration` workflow runs on every PR. On a machine that already runs your
+Unit, test a throwaway Unit instead (the script refuses to seed users into a
+database that has real users, and to start over existing containers):
+
+```bash
+bash scripts/ci/generate-ci-env.sh .env.ci-sec ci-sec
+bash scripts/ci/security-integration.sh --env-file .env.ci-sec --build --down
+rm .env.ci-sec
+bash scripts/smoke/multi-unit-smoke.sh
+```
 
 ## API Smoke Tests
 
@@ -139,6 +170,8 @@ Before opening or updating a PR, run:
 
 ```bash
 npm test -- --runInBand
+npm run typecheck:baseline
+npm run lint:baseline
 npm run build
 ```
 
@@ -156,11 +189,13 @@ docker compose exec -T docs mkdocs build --strict
 
 ## CI Policy
 
-CI should start strict but realistic:
-
-- gate every PR on Jest, schema smoke, production build, and docs build;
-- do not gate on TypeScript until the existing type debt is resolved;
-- do not gate on external API credentials;
-- add API smoke tests once `/api/v1` has API key auth;
-- run Playwright release smoke on GitHub pre-releases before making browser E2E
-  required for every PR.
+- Every pull request, whatever its base branch (stacked PRs included), and every
+  push to `development` and `main` run Jest, the tsc and ESLint baselines, schema
+  smoke, production build, docs build, and the Docker security + multi-Unit
+  integration job. No path filters, no nightly schedule.
+- Jest must be fully green: there is no quarantine list. Fix or delete a broken
+  test in the PR that breaks it.
+- TypeScript and ESLint gate on "no new problems"; baselines only shrink.
+- No external API credentials and no repository secrets in PR workflows (fork
+  PRs run the same checks).
+- Playwright release smoke runs on GitHub pre-releases; it is not yet a PR gate.

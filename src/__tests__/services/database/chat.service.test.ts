@@ -135,9 +135,10 @@ describe('ChatService', () => {
       const result = await chatService.loadConversations(userId);
 
       expect(result).toEqual(conversations);
+      // Without a domain filter, job-run conversations are hidden from the list.
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM chat_conversations WHERE user_id = $1 ORDER BY pinned DESC, updated_at DESC',
-        [userId]
+        'SELECT * FROM chat_conversations WHERE user_id = $1 AND domain_slug != $2 ORDER BY pinned DESC, updated_at DESC',
+        [userId, 'job']
       );
     });
 

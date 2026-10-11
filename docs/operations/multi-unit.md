@@ -219,7 +219,12 @@ It refuses to run with an empty Unit name, `allerac`, a name starting with
 `allerac`, the `ALLERAC_UNIT` of `./.env`, or a project or volume that already
 exists. Compose runs in a clean environment with explicit `-p`, `-f` and
 `--env-file`, so exported shell variables cannot point it at another Unit.
-`SMOKE_KEEP=1` leaves the Unit running for inspection.
+`SMOKE_KEEP=1` leaves the Unit running for inspection. `SMOKE_IMAGES_FROM=allerac`
+reuses the images already built for the default Unit instead of building again.
+
+CI runs this on every pull request (`.github/workflows/integration.yml`), after
+`scripts/ci/security-integration.sh` has checked the default Unit; see
+`docs/tests/ci-and-versioning.md`.
 
 ## Removing a Unit
 

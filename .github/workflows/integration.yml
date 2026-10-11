@@ -1,0 +1,99 @@
+name: Integration
+
+# Docker integration gate, on every pull request (any base branch, stacked PRs
+# included) and on pushes to development and main. No path filters.
+#
+# Builds only the images the core of a Unit needs (app, agent-worker,
+# executor; db/migrations use stock images) with buildx + the GitHub Actions
+# cache, brings up the default Unit with a generated throwaway .env (no real
+# tokens, so PRs from forks work without secrets), and runs:
+#   scripts/ci/security-integration.sh   shell hardening / access policy
+#   scripts/smoke/multi-unit-smoke.sh    a second, lean Unit next to it
+# No Ollama, monitoring, n8n or Portainer is started.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - development
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    name: Docker security + multi-Unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Expose GitHub Actions cache to buildx
+        uses: crazy-max/ghaction-github-runtime@v3
+
+      - name: Generate throwaway .env
+        run: bash scripts/ci/generate-ci-env.sh .env
+
+      - name: Build app, agent-worker and executor (bake + GHA cache)
+        run: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          COMMIT_HASH="${GITHUB_SHA::7}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export COMMIT_HASH BUILD_DATE
+          docker compose version
+          docker buildx bake -f docker-compose.yml --load \
+            --set app.tags=allerac-app \
+            --set agent-worker.tags=allerac-agent-worker \
+            --set executor.tags=allerac-executor \
+            --set app.cache-from=type=gha,scope=allerac-app \
+            --set app.cache-to=type=gha,scope=allerac-app,mode=max \
+            --set agent-worker.cache-from=type=gha,scope=allerac-agent-worker \
+            --set agent-worker.cache-to=type=gha,scope=allerac-agent-worker,mode=max \
+            --set executor.cache-from=type=gha,scope=allerac-executor \
+            --set executor.cache-to=type=gha,scope=allerac-executor,mode=max \
+            app agent-worker executor
+
+      - name: Security integration (default Unit)
+        run: bash scripts/ci/security-integration.sh --logs-dir ci-logs
+
+      - name: Lean public Unit smoke (second Unit on the same host)
+        env:
+          SMOKE_UNIT: smoke-ci
+          SMOKE_IMAGES_FROM: allerac
+          # Keep the containers on failure so the next step can collect logs;
+          # the runner is discarded anyway.
+          SMOKE_KEEP: "1"
+        run: bash scripts/smoke/multi-unit-smoke.sh
+
+      - name: Collect container logs
+        if: failure()
+        run: |
+          mkdir -p ci-logs
+          docker ps -a > ci-logs/docker-ps.txt 2>&1 || true
+          for c in $(docker ps -aq); do
+            name="$(docker inspect -f '{{.Name}}' "$c" | tr -d /)"
+            docker logs --timestamps "$c" > "ci-logs/container-${name}.log" 2>&1 || true
+            docker inspect "$c" > "ci-logs/inspect-${name}.json" 2>&1 || true
+          done
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: integration-logs
+          path: ci-logs/
+          if-no-files-found: ignore
+          retention-days: 7

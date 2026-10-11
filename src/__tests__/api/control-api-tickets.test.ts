@@ -33,6 +33,13 @@ jest.mock('@/app/services/tickets/ticket.service', () => ({
   },
 }));
 
+// GET /api/v1/me also loads the user's CLI preferences; keep it off the real DB.
+jest.mock('@/app/services/user/user-settings.service', () => ({
+  UserSettingsService: jest.fn().mockImplementation(() => ({
+    loadUserSettings: jest.fn().mockResolvedValue(null),
+  })),
+}));
+
 const mockRequireCurrentUser = jest.mocked(requireCurrentUser);
 const mockTicketService = jest.mocked(ticketService);
 
@@ -99,6 +106,11 @@ describe('Control API v1 tickets', () => {
           name: user.name,
           isAdmin: false,
           authMode: 'session',
+        },
+        cliPreferences: {
+          domainSlug: null,
+          modelId: null,
+          provider: null,
         },
       },
     });
