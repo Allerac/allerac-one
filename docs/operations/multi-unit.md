@@ -195,6 +195,32 @@ OLLAMA_CPUS=2
 
 Unset values keep the defaults (`1G`, `512M`, `10g`, no CPU limit).
 
+## Smoke test
+
+`scripts/smoke/multi-unit-smoke.sh` brings up a throwaway lean Unit next to
+your existing install, checks it, and removes it again (containers, volumes,
+network and the images it built):
+
+```bash
+bash scripts/smoke/multi-unit-smoke.sh                 # full run (builds images)
+SMOKE_DRY_RUN=1 bash scripts/smoke/multi-unit-smoke.sh # config checks only
+```
+
+It checks that the resolved config has no executor, Portainer, host-monitoring
+or docs service and only uses the throwaway Unit's names. It checks that `app`
+and `agent-worker` become healthy without an executor and that the Unit's
+volume and network are its own. Over HTTP it expects `/login` → 200,
+`/api/v1/version` → 200 and `/api/v1/me` → 401. With an admin session created
+in the throwaway database, `POST /api/workspace/run` must answer 403 and
+`/workspace` 404. Finally it checks that the default Unit's containers did not
+change.
+
+It refuses to run with an empty Unit name, `allerac`, a name starting with
+`allerac`, the `ALLERAC_UNIT` of `./.env`, or a project or volume that already
+exists. Compose runs in a clean environment with explicit `-p`, `-f` and
+`--env-file`, so exported shell variables cannot point it at another Unit.
+`SMOKE_KEEP=1` leaves the Unit running for inspection.
+
 ## Removing a Unit
 
 ```bash
