@@ -20,6 +20,9 @@ RUN npx esbuild src/agent-worker.ts \
     --target=node20 \
     --external:pg-native \
     --outfile=dist/agent-worker.js
+# The runner intentionally contains no node_modules. Fail the image build if a
+# future import pulls the native bcrypt runtime back into the standalone bundle.
+RUN ! grep -q "node_modules/bcrypt/bcrypt.js" dist/agent-worker.js
 
 FROM node:20-alpine AS runner
 WORKDIR /app
