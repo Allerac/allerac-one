@@ -134,6 +134,7 @@ export const STALE_NOTE_CANDIDATES_SQL = `
   FROM user_notes n
   LEFT JOIN documents d ON d.id = n.document_id AND d.uploaded_by = n.user_id
   WHERE n.archived_at IS NULL
+    AND n.source NOT LIKE 'connector_root:%'
     AND (btrim(coalesce(n.title, '')) <> '' OR btrim(n.content) <> '')
     AND ($1::uuid IS NULL OR n.id > $1::uuid)
     AND (

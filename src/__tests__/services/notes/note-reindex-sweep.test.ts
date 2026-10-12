@@ -114,6 +114,7 @@ describe('note sweep configuration', () => {
 
   it('candidate SQL skips archived and empty notes and pages by id', () => {
     expect(STALE_NOTE_CANDIDATES_SQL).toContain('n.archived_at IS NULL');
+    expect(STALE_NOTE_CANDIDATES_SQL).toContain("n.source NOT LIKE 'connector_root:%'");
     expect(STALE_NOTE_CANDIDATES_SQL).toContain('n.id > $1::uuid');
     expect(STALE_NOTE_CANDIDATES_SQL).toContain('ORDER BY n.id');
     expect(buildNoteIndexText('T', 'c')).toBe('T\n\nc');
