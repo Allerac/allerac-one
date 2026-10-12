@@ -25,6 +25,10 @@ export async function register() {
     if (!workersDisabled) {
       // Poll job_executions and emit to log buffer so scheduler activity appears in /logs
       startSchedulerLogger();
+
+      // Re-embed notes whose semantic index is missing or stale, slowly and in the background.
+      const { startNoteReindexSweep } = await import('./app/services/notes/note-reindex-sweep');
+      startNoteReindexSweep();
     }
   }
 }
