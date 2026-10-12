@@ -30,7 +30,7 @@ describe('ApiKeyService', () => {
       }],
     });
 
-    const created = await service.create({ userId: 'user-id', name: 'Bruno' });
+    const created = await service.create({ userId: 'user-id', name: 'Bruno', scopes: ['profile:read'] });
 
     expect(created.secret).toBe('alr_live_test_secret');
     expect(created.apiKey).toMatchObject({
@@ -46,7 +46,7 @@ describe('ApiKeyService', () => {
         'Bruno',
         'alr_live_test_secret',
         service.hashToken('alr_live_test_secret'),
-        [],
+        ['profile:read'],
         null,
       ],
     );
@@ -108,7 +108,7 @@ describe('ApiKeyService', () => {
   });
 
   it('rejects tokens outside the Allerac key format', async () => {
-    const user = await service.validateBearerToken('other-token');
+    const user = await service.validateBearerToken('other-token', 'profile:read');
 
     expect(user).toBeNull();
     expect(mockQuery).not.toHaveBeenCalled();

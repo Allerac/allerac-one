@@ -96,9 +96,12 @@ export default function CliSettingsClient({ domains, cliDomainSlug, cliModelId }
           <h2 className={`text-sm font-semibold ${d ? 'text-gray-100' : 'text-gray-900'}`}>Quick start</h2>
           <ol className={`text-sm list-decimal list-inside flex flex-col gap-1.5 ${d ? 'text-gray-300' : 'text-gray-700'}`}>
             <li>
-              Generate an API key in your account settings (gear icon → <strong>API Access</strong>) with the
-              <code className={`mx-1 ${d ? 'text-gray-300' : 'text-gray-700'}`}>chat:read</code> and
-              <code className={`mx-1 ${d ? 'text-gray-300' : 'text-gray-700'}`}>chat:write</code> scopes.
+              Generate an API key in your account settings (gear icon → <strong>API Access</strong>) using the
+              <strong className="mx-1">Chat client</strong> preset
+              (<code className={`${d ? 'text-gray-300' : 'text-gray-700'}`}>profile:read</code>,
+              <code className={`mx-1 ${d ? 'text-gray-300' : 'text-gray-700'}`}>chat:read</code>,
+              <code className={`mx-1 ${d ? 'text-gray-300' : 'text-gray-700'}`}>chat:write</code>,
+              <code className={`mx-1 ${d ? 'text-gray-300' : 'text-gray-700'}`}>capabilities:read</code>).
             </li>
             <li>Save your defaults above.</li>
             <li>Run the CLI from the project root on your machine:</li>

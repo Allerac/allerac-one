@@ -91,6 +91,10 @@ export default function QuickTokenCard({ isDarkMode, scopeOptions, connectedProv
   useEffect(() => { void loadLiveTokens(); }, []);
 
   const getToken = async () => {
+    if (availableScopes.length === 0) {
+      setError('Connect a provider first: a token needs at least one scope.');
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
