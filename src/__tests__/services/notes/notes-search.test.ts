@@ -26,4 +26,16 @@ describe('NotesService.searchNotes', () => {
     expect(params).toEqual(['[0.1,0.2]', 'user-a', 3]);
     expect(rows).toEqual([{ note_id: 'n1' }]);
   });
+
+  it('excludes archived notes from semantic search', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
+    await new NotesService().searchNotes('user-a', 'editor');
+    expect(mockQuery.mock.calls[0][0]).toContain('n.archived_at IS NULL');
+  });
+
+  it('excludes archived notes from keyword search', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
+    await new NotesService().keywordSearchNotes('user-a', 'editor');
+    expect(mockQuery.mock.calls[0][0]).toContain('archived_at IS NULL');
+  });
 });
