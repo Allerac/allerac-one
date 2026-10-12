@@ -124,22 +124,28 @@ export class NotesService {
     const { embedding } = await embeddingService.generateEmbedding(query);
     const embeddingStr = `[${embedding.join(',')}]`;
 
+    // One row per note: keep each note's best-matching chunk, then rank notes.
     const res = await pool.query(
-      `SELECT
-         n.id                                   AS note_id,
-         n.title,
-         n.content,
-         n.tags,
-         n.created_at,
-         1 - (dc.embedding <=> $1::vector)      AS similarity
-       FROM document_chunks dc
-       JOIN documents d  ON d.id = dc.document_id
-       JOIN user_notes n ON n.document_id = d.id
-       WHERE d.uploaded_by = $2
-         AND d.domain_slug = 'notes'
-         AND d.status = 'completed'
-         AND (1 - (dc.embedding <=> $1::vector)) > 0.2
-       ORDER BY dc.embedding <=> $1::vector
+      `SELECT note_id, title, content, tags, created_at, similarity
+       FROM (
+         SELECT DISTINCT ON (n.id)
+           n.id                                   AS note_id,
+           n.title,
+           n.content,
+           n.tags,
+           n.created_at,
+           1 - (dc.embedding <=> $1::vector)      AS similarity
+         FROM document_chunks dc
+         JOIN documents d  ON d.id = dc.document_id
+         JOIN user_notes n ON n.document_id = d.id AND n.user_id = d.uploaded_by
+         WHERE d.uploaded_by = $2
+           AND d.domain_slug = 'notes'
+           AND d.status = 'completed'
+           AND dc.embedding IS NOT NULL
+           AND (1 - (dc.embedding <=> $1::vector)) > 0.2
+         ORDER BY n.id, dc.embedding <=> $1::vector
+       ) best_per_note
+       ORDER BY similarity DESC, created_at DESC
        LIMIT $3`,
       [embeddingStr, userId, limit]
     );
