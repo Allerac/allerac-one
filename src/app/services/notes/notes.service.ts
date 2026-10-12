@@ -18,6 +18,10 @@ export interface Note {
   source: string;
   due_date: Date | null;
   content_hash?: string | null;
+  parent_id?: string | null;
+  position?: number;
+  icon?: string | null;
+  archived_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 }
