@@ -49,3 +49,20 @@ export function linkifyWikiLinks(markdown: string): string {
     })))
     .join('');
 }
+
+/** Target of the [[link]] that contains `pos` on its line, if any. */
+export function wikiLinkAt(text: string, pos: number): string | null {
+  const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+  const lineEndRaw = text.indexOf('\n', pos);
+  const line = text.slice(lineStart, lineEndRaw < 0 ? text.length : lineEndRaw);
+  const offset = pos - lineStart;
+  const re = /\[\[([^[\]\n]+?)\]\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line))) {
+    if (offset >= m.index && offset <= m.index + m[0].length) {
+      const target = m[1].split('|')[0].trim();
+      return target || null;
+    }
+  }
+  return null;
+}
