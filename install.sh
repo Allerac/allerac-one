@@ -630,7 +630,7 @@ ALLOW_REGISTRATION=false
 # non-admin users, list their user IDs (UUIDs), comma-separated.
 SHELL_ALLOWED_USER_IDS=
 
-# The AI shell works in a dedicated Docker volume (allerac_executor_workspace),
+# The AI shell works in a dedicated Docker volume (${ALLERAC_UNIT:-allerac}_executor_workspace),
 # not in your home directory. Optional: a host folder instead, owned by uid 10001
 # (never /home or this install folder), e.g. /srv/allerac-workspace
 # EXECUTOR_WORKSPACE=
@@ -769,7 +769,7 @@ start_services() {
     # If Ollama container exited due to port conflict, try restarting once
     sleep 3
     local ollama_status
-    ollama_status=$($USE_SUDO docker inspect allerac-ollama --format='{{.State.Status}}' 2>/dev/null || echo "missing")
+    ollama_status=$($USE_SUDO docker inspect ${ALLERAC_UNIT:-allerac}-ollama --format='{{.State.Status}}' 2>/dev/null || echo "missing")
     if [ "$ollama_status" = "exited" ]; then
         log_warn "Ollama container exited — attempting restart (possible port conflict resolved)..."
         $USE_SUDO docker compose up -d ollama
@@ -788,10 +788,10 @@ follow_model_download() {
 
     # Wait for the setup container to appear (up to 60s, Ollama healthcheck takes ~30s)
     local waited=0
-    while ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^allerac-ollama-setup$"; do
+    while ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${ALLERAC_UNIT:-allerac}-ollama-setup$"; do
         if [ $waited -ge 60 ]; then
             log_warn "ollama-setup container not found. Models may still be downloading."
-            log_info "Check progress: docker logs -f allerac-ollama-setup"
+            log_info "Check progress: docker logs -f ${ALLERAC_UNIT:-allerac}-ollama-setup"
             return
         fi
         sleep 1
@@ -799,15 +799,15 @@ follow_model_download() {
     done
 
     # Follow logs — exits automatically when the container stops
-    docker logs -f allerac-ollama-setup 2>/dev/null || true
+    docker logs -f ${ALLERAC_UNIT:-allerac}-ollama-setup 2>/dev/null || true
     echo ""
 
     local exit_code
-    exit_code=$(docker inspect allerac-ollama-setup --format='{{.State.ExitCode}}' 2>/dev/null || echo "0")
+    exit_code=$(docker inspect ${ALLERAC_UNIT:-allerac}-ollama-setup --format='{{.State.ExitCode}}' 2>/dev/null || echo "0")
     if [ "$exit_code" = "0" ]; then
         log_success "Models ready"
     else
-        log_warn "Model download may have failed (exit $exit_code). Check: docker logs allerac-ollama-setup"
+        log_warn "Model download may have failed (exit $exit_code). Check: docker logs ${ALLERAC_UNIT:-allerac}-ollama-setup"
     fi
 }
 

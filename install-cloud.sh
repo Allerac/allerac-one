@@ -274,7 +274,7 @@ start_services() {
 
     log_info "Creating Docker network and volumes..."
     $USE_SUDO docker network create allerac 2>/dev/null || true
-    for vol in allerac_ollama_data allerac_postgres_data allerac_db_data allerac_prometheus_data allerac_backups_data; do
+    for vol in ${ALLERAC_UNIT:-allerac}_ollama_data ${ALLERAC_UNIT:-allerac}_postgres_data ${ALLERAC_UNIT:-allerac}_db_data ${ALLERAC_UNIT:-allerac}_prometheus_data ${ALLERAC_UNIT:-allerac}_backups_data; do
         $USE_SUDO docker volume create "$vol" 2>/dev/null || true
     done
     log_success "Network and volumes ready"

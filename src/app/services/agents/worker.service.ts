@@ -9,7 +9,7 @@ import { TOOLS } from '../../tools/tools';
 import { WorkerSpec } from './orchestrator.service';
 import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
 import { getUserWorkspaceRoot, normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
-import { isShellAllowedFor, SHELL_ACCESS_DENIED_MESSAGE, withoutShellTools } from '@/app/lib/shell-policy';
+import { isShellAllowedFor, shellAccessDeniedMessage, withoutShellTools } from '@/app/lib/shell-policy';
 
 export interface WorkerExecutionConfig {
   userId: string;
@@ -158,7 +158,7 @@ export class WorkerService {
             } else if (toolName === 'execute_shell') {
               const safeCwd = resolveShellCwd(userId, toolArgs.cwd);
               if (!shellAllowed) {
-                toolResult = { error: SHELL_ACCESS_DENIED_MESSAGE };
+                toolResult = { error: shellAccessDeniedMessage() };
               } else if (!safeCwd) {
                 toolResult = { error: 'Invalid cwd. Shell commands must run inside your workspace.' };
               } else {

@@ -147,6 +147,7 @@ nav:
           - Sandbox Home: deploy/sandbox-home.md
           - Prod Azure: deploy/prod-azure.md
       - Database Backup and Restore: database-backup-restore.md
+      - Multiple Units on One Host: operations/multi-unit.md
       - Containers: containers/containers.md
       - Infrastructure: infrastructure/infrastructure.md
       - Local Setup: local-setup/local-setup.md

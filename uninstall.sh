@@ -90,7 +90,7 @@ else
 fi
 
 # Also remove any leftover allerac containers not caught by compose
-LEFTOVER=$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep "^allerac-" || true)
+LEFTOVER=$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep "^${ALLERAC_UNIT:-allerac}-" || true)
 if [ -n "$LEFTOVER" ]; then
     echo "$LEFTOVER" | while read -r name; do
         docker rm -f "$name" >/dev/null 2>&1 && log_ok "Removed leftover container: $name"
@@ -135,12 +135,12 @@ echo -e "${BOLD}[3/4] Data volumes...${NC}"
 
 if [[ "$MODE" == "--all" ]]; then
     for VOL in \
-        "allerac_db_data" \
-        "allerac_ollama_data" \
-        "allerac_backups_data" \
-        "allerac_redis_data" \
-        "allerac_prometheus_data" \
-        "allerac_grafana_data"; do
+        "${ALLERAC_UNIT:-allerac}_db_data" \
+        "${ALLERAC_UNIT:-allerac}_ollama_data" \
+        "${ALLERAC_UNIT:-allerac}_backups_data" \
+        "${ALLERAC_UNIT:-allerac}_redis_data" \
+        "${ALLERAC_UNIT:-allerac}_prometheus_data" \
+        "${ALLERAC_UNIT:-allerac}_grafana_data"; do
         if docker volume inspect "$VOL" >/dev/null 2>&1; then
             docker volume rm "$VOL" >/dev/null 2>&1 && log_ok "Removed volume: $VOL"
         else

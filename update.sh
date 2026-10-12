@@ -40,7 +40,7 @@ print_rollback_instructions() {
     echo ""
     echo -e "${YELLOW}Rollback instructions (${phase}):${NC}"
     echo "  1. Inspect the failure:"
-    echo "     docker compose -f $COMPOSE_FILE logs --tail=200 app migrations"
+    echo "     docker compose $COMPOSE_ARGS logs --tail=200 app migrations"
 
     if [ "$MIGRATIONS_STARTED" = true ] && [ -n "$PRE_UPDATE_BACKUP" ]; then
         echo "  2. If the database must return to its pre-update state:"
@@ -52,8 +52,8 @@ print_rollback_instructions() {
     if [ -n "$PREVIOUS_COMMIT" ]; then
         echo "  3. Restore the previous application revision:"
         printf '     git checkout --detach %q\n' "$PREVIOUS_COMMIT"
-        echo "     docker compose -f $COMPOSE_FILE build"
-        echo "     docker compose -f $COMPOSE_FILE up -d"
+        echo "     docker compose $COMPOSE_ARGS build"
+        echo "     docker compose $COMPOSE_ARGS up -d"
         if [ -n "$PREVIOUS_BRANCH" ]; then
             echo "  4. After resolving the update, return to the tracked branch:"
             printf '     git checkout %q\n' "$PREVIOUS_BRANCH"
@@ -82,7 +82,7 @@ fail_update() {
 detect_product_line() {
     if [ -n "$ALLERAC_PRODUCT_LINE" ]; then
         PRODUCT_LINE="$ALLERAC_PRODUCT_LINE"
-    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "allerac-tunnel"; then
+    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${UNIT}-tunnel"; then
         PRODUCT_LINE="cloud"
     else
         PRODUCT_LINE="local"
@@ -91,6 +91,47 @@ detect_product_line() {
     COMPOSE_FILE="docker-compose.yml"
     COMPOSE_FLAGS=""
 }
+COMPOSE_FILE="docker-compose.yml"
+
+# --------------------------------------------
+# Allerac Unit (see docs/operations/multi-unit.md)
+# --------------------------------------------
+# With nothing set this is the historic single-Unit install: env file .env,
+# containers allerac-*, volumes allerac_*. To manage another Unit on the same
+# host point ALLERAC_ENV_FILE at its env file (ALLERAC_ENV_FILE=.env.<unit>).
+ALLERAC_ENV_FILE="${ALLERAC_ENV_FILE:-.env}"
+case "$ALLERAC_ENV_FILE" in
+    /*) UNIT_ENV_PATH="$ALLERAC_ENV_FILE" ;;
+    *)  UNIT_ENV_PATH="$(pwd)/$ALLERAC_ENV_FILE" ;;
+esac
+unit_env_value() {
+    { grep -E "^$1=" "$UNIT_ENV_PATH" 2>/dev/null || true; } | tail -n 1 | cut -d= -f2- \
+        | sed -e 's/^["'\'']//' -e 's/["'\'']$//'
+}
+UNIT="${ALLERAC_UNIT:-$(unit_env_value ALLERAC_UNIT)}"
+UNIT="${UNIT:-allerac}"
+if ! [[ "$UNIT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+    echo "Invalid ALLERAC_UNIT '$UNIT' (lowercase letters, digits, '-' and '_' only)." >&2
+    exit 1
+fi
+# Compose files: the Unit's COMPOSE_FILE (e.g. docker-compose.yml:docker-compose.public.yml)
+# or the default file. A non-default env file is passed explicitly.
+COMPOSE_ARGS="-f $COMPOSE_FILE"
+UNIT_COMPOSE_FILES="$(unit_env_value COMPOSE_FILE)"
+if [ -n "$UNIT_COMPOSE_FILES" ]; then
+    COMPOSE_ARGS=""
+    IFS=':' read -ra _unit_compose_files <<< "$UNIT_COMPOSE_FILES"
+    for _unit_compose_file in "${_unit_compose_files[@]}"; do
+        COMPOSE_ARGS="$COMPOSE_ARGS -f $_unit_compose_file"
+    done
+fi
+[ "$ALLERAC_ENV_FILE" = ".env" ] || COMPOSE_ARGS="$COMPOSE_ARGS --env-file $UNIT_ENV_PATH"
+# Step 8 passes COMPOSE_PROFILES explicitly. For a non-default Unit take it from
+# that Unit's env file when the shell does not set it. (The primary Unit keeps
+# the historic behaviour: only the shell value is used there.)
+if [ "$ALLERAC_ENV_FILE" != ".env" ] && [ -z "${COMPOSE_PROFILES+x}" ]; then
+    COMPOSE_PROFILES="$(unit_env_value COMPOSE_PROFILES)"
+fi
 
 compose_profiles_without() {
     local remove_profile="$1"
@@ -112,6 +153,19 @@ compose_profiles_without() {
     printf '%s' "$result"
 }
 
+# Only the given services that are active for this Unit (a lean Unit using
+# docker-compose.public.yml has no executor, so it is not rebuilt).
+active_services() {
+    local active svc result=""
+    active="$(docker compose $COMPOSE_ARGS $COMPOSE_FLAGS config --services 2>/dev/null || true)"
+    for svc in "$@"; do
+        if [ -z "$active" ] || printf '%s\n' "$active" | grep -qx "$svc"; then
+            result="$result $svc"
+        fi
+    done
+    printf '%s' "${result# }"
+}
+
 # ============================================
 # Verify running containers (product-line aware)
 # ============================================
@@ -120,7 +174,7 @@ verify_deployment() {
     echo -e "${YELLOW}Verifying deployment services...${NC}"
 
     local app_status
-    app_status="$(docker inspect allerac-app \
+    app_status="$(docker inspect ${UNIT}-app \
         --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
         2>/dev/null || echo "missing")"
     if [ "$app_status" = "healthy" ]; then
@@ -131,18 +185,18 @@ verify_deployment() {
 
     if [ "$PRODUCT_LINE" = "cloud" ]; then
         # Cloud-specific services
-        docker ps --format '{{.Names}}' | grep -q "allerac-tunnel"   && echo -e "${GREEN}✓ Cloudflare tunnel is running${NC}" || echo -e "${YELLOW}⚠ Tunnel is not running${NC}"
-        docker ps --format '{{.Names}}' | grep -q "allerac-telegram" && echo -e "${GREEN}✓ Telegram bot is running${NC}"   || echo -e "${YELLOW}⚠ Telegram bot is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -q "${UNIT}-tunnel"   && echo -e "${GREEN}✓ Cloudflare tunnel is running${NC}" || echo -e "${YELLOW}⚠ Tunnel is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -q "${UNIT}-telegram" && echo -e "${GREEN}✓ Telegram bot is running${NC}"   || echo -e "${YELLOW}⚠ Telegram bot is not running${NC}"
         docker ps --format '{{.Names}}' | grep -q "grafana"          && echo -e "${GREEN}✓ Grafana is running${NC}"        || echo -e "${YELLOW}⚠ Grafana is not running${NC}"
         docker ps --format '{{.Names}}' | grep -q "loki"             && echo -e "${GREEN}✓ Loki is running${NC}"           || echo -e "${YELLOW}⚠ Loki is not running${NC}"
-        docker ps --format '{{.Names}}' | grep -q "allerac-notifier" && echo -e "${GREEN}✓ Notifier is running${NC}"       || echo -e "${YELLOW}⚠ Notifier is not running${NC}"
-        docker ps --format '{{.Names}}' | grep -q "allerac-ollama"   && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
+        docker ps --format '{{.Names}}' | grep -q "${UNIT}-notifier" && echo -e "${GREEN}✓ Notifier is running${NC}"       || echo -e "${YELLOW}⚠ Notifier is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -q "${UNIT}-ollama"   && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
     else
         # Local-specific services (only check if they were running before)
-        docker ps --format '{{.Names}}' | grep -q "allerac-ollama"        && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
-        docker ps --format '{{.Names}}' | grep -q "allerac-health-worker" && echo -e "${GREEN}✓ Health worker is running${NC}"  || echo -e "${YELLOW}⚠ Health worker is not running${NC}"
-        docker ps --format '{{.Names}}' | grep -q "allerac-notifier"      && echo -e "${GREEN}✓ Notifier is running${NC}"       || true
-        docker ps --format '{{.Names}}' | grep -q "allerac-grafana"       && echo -e "${GREEN}✓ Grafana is running${NC}"        || true
+        docker ps --format '{{.Names}}' | grep -q "${UNIT}-ollama"        && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
+        docker ps --format '{{.Names}}' | grep -q "${UNIT}-health-worker" && echo -e "${GREEN}✓ Health worker is running${NC}"  || echo -e "${YELLOW}⚠ Health worker is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -q "${UNIT}-notifier"      && echo -e "${GREEN}✓ Notifier is running${NC}"       || true
+        docker ps --format '{{.Names}}' | grep -q "${UNIT}-grafana"       && echo -e "${GREEN}✓ Grafana is running${NC}"        || true
     fi
 }
 
@@ -216,7 +270,10 @@ setup_local_hostname() {
     [ "$generated" = true ] && echo -e "${GREEN}✓ HTTPS certificates generated${NC}"
 }
 
-if [ "$PRODUCT_LINE" = "local" ]; then
+if [ "$PRODUCT_LINE" = "local" ] && [ "$UNIT" != "allerac" ]; then
+    echo -e "${YELLOW}[0/9]${NC} Skipping local hostname setup (allerac.home belongs to the primary Unit)."
+    echo ""
+elif [ "$PRODUCT_LINE" = "local" ]; then
     echo -e "${YELLOW}[0/9]${NC} Configuring local hostname (allerac.home)..."
     setup_local_hostname
     echo -e "${GREEN}✓ Local hostname ready${NC}"
@@ -227,7 +284,7 @@ fi
 echo -e "${YELLOW}[1/9]${NC} Creating pre-update database backup..."
 BACKUP_PATH_FILE="$(mktemp)"
 ALLERAC_BACKUP_PATH_FILE="$BACKUP_PATH_FILE" INSTALL_DIR="$(pwd)" \
-    bash ./allerac.sh backup pre-update \
+    ALLERAC_ENV_FILE="$ALLERAC_ENV_FILE" ALLERAC_UNIT="$UNIT" bash ./allerac.sh backup pre-update \
     || fail_update "pre-update backup" "Update aborted: a verified database backup could not be created."
 PRE_UPDATE_BACKUP="$(cat "$BACKUP_PATH_FILE")"
 [ -n "$PRE_UPDATE_BACKUP" ] \
@@ -255,26 +312,34 @@ echo ""
 # Step 4: Ensure named data volumes exist (safe to run on every update)
 # These are declared as external in docker-compose.yml so they must exist before `up`.
 echo -e "${YELLOW}[4/9]${NC} Ensuring data volumes exist..."
-docker volume create allerac_db_data      > /dev/null 2>&1 || true
-docker volume create allerac_ollama_data  > /dev/null 2>&1 || true
-docker volume create allerac_backups_data > /dev/null 2>&1 || true
+docker volume create ${UNIT}_db_data      > /dev/null 2>&1 || true
+docker volume create ${UNIT}_ollama_data  > /dev/null 2>&1 || true
+docker volume create ${UNIT}_backups_data > /dev/null 2>&1 || true
 echo -e "${GREEN}✓ Volumes ready${NC}"
 echo ""
 
 # Executor hardening notice: HOST_WORKSPACE (host /home mounted read-write into
 # the shell executor) is no longer used. Warn so nobody silently loses files.
-if grep -q "^HOST_WORKSPACE=" .env 2>/dev/null; then
+if grep -q "^HOST_WORKSPACE=" "$UNIT_ENV_PATH" 2>/dev/null; then
     echo -e "${YELLOW}  Note: HOST_WORKSPACE in .env is no longer used. The AI shell now works in the${NC}"
-    echo -e "${YELLOW}  Docker volume allerac_executor_workspace (or EXECUTOR_WORKSPACE). Existing${NC}"
+    echo -e "${YELLOW}  Docker volume ${UNIT}_executor_workspace (or EXECUTOR_WORKSPACE). Existing${NC}"
     echo -e "${YELLOW}  projects under <HOST_WORKSPACE>/projects must be copied once — see${NC}"
     echo -e "${YELLOW}  infra/executor/README.md (\"Upgrading\").${NC}"
     echo ""
 fi
 
+# n8n keeps its credentials encrypted with N8N_ENCRYPTION_KEY. Compose cannot
+# require it only when the automation profile is on, so check it here.
+EFFECTIVE_PROFILES="${COMPOSE_PROFILES:-$(unit_env_value COMPOSE_PROFILES)}"
+if [[ ",${EFFECTIVE_PROFILES}," == *",automation,"* ]] \
+    && [ -z "${N8N_ENCRYPTION_KEY:-$(unit_env_value N8N_ENCRYPTION_KEY)}" ]; then
+    fail_update "configuration check" "N8N_ENCRYPTION_KEY is required when the automation profile is enabled (generate one with: openssl rand -hex 32)."
+fi
+
 # Step 5: Run database migrations
 echo -e "${YELLOW}[5/9]${NC} Running database migrations..."
 MIGRATIONS_STARTED=true
-docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up --force-recreate migrations \
+docker compose $COMPOSE_ARGS $COMPOSE_FLAGS up --force-recreate migrations \
     || fail_update "database migration" "Failed to run migrations."
 echo -e "${GREEN}✓ Migrations complete${NC}"
 echo ""
@@ -282,15 +347,15 @@ echo ""
 # Step 6: Rebuild app images
 echo -e "${YELLOW}[6/9]${NC} Rebuilding application images..."
 if [ "$PRODUCT_LINE" = "cloud" ]; then
-    docker compose -f "$COMPOSE_FILE" build app allerac-telegram notifier executor agent-worker \
+    docker compose $COMPOSE_ARGS $COMPOSE_FLAGS build $(active_services app allerac-telegram notifier executor agent-worker) \
         || fail_update "image build" "Failed to rebuild application images."
 else
     # Only rebuild images that exist in this deployment
     # executor and agent-worker carry the shell-hardening changes; rebuild them too.
-    BUILD_TARGETS="app health-worker executor agent-worker"
-    docker ps --format '{{.Names}}' | grep -q "allerac-telegram" && BUILD_TARGETS="$BUILD_TARGETS allerac-telegram"
-    docker ps --format '{{.Names}}' | grep -q "allerac-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
-    docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS build $BUILD_TARGETS \
+    BUILD_TARGETS="$(active_services app health-worker executor agent-worker)"
+    docker ps --format '{{.Names}}' | grep -q "${UNIT}-telegram" && BUILD_TARGETS="$BUILD_TARGETS allerac-telegram"
+    docker ps --format '{{.Names}}' | grep -q "${UNIT}-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
+    docker compose $COMPOSE_ARGS $COMPOSE_FLAGS build $BUILD_TARGETS \
         || fail_update "image build" "Failed to rebuild application images."
 fi
 echo -e "${GREEN}✓ Images rebuilt${NC}"
@@ -311,7 +376,7 @@ if [ -n "$OLD_CONTAINERS" ]; then
 fi
 # Also remove known allerac containers by name in case they exist from a
 # previous install with a different compose project label (e.g. profile changes).
-for KNOWN in allerac-health-worker; do
+for KNOWN in ${UNIT}-health-worker; do
     if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${KNOWN}$"; then
         echo "  Removing leftover container: $KNOWN"
         docker rm -f "$KNOWN" > /dev/null 2>&1 || true
@@ -321,7 +386,7 @@ done
 # Docker Compose can leave prefixed containers behind when an interrupted deploy
 # is killed while services are being recreated. These names can conflict with the
 # next restart even though they are no longer part of the active project.
-ORPHAN_PATTERNS='^[[:alnum:]]+_allerac-(app|telegram|notifier|health-worker)$'
+ORPHAN_PATTERNS="^[[:alnum:]]+_${UNIT}-(app|telegram|notifier|health-worker)\$"
 ORPHAN_CONTAINERS="$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E "$ORPHAN_PATTERNS" || true)"
 if [ -n "$ORPHAN_CONTAINERS" ]; then
     echo "$ORPHAN_CONTAINERS" | while read -r c; do
@@ -341,7 +406,7 @@ if [ "${SKIP_WEBHOOK_RESTART:-false}" = "true" ]; then
 fi
 COMMIT_HASH=$COMMIT_HASH BUILD_DATE=$BUILD_DATE RELEASE_VERSION=$RELEASE_VERSION \
     COMPOSE_PROFILES="$RESTART_COMPOSE_PROFILES" \
-    docker compose -f "$COMPOSE_FILE" $COMPOSE_FLAGS up -d \
+    docker compose $COMPOSE_ARGS $COMPOSE_FLAGS up -d \
     || fail_update "service restart" "Failed to restart services."
 echo -e "${GREEN}✓ Services restarted${NC}"
 echo ""
@@ -349,7 +414,7 @@ echo ""
 # Step 9: Verify - wait up to 60s for the app to be healthy
 echo -e "${YELLOW}[9/9]${NC} Verifying deployment..."
 WAIT=0
-until [ "$(docker inspect allerac-app --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' 2>/dev/null || true)" = "healthy" ] \
+until [ "$(docker inspect ${UNIT}-app --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' 2>/dev/null || true)" = "healthy" ] \
     || [ $WAIT -ge 60 ]; do
     sleep 2
     WAIT=$((WAIT + 2))
@@ -367,7 +432,7 @@ if [ "$PRODUCT_LINE" = "cloud" ]; then
     echo "  App:     http://localhost:8080"
     echo "  Grafana: http://localhost:3001"
 else
-    APP_PORT=$(grep "^APP_PORT=" .env 2>/dev/null | cut -d= -f2)
+    APP_PORT=$(unit_env_value APP_PORT)
     echo "  App: https://allerac.home  (or http://localhost:${APP_PORT:-8080})"
 fi
 echo ""

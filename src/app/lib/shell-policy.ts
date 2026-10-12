@@ -13,6 +13,8 @@
  *   on the immutable user id on purpose: there is no e-mail verification, so
  *   an e-mail based allowlist could be claimed by whoever registers first.
  * - If the user's role cannot be determined (missing user, DB error), deny.
+ * - If this Unit runs without the executor (EXECUTOR_ENABLED=false, see
+ *   docker-compose.public.yml), deny everyone, admins included.
  *
  * The workspace path checks in workspace-paths.ts only pin the working
  * directory; they are not a sandbox. This policy is the real gate.
@@ -23,12 +25,23 @@
  * helpers live in shell-access.ts.
  */
 import pool from '@/app/clients/db';
+import { isExecutorEnabled } from '@/lib/executor-enabled';
 
 /** Tools whose implementation calls the executor. */
 export const SHELL_TOOL_NAMES = ['execute_shell', 'edit_file'];
 
 export const SHELL_ACCESS_DENIED_MESSAGE =
   'Shell access is restricted to administrators on this instance.';
+
+export const SHELL_EXECUTOR_DISABLED_MESSAGE =
+  'The shell executor is disabled on this instance.';
+
+/** The message to show when a shell call is refused. */
+export function shellAccessDeniedMessage(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return isExecutorEnabled(env) ? SHELL_ACCESS_DENIED_MESSAGE : SHELL_EXECUTOR_DISABLED_MESSAGE;
+}
 
 export interface ShellAccessSubject {
   id?: string | null;
@@ -49,6 +62,7 @@ export function isShellAllowedFor(
   subject: ShellAccessSubject | null | undefined,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
+  if (!isExecutorEnabled(env)) return false;
   if (!subject || !subject.id) return false;
   if (subject.is_admin === true) return true;
   return allowedUserIds(env).has(String(subject.id).toLowerCase());
@@ -60,6 +74,7 @@ export function isShellAllowedFor(
  */
 export async function canUserIdUseShell(userId: string | null | undefined): Promise<boolean> {
   if (!userId) return false;
+  if (!isExecutorEnabled()) return false;
   try {
     const result = await pool.query<{ id: string; is_admin: boolean }>(
       'SELECT id, is_admin FROM users WHERE id = $1',

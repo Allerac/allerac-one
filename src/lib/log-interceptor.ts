@@ -3,7 +3,7 @@
  *
  * Usage in any Node.js service (Telegram, Health Worker, etc):
  *   import { installLogInterceptor } from '@/lib/log-interceptor';
- *   installLogInterceptor('http://allerac-app:8080/api/log-submit');
+ *   installLogInterceptor('http://app:8080/api/log-submit');
  *
  * After this, all console.log/warn/error with [Context] format
  * will be automatically sent to the log API.
@@ -35,14 +35,14 @@ export async function sendLogToAPI(
 /**
  * Install log interceptor for a service
  *
- * @param apiUrl - URL of the log API (default: http://allerac-app:8080/api/log-submit)
+ * @param apiUrl - URL of the log API (default: http://app:8080/api/log-submit)
  * @param serviceName - Optional service name for debugging (used in error messages)
  *
  * Example:
- *   installLogInterceptor('http://allerac-app:8080/api/log-submit', 'telegram-bot');
+ *   installLogInterceptor('http://app:8080/api/log-submit', 'telegram-bot');
  */
 export function installLogInterceptor(
-  apiUrl: string = 'http://allerac-app:8080/api/log-submit',
+  apiUrl: string = 'http://app:8080/api/log-submit',
   serviceName: string = 'Service'
 ): void {
   // Prevent double installation

@@ -8,7 +8,7 @@
  */
 import { ForbiddenError, requireCurrentUser } from '@/app/lib/auth-session';
 import type { User } from '@/app/services/auth/auth.service';
-import { isShellAllowedFor, SHELL_ACCESS_DENIED_MESSAGE } from '@/app/lib/shell-policy';
+import { isShellAllowedFor, shellAccessDeniedMessage } from '@/app/lib/shell-policy';
 
 export * from '@/app/lib/shell-policy';
 
@@ -16,7 +16,7 @@ export * from '@/app/lib/shell-policy';
 export async function requireShellUser(): Promise<User> {
   const user = await requireCurrentUser();
   if (!isShellAllowedFor(user)) {
-    throw new ForbiddenError(SHELL_ACCESS_DENIED_MESSAGE);
+    throw new ForbiddenError(shellAccessDeniedMessage());
   }
   return user;
 }

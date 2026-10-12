@@ -1,3 +1,5 @@
+import { isExecutorEnabled } from './executor-enabled';
+
 const APP_REQUIRED_SECRETS = [
   'ENCRYPTION_KEY',
   'TELEGRAM_TOKEN_ENCRYPTION_KEY',
@@ -22,7 +24,9 @@ function collectConfigErrors(
   }
 
   if (!env.DATABASE_URL?.trim()) errors.push('DATABASE_URL is required');
-  if (!env.EXECUTOR_URL?.trim()) errors.push('EXECUTOR_URL is required');
+  // Lean Units run without the executor (EXECUTOR_ENABLED=false). EXECUTOR_SECRET
+  // is still required: it also authenticates internal calls (jobs, log-submit).
+  if (isExecutorEnabled(env) && !env.EXECUTOR_URL?.trim()) errors.push('EXECUTOR_URL is required');
 
   return errors;
 }

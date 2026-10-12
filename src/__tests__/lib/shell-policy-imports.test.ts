@@ -14,8 +14,8 @@ const imports = [...source.matchAll(/^\s*import\s[^;]*?from\s+['"]([^'"]+)['"]/g
   .map(match => match[1]);
 
 describe('shell-policy stays worker-safe', () => {
-  it('only imports the database client', () => {
-    expect(imports.sort()).toEqual(['@/app/clients/db']);
+  it('only imports the database client and the executor flag', () => {
+    expect(imports.sort()).toEqual(['@/app/clients/db', '@/lib/executor-enabled']);
   });
 
   it.each(['@/app/lib/auth-session', 'next/headers', 'bcrypt', '@/app/services/auth/auth.service'])(

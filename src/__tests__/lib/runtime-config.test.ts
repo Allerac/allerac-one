@@ -54,3 +54,22 @@ describe('validateWorkerRuntimeConfig', () => {
     })).toThrow(/ENCRYPTION_KEY must contain at least 32 characters[\s\S]*EXECUTOR_SECRET/);
   });
 });
+
+describe('Units without the executor (EXECUTOR_ENABLED=false)', () => {
+  const withoutExecutorUrl = { ...validEnv, EXECUTOR_URL: undefined };
+
+  test('does not require EXECUTOR_URL when the executor is disabled', () => {
+    const env = { ...withoutExecutorUrl, EXECUTOR_ENABLED: 'false' };
+    expect(() => validateRuntimeConfig(env)).not.toThrow();
+    expect(() => validateWorkerRuntimeConfig(env)).not.toThrow();
+  });
+
+  test('still requires EXECUTOR_URL by default', () => {
+    expect(() => validateRuntimeConfig(withoutExecutorUrl)).toThrow(/EXECUTOR_URL is required/);
+  });
+
+  test('still requires EXECUTOR_SECRET (it also authenticates internal service calls)', () => {
+    const env = { ...withoutExecutorUrl, EXECUTOR_ENABLED: 'false', EXECUTOR_SECRET: undefined };
+    expect(() => validateRuntimeConfig(env)).toThrow(/EXECUTOR_SECRET is required/);
+  });
+});
