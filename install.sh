@@ -598,6 +598,15 @@ EXECUTOR_SECRET=${EXEC_SECRET}
 HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET}
 
 # --------------------------------------------
+# Optional modules (docs/operations/modules-and-profiles.md)
+# all (default) | personal | openworld | sales; install.sh, update.sh and
+# allerac start derive COMPOSE_PROFILES (e.g. health) from it.
+# --------------------------------------------
+# ALLERAC_PROFILE=all
+${ALLERAC_PROFILE:+ALLERAC_PROFILE=${ALLERAC_PROFILE}}
+${ALLERAC_MODULES:+ALLERAC_MODULES=${ALLERAC_MODULES}}
+
+# --------------------------------------------
 # Ollama models for this hardware tier
 # lite/home/pro: qwen2.5:3b | custom = user-defined
 # --------------------------------------------
@@ -740,6 +749,21 @@ start_services() {
     export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     export OLLAMA_RUNTIME
 
+    # Module services (e.g. health-worker): derive their Compose profiles from
+    # ALLERAC_PROFILE / ALLERAC_MODULES (shell or .env) unless COMPOSE_PROFILES
+    # is set in the shell. See docs/operations/modules-and-profiles.md.
+    if [ -z "${COMPOSE_PROFILES+x}" ] && [ -f scripts/lib/compose-profiles.sh ]; then
+        # shellcheck source=scripts/lib/compose-profiles.sh
+        . scripts/lib/compose-profiles.sh
+        _env_value() { { grep -E "^$1=" .env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//'; }
+        COMPOSE_PROFILES="$(allerac_effective_compose_profiles 0 "" \
+            "$(_env_value COMPOSE_PROFILES)" \
+            "${ALLERAC_PROFILE-$(_env_value ALLERAC_PROFILE)}" \
+            "${ALLERAC_MODULES-$(_env_value ALLERAC_MODULES)}")"
+        export COMPOSE_PROFILES
+        log_info "Compose profiles: ${COMPOSE_PROFILES:-none}"
+    fi
+
     log_info "Pulling base images..."
     # WSL2 can crash docker compose (SIGBUS) during large concurrent pulls due
     # to mmap issues.  Retry up to 3 times — Docker caches completed layers so
@@ -759,7 +783,12 @@ start_services() {
     fi
 
     log_info "Building application..."
-    $USE_SUDO docker compose build app health-worker
+    # health-worker only exists when the health profile is active (COMPOSE_PROFILES=health).
+    BUILD_TARGETS="app"
+    if $USE_SUDO docker compose config --services 2>/dev/null | grep -qx health-worker; then
+        BUILD_TARGETS="$BUILD_TARGETS health-worker"
+    fi
+    $USE_SUDO docker compose build $BUILD_TARGETS
 
     log_info "Starting containers..."
     $USE_SUDO docker compose up -d

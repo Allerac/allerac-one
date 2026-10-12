@@ -1,4 +1,5 @@
 import pool from '@/app/clients/db';
+import { filterEnabledDomainSlugs } from '@/modules/registry';
 import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 
 export async function GET() {
@@ -17,7 +18,7 @@ export async function GET() {
            ORDER BY d.sort_order ASC`,
       user.is_admin ? [] : [user.id]
     );
-    const visible = result.rows.map((r: { slug: string }) => r.slug);
+    const visible = filterEnabledDomainSlugs(result.rows.map((r: { slug: string }) => r.slug));
     return Response.json({ visible });
   } catch (error) {
     const authError = authenticationErrorResponse(error);

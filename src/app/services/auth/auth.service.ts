@@ -1,4 +1,5 @@
 // Auth service for user authentication
+import { getDisabledDomainSlugs, isDomainEnabled } from '@/modules/registry';
 
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
@@ -309,15 +310,26 @@ export class AuthService {
    */
   async getFirstDomainSlug(userId: string): Promise<string | null> {
     try {
-      const result = await pool.query(
-        `SELECT d.slug
-         FROM user_domain_access uda
-         JOIN domains d ON uda.domain_id = d.id
-         WHERE uda.user_id = $1 AND d.is_active = true
-         ORDER BY d.created_at ASC
-         LIMIT 1`,
-        [userId]
-      );
+      const disabled = getDisabledDomainSlugs();
+      const result = disabled.length === 0
+        ? await pool.query(
+          `SELECT d.slug
+           FROM user_domain_access uda
+           JOIN domains d ON uda.domain_id = d.id
+           WHERE uda.user_id = $1 AND d.is_active = true
+           ORDER BY d.created_at ASC
+           LIMIT 1`,
+          [userId]
+        )
+        : await pool.query(
+          `SELECT d.slug
+           FROM user_domain_access uda
+           JOIN domains d ON uda.domain_id = d.id
+           WHERE uda.user_id = $1 AND d.is_active = true AND NOT (d.slug = ANY($2::text[]))
+           ORDER BY d.created_at ASC
+           LIMIT 1`,
+          [userId, disabled]
+        );
       return result.rows[0]?.slug ?? null;
     } catch (error) {
       console.error('getFirstDomainSlug error:', error);
@@ -472,6 +484,7 @@ export class AuthService {
   }
 
   async canAccessDomain(userId: string, isAdmin: boolean, slug: string): Promise<boolean> {
+    if (!isDomainEnabled(slug)) return false;
     if (isAdmin) return true;
     try {
       const result = await pool.query(

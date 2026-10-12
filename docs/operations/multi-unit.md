@@ -23,6 +23,7 @@ names and services as before, so an existing install is unaffected.
 |---|---|---|
 | `ALLERAC_UNIT` | `allerac` | Compose project name, every container name (`<unit>-app`, `<unit>-db`, ...) and every volume name (`<unit>_db_data`, ...). Lowercase letters, digits, `-`, `_`. |
 | `ALLERAC_ENV_FILE` | `.env` | The env file loaded into the `app` container. Set it to the Unit's own file name. |
+| `ALLERAC_PROFILE` / `ALLERAC_MODULES` | `all` | Optional modules enabled in this Unit ([modules-and-profiles.md](modules-and-profiles.md)). |
 | `COMPOSE_FILE` | (unset) | `docker-compose.yml:docker-compose.public.yml` selects the lean public profile. |
 | `APP_PORT`, `OLLAMA_PORT`, `DOCS_PORT`, `N8N_PORT`, `WEBHOOK_PORT`, `EXECUTOR_DEV_PORT`, `EXECUTOR_DEV_PORT_RANGE`, `NODE_EXPORTER_PORT`, `PROMETHEUS_PORT`, `LOKI_PORT`, `PORTAINER_PORT`, `GARMIN_WORKER_PORT`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT` | today's ports | Host side of every published port. Container ports never change. |
 | `MONITORING_BIND`, `PORTAINER_BIND`, `N8N_BIND`, `EXECUTOR_DEV_PORTS_BIND` | `127.0.0.1` | Host interface for internal tools. |
@@ -35,6 +36,19 @@ other's containers by name. Internal URLs use Compose service names (`app`,
 Published host ports are a different matter: anything published on all
 interfaces (by default the app, docs and Ollama ports) is reachable from other
 Units through the host, like from the rest of your network.
+
+## Modules and profiles per Unit
+
+Each Unit can run a different set of optional modules with `ALLERAC_PROFILE`
+(`all`, `personal`, `openworld`, `sales`) or an explicit `ALLERAC_MODULES`
+list. `install.sh`, `update.sh` and `allerac.sh` derive the module Compose
+profiles from it (e.g. `health` for health-worker) and merge them with the
+Unit's own `COMPOSE_PROFILES`; a `COMPOSE_PROFILES` set in the calling shell
+wins as is. Plain `docker compose --env-file .env.<unit> up -d` does not do
+this, so add `health` to `COMPOSE_PROFILES` there yourself. Public Units
+should set `ALLERAC_PROFILE=openworld` or `sales` (nothing set means `all`,
+which starts health-worker). Example env files live in `deploy/profiles/`.
+See [modules-and-profiles.md](modules-and-profiles.md).
 
 ## Add a second Unit
 
@@ -174,8 +188,8 @@ The code is shared, so pull once and rebuild each Unit:
 ALLERAC_ENV_FILE=.env.website ./update.sh            # another Unit
 ```
 
-`update.sh` reads `ALLERAC_UNIT`, `COMPOSE_FILE` and `COMPOSE_PROFILES` from
-the given env file, backs that Unit up first, only rebuilds services the Unit
+`update.sh` reads `ALLERAC_UNIT`, `COMPOSE_FILE`, `COMPOSE_PROFILES` and
+`ALLERAC_PROFILE`/`ALLERAC_MODULES` (to derive module profiles) from the given env file, backs that Unit up first, only rebuilds services the Unit
 actually runs (a lean Unit has no executor), and skips the `allerac.home`
 hostname setup for non-primary Units. Note that `update.sh` also runs
 `git pull`, so the second run usually finds nothing new to pull.
