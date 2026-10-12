@@ -11,6 +11,8 @@ import pool from '@/app/clients/db';
 import { EmbeddingService } from './embedding.service';
 import { extractPdfText } from './pdf-text';
 
+export type DocumentSourceType = 'upload' | 'crawler' | 'note';
+
 // Configuration for text chunking
 const CHUNK_SIZE = 1000; // Characters per chunk
 const CHUNK_OVERLAP = 200; // Overlap between chunks to maintain context
@@ -205,13 +207,27 @@ export class DocumentService {
   /**
    * Creates a document record in the database (public for async workflow).
    */
-  async createDocumentRecord(file: File, userId: string, domainSlug?: string | null): Promise<string> {
+  async createDocumentRecord(
+    file: File,
+    userId: string,
+    domainSlug?: string | null,
+    source: { type: DocumentSourceType; id?: string | null } = { type: 'upload' },
+  ): Promise<string> {
     try {
       const res = await pool.query(
-        `INSERT INTO documents (filename, file_type, file_size, uploaded_by, status, domain_slug)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO documents (filename, file_type, file_size, uploaded_by, status, domain_slug, source_type, source_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id`,
-        [file.name, file.type || 'text/plain', file.size, userId, 'processing', domainSlug ?? null]
+        [
+          file.name,
+          file.type || 'text/plain',
+          file.size,
+          userId,
+          'processing',
+          domainSlug ?? null,
+          source.type,
+          source.id ?? null,
+        ]
       );
       return res.rows[0].id;
     } catch (error: any) {
@@ -324,11 +340,11 @@ export class DocumentService {
     try {
       const res = domainSlug
         ? await pool.query(
-            'SELECT * FROM documents WHERE uploaded_by = $1 AND domain_slug = $2 ORDER BY uploaded_at DESC',
+            "SELECT * FROM documents WHERE uploaded_by = $1 AND domain_slug = $2 AND source_type <> 'note' ORDER BY uploaded_at DESC",
             [userId, domainSlug]
           )
         : await pool.query(
-            'SELECT * FROM documents WHERE uploaded_by = $1 ORDER BY uploaded_at DESC',
+            "SELECT * FROM documents WHERE uploaded_by = $1 AND source_type <> 'note' ORDER BY uploaded_at DESC",
             [userId]
           );
       return res.rows;
@@ -382,12 +398,13 @@ export class DocumentService {
 
   /**
    * Deletes a document and all its chunks from the database.
-   * Only allows deletion if the user owns the document.
+   * Only allows deletion if the user owns the document. Note-backed documents are
+   * derived from user_notes and can only be removed by deleting the note.
    */
   async deleteDocument(documentId: string, userId: string): Promise<void> {
     try {
       const result = await pool.query(
-        'DELETE FROM documents WHERE id = $1 AND uploaded_by = $2',
+        `DELETE FROM documents WHERE id = $1 AND uploaded_by = $2 AND source_type <> 'note'`,
         [documentId, userId]
       );
       if (result.rowCount === 0) {

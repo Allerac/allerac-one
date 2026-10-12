@@ -219,8 +219,8 @@ export class CrawlerService {
         let documentId = current.rows[0]?.document_id as string | undefined;
         if (!documentId) {
           const created = await pool.query(
-            `INSERT INTO documents (filename,file_type,file_size,uploaded_by,status,domain_slug,metadata)
-             VALUES ($1,$2,$3,$4,'processing',$5,$6) RETURNING id`,
+            `INSERT INTO documents (filename,file_type,file_size,uploaded_by,status,domain_slug,metadata,source_type)
+             VALUES ($1,$2,$3,$4,'processing',$5,$6,'crawler') RETURNING id`,
             [item.title, item.contentType, Buffer.byteLength(item.content, 'utf8'), userId, source.rows[0].domain_slug,
               JSON.stringify({ crawler: { sourceId: item.sourceId, externalId: item.externalId, canonicalUrl: item.canonicalUrl } })]);
           const createdDocumentId = created.rows[0].id as string;

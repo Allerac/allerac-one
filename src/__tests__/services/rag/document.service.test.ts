@@ -19,7 +19,7 @@ describe('DocumentService ownership', () => {
     await documentService.deleteDocument('doc-a', 'user-a');
 
     expect(mockQuery).toHaveBeenCalledWith(
-      'DELETE FROM documents WHERE id = $1 AND uploaded_by = $2',
+      "DELETE FROM documents WHERE id = $1 AND uploaded_by = $2 AND source_type <> 'note'",
       ['doc-a', 'user-a']
     );
   });
@@ -38,7 +38,7 @@ describe('DocumentService ownership', () => {
     await documentService.getAllDocuments('user-a', 'notes');
 
     expect(mockQuery).toHaveBeenCalledWith(
-      'SELECT * FROM documents WHERE uploaded_by = $1 AND domain_slug = $2 ORDER BY uploaded_at DESC',
+      "SELECT * FROM documents WHERE uploaded_by = $1 AND domain_slug = $2 AND source_type <> 'note' ORDER BY uploaded_at DESC",
       ['user-a', 'notes']
     );
   });
@@ -71,5 +71,32 @@ describe('DocumentService ownership', () => {
       'UPDATE documents SET status = $1, error_message = $2 WHERE id = $3',
       ['completed', null, 'doc-a'],
     );
+  });
+
+  it('hides note-backed documents from the unscoped document list', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
+
+    await documentService.getAllDocuments('user-a');
+
+    expect(mockQuery.mock.calls[0][0]).toContain("source_type <> 'note'");
+    expect(mockQuery.mock.calls[0][1]).toEqual(['user-a']);
+  });
+
+  it('refuses to delete a note-backed document directly', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
+
+    await expect(documentService.deleteDocument('note-doc', 'user-a')).rejects.toThrow('Document not found');
+  });
+
+  it('records the document source on creation', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 'doc-n' }], rowCount: 1 } as never);
+    const file = { name: 'Note', type: 'text/plain', size: 4 } as File;
+
+    await documentService.createDocumentRecord(file, 'user-a', 'notes', { type: 'note' });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 'doc-u' }], rowCount: 1 } as never);
+    await documentService.createDocumentRecord(file, 'user-a', null);
+
+    expect(mockQuery.mock.calls[0][1]).toEqual(['Note', 'text/plain', 4, 'user-a', 'processing', 'notes', 'note', null]);
+    expect(mockQuery.mock.calls[1][1]).toEqual(['Note', 'text/plain', 4, 'user-a', 'processing', null, 'upload', null]);
   });
 });

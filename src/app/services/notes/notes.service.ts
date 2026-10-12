@@ -56,7 +56,7 @@ export class NotesService {
         size: content.length,
       } as File;
 
-      const docId = await documentService.createDocumentRecord(fakeFile, userId, 'notes');
+      const docId = await documentService.createDocumentRecord(fakeFile, userId, 'notes', { type: 'note' });
       documentId = docId;
       documentService.processDocumentContent(docId, content).catch(err => {
         console.error('[Notes] Background embedding failed:', err);
@@ -71,6 +71,13 @@ export class NotesService {
        RETURNING *`,
       [userId, documentId, title, content, tags, source, due_date ?? null]
     );
+
+    if (documentId) {
+      await pool.query(
+        'UPDATE documents SET source_id = $1 WHERE id = $2 AND uploaded_by = $3',
+        [res.rows[0].id, documentId, userId],
+      ).catch((err: unknown) => console.error('[Notes] Failed to link note document:', err));
+    }
 
     return res.rows[0] as Note;
   }
