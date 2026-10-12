@@ -61,9 +61,10 @@ through the `agent_runs` table in Postgres. The app and the worker share the sam
 service-layer code; only the hosting process differs.
 
 The long-term platform direction is documented in
-[Allerac Federation](allerac-federation.md): a network of isolated domain cells that
-can run specialized agents and cooperate through stable APIs, events, identity, and
-durable work contracts.
+[Allerac Units](allerac-units.md) — one deployment hosting many people and agents
+with logical isolation — and [Allerac Federation](allerac-federation.md): a network
+of Units, including specialized domain cells, that cooperate through stable APIs,
+events, identity, and durable work contracts.
 
 ## Tech Stack
 

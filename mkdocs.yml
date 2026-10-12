@@ -100,6 +100,7 @@ nav:
   - Architecture:
       - Overview: architecture/architecture.md
       - Control API v1: architecture/control-api-v1.md
+      - Allerac Units: architecture/allerac-units.md
       - Allerac Federation: architecture/allerac-federation.md
       - Mobile & Robot Clients: architecture/mobile-and-robot-clients.md
       - Native iOS Client: architecture/ios-client.md

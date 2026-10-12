@@ -35,4 +35,5 @@ sequence of implementation.
 
 | Document | Status | Purpose |
 |---|---|---|
-| [Allerac Federation](../architecture/allerac-federation.md) | Directional | Define the long-term model for isolated domain cells cooperating through stable contracts |
+| [Allerac Units](../architecture/allerac-units.md) | Directional | Define how one Allerac deployment hosts many people and agents: agent identity, scoped memory, call policies, approval gates, and quotas |
+| [Allerac Federation](../architecture/allerac-federation.md) | Directional | Define the long-term model for Allerac Units, including specialized domain cells, cooperating through stable contracts |
