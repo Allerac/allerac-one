@@ -76,7 +76,10 @@ describe('NotesService ownership', () => {
 
     await notesService.updateNote('user-a', 'note-a', { title: 'Updated' });
 
-    expect(mockQuery).toHaveBeenCalledTimes(1);
+    // Only the UPDATE (plus the background [[link]] resync lookup) runs; no
+    // embedding or document work happens inline.
+    expect(mockQuery.mock.calls[0][0]).toContain('UPDATE user_notes SET');
+    expect(mockQuery.mock.calls.every(c => !String(c[0]).includes('documents'))).toBe(true);
     expect(noteReindexQueue.getStats().pending).toBe(1);
     noteReindexQueue.cancel('note-a');
   });

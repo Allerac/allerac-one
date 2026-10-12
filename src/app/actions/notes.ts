@@ -3,6 +3,7 @@
 import { NotesService, CreateNoteInput, UpdateNoteInput } from '@/app/services/notes/notes.service';
 import { requireCurrentUser } from '@/app/lib/auth-session';
 import { notePagesService, NoteMoveError } from '@/app/services/notes/note-pages.service';
+import { noteLinksService } from '@/app/services/notes/note-links.service';
 
 const notesService = new NotesService();
 
@@ -131,5 +132,15 @@ export async function getNote(noteId: string) {
     return { success: !!note, note };
   } catch (err: unknown) {
     return { success: false, note: null, error: getErrorMessage(err) };
+  }
+}
+
+export async function getNoteBacklinks(noteId: string) {
+  try {
+    const user = await requireCurrentUser();
+    const backlinks = await noteLinksService.getBacklinks(user.id, noteId);
+    return { success: true, backlinks };
+  } catch (err: unknown) {
+    return { success: false, backlinks: [], error: getErrorMessage(err) };
   }
 }

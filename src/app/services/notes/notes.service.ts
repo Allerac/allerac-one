@@ -1,6 +1,7 @@
 import pool from '@/app/clients/db';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { DocumentService } from '@/app/services/rag/document.service';
+import { noteLinksService } from './note-links.service';
 import {
   NoteReindexQueue,
   buildNoteIndexText,
@@ -106,7 +107,9 @@ export class NotesService {
       ).catch((err: unknown) => console.error('[Notes] Failed to link note document:', err));
     }
 
-    return res.rows[0] as Note;
+    const created = res.rows[0] as Note;
+    await updateNoteLinks(userId, created.id, { content, title, titleChanged: !!title });
+    return created;
   }
 
   async getNote(userId: string, noteId: string): Promise<Note | null> {
@@ -218,6 +221,12 @@ export class NotesService {
       );
     }
 
+    try {
+      await noteLinksService.deleteLinksForNote(userId, noteId);
+    } catch (err) {
+      console.error('[Notes] Failed to delete note links:', err);
+    }
+
     return true;
   }
 
@@ -247,6 +256,13 @@ export class NotesService {
     // the background (debounced) and is skipped when the text hash is unchanged.
     if (input.content !== undefined || input.title !== undefined) {
       noteReindexQueue.schedule(userId, note.id);
+    }
+    if (input.content !== undefined || input.title !== undefined) {
+      await updateNoteLinks(userId, note.id, {
+        content: input.content !== undefined ? note.content : undefined,
+        title: note.title,
+        titleChanged: input.title !== undefined,
+      });
     }
 
     return note;
@@ -323,6 +339,28 @@ export class NotesService {
       [userId]
     );
     return res.rows.map(r => r.tag);
+  }
+}
+
+/**
+ * Keeps knowledge_links in sync after a save. Link maintenance never fails the
+ * save itself: a missing table or a transient error only logs.
+ */
+async function updateNoteLinks(
+  userId: string,
+  noteId: string,
+  change: { content?: string; title: string | null; titleChanged: boolean },
+): Promise<void> {
+  try {
+    if (change.content !== undefined) await noteLinksService.syncNoteLinks(userId, noteId, change.content);
+    if (change.titleChanged) {
+      // Can touch many notes, so it runs after the save returns.
+      noteLinksService.resyncReferencesTo(userId, change.title, noteId).catch(err => {
+        console.error('[Notes] Failed to resync references to renamed note:', err);
+      });
+    }
+  } catch (err) {
+    console.error('[Notes] Failed to update note links:', err);
   }
 }
 
