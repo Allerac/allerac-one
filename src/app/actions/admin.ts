@@ -12,6 +12,7 @@ import {
   type OperationPricing,
 } from '@/app/services/credits/credit.service';
 import { apiKeyService } from '@/app/services/api-keys/api-key.service';
+import { unknownScopes } from '@/app/services/api-keys/api-key-scopes';
 
 const authService = new AuthService();
 const systemSettingsService = new SystemSettingsService();
@@ -131,6 +132,9 @@ export async function createDomainUser(
 > {
   await assertAdmin();
 
+  if (issueApiKeyScopes && issueApiKeyScopes.length > 0 && unknownScopes(issueApiKeyScopes).length > 0) {
+    return { success: false, error: 'Unknown API key scope' };
+  }
   if (!email || email.length > 254 || !email.includes('@')) return { success: false, error: 'Invalid email' };
   if (!password || password.length < 8) return { success: false, error: 'Password must be at least 8 characters' };
   if (!validIds(domainIds)) return { success: false, error: 'Invalid domain selection' };

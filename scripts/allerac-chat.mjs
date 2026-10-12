@@ -3,7 +3,7 @@
 //
 // Talks to the Control API (/api/v1) with a Bearer API key instead of a
 // browser session — generate one at /config -> "API Access" with the
-// chat:read + chat:write scopes.
+// "Chat client" preset (profile:read, chat:read, chat:write, capabilities:read).
 //
 // Default domain/model come from your account's CLI settings (the "CLI" app
 // in the Hub's Start Menu, /cli) via GET /api/v1/me — no env vars needed for
@@ -79,7 +79,7 @@ const paint = (color, text) => `${color}${text}${c.reset}`;
 
 if (!apiKey) {
   console.error(paint(c.red, 'Missing ALLERAC_API_KEY.'));
-  console.error(paint(c.gray, 'Generate one at /config -> "API Access" (scopes: chat:read, chat:write).'));
+  console.error(paint(c.gray, 'Generate one at /config -> "API Access" (preset: Chat client — profile:read, chat:read, chat:write, capabilities:read).'));
   process.exit(1);
 }
 

@@ -17,6 +17,8 @@
 #              command cannot see EXECUTOR_SECRET; non-admin: the 7
 #              /api/workspace/* routes (8 calls) 403 and /workspace 404;
 #              no session: 401
+#   api keys   a key with empty scopes is denied (403), a scoped key only
+#              reaches its own scope, key creation without scopes is 400
 #   sign-up    registration closed by default: checkFirstRun reports
 #              registrationOpen=false and the register server action creates
 #              no user (calls the real Next.js server actions)
@@ -305,6 +307,23 @@ ROUTES
 [ "$denied" = "8" ] && ok "non-admin: all 8 /api/workspace/* calls (7 routes) -> 403" || bad "non-admin: only $denied of 8 /api/workspace/* calls returned 403"
 [ "$(http_code -H "Cookie: $USER_COOKIE" "$BASE/workspace")" = "404" ] && ok "non-admin: GET /workspace -> 404" || bad "non-admin: GET /workspace did not return 404"
 [ "$(http_code "$BASE/api/workspace/projects")" = "401" ] && ok "no session: GET /api/workspace/projects -> 401" || bad "no session: /api/workspace/projects did not return 401"
+
+# ------------------------------------------------------------------
+# 4b. Control API key scopes (deny by default)
+# ------------------------------------------------------------------
+sha256_hex() { if command -v sha256sum >/dev/null; then printf '%s' "$1" | sha256sum | cut -d' ' -f1; else printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1; fi; }
+EMPTY_KEY="alr_live_$(openssl rand -hex 32 2>/dev/null || od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+SCOPED_KEY="alr_live_$(openssl rand -hex 32 2>/dev/null || od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+psql_q <<SQL >/dev/null
+INSERT INTO control_api_keys (user_id, name, token_prefix, token_hash, scopes) VALUES
+  ('${ADMIN_ID}', 'ci empty scopes',  '${EMPTY_KEY:0:24}',  '$(sha256_hex "$EMPTY_KEY")',  '{}'),
+  ('${ADMIN_ID}', 'ci profile:read',  '${SCOPED_KEY:0:24}', '$(sha256_hex "$SCOPED_KEY")', '{profile:read}');
+SQL
+[ "$(http_code -H "Authorization: Bearer $EMPTY_KEY" "$BASE/api/v1/me")" = "403" ] && ok "API key with empty scopes: GET /api/v1/me -> 403" || bad "API key with empty scopes was not denied on GET /api/v1/me"
+[ "$(http_code -H "Authorization: Bearer $SCOPED_KEY" "$BASE/api/v1/me")" = "200" ] && ok "API key with profile:read: GET /api/v1/me -> 200" || bad "API key with profile:read: GET /api/v1/me did not return 200"
+[ "$(http_code -H "Authorization: Bearer $SCOPED_KEY" "$BASE/api/v1/tickets")" = "403" ] && ok "API key with profile:read: GET /api/v1/tickets -> 403" || bad "API key with profile:read was not denied on GET /api/v1/tickets"
+[ "$(http_code -X POST "$BASE/api/v1/api-keys" -H "Cookie: $ADMIN_COOKIE" -H 'Content-Type: application/json' -d '{"name":"ci no scopes"}')" = "400" ] \
+    && ok "admin: POST /api/v1/api-keys without scopes -> 400" || bad "admin: POST /api/v1/api-keys without scopes did not return 400"
 
 # ------------------------------------------------------------------
 # 5. Registration closed by default (real Next.js server actions)

@@ -13,8 +13,24 @@ Authorization: Bearer alr_live_<secret>
 The full secret is returned only once when the key is created. Allerac stores only
 a hash of the token.
 
-If `scopes` is empty, the key can call any Control API route available to the
-owning user. If scopes are set, the key must include the route's required scope.
+Scopes are deny-by-default:
+
+- A key can only call routes whose required scope is explicitly listed on the key.
+- `scopes` is required when creating a key and must contain at least one scope.
+- Unknown scopes are rejected at creation (`400 validation_error`) and never
+  grant access.
+- There is no wildcard scope. To grant access to every route, list every scope
+  (the admin UI "Full access" preset does this).
+- A key with an empty scope list (only possible for keys created before this
+  rule) grants nothing: every Control API call with it returns
+  `403 missing_scope`. Revoke it and create a new key with explicit scopes.
+
+Non-admin users can only create keys with the self-service scopes
+(`health:proxy:read`, `chat:write`).
+
+The default "Chat client" preset (`profile:read`, `chat:read`, `chat:write`,
+`capabilities:read`) covers the terminal client (`scripts/allerac-chat.mjs`);
+add `domains:read` to use its `/domains` command.
 
 ## `GET /api/v1/api-keys`
 
@@ -38,7 +54,7 @@ Response:
         "id": "key-id",
         "name": "Bruno",
         "prefix": "alr_live_abc123",
-        "scopes": [],
+        "scopes": ["profile:read"],
         "lastUsedAt": null,
         "revokedAt": null,
         "expiresAt": null,
@@ -60,7 +76,7 @@ curl -s \
   -X POST \
   -H "Content-Type: application/json" \
   -H "Cookie: session_token=$SESSION_TOKEN" \
-  -d '{"name":"Bruno"}' \
+  -d '{"name":"Bruno","scopes":["profile:read","chat:read","chat:write","capabilities:read"]}' \
   http://localhost:8080/api/v1/api-keys
 ```
 
@@ -73,7 +89,7 @@ Response:
       "id": "key-id",
       "name": "Bruno",
       "prefix": "alr_live_abc123",
-      "scopes": [],
+      "scopes": ["profile:read", "chat:read", "chat:write", "capabilities:read"],
       "lastUsedAt": null,
       "revokedAt": null,
       "expiresAt": null,

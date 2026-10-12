@@ -82,14 +82,14 @@ describe('Control API v1 API keys', () => {
     const response = await createApiKey(jsonRequest(
       'http://localhost/api/v1/api-keys',
       'POST',
-      { name: 'Bruno' },
+      { name: 'Bruno', scopes: ['health:proxy:read'] },
     ));
 
     expect(response.status).toBe(201);
     expect(mockApiKeyService.create).toHaveBeenCalledWith({
       userId: user.id,
       name: 'Bruno',
-      scopes: undefined,
+      scopes: ['health:proxy:read'],
       expiresAt: null,
     });
     expect(await response.json()).toEqual({
@@ -164,6 +164,32 @@ describe('Control API v1 API keys', () => {
       scopes: ['documents:write'],
       expiresAt: null,
     });
+  });
+
+  it.each([
+    ['omitted', { name: 'No scopes' }],
+    ['empty', { name: 'No scopes', scopes: [] }],
+  ])('rejects key creation when scopes are %s', async (_label, body) => {
+    mockRequireCurrentUser.mockResolvedValueOnce({ ...user, is_admin: true });
+
+    const response = await createApiKey(jsonRequest('http://localhost/api/v1/api-keys', 'POST', body));
+
+    expect(response.status).toBe(400);
+    expect(mockApiKeyService.create).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ error: { code: 'validation_error' } });
+  });
+
+  it('rejects key creation with unknown scopes, even for admins', async () => {
+    mockRequireCurrentUser.mockResolvedValueOnce({ ...user, is_admin: true });
+
+    const response = await createApiKey(jsonRequest(
+      'http://localhost/api/v1/api-keys',
+      'POST',
+      { name: 'Bad', scopes: ['profile:read', '*'] },
+    ));
+
+    expect(response.status).toBe(400);
+    expect(mockApiKeyService.create).not.toHaveBeenCalled();
   });
 
   it('lists API keys without returning secrets', async () => {

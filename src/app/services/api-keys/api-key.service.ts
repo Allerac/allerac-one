@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import pool from '@/app/clients/db';
 import type { User } from '@/app/services/auth/auth.service';
+import { hasScope, unknownScopes } from './api-key-scopes';
 
 const TOKEN_PREFIX = 'alr_live_';
 const TOKEN_RANDOM_BYTES = 32;
@@ -27,6 +28,13 @@ export class ApiKeyMissingScopeError extends Error {
   constructor(public readonly requiredScope: string) {
     super(`API key is missing required scope: ${requiredScope}`);
     this.name = 'ApiKeyMissingScopeError';
+  }
+}
+
+export class ApiKeyInvalidScopesError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiKeyInvalidScopesError';
   }
 }
 
@@ -60,9 +68,19 @@ export class ApiKeyService {
   async create(params: {
     userId: string;
     name: string;
-    scopes?: string[];
+    scopes: string[];
     expiresAt?: Date | null;
   }): Promise<CreatedControlApiKey> {
+    // A key without scopes would grant nothing, so refuse to create one.
+    if (!Array.isArray(params.scopes) || params.scopes.length === 0) {
+      throw new ApiKeyInvalidScopesError('An API key needs at least one scope.');
+    }
+    const unknown = unknownScopes(params.scopes);
+    if (unknown.length > 0) {
+      throw new ApiKeyInvalidScopesError(`Unknown scope(s): ${unknown.join(', ')}`);
+    }
+    const scopes = Array.from(new Set(params.scopes));
+
     const secret = this.generateToken();
     const tokenHash = this.hashToken(secret);
     const tokenPrefix = this.tokenLookupPrefix(secret);
@@ -71,7 +89,7 @@ export class ApiKeyService {
       `INSERT INTO control_api_keys (user_id, name, token_prefix, token_hash, scopes, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, user_id, name, token_prefix, scopes, last_used_at, revoked_at, expires_at, created_at`,
-      [params.userId, params.name, tokenPrefix, tokenHash, params.scopes ?? [], params.expiresAt ?? null],
+      [params.userId, params.name, tokenPrefix, tokenHash, scopes, params.expiresAt ?? null],
     );
 
     return {
@@ -104,7 +122,7 @@ export class ApiKeyService {
     return result.rowCount > 0;
   }
 
-  async validateBearerToken(token: string, requiredScope?: string): Promise<User | null> {
+  async validateBearerToken(token: string, requiredScope: string): Promise<User | null> {
     if (!token.startsWith(TOKEN_PREFIX)) return null;
 
     const tokenHash = this.hashToken(token);
@@ -133,8 +151,8 @@ export class ApiKeyService {
     if (result.rows.length === 0) return null;
 
     const row = result.rows[0];
-    const scopes = (row.scopes ?? []) as string[];
-    if (requiredScope && scopes.length > 0 && !scopes.includes(requiredScope)) {
+    // Deny by default: empty scope lists and unknown scopes grant nothing.
+    if (!hasScope(row.scopes, requiredScope)) {
       throw new ApiKeyMissingScopeError(requiredScope);
     }
 
