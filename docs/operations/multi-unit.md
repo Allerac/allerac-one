@@ -23,6 +23,7 @@ names and services as before, so an existing install is unaffected.
 |---|---|---|
 | `ALLERAC_UNIT` | `allerac` | Compose project name, every container name (`<unit>-app`, `<unit>-db`, ...) and every volume name (`<unit>_db_data`, ...). Lowercase letters, digits, `-`, `_`. |
 | `ALLERAC_ENV_FILE` | `.env` | The env file loaded into the `app` container. Set it to the Unit's own file name. |
+| `ALLERAC_PROFILE` / `ALLERAC_MODULES` | `all` | Optional modules enabled in this Unit ([modules-and-profiles.md](modules-and-profiles.md)). |
 | `COMPOSE_FILE` | (unset) | `docker-compose.yml:docker-compose.public.yml` selects the lean public profile. |
 | `APP_PORT`, `OLLAMA_PORT`, `DOCS_PORT`, `N8N_PORT`, `WEBHOOK_PORT`, `EXECUTOR_DEV_PORT`, `EXECUTOR_DEV_PORT_RANGE`, `NODE_EXPORTER_PORT`, `PROMETHEUS_PORT`, `LOKI_PORT`, `PORTAINER_PORT`, `GARMIN_WORKER_PORT`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT` | today's ports | Host side of every published port. Container ports never change. |
 | `MONITORING_BIND`, `PORTAINER_BIND`, `N8N_BIND`, `EXECUTOR_DEV_PORTS_BIND` | `127.0.0.1` | Host interface for internal tools. |
@@ -35,6 +36,15 @@ other's containers by name. Internal URLs use Compose service names (`app`,
 Published host ports are a different matter: anything published on all
 interfaces (by default the app, docs and Ollama ports) is reachable from other
 Units through the host, like from the rest of your network.
+
+## Modules and profiles per Unit
+
+Each Unit can run a different set of optional modules with `ALLERAC_PROFILE`
+(`all`, `personal`, `openworld`, `sales`) or an explicit `ALLERAC_MODULES`
+list, and start module services with `COMPOSE_PROFILES` (e.g. `health` for
+health-worker). Example env files live in `deploy/profiles/`. With nothing
+set, a Unit runs every module, but health-worker needs `COMPOSE_PROFILES=health`.
+See [modules-and-profiles.md](modules-and-profiles.md).
 
 ## Add a second Unit
 

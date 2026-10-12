@@ -1,4 +1,5 @@
 import pool from '@/app/clients/db';
+import { isDomainEnabled } from '@/modules/registry';
 
 export interface DomainDefaultSkill {
   id: string;
@@ -93,7 +94,7 @@ export class DomainService {
       input.isAdmin ? [] : [input.userId],
     );
 
-    return result.rows.map(rowToDomain);
+    return result.rows.map(rowToDomain).filter((d) => isDomainEnabled(d.slug));
   }
 }
 

@@ -759,7 +759,12 @@ start_services() {
     fi
 
     log_info "Building application..."
-    $USE_SUDO docker compose build app health-worker
+    # health-worker only exists when the health profile is active (COMPOSE_PROFILES=health).
+    BUILD_TARGETS="app"
+    if $USE_SUDO docker compose config --services 2>/dev/null | grep -qx health-worker; then
+        BUILD_TARGETS="$BUILD_TARGETS health-worker"
+    fi
+    $USE_SUDO docker compose build $BUILD_TARGETS
 
     log_info "Starting containers..."
     $USE_SUDO docker compose up -d

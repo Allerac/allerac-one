@@ -1,5 +1,6 @@
 import pool from '@/app/clients/db';
 import { ForbiddenError } from '@/app/lib/auth-errors';
+import { isDomainEnabled } from '@/modules/registry';
 
 export interface DomainAccessUser {
   id: string;
@@ -13,6 +14,10 @@ export interface DomainAccessUser {
  * be safely bundled into background runtimes such as the Telegram bot.
  */
 export async function assertDomainAccess(user: DomainAccessUser, domainSlug: string): Promise<void> {
+  // A domain owned by a module that is off in this Unit is unavailable to everyone, admins included.
+  if (!isDomainEnabled(domainSlug)) {
+    throw new ForbiddenError('Domain not available in this Unit');
+  }
   if (user.is_admin) return;
 
   const result = await pool.query(

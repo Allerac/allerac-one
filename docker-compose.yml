@@ -11,6 +11,8 @@
 #   COMPOSE_PROFILES=local      - Caddy reverse proxy (local HTTPS, e.g. home.allerac)
 #   COMPOSE_PROFILES=cloud      - Cloudflare Tunnel (VM/cloud access, no open ports)
 #   COMPOSE_PROFILES=webhook    - Auto-deploy on git push
+#   COMPOSE_PROFILES=health     - health-worker (Garmin/Strava) for the personal "health" module
+#                                 (docs/operations/modules-and-profiles.md)
 #   COMPOSE_PROFILES=automation - n8n workflow automation (see docs/roadmap/n8n-workflow-integration.md;
 #                                 needs N8N_ENCRYPTION_KEY, checked by update.sh)
 #
@@ -36,7 +38,8 @@
 #   OLLAMA_RUNTIME                   - Docker runtime for Ollama (runc or nvidia; default: runc)
 #
 # All services enabled by default:
-# - Core: app, docs, db, executor, health-worker, ollama
+# - Core: app, docs, db, executor, ollama
+# - Health module (profile health): health-worker
 # - Monitoring: prometheus, loki, promtail, node-exporter
 # - Notifications: redis, notifier, allerac-telegram
 # - Management: portainer
@@ -155,7 +158,11 @@ services:
           memory: 256M
           pids: 512
 
+  # Personal "health" module (Garmin + Strava sync). Only started with the
+  # health profile: COMPOSE_PROFILES=health (deploy/profiles/personal.env sets it).
+  # See docs/operations/modules-and-profiles.md.
   health-worker:
+    profiles: [health]
     build:
       context: ./services/health-worker
       dockerfile: Dockerfile
@@ -288,6 +295,8 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     environment:
+      - ALLERAC_PROFILE=${ALLERAC_PROFILE:-}
+      - ALLERAC_MODULES=${ALLERAC_MODULES:-}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       - STRAVA_CLIENT_ID=${STRAVA_CLIENT_ID:-}
@@ -543,6 +552,8 @@ services:
     volumes:
       - ${TELEGRAM_BOTS_FILE:-./telegram-bots.json}:/app/telegram-bots.json:ro
     environment:
+      - ALLERAC_PROFILE=${ALLERAC_PROFILE:-}
+      - ALLERAC_MODULES=${ALLERAC_MODULES:-}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-allerac}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}

@@ -11,6 +11,7 @@ import { JOBS_TOOL_DEFINITIONS, SCHEDULE_TASK_TOOL_DEFINITION } from '@/app/tool
 import { NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
 import { TICKETS_TOOL_DEFINITIONS } from '@/app/tools/tickets.tool';
 import { TOOLS } from '@/app/tools/tools';
+import { filterEnabledTools } from '@/modules/registry';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '@/app/tools/instructions.tool.definitions';
 import { SHELL_TOOL_NAMES, withoutShellTools } from '@/app/lib/shell-policy';
 
@@ -112,7 +113,7 @@ export async function resolveChatTools(
     tools = tools.filter((tool) => !isToolForbiddenInDomain(tool.function.name, domain));
   }
 
-  return [
+  return filterEnabledTools([
     ...tools.filter((tool) => !DOMAIN_TOOL_NAMES.includes(tool.function.name)
       && !['recall_memory', 'create_memory'].includes(tool.function.name)),
     // Memory, scheduling, and self-instruction tools are otherwise unconditional across every
@@ -129,5 +130,5 @@ export async function resolveChatTools(
     ...(domain === 'email' ? EMAIL_TOOL_DEFINITIONS : []),
     ...(domain === 'jobs' ? JOBS_TOOL_DEFINITIONS : []),
     ...(domain === 'tickets' ? TICKETS_TOOL_DEFINITIONS : []),
-  ];
+  ]);
 }

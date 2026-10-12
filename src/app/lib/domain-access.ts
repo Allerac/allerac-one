@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { isDomainEnabled } from '@/modules/registry';
 import { AuthService, User } from '@/app/services/auth/auth.service';
 
 const authService = new AuthService();
@@ -29,6 +30,9 @@ export async function requireDomainAccess(slug: string): Promise<User> {
 
   const user = await authService.validateSession(token);
   if (!user) redirect('/login');
+
+  // Module turned off in this Unit (ALLERAC_MODULES / ALLERAC_PROFILE): the page does not exist.
+  if (!isDomainEnabled(slug)) notFound();
 
   const allowed = await authService.canAccessDomain(user.id, user.is_admin, slug);
   if (!allowed) {

@@ -5,6 +5,7 @@ import { JOBS_TOOL_DEFINITIONS } from './jobs.tool.definitions';
 import { TICKETS_TOOL_DEFINITIONS } from './tickets.tool.definitions';
 import { GITHUB_TOOL_DEFINITIONS } from './github.tool.definitions';
 import { LOGS_TOOL_DEFINITIONS } from './logs.tool.definitions';
+import { filterEnabledTools } from '@/modules/registry';
 
 export { JOBS_TOOL_DEFINITIONS };
 export { TICKETS_TOOL_DEFINITIONS };
@@ -329,7 +330,8 @@ const MUSIC_TOOLS = process.env.SPOTIFY_CLIENT_ID ? [
   },
 ] : [];
 
-export const TOOLS = [
+// Tools owned by modules disabled in this Unit (ALLERAC_MODULES / ALLERAC_PROFILE) are never offered.
+export const TOOLS = filterEnabledTools([
   {
     type: 'function',
     function: {
@@ -515,4 +517,4 @@ export const TOOLS = [
   },
   ...GITHUB_TOOL_DEFINITIONS,
   ...LOGS_TOOL_DEFINITIONS,
-];
+]);
