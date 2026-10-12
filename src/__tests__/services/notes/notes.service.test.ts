@@ -1,6 +1,6 @@
 import '../../__mocks__/db';
 import pool from '@/app/clients/db';
-import { NotesService } from '@/app/services/notes/notes.service';
+import { NotesService, noteReindexQueue } from '@/app/services/notes/notes.service';
 
 const mockQuery = jest.mocked(pool.query);
 
@@ -58,6 +58,18 @@ describe('NotesService ownership', () => {
 
   it('does not reindex when only note metadata changes', async () => {
     mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 'note-a', document_id: 'doc-a', title: 'T', content: 'Original', tags: ['x'] }],
+      rowCount: 1,
+    } as never);
+
+    await notesService.updateNote('user-a', 'note-a', { tags: ['x'] });
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    expect(noteReindexQueue.getStats().pending).toBe(0);
+  });
+
+  it('schedules a background reindex on content or title change without waiting for it', async () => {
+    mockQuery.mockResolvedValueOnce({
       rows: [{ id: 'note-a', document_id: 'doc-a', title: 'Updated', content: 'Original' }],
       rowCount: 1,
     } as never);
@@ -65,5 +77,7 @@ describe('NotesService ownership', () => {
     await notesService.updateNote('user-a', 'note-a', { title: 'Updated' });
 
     expect(mockQuery).toHaveBeenCalledTimes(1);
+    expect(noteReindexQueue.getStats().pending).toBe(1);
+    noteReindexQueue.cancel('note-a');
   });
 });
