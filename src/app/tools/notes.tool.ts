@@ -43,11 +43,13 @@ export function buildNotesTools(user: NotesUser) {
       return { success: deleted };
     },
 
-    update_note: async (args: { note_id: string; content?: string; title?: string; tags?: string[] }) => {
+    update_note: async (args: { note_id: string; content?: string; title?: string; tags?: string[]; due_date?: string | null }) => {
       const note = await notesService.updateNote(user.id, args.note_id, {
         content: args.content,
         title: args.title,
         tags: args.tags,
+        // undefined keeps the current due date; null (or an empty string) clears it.
+        due_date: args.due_date === undefined ? undefined : (args.due_date || null),
       });
       return { success: !!note, note_id: note?.id };
     },
