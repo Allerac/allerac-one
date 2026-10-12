@@ -427,7 +427,7 @@ export default function ChatMessages({
                           )}
                         </div>
                       )}
-                      <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'text-gray-900 prose-headings:text-gray-900 prose-p:text-gray-900 prose-li:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-pre:bg-gray-100 prose-pre:text-gray-900'} prose-a:text-brand-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
+                      <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'text-gray-100 prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'text-gray-900 prose-headings:text-gray-900 prose-p:text-gray-900 prose-li:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-pre:bg-gray-100 prose-pre:text-gray-900'} prose-a:text-brand-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
