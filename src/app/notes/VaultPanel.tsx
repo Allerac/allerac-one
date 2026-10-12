@@ -523,8 +523,9 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   const [confirmDeleteNote, setConfirmDeleteNote] = useState<Note | null>(null);
   const [treeItems, setTreeItems]       = useState<TreeItem[]>([]);
   const [showArchived, setShowArchived] = useState(false);
-  const [breadcrumbs, setBreadcrumbs]   = useState<PageControls['breadcrumbs']>([]);
-  const [backlinks, setBacklinks]       = useState<PageControls['backlinks']>([]);
+  // Keyed by note id so a stale result for another note is never shown.
+  const [crumbState, setCrumbState]     = useState<{ id: string; items: PageControls['breadcrumbs'] } | null>(null);
+  const [backlinkState, setBacklinkState] = useState<{ id: string; items: PageControls['backlinks'] } | null>(null);
 
   // Let the chat see whatever note is open, so the user can ask about "this
   // note" without pasting it in. Re-runs whenever the selected note or its
@@ -563,19 +564,22 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   const selectedId = selectedNote?.id ?? null;
   const selectedParentId = selectedNote?.parent_id ?? null;
   useEffect(() => {
-    if (!selectedId) { setBreadcrumbs([]); return; }
+    if (!selectedId) return;
     let cancelled = false;
-    getNoteBreadcrumbs(selectedId).then(res => { if (!cancelled && res.success) setBreadcrumbs(res.breadcrumbs); });
+    getNoteBreadcrumbs(selectedId).then(res => { if (!cancelled && res.success) setCrumbState({ id: selectedId, items: res.breadcrumbs }); });
     return () => { cancelled = true; };
   }, [selectedId, selectedParentId]);
 
   const selectedUpdatedAt = selectedNote?.updated_at;
   useEffect(() => {
-    if (!selectedId) { setBacklinks([]); return; }
+    if (!selectedId) return;
     let cancelled = false;
-    getNoteBacklinks(selectedId).then(res => { if (!cancelled && res.success) setBacklinks(res.backlinks); });
+    getNoteBacklinks(selectedId).then(res => { if (!cancelled && res.success) setBacklinkState({ id: selectedId, items: res.backlinks }); });
     return () => { cancelled = true; };
   }, [selectedId, selectedUpdatedAt, treeItems]);
+
+  const breadcrumbs = crumbState && crumbState.id === selectedId ? crumbState.items : [];
+  const backlinks = backlinkState && backlinkState.id === selectedId ? backlinkState.items : [];
 
   const openNoteByTitle = (title: string) => {
     const key = title.trim().toLowerCase();
