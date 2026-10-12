@@ -5,10 +5,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   listNotes, searchNotes, createNote, updateNote, deleteNote, getAllTags,
-  listNoteTree, getNote, moveNote, setNoteArchived, getNoteBreadcrumbs,
+  listNoteTree, getNote, moveNote, setNoteArchived, getNoteBreadcrumbs, getNoteBacklinks,
 } from '@/app/actions/notes';
 import { NoteTree, Breadcrumbs } from './NoteTree';
 import { buildTree, subtreeIds, TreeItem } from './note-tree';
+import { applyWikiCompletion, getWikiQuery, linkifyWikiLinks, matchTitles, WIKI_HREF_PREFIX, WikiQuery } from './wiki-links';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 
 interface Note {
@@ -116,7 +117,7 @@ function NoteRow({ note, selected, onSelect, onDelete, d }: {
   );
 }
 
-function mdComponents(d: boolean) {
+function mdComponents(d: boolean, onWikiLink?: (title: string) => void) {
   const text = d ? 'text-gray-300' : 'text-gray-700';
   const heading = d ? 'text-gray-100' : 'text-gray-900';
   const border = d ? 'border-gray-700' : 'border-gray-200';
@@ -148,7 +149,15 @@ function mdComponents(d: boolean) {
       }
       return <code className={`px-1.5 py-0.5 rounded text-xs font-mono ${code}`} {...props}>{children}</code>;
     },
-    a: ({ children, href }: any) => (
+    a: ({ children, href }: any) => typeof href === 'string' && href.startsWith(WIKI_HREF_PREFIX) ? (
+      <a
+        href={href}
+        onClick={e => { e.preventDefault(); onWikiLink?.(decodeURIComponent(href.slice(WIKI_HREF_PREFIX.length))); }}
+        className="text-indigo-400 hover:text-indigo-300 underline decoration-dotted"
+      >
+        {children}
+      </a>
+    ) : (
       <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
         {children}
       </a>
@@ -183,6 +192,10 @@ interface PageControls {
   breadcrumbs: Array<{ id: string; title: string | null; icon: string | null }>;
   moveTargets: Array<{ id: string; label: string }>;
   onNavigate: (id: string) => void;
+  /** Titles offered by [[ autocomplete. */
+  linkTitles: string[];
+  onOpenTitle: (title: string) => void;
+  backlinks: Array<{ note_id: string; title: string | null; icon: string | null; snippet: string }>;
   onMove: (parentId: string | null) => void;
   onArchive: (archived: boolean) => void;
 }
@@ -207,6 +220,23 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
   const [dirty, setDirty]         = useState(false);
   const autoSaveRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef               = useRef<HTMLTextAreaElement>(null);
+  const [wikiQuery, setWikiQuery] = useState<WikiQuery | null>(null);
+  const [wikiIndex, setWikiIndex] = useState(0);
+  const wikiMatches = wikiQuery && page ? matchTitles(page.linkTitles.filter(t => t !== title), wikiQuery.query) : [];
+
+  const updateWikiQuery = (el: HTMLTextAreaElement) => {
+    setWikiQuery(getWikiQuery(el.value, el.selectionStart));
+    setWikiIndex(0);
+  };
+
+  const completeWikiLink = (picked: string) => {
+    const el = textareaRef.current;
+    if (!el || !wikiQuery) return;
+    const next = applyWikiCompletion(content, wikiQuery, el.selectionStart, picked);
+    handleContentChange(next.text);
+    setWikiQuery(null);
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(next.cursor, next.cursor); });
+  };
 
   // Reset when note changes
   useEffect(() => {
@@ -408,28 +438,70 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
 
       {/* Editor body */}
       {editMode ? (
+        <div className="relative flex-1 min-h-0 flex flex-col">
         <textarea
           ref={textareaRef}
           value={content}
-          onChange={e => handleContentChange(e.target.value)}
+          onChange={e => { handleContentChange(e.target.value); updateWikiQuery(e.target); }}
+          onKeyDown={e => {
+            if (wikiMatches.length === 0) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); setWikiIndex(i => (i + 1) % wikiMatches.length); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiIndex(i => (i - 1 + wikiMatches.length) % wikiMatches.length); }
+            else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); completeWikiLink(wikiMatches[wikiIndex]); }
+            else if (e.key === 'Escape') { e.preventDefault(); setWikiQuery(null); }
+          }}
+          onBlur={() => setTimeout(() => setWikiQuery(null), 150)}
           spellCheck={false}
           className={`flex-1 min-h-0 resize-none outline-none font-mono text-sm leading-relaxed px-5 py-4 ${
             d
               ? 'bg-gray-900 text-gray-200 placeholder-gray-700'
               : 'bg-white text-gray-800 placeholder-gray-300'
           }`}
-          placeholder="Write in Markdown…"
+          placeholder="Write in Markdown… Type [[ to link a page."
         />
+        {wikiMatches.length > 0 && (
+          <ul role="listbox" aria-label="Link to page" className={`absolute left-5 top-4 z-10 w-64 rounded-lg border shadow-lg text-xs overflow-hidden ${d ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}>
+            {wikiMatches.map((t, i) => (
+              <li
+                key={t}
+                role="option"
+                aria-selected={i === wikiIndex}
+                onMouseDown={e => { e.preventDefault(); completeWikiLink(t); }}
+                className={`px-3 py-1.5 cursor-pointer truncate ${i === wikiIndex ? (d ? 'bg-indigo-900/60' : 'bg-indigo-50') : ''}`}
+              >
+                {t}
+              </li>
+            ))}
+          </ul>
+        )}
+        </div>
       ) : (
         <div className={`flex-1 overflow-y-auto px-5 py-4 text-sm ${d ? 'text-gray-300' : 'text-gray-700'}`}>
           {content ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents(d)}>
-              {content}
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents(d, page?.onOpenTitle)}>
+              {linkifyWikiLinks(content)}
             </ReactMarkdown>
           ) : (
             <p className={`italic ${d ? 'text-gray-600' : 'text-gray-400'}`}>
               Empty note. Switch to Edit to start writing.
             </p>
+          )}
+          {page && page.backlinks.length > 0 && (
+            <section aria-label="Backlinks" className={`mt-8 pt-3 border-t ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+              <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+                Linked from · {page.backlinks.length}
+              </h4>
+              <ul className="space-y-1.5">
+                {page.backlinks.map(b => (
+                  <li key={b.note_id}>
+                    <button type="button" onClick={() => page.onNavigate(b.note_id)} className="text-left w-full">
+                      <span className={`text-xs font-medium ${d ? 'text-indigo-300' : 'text-indigo-700'}`}>{b.icon ? `${b.icon} ` : ''}{b.title || 'Untitled'}</span>
+                      <span className={`block text-xs truncate ${d ? 'text-gray-500' : 'text-gray-400'}`}>{b.snippet.replace(/\s+/g, ' ')}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </div>
       )}
@@ -452,6 +524,7 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   const [treeItems, setTreeItems]       = useState<TreeItem[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [breadcrumbs, setBreadcrumbs]   = useState<PageControls['breadcrumbs']>([]);
+  const [backlinks, setBacklinks]       = useState<PageControls['backlinks']>([]);
 
   // Let the chat see whatever note is open, so the user can ask about "this
   // note" without pasting it in. Re-runs whenever the selected note or its
@@ -495,6 +568,20 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
     getNoteBreadcrumbs(selectedId).then(res => { if (!cancelled && res.success) setBreadcrumbs(res.breadcrumbs); });
     return () => { cancelled = true; };
   }, [selectedId, selectedParentId]);
+
+  const selectedUpdatedAt = selectedNote?.updated_at;
+  useEffect(() => {
+    if (!selectedId) { setBacklinks([]); return; }
+    let cancelled = false;
+    getNoteBacklinks(selectedId).then(res => { if (!cancelled && res.success) setBacklinks(res.backlinks); });
+    return () => { cancelled = true; };
+  }, [selectedId, selectedUpdatedAt, treeItems]);
+
+  const openNoteByTitle = (title: string) => {
+    const key = title.trim().toLowerCase();
+    const match = treeItems.find(t => (t.title ?? '').trim().toLowerCase() === key);
+    if (match) void openNoteById(match.id);
+  };
 
   const openNoteById = async (id: string) => {
     const res = await getNote(id);
@@ -754,6 +841,9 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
               breadcrumbs,
               moveTargets,
               onNavigate: openNoteById,
+              linkTitles: treeItems.map(t => t.title ?? '').filter(Boolean),
+              onOpenTitle: openNoteByTitle,
+              backlinks,
               onMove: parentId => handleMove(selectedNote.id, parentId),
               onArchive: archived => handleArchive(selectedNote.id, archived),
             }}

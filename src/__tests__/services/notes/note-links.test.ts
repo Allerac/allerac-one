@@ -38,7 +38,7 @@ describe('NoteLinksService', () => {
 
   function fakeClient(insertRows: unknown[] = []) {
     const client = {
-      query: jest.fn(async (sql: string) => (sql.startsWith('INSERT') ? { rows: insertRows } : { rows: [] })),
+      query: jest.fn(async (sql: string, _params?: unknown[]) => (sql.startsWith('INSERT') ? { rows: insertRows } : { rows: [] })),
       release: jest.fn(),
     };
     mockConnect.mockResolvedValueOnce(client as never);
