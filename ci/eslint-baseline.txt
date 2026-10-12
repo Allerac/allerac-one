@@ -21,7 +21,6 @@ src/__tests__/api/control-api-crawler.test.ts	@typescript-eslint/no-explicit-any
 src/__tests__/api/control-api-documents.test.ts	@typescript-eslint/no-explicit-any	error	1
 src/__tests__/api/control-api-documents.test.ts	@typescript-eslint/no-unused-vars	warning	1
 src/__tests__/api/control-api-email.test.ts	no-var	error	3
-src/__tests__/api/control-api-finance.test.ts	@typescript-eslint/no-explicit-any	error	7
 src/__tests__/api/control-api-health-proxy.test.ts	@typescript-eslint/no-explicit-any	error	16
 src/__tests__/api/control-api-health.test.ts	@typescript-eslint/no-explicit-any	error	46
 src/__tests__/api/control-api-jobs.test.ts	@typescript-eslint/no-explicit-any	error	8
@@ -32,7 +31,6 @@ src/__tests__/api/control-api-search.test.ts	no-var	error	3
 src/__tests__/api/control-api-skills.test.ts	@typescript-eslint/no-explicit-any	error	1
 src/__tests__/components/document-upload.test.tsx	@typescript-eslint/no-explicit-any	error	2
 src/__tests__/lib/runtime-config.test.ts	@typescript-eslint/no-unused-vars	warning	1
-src/__tests__/services/Perceptron.test.ts	@typescript-eslint/no-explicit-any	error	4
 src/__tests__/services/agents/worker-runner.service.test.ts	@typescript-eslint/no-explicit-any	error	5
 src/__tests__/services/api-keys/api-key.service.test.ts	@typescript-eslint/no-explicit-any	error	1
 src/__tests__/services/auth/auth.service.test.ts	@typescript-eslint/no-explicit-any	error	19
@@ -56,10 +54,6 @@ src/app/actions/system.ts	@typescript-eslint/no-explicit-any	error	4
 src/app/actions/updates.ts	@typescript-eslint/no-explicit-any	error	4
 src/app/admin/AdminClient.tsx	react-hooks/set-state-in-effect	error	1
 src/app/api/agents/route.ts	@typescript-eslint/no-unused-vars	warning	1
-src/app/api/benchmark/route.ts	@typescript-eslint/no-explicit-any	error	2
-src/app/api/benchmark/route.ts	@typescript-eslint/no-unused-vars	warning	2
-src/app/api/benchmark/vision/route.ts	@typescript-eslint/no-explicit-any	error	5
-src/app/api/benchmark/vision/route.ts	@typescript-eslint/no-unused-vars	warning	2
 src/app/api/chat/extract-text/route.ts	@typescript-eslint/no-unused-vars	warning	1
 src/app/api/chat/route.ts	@typescript-eslint/no-explicit-any	error	6
 src/app/api/chat/route.ts	@typescript-eslint/no-unused-vars	warning	2
@@ -67,9 +61,6 @@ src/app/api/domains/route.ts	@typescript-eslint/no-unused-vars	warning	1
 src/app/api/email/message/route.ts	@typescript-eslint/no-unused-vars	warning	1
 src/app/api/email/messages/route.ts	@typescript-eslint/no-unused-vars	warning	1
 src/app/api/email/send/route.ts	@typescript-eslint/no-unused-vars	warning	1
-src/app/api/finance/candle/route.ts	@typescript-eslint/no-unused-vars	warning	2
-src/app/api/finance/quote/route.ts	@typescript-eslint/no-explicit-any	error	2
-src/app/api/finance/quote/route.ts	@typescript-eslint/no-unused-vars	warning	2
 src/app/api/github/pr/[number]/route.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/api/health/activities-range/route.ts	@typescript-eslint/no-unused-vars	warning	2
 src/app/api/health/activities/route.ts	@typescript-eslint/no-unused-vars	warning	2
@@ -89,11 +80,6 @@ src/app/api/ollama/api/chat/route.ts	@typescript-eslint/no-unused-vars	warning	1
 src/app/api/ollama/pull/route.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/api/ollama/pull/route.ts	@typescript-eslint/no-unused-vars	warning	3
 src/app/api/search/route.ts	@typescript-eslint/no-unused-vars	warning	2
-src/app/api/skill-eval/apply/route.ts	@typescript-eslint/no-unused-vars	warning	2
-src/app/api/skill-eval/improve/route.ts	@typescript-eslint/no-explicit-any	error	2
-src/app/api/skill-eval/improve/route.ts	@typescript-eslint/no-unused-vars	warning	2
-src/app/api/skill-eval/route.ts	@typescript-eslint/no-explicit-any	error	2
-src/app/api/skill-eval/route.ts	@typescript-eslint/no-unused-vars	warning	3
 src/app/api/strava/webhook/route.ts	@typescript-eslint/no-explicit-any	error	2
 src/app/api/tickets/[id]/route.ts	@typescript-eslint/no-unused-vars	warning	1
 src/app/api/tickets/route.ts	@typescript-eslint/no-unused-vars	warning	1
@@ -107,7 +93,6 @@ src/app/api/v1/documents/route.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/api/v1/health/activities/[activityId]/route/route.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/api/v1/health/activities/[activityId]/series/route.ts	@typescript-eslint/no-explicit-any	error	2
 src/app/api/v1/health/activities/[activityId]/series/route.ts	@typescript-eslint/no-unused-vars	warning	2
-src/app/benchmark/BenchmarkClient.tsx	react-hooks/set-state-in-effect	error	1
 src/app/chat/ChatClient.tsx	@typescript-eslint/no-explicit-any	error	8
 src/app/chat/ChatClient.tsx	@typescript-eslint/no-unused-vars	warning	6
 src/app/chat/ChatClient.tsx	react-hooks/exhaustive-deps	warning	3
@@ -122,8 +107,6 @@ src/app/components/agents/AgentRunView.tsx	react-hooks/set-state-in-effect	error
 src/app/components/agents/AgentRunsTab.tsx	@typescript-eslint/no-unused-vars	warning	3
 src/app/components/allerac/MyAlleracModal.tsx	@next/next/no-img-element	warning	1
 src/app/components/auth/UserSettingsModal.tsx	@typescript-eslint/no-unused-vars	warning	2
-src/app/components/benchmark/vision-benchmark.tsx	@next/next/no-img-element	warning	1
-src/app/components/benchmark/vision-benchmark.tsx	@typescript-eslint/no-explicit-any	error	1
 src/app/components/chat/ChatHeader.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/components/chat/ChatInput.tsx	@next/next/no-img-element	warning	1
 src/app/components/chat/ChatInput.tsx	@typescript-eslint/no-explicit-any	error	5
@@ -143,9 +126,6 @@ src/app/components/email/AddAccountModal.tsx	react-hooks/static-components	error
 src/app/components/email/AddAccountModal.tsx	react/no-unescaped-entities	error	1
 src/app/components/email/ComposeModal.tsx	@typescript-eslint/no-explicit-any	error	1
 src/app/components/email/EmailPanel.tsx	@typescript-eslint/no-unused-vars	warning	1
-src/app/components/finance/StockChart.tsx	@typescript-eslint/no-unused-vars	warning	2
-src/app/components/finance/StockChart.tsx	react-hooks/set-state-in-effect	error	1
-src/app/components/finance/StockPanel.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/components/health/ActivitiesList.tsx	@typescript-eslint/no-unused-vars	warning	2
 src/app/components/health/ActivitiesList.tsx	react-hooks/exhaustive-deps	warning	1
 src/app/components/health/ActivityCharts.tsx	@typescript-eslint/no-explicit-any	error	1
@@ -203,12 +183,7 @@ src/app/components/social/SocialPostStudio.tsx	@next/next/no-img-element	warning
 src/app/components/social/SocialPostStudio.tsx	@typescript-eslint/no-explicit-any	error	2
 src/app/components/social/SocialPostStudio.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/components/social/SocialPostStudio.tsx	react-hooks/exhaustive-deps	warning	5
-src/app/components/space/SatelliteSimulator.tsx	(parse)	warning	1
-src/app/components/space/SatelliteSimulator.tsx	@typescript-eslint/no-unused-vars	warning	1
-src/app/components/system/BenchmarkPanel.tsx	@typescript-eslint/no-explicit-any	error	2
 src/app/components/system/PreferencesTab.tsx	@typescript-eslint/no-unused-vars	warning	1
-src/app/components/system/SkillEvalPanel.tsx	@typescript-eslint/no-explicit-any	error	5
-src/app/components/system/SkillEvalPanel.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/components/system/SystemDashboard.tsx	react-hooks/exhaustive-deps	warning	1
 src/app/components/system/SystemTab.tsx	@typescript-eslint/no-explicit-any	error	10
 src/app/components/system/SystemTab.tsx	@typescript-eslint/no-unused-vars	warning	1
@@ -216,9 +191,6 @@ src/app/components/workspace/FileTree.tsx	react-hooks/set-state-in-effect	error	
 src/app/components/workspace/FileViewer.tsx	@typescript-eslint/no-explicit-any	error	1
 src/app/context/DomainContext.tsx	@typescript-eslint/no-explicit-any	error	1
 src/app/context/ThemeContext.tsx	react-hooks/set-state-in-effect	error	1
-src/app/design/DesignCanvas.tsx	@typescript-eslint/no-explicit-any	error	2
-src/app/design/DesignCanvas.tsx	react-hooks/set-state-in-effect	error	2
-src/app/finance/FinanceClient.tsx	@typescript-eslint/no-unused-vars	warning	2
 src/app/hooks/useConversations.ts	@typescript-eslint/no-explicit-any	error	2
 src/app/hooks/useConversations.ts	react-hooks/exhaustive-deps	warning	1
 src/app/hooks/useConversations.ts	react-hooks/set-state-in-effect	error	1
@@ -246,7 +218,6 @@ src/app/notes/VaultPanel.tsx	react-hooks/exhaustive-deps	warning	3
 src/app/notes/VaultPanel.tsx	react-hooks/set-state-in-effect	error	3
 src/app/notes/VaultPanel.tsx	react/no-unescaped-entities	error	3
 src/app/reset-password/ResetPasswordClient.tsx	@next/next/no-img-element	warning	1
-src/app/robot-assistant/RobotClient.tsx	@typescript-eslint/no-explicit-any	error	2
 src/app/search/SearchClient.tsx	@typescript-eslint/no-explicit-any	error	3
 src/app/search/SearchClient.tsx	@typescript-eslint/no-unused-vars	warning	3
 src/app/services/agents/orchestrator.service.ts	@typescript-eslint/no-explicit-any	error	1
@@ -265,7 +236,6 @@ src/app/services/chat/chat-tool-runner.ts	prefer-const	error	1
 src/app/services/crypto/encryption.service.ts	@typescript-eslint/no-unused-vars	warning	1
 src/app/services/email/imap.service.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/services/email/smtp.service.ts	@typescript-eslint/no-explicit-any	error	1
-src/app/services/finance/market-data.service.ts	@typescript-eslint/no-explicit-any	error	2
 src/app/services/health/detail-sync-runner.service.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/services/health/detail-sync.service.ts	@typescript-eslint/no-explicit-any	error	21
 src/app/services/health/health-query.service.ts	@typescript-eslint/no-explicit-any	error	1
@@ -278,7 +248,6 @@ src/app/services/llm/llm.service.ts	@typescript-eslint/no-explicit-any	error	25
 src/app/services/llm/llm.service.ts	@typescript-eslint/no-unused-vars	warning	14
 src/app/services/memory/conversation-memory.service.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/services/memory/conversation-memory.service.ts	@typescript-eslint/no-unused-vars	warning	2
-src/app/services/oidc/provider.ts	@typescript-eslint/no-unused-vars	warning	2
 src/app/services/rag/document.service.ts	@typescript-eslint/no-explicit-any	error	5
 src/app/services/rag/vector-search.service.ts	@typescript-eslint/no-explicit-any	error	4
 src/app/services/skills/skills.service.ts	@typescript-eslint/no-explicit-any	error	1
@@ -291,8 +260,6 @@ src/app/services/strava/strava-detail-sync.service.ts	@typescript-eslint/no-expl
 src/app/services/telegram/telegram-bot-config.service.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/services/telegram/telegram-bot.service.ts	@typescript-eslint/no-explicit-any	error	21
 src/app/services/telegram/telegram-bot.service.ts	@typescript-eslint/no-unused-vars	warning	1
-src/app/space/SpaceClient.tsx	@typescript-eslint/no-unused-expressions	warning	1
-src/app/space/SpaceClient.tsx	@typescript-eslint/no-unused-vars	warning	13
 src/app/tickets/TicketsClient.tsx	@typescript-eslint/no-explicit-any	error	2
 src/app/tickets/TicketsClient.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/tickets/TicketsClient.tsx	react-hooks/exhaustive-deps	warning	1
@@ -311,7 +278,5 @@ src/instrumentation.ts	@typescript-eslint/no-explicit-any	error	1
 src/lib/log-interceptor.ts	@typescript-eslint/no-explicit-any	error	7
 src/lib/log-interceptor.ts	@typescript-eslint/no-unused-vars	warning	2
 src/lib/logger.ts	@typescript-eslint/no-explicit-any	error	9
-src/pages/api/auth/oidc/[uid]/login.ts	@typescript-eslint/no-explicit-any	error	1
-src/pages/api/auth/oidc/[uid]/sso.ts	@typescript-eslint/no-explicit-any	error	1
 src/telegram-multi-bot.ts	@typescript-eslint/no-explicit-any	error	3
 src/telegram-multi-bot.ts	@typescript-eslint/no-unused-vars	warning	1
