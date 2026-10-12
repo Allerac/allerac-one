@@ -170,13 +170,17 @@ export default function EmailPanel({ isDarkMode: d, onContextUpdate }: Props) {
     setDeletingUid(uid);
     setRevealedUid(null);
     try {
-      await emailActions.deleteEmailMessage(selectedAccount, uid);
+      const result = await emailActions.deleteEmailMessage(selectedAccount, uid);
+      if (result.error) throw new Error(result.error);
+
       setMessages(prev => prev.filter(m => m.uid !== uid));
       const cached = listCache.current.get(selectedAccount);
       if (cached) listCache.current.set(selectedAccount, cached.filter(m => m.uid !== uid));
+      msgCache.current.delete(uid);
       if (selectedMsg?.uid === uid) { setSelectedMsg(null); onContextUpdate(''); }
-    } catch { /* silent */ }
-    finally { setDeletingUid(null); }
+    } catch (err) {
+      console.error('Failed to delete email message', err);
+    } finally { setDeletingUid(null); }
   }, [selectedAccount, deletingUid, selectedMsg, onContextUpdate]);
 
   const onSwipeTouchStart = useCallback((e: React.TouchEvent<HTMLButtonElement>, uid: number) => {
