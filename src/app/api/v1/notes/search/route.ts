@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { NotesService } from '@/app/services/notes/notes.service';
-import { requireApiUser } from '../../_lib/auth';
+import { requireApiDomainUser } from '../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../_lib/responses';
 import { noteFromKeyword, noteSearchResultDto } from '../../_lib/notes';
 
@@ -12,7 +12,7 @@ const querySchema = z.object({
 
 export async function GET(request: Request): Promise<Response> {
   try {
-    const user = await requireApiUser('notes:read', request);
+    const user = await requireApiDomainUser('notes:read', 'notes', request);
     const parsed = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
     if (!parsed.success) {
       return apiError('validation_error', 'q is required', 400, parsed.error.flatten());

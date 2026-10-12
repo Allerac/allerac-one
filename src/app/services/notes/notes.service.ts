@@ -2,6 +2,7 @@ import pool from '@/app/clients/db';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { DocumentService } from '@/app/services/rag/document.service';
 import { noteLinksService } from './note-links.service';
+import { NoteMoveError } from './note-pages.service';
 import {
   NoteReindexQueue,
   buildNoteIndexText,
@@ -65,7 +66,7 @@ export class NotesService {
          FROM user_notes WHERE id = $1 AND user_id = $2`,
         [parent_id, userId],
       );
-      if (parent.rows.length === 0) throw new Error('Parent note not found');
+      if (parent.rows.length === 0) throw new NoteMoveError('Parent note not found', 'parent_not_found');
       position = Number(parent.rows[0].next ?? 0);
     }
 

@@ -13,7 +13,22 @@ export function noteDto(note: Note) {
     tags: note.tags,
     source: note.source,
     dueDate: iso(note.due_date as unknown as Date | string | null),
+    parentId: note.parent_id ?? null,
+    position: note.position ?? 0,
+    icon: note.icon ?? null,
+    archivedAt: iso(note.archived_at as unknown as Date | string | null),
     createdAt: iso(note.created_at),
+    updatedAt: iso(note.updated_at),
+  };
+}
+
+export function noteSummaryDto(note: Note) {
+  return {
+    id: note.id,
+    title: note.title,
+    parentId: note.parent_id ?? null,
+    position: note.position ?? 0,
+    icon: note.icon ?? null,
     updatedAt: iso(note.updated_at),
   };
 }
