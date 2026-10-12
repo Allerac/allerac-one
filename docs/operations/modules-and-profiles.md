@@ -53,19 +53,55 @@ enabled modules.
 
 ## Docker Compose profiles
 
-`health-worker` (Garmin + Strava sync) runs only with the `health` Compose
-profile. A default `docker compose up -d` no longer starts it.
+`health-worker` (Garmin + Strava sync) belongs to the `health` module and only
+runs with the `health` Compose profile.
 
-- Personal Unit: set `COMPOSE_PROFILES=health` (plus any profiles you already
-  use, e.g. `health,local,webhook`). `deploy/profiles/personal.env` does this.
+### Derived automatically by the scripts
+
+`install.sh`, `update.sh` and `allerac.sh` (`allerac start`, ...) derive
+`COMPOSE_PROFILES` from the module selection, so **setting only
+`ALLERAC_PROFILE=personal` is enough**:
+
+| Module selection | Derived Compose profiles |
+|---|---|
+| nothing set / `ALLERAC_PROFILE=all` | `health` (same services as before modules existed) |
+| `ALLERAC_PROFILE=personal` | `health` |
+| `ALLERAC_PROFILE=openworld` or `sales` | none |
+| `ALLERAC_MODULES` containing `health` | `health` |
+
+Rules:
+
+- The derived profiles are **merged** with the Unit's `COMPOSE_PROFILES` from
+  its env file (`local`, `webhook`, `cloud`, ...), without duplicates:
+  `COMPOSE_PROFILES=local,webhook` + `personal` gives `local,webhook,health`.
+- `COMPOSE_PROFILES` set in the **calling shell** is explicit and always wins
+  as is (`COMPOSE_PROFILES=local ./update.sh` does not add `health`; an
+  empty `COMPOSE_PROFILES= ./update.sh` adds nothing).
+- `ALLERAC_PROFILE` / `ALLERAC_MODULES` are read from the shell first, then
+  from the Unit's env file.
+
+The mapping lives in `scripts/lib/compose-profiles.sh` (sourced by the three
+scripts). It is a static copy of the manifests' `dockerProfile` and of
+`ALLERAC_PROFILES`; `src/__tests__/modules/compose-profiles-sync.test.ts`
+fails if they drift, and also runs `scripts/lib/compose-profiles.test.sh`.
+
+### Plain `docker compose up`
+
+Compose itself knows nothing about modules. Without the scripts you still
+need the profile yourself, e.g. `COMPOSE_PROFILES=health` in `.env` or
+`COMPOSE_PROFILES=health,local docker compose up -d`. Otherwise health-worker
+is not started.
+
+### Notes
+
 - `garmin-auth-worker` stays under the `local` profile (it exists to use a
   home IP for Garmin login), so enable `local` too if you use it.
-- Existing installs that use Health: add `health` to `COMPOSE_PROFILES`
-  before the next `update.sh`, otherwise health-worker is not started.
-
-CI (`scripts/ci/security-integration.sh`) and the multi-unit smoke
-(`scripts/smoke/multi-unit-smoke.sh`) start named core services with
-`COMPOSE_PROFILES=` and never start health-worker, so they are unaffected.
+- A lean public Unit should set `ALLERAC_PROFILE=openworld` or `sales`;
+  with nothing set the scripts treat it as `all` and start health-worker.
+- CI (`scripts/ci/security-integration.sh`) and the multi-unit smoke
+  (`scripts/smoke/multi-unit-smoke.sh`) call `docker compose` directly with
+  `COMPOSE_PROFILES=` and named core services, so they never start
+  health-worker.
 
 ## Example env files
 
@@ -74,7 +110,7 @@ into the Unit's env file:
 
 ```bash
 cat deploy/profiles/personal.env >> .env      # edit secrets afterwards
-docker compose up -d
+./update.sh                                   # or: allerac start (derives COMPOSE_PROFILES=health)
 ```
 
 For a second Unit:
@@ -82,7 +118,7 @@ For a second Unit:
 ```bash
 cp .env.unit.example .env.openworld
 cat deploy/profiles/openworld.env >> .env.openworld
-docker compose --env-file .env.openworld up -d
+ALLERAC_ENV_FILE=.env.openworld ./update.sh
 ```
 
 ## Adding a module
@@ -90,4 +126,6 @@ docker compose --env-file .env.openworld up -d
 1. Create `src/modules/<id>/module.ts` with `defineModule({...})`.
 2. Add it to `MODULES` in `src/modules/registry.ts`.
 3. Add it to the relevant presets in `ALLERAC_PROFILES` (`src/lib/runtime-config.ts`).
-4. Put its Docker services under `profiles: [<id>]`.
+4. Put its Docker services under `profiles: [<id>]`, set `dockerProfile` in the
+   manifest and add it to `ALLERAC_MODULE_COMPOSE_PROFILES` in
+   `scripts/lib/compose-profiles.sh` (the sync test enforces it).

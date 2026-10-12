@@ -126,11 +126,24 @@ if [ -n "$UNIT_COMPOSE_FILES" ]; then
     done
 fi
 [ "$ALLERAC_ENV_FILE" = ".env" ] || COMPOSE_ARGS="$COMPOSE_ARGS --env-file $UNIT_ENV_PATH"
+# COMPOSE_PROFILES set in the calling shell is explicit and always wins.
+if [ -n "${COMPOSE_PROFILES+x}" ]; then SHELL_COMPOSE_PROFILES_SET=1; else SHELL_COMPOSE_PROFILES_SET=0; fi
 # Step 8 passes COMPOSE_PROFILES explicitly. For a non-default Unit take it from
 # that Unit's env file when the shell does not set it. (The primary Unit keeps
 # the historic behaviour: only the shell value is used there.)
 if [ "$ALLERAC_ENV_FILE" != ".env" ] && [ -z "${COMPOSE_PROFILES+x}" ]; then
     COMPOSE_PROFILES="$(unit_env_value COMPOSE_PROFILES)"
+fi
+# Module services (e.g. health-worker): derive their Compose profiles from
+# ALLERAC_PROFILE / ALLERAC_MODULES and merge them with the Unit's profiles.
+# shellcheck source=scripts/lib/compose-profiles.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/lib/compose-profiles.sh"
+if [ "$SHELL_COMPOSE_PROFILES_SET" != "1" ]; then
+    COMPOSE_PROFILES="$(allerac_effective_compose_profiles 0 "" \
+        "${COMPOSE_PROFILES:-$(unit_env_value COMPOSE_PROFILES)}" \
+        "${ALLERAC_PROFILE-$(unit_env_value ALLERAC_PROFILE)}" \
+        "${ALLERAC_MODULES-$(unit_env_value ALLERAC_MODULES)}")"
+    export COMPOSE_PROFILES
 fi
 
 compose_profiles_without() {

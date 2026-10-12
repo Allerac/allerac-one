@@ -68,6 +68,19 @@ if [ -n "$UNIT_COMPOSE_FILES" ]; then
     done
 fi
 [ "$ALLERAC_ENV_FILE" = ".env" ] || COMPOSE_ARGS="$COMPOSE_ARGS --env-file $UNIT_ENV_PATH"
+# Module services (e.g. health-worker): derive their Compose profiles from
+# ALLERAC_PROFILE / ALLERAC_MODULES unless COMPOSE_PROFILES is set in the shell.
+_compose_profiles_lib="$INSTALL_DIR/scripts/lib/compose-profiles.sh"
+[ -f "$_compose_profiles_lib" ] || _compose_profiles_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/lib/compose-profiles.sh"
+if [ -z "${COMPOSE_PROFILES+x}" ] && [ -f "$_compose_profiles_lib" ]; then
+    # shellcheck source=scripts/lib/compose-profiles.sh
+    . "$_compose_profiles_lib"
+    COMPOSE_PROFILES="$(allerac_effective_compose_profiles 0 "" \
+        "$(unit_env_value COMPOSE_PROFILES)" \
+        "${ALLERAC_PROFILE-$(unit_env_value ALLERAC_PROFILE)}" \
+        "${ALLERAC_MODULES-$(unit_env_value ALLERAC_MODULES)}")"
+    export COMPOSE_PROFILES
+fi
 # Database backups: ./backups for the primary Unit (unchanged), ./backups/<unit> otherwise.
 if [ "$UNIT" = "allerac" ]; then
     UNIT_BACKUP_DIR="$INSTALL_DIR/backups"

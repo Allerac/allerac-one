@@ -11,7 +11,8 @@
 #   COMPOSE_PROFILES=local      - Caddy reverse proxy (local HTTPS, e.g. home.allerac)
 #   COMPOSE_PROFILES=cloud      - Cloudflare Tunnel (VM/cloud access, no open ports)
 #   COMPOSE_PROFILES=webhook    - Auto-deploy on git push
-#   COMPOSE_PROFILES=health     - health-worker (Garmin/Strava) for the personal "health" module
+#   COMPOSE_PROFILES=health     - health-worker (Garmin/Strava) for the personal "health" module;
+#                                 install.sh/update.sh/allerac.sh derive it from ALLERAC_PROFILE
 #                                 (docs/operations/modules-and-profiles.md)
 #   COMPOSE_PROFILES=automation - n8n workflow automation (see docs/roadmap/n8n-workflow-integration.md;
 #                                 needs N8N_ENCRYPTION_KEY, checked by update.sh)
@@ -159,7 +160,8 @@ services:
           pids: 512
 
   # Personal "health" module (Garmin + Strava sync). Only started with the
-  # health profile: COMPOSE_PROFILES=health (deploy/profiles/personal.env sets it).
+  # health profile. install.sh/update.sh/allerac.sh add it from ALLERAC_PROFILE
+  # (personal/all); plain `docker compose up` needs COMPOSE_PROFILES=health.
   # See docs/operations/modules-and-profiles.md.
   health-worker:
     profiles: [health]

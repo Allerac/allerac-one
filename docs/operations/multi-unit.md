@@ -41,9 +41,13 @@ Units through the host, like from the rest of your network.
 
 Each Unit can run a different set of optional modules with `ALLERAC_PROFILE`
 (`all`, `personal`, `openworld`, `sales`) or an explicit `ALLERAC_MODULES`
-list, and start module services with `COMPOSE_PROFILES` (e.g. `health` for
-health-worker). Example env files live in `deploy/profiles/`. With nothing
-set, a Unit runs every module, but health-worker needs `COMPOSE_PROFILES=health`.
+list. `install.sh`, `update.sh` and `allerac.sh` derive the module Compose
+profiles from it (e.g. `health` for health-worker) and merge them with the
+Unit's own `COMPOSE_PROFILES`; a `COMPOSE_PROFILES` set in the calling shell
+wins as is. Plain `docker compose --env-file .env.<unit> up -d` does not do
+this, so add `health` to `COMPOSE_PROFILES` there yourself. Public Units
+should set `ALLERAC_PROFILE=openworld` or `sales` (nothing set means `all`,
+which starts health-worker). Example env files live in `deploy/profiles/`.
 See [modules-and-profiles.md](modules-and-profiles.md).
 
 ## Add a second Unit
@@ -184,8 +188,8 @@ The code is shared, so pull once and rebuild each Unit:
 ALLERAC_ENV_FILE=.env.website ./update.sh            # another Unit
 ```
 
-`update.sh` reads `ALLERAC_UNIT`, `COMPOSE_FILE` and `COMPOSE_PROFILES` from
-the given env file, backs that Unit up first, only rebuilds services the Unit
+`update.sh` reads `ALLERAC_UNIT`, `COMPOSE_FILE`, `COMPOSE_PROFILES` and
+`ALLERAC_PROFILE`/`ALLERAC_MODULES` (to derive module profiles) from the given env file, backs that Unit up first, only rebuilds services the Unit
 actually runs (a lean Unit has no executor), and skips the `allerac.home`
 hostname setup for non-primary Units. Note that `update.sh` also runs
 `git pull`, so the second run usually finds nothing new to pull.
