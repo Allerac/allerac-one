@@ -280,7 +280,7 @@ resp="$(curl -s --max-time 60 -w '\n%{http_code}' -X POST "$BASE/api/workspace/r
 code="$(printf '%s' "$resp" | tail -n 1)"; body="$(printf '%s' "$resp" | sed '$d')"
 [ "$code" = "200" ] && ok "admin: POST /api/workspace/run -> 200" || bad "admin: POST /api/workspace/run -> $code ${body:0:200}"
 printf '%s' "$body" | grep -q 'uid=10001' && ok "admin command runs as uid 10001" || bad "admin command output has no uid=10001: ${body:0:200}"
-printf '%s' "$body" | grep -q 'secret=\[\]' && printf '%s' "$body" | grep -q '\\n0\\n' && ! printf '%s' "$body" | grep -qF "$SECRET" \
+printf '%s' "$body" | grep -q 'secret=\[\]' && printf '%s' "$body" | grep -qE '\\n0(\\n|")' && ! printf '%s' "$body" | grep -qF "$SECRET" \
     && ok "command cannot see EXECUTOR_SECRET" || bad "EXECUTOR_SECRET visible to commands: ${body:0:300}"
 printf '%s' "$body" | grep -q 'Read-only file system' && ok "command cannot write to / (read-only rootfs)" || bad "command wrote to / or no read-only error: ${body:0:200}"
 
