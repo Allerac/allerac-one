@@ -10,6 +10,11 @@ export const CREATE_MEMORY_TOOL_DEFINITION = {
         importance: { type: 'number', description: 'Importance from 1 to 10 (default 7).' },
         emotion: { type: 'number', enum: [-1, 0, 1], description: 'Optional sentiment: -1 negative, 0 neutral, 1 positive.' },
         domain_slug: { type: 'string', description: 'Optional domain this memory belongs to. Defaults to the current domain.' },
+        topics: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional short topic keywords that describe this memory (for example "editor", "travel"). Omit when unsure.',
+        },
       },
       required: ['content'],
     },

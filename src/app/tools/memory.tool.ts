@@ -1,6 +1,7 @@
 import pool from '@/app/clients/db';
 import { assertDomainAccess } from '@/app/lib/domain-access-check';
 import type { User } from '@/app/services/auth/auth.service';
+import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
 
 export { MEMORY_DOMAIN_TOOL_DEFINITIONS, RECALL_MEMORY_TOOL_DEFINITION } from './memory.tool.definitions';
 
@@ -8,6 +9,24 @@ interface MemoryToolContext {
   user: User;
   conversationId: string;
   callerDomain: string;
+}
+
+// createManualMemory never calls the LLM, so no credentials are needed here.
+const toolMemoryConfig = { endpoint: '', apiKey: '', model: '' };
+
+const MAX_TOPICS = 8;
+const MAX_TOPIC_LENGTH = 40;
+
+function normalizeTopics(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const topics = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== 'string') continue;
+    const topic = item.trim().toLowerCase().slice(0, MAX_TOPIC_LENGTH);
+    if (topic) topics.add(topic);
+    if (topics.size >= MAX_TOPICS) break;
+  }
+  return [...topics];
 }
 
 function clampLimit(value: unknown, fallback: number, maximum: number): number {
@@ -70,7 +89,7 @@ async function searchMemories(
   return { memories: result.rows };
 }
 
-export function buildMemoryTools({ user, conversationId, callerDomain }: MemoryToolContext) {
+export function buildMemoryTools({ user, callerDomain }: MemoryToolContext) {
   return {
     recall_memory: async (args: { query: string; domain_slug?: string; limit?: number }) => {
       const domainSlug = args.domain_slug?.trim() || callerDomain;
@@ -82,41 +101,34 @@ export function buildMemoryTools({ user, conversationId, callerDomain }: MemoryT
       return searchMemories(user, args.query, domainSlug, clampLimit(args.limit, 10, 50));
     },
 
-    create_memory: async (args: { content: string; importance?: number; emotion?: number; domain_slug?: string }) => {
+    create_memory: async (args: {
+      content: string;
+      importance?: number;
+      emotion?: number;
+      domain_slug?: string;
+      topics?: string[];
+    }) => {
       const domainSlug = args.domain_slug?.trim() || callerDomain;
       await ensureDomainAccess(user, domainSlug);
+      const content = typeof args.content === 'string' ? args.content.trim() : '';
+      if (!content) return { success: false, error: 'Memory content is required' };
       const importance = Math.max(1, Math.min(10, Math.trunc(Number(args.importance) || 7)));
-      const emotion = [-1, 0, 1].includes(Number(args.emotion)) ? Number(args.emotion) : 0;
-      const existing = await pool.query(
-        'SELECT id, summary FROM conversation_summaries WHERE conversation_id = $1 AND user_id = $2',
-        [conversationId, user.id],
-      );
+      const emotionValue = Number(args.emotion);
+      const emotion = (emotionValue === -1 || emotionValue === 0 || emotionValue === 1) ? emotionValue : 0;
 
-      if (existing.rows[0]) {
-        const updated = await pool.query(
-          `UPDATE conversation_summaries
-           SET summary = summary || E'\n\n' || $1,
-               key_topics = ARRAY(SELECT DISTINCT unnest(key_topics || ARRAY['preference', 'correction'])),
-               importance_score = $2,
-               emotion = $3
-           WHERE id = $4 AND user_id = $5
-           RETURNING id, summary, domain_slug`,
-          [args.content.trim(), importance, emotion, existing.rows[0].id, user.id],
-        );
-        return { success: true, memory: updated.rows[0] };
-      }
-
-      const inserted = await pool.query(
-        `INSERT INTO conversation_summaries
-           (user_id, conversation_id, summary, key_topics, importance_score, message_count, emotion, domain_slug)
-         SELECT $1, cc.id, $3, ARRAY['preference', 'correction'], $4, 1, $5, $6
-         FROM chat_conversations cc
-         WHERE cc.id = $2 AND cc.user_id = $1
-         RETURNING id, summary, domain_slug`,
-        [user.id, conversationId, args.content.trim(), importance, emotion, domainSlug],
-      );
-      if (!inserted.rows[0]) return { success: false, error: 'Conversation not found' };
-      return { success: true, memory: inserted.rows[0] };
+      // Tool-created memories are standalone rows (conversation_id NULL) so that a
+      // later conversation summary (upsert on conversation_id) never overwrites them,
+      // and so they do not block automatic summarisation of the conversation.
+      const memory = await new ConversationMemoryService(toolMemoryConfig, domainSlug).createManualMemory(user.id, {
+        content,
+        keyTopics: normalizeTopics(args.topics),
+        importanceScore: importance,
+        emotion,
+      });
+      return {
+        success: true,
+        memory: { id: memory.id, summary: memory.summary, domain_slug: memory.domain_slug ?? domainSlug },
+      };
     },
 
     delete_memory: async (args: { memory_id: string }) => {
