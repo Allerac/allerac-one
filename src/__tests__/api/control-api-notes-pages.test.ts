@@ -24,19 +24,19 @@ jest.mock('@/app/services/api-keys/api-key.service', () => ({
 
 jest.mock('@/app/services/notes/notes.service', () => {
   const service = { listNotes: jest.fn(), createNote: jest.fn(), updateNote: jest.fn(), getNote: jest.fn() };
-  (global as any).__pageNotesSvc = service;
+  (globalThis as Record<string, unknown>).__pageNotesSvc = service;
   return { NotesService: jest.fn().mockImplementation(() => service) };
 });
 
 jest.mock('@/app/services/notes/note-pages.service', () => {
   const actual = jest.requireActual('@/app/services/notes/note-pages.service');
   const service = { listChildren: jest.fn(), getBreadcrumbs: jest.fn(), moveNote: jest.fn(), setArchived: jest.fn() };
-  (global as any).__pagesSvc = service;
+  (globalThis as Record<string, unknown>).__pagesSvc = service;
   return { NoteMoveError: actual.NoteMoveError, NotePagesService: jest.fn().mockImplementation(() => service) };
 });
 
-const notesSvc = () => (global as any).__pageNotesSvc as Record<string, jest.Mock>;
-const pagesSvc = () => (global as any).__pagesSvc as Record<string, jest.Mock>;
+const notesSvc = () => (globalThis as Record<string, unknown>).__pageNotesSvc as Record<string, jest.Mock>;
+const pagesSvc = () => (globalThis as Record<string, unknown>).__pagesSvc as Record<string, jest.Mock>;
 const PARENT = '11111111-1111-4111-8111-111111111111';
 const user = { id: 'user-id', email: 'u@example.com', name: 'U', is_admin: false, created_at: new Date() };
 const note = (over: Record<string, unknown> = {}) => ({
