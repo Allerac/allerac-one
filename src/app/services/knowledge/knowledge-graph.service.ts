@@ -115,6 +115,7 @@ export class KnowledgeGraphService {
          LEFT JOIN crawler_documents cd ON cd.document_id = d.id
          LEFT JOIN document_chunks dc ON dc.document_id = d.id
          WHERE d.uploaded_by = $1 AND d.status = 'completed'
+           AND d.source_type <> 'note'
            AND ($2::text IS NULL OR d.domain_slug = $2)
            AND (d.domain_slug IS NULL OR $4::boolean OR EXISTS (
              SELECT 1 FROM domains domain_access

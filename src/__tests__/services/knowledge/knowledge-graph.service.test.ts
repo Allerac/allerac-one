@@ -18,6 +18,16 @@ function node(overrides: Partial<KnowledgeNode>): KnowledgeNode {
 describe('KnowledgeGraphService', () => {
   beforeEach(() => query.mockReset());
 
+  it('excludes note-backed documents and keeps domain access checks', async () => {
+    query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
+
+    await new KnowledgeGraphService().getGraph('user-id');
+
+    const documentSql = query.mock.calls[1][0] as string;
+    expect(documentSql).toContain("d.source_type <> 'note'");
+    expect(documentSql).toContain('user_domain_access');
+  });
+
   it('projects memories and crawler documents into typed nodes', async () => {
     query
       .mockResolvedValueOnce({ rows: [{

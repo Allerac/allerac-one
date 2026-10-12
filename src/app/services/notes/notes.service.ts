@@ -1,6 +1,12 @@
 import pool from '@/app/clients/db';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { DocumentService } from '@/app/services/rag/document.service';
+import {
+  NoteReindexQueue,
+  buildNoteIndexText,
+  hashNoteIndexText,
+  noteDocumentName,
+} from './note-reindex-queue';
 
 export interface Note {
   id: string;
@@ -11,6 +17,7 @@ export interface Note {
   tags: string[];
   source: string;
   due_date: Date | null;
+  content_hash?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -45,20 +52,23 @@ export class NotesService {
     const { content, title = null, tags = [], source = 'chat', due_date = null } = input;
 
     let documentId: string | null = null;
+    const indexText = buildNoteIndexText(title, content);
+    let contentHash: string | null = null;
 
     try {
       const embeddingService = new EmbeddingService();
       const documentService = new DocumentService(embeddingService);
 
       const fakeFile = {
-        name: title || content.slice(0, 60).replace(/\n/g, ' '),
+        name: noteDocumentName(title, content),
         type: 'text/plain',
-        size: content.length,
+        size: indexText.length,
       } as File;
 
-      const docId = await documentService.createDocumentRecord(fakeFile, userId, 'notes');
+      const docId = await documentService.createDocumentRecord(fakeFile, userId, 'notes', { type: 'note' });
       documentId = docId;
-      documentService.processDocumentContent(docId, content).catch(err => {
+      contentHash = hashNoteIndexText(indexText);
+      documentService.processDocumentContent(docId, indexText).catch(err => {
         console.error('[Notes] Background embedding failed:', err);
       });
     } catch (err) {
@@ -66,11 +76,18 @@ export class NotesService {
     }
 
     const res = await pool.query(
-      `INSERT INTO user_notes (user_id, document_id, title, content, tags, source, due_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO user_notes (user_id, document_id, title, content, tags, source, due_date, content_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [userId, documentId, title, content, tags, source, due_date ?? null]
+      [userId, documentId, title, content, tags, source, due_date ?? null, contentHash]
     );
+
+    if (documentId) {
+      await pool.query(
+        'UPDATE documents SET source_id = $1 WHERE id = $2 AND uploaded_by = $3',
+        [res.rows[0].id, documentId, userId],
+      ).catch((err: unknown) => console.error('[Notes] Failed to link note document:', err));
+    }
 
     return res.rows[0] as Note;
   }
@@ -117,22 +134,28 @@ export class NotesService {
     const { embedding } = await embeddingService.generateEmbedding(query);
     const embeddingStr = `[${embedding.join(',')}]`;
 
+    // One row per note: keep each note's best-matching chunk, then rank notes.
     const res = await pool.query(
-      `SELECT
-         n.id                                   AS note_id,
-         n.title,
-         n.content,
-         n.tags,
-         n.created_at,
-         1 - (dc.embedding <=> $1::vector)      AS similarity
-       FROM document_chunks dc
-       JOIN documents d  ON d.id = dc.document_id
-       JOIN user_notes n ON n.document_id = d.id
-       WHERE d.uploaded_by = $2
-         AND d.domain_slug = 'notes'
-         AND d.status = 'completed'
-         AND (1 - (dc.embedding <=> $1::vector)) > 0.2
-       ORDER BY dc.embedding <=> $1::vector
+      `SELECT note_id, title, content, tags, created_at, similarity
+       FROM (
+         SELECT DISTINCT ON (n.id)
+           n.id                                   AS note_id,
+           n.title,
+           n.content,
+           n.tags,
+           n.created_at,
+           1 - (dc.embedding <=> $1::vector)      AS similarity
+         FROM document_chunks dc
+         JOIN documents d  ON d.id = dc.document_id
+         JOIN user_notes n ON n.document_id = d.id AND n.user_id = d.uploaded_by
+         WHERE d.uploaded_by = $2
+           AND d.domain_slug = 'notes'
+           AND d.status = 'completed'
+           AND dc.embedding IS NOT NULL
+           AND (1 - (dc.embedding <=> $1::vector)) > 0.2
+         ORDER BY n.id, dc.embedding <=> $1::vector
+       ) best_per_note
+       ORDER BY similarity DESC, created_at DESC
        LIMIT $3`,
       [embeddingStr, userId, limit]
     );
@@ -162,6 +185,7 @@ export class NotesService {
     const documentId = noteRes.rows[0].document_id;
 
     await pool.query('DELETE FROM user_notes WHERE id = $1 AND user_id = $2', [noteId, userId]);
+    noteReindexQueue.cancel(noteId);
 
     if (documentId) {
       await pool.query(
@@ -195,13 +219,75 @@ export class NotesService {
     const note = res.rows[0] as Note | undefined;
     if (!note) return null;
 
-    if (input.content !== undefined && note.document_id) {
-      const embeddingService = new EmbeddingService();
-      const documentService = new DocumentService(embeddingService);
-      await documentService.reprocessDocumentContent(note.document_id, note.content);
+    // Title and content are both part of the indexed text. Re-embedding runs in
+    // the background (debounced) and is skipped when the text hash is unchanged.
+    if (input.content !== undefined || input.title !== undefined) {
+      noteReindexQueue.schedule(userId, note.id);
     }
 
     return note;
+  }
+
+  /**
+   * Re-embeds one note if its indexed text (title + content) changed since the
+   * last successful embedding, or if its document is missing or not completed.
+   */
+  async reindexNote(userId: string, noteId: string): Promise<'reindexed' | 'skipped' | 'missing' | 'failed'> {
+    const res = await pool.query(
+      `SELECT n.id, n.title, n.content, n.document_id, n.content_hash, d.status AS document_status
+       FROM user_notes n
+       LEFT JOIN documents d ON d.id = n.document_id AND d.uploaded_by = n.user_id
+       WHERE n.id = $1 AND n.user_id = $2`,
+      [noteId, userId],
+    );
+    const row = res.rows[0] as {
+      id: string; title: string | null; content: string; document_id: string | null;
+      content_hash: string | null; document_status: string | null;
+    } | undefined;
+    if (!row) return 'missing';
+
+    const indexText = buildNoteIndexText(row.title, row.content);
+    const hash = hashNoteIndexText(indexText);
+    if (row.document_id && row.document_status === 'completed' && row.content_hash === hash) {
+      return 'skipped';
+    }
+
+    const documentService = new DocumentService(new EmbeddingService());
+    const name = noteDocumentName(row.title, row.content);
+    let documentId = row.document_status ? row.document_id : null;
+    if (documentId) {
+      await pool.query(
+        'UPDATE documents SET filename = $1, file_size = $2 WHERE id = $3 AND uploaded_by = $4',
+        [name, indexText.length, documentId, userId],
+      );
+      await documentService.reprocessDocumentContent(documentId, indexText);
+    } else {
+      // The note never got a document (e.g. the embedding backend was down at creation).
+      documentId = await documentService.createDocumentRecord(
+        { name, type: 'text/plain', size: indexText.length } as File,
+        userId,
+        'notes',
+        { type: 'note', id: row.id },
+      );
+      await pool.query(
+        'UPDATE user_notes SET document_id = $1 WHERE id = $2 AND user_id = $3',
+        [documentId, row.id, userId],
+      );
+      await documentService.processDocumentContent(documentId, indexText);
+    }
+
+    const status = await pool.query(
+      'SELECT status FROM documents WHERE id = $1 AND uploaded_by = $2',
+      [documentId, userId],
+    );
+    if (status.rows[0]?.status !== 'completed') return 'failed';
+
+    // Record the hash of the text that was embedded; updated_at is left alone.
+    await pool.query(
+      'UPDATE user_notes SET content_hash = $1 WHERE id = $2 AND user_id = $3',
+      [hash, row.id, userId],
+    );
+    return 'reindexed';
   }
 
   async getAllTags(userId: string): Promise<string[]> {
@@ -215,3 +301,7 @@ export class NotesService {
     return res.rows.map(r => r.tag);
   }
 }
+
+export const noteReindexQueue = new NoteReindexQueue(
+  (userId, noteId) => new NotesService().reindexNote(userId, noteId),
+);
