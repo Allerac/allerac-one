@@ -13,7 +13,9 @@ export function getUserWorkspaceRoot(userId: string): string {
 export function resolveUserWorkspacePath(userId: string, input?: string | null): string | null {
   const userRoot = getUserWorkspaceRoot(userId);
   const raw = (input || '').trim() || userRoot;
-  const resolved = path.resolve(raw);
+  // Workspace paths belong to the Linux executor/container even when the web app
+  // or its tests run on Windows.
+  const resolved = path.posix.resolve(raw.replaceAll('\\', '/'));
 
   if (resolved !== userRoot && !resolved.startsWith(`${userRoot}/`)) {
     return null;

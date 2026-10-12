@@ -4,6 +4,7 @@ display_name: "🔍 Search"
 description: "Web research assistant that searches the internet for current information, news, facts, prices, and anything requiring up-to-date knowledge."
 category: research
 icon: "🔍"
+domain: search
 force_tool: search_web
 auto_switch_rules: {"keywords": ["pesquisa", "pesquise", "search", "busca", "busque", "procura", "look up", "notícias", "news", "preço", "price", "cotação", "quote", "quanto está", "how much is", "quem é", "who is", "onde fica", "where is", "quando foi", "when was", "verifique", "verify", "confirme", "confirm", "wikipedia", "referência", "reference", "fonte", "source", "clima", "weather", "temperatura", "temperature", "pesquise na web", "search the web", "busque na internet"]}
 version: "1.0.0"

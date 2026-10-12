@@ -20,7 +20,11 @@ RUN npx esbuild src/telegram-multi-bot.ts \
     --platform=node \
     --target=node20 \
     --external:pg-native \
+    --metafile=dist/meta.json \
     --outfile=dist/bot.js
+# The runner intentionally contains no node_modules. Fail the image build if a
+# future import pulls the native bcrypt runtime back into the standalone bundle.
+RUN ! grep -q "node_modules/bcrypt/bcrypt.js" dist/bot.js
 
 FROM node:20-alpine AS runner
 WORKDIR /app

@@ -32,11 +32,13 @@ export class OrchestratorService {
   private githubToken?: string;
   private geminiToken?: string;
   private anthropicToken?: string;
+  private openaiToken?: string;
 
-  constructor(config?: { githubToken?: string; geminiToken?: string; anthropicToken?: string }) {
+  constructor(config?: { githubToken?: string; geminiToken?: string; anthropicToken?: string; openaiToken?: string }) {
     this.githubToken = config?.githubToken;
     this.geminiToken = config?.geminiToken;
     this.anthropicToken = config?.anthropicToken;
+    this.openaiToken = config?.openaiToken;
   }
 
   async evaluateComplexity(
@@ -101,7 +103,7 @@ Respond in JSON format:
   async createPlan(
     message: string,
     selectedModel: string,
-    modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic',
+    modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai',
     modelBaseUrl: string,
     conversationContext?: string
   ): Promise<AgentPlan> {
@@ -109,6 +111,7 @@ Respond in JSON format:
       githubToken: this.githubToken,
       geminiToken: this.geminiToken,
       anthropicToken: this.anthropicToken,
+      openaiToken: this.openaiToken,
     });
 
     const systemPrompt = `You are an expert task planner that breaks down complex requests into parallel subtasks.
@@ -189,13 +192,14 @@ Max 5 workers. Keep tasks independent and parallelizable.`;
     plan: AgentPlan,
     workerResults: WorkerResult[],
     selectedModel: string,
-    modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic',
+    modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai',
     modelBaseUrl: string
   ): AsyncGenerator<string> {
     const llmService = new LLMService(modelProvider, modelBaseUrl, {
       githubToken: this.githubToken,
       geminiToken: this.geminiToken,
       anthropicToken: this.anthropicToken,
+      openaiToken: this.openaiToken,
     });
 
     const systemPrompt = `You are an expert synthesizer that combines results from parallel agents.

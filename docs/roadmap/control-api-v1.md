@@ -2,11 +2,11 @@
 
 ## Status
 
-Beta baseline complete. As of 2026-07-25 the `/api/v1` contract covers `version`, `me`,
+Beta baseline complete. As of 2026-08-01 the `/api/v1` contract covers `version`, `me`,
 `domains`, `capabilities`, API keys, conversations (including synchronous message
 send), memories, tickets, agent runs, documents, notes, scheduled jobs (including
-manual run), skills, health, search, speech, robot settings, email, finance, and
-music — 51 route paths and 70 operations, in sync with
+manual run), skills, health, search, speech, robot settings, email, finance, music,
+and LLM and embedding benchmarks — 54 route paths and 76 operations, in sync with
 `docs/api/openapi/control-api-v1.yaml`. Browser session auth and scoped bearer API
 keys are both implemented.
 

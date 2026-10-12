@@ -1,5 +1,10 @@
 # How to add a new domain
 
+> Building a domain meant to be reached by an **external website or anonymous visitor** (not a
+> logged-in Allerac user)? Read this first, then
+> [expose-agent-to-website.md](./expose-agent-to-website.md) for the extra steps — service account
+> isolation, tool restriction, and the website-side proxy all need care that this doc doesn't cover.
+
 A domain is a scoped workspace for a specific use case (e.g. Design, Finance, Tickets). Each domain has:
 - A **page route** (`/design`, `/finance`, etc.)
 - A **skill** that acts as the system prompt for that domain's AI assistant

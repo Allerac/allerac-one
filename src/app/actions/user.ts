@@ -5,6 +5,7 @@ import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 import pool from '@/app/clients/db';
+import { domainInstructionsService } from '@/app/services/instructions/domain-instructions.service';
 
 const userSettingsService = new UserSettingsService();
 const systemSettingsService = new SystemSettingsService();
@@ -25,13 +26,14 @@ export async function loadProviderConfigurationStatus() {
         githubConfigured: Boolean(settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN),
         googleConfigured: Boolean(settings?.google_api_key || systemSettings.google_api_key),
         anthropicConfigured: Boolean(settings?.anthropic_api_key || systemSettings.anthropic_api_key),
+        openaiConfigured: Boolean(settings?.openai_api_key || systemSettings.openai_api_key || process.env.OPENAI_API_KEY),
         tavilyConfigured: Boolean(settings?.tavily_api_key || systemSettings.tavily_api_key || process.env.TAVILY_API_KEY),
     };
 }
 
-export async function saveUserSettings(githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string) {
+export async function saveUserSettings(githubToken?: string, tavilyApiKey?: string, telegramBotToken?: string, googleApiKey?: string, anthropicApiKey?: string, location?: string, timezone?: string, openaiApiKey?: string) {
     const user = await requireCurrentUser();
-    return await userSettingsService.saveUserSettings(user.id, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location, timezone);
+    return await userSettingsService.saveUserSettings(user.id, githubToken, tavilyApiKey, telegramBotToken, googleApiKey, anthropicApiKey, location, timezone, openaiApiKey);
 }
 
 export async function setGoogleKeyPreference(preference: 'personal' | 'allerac') {
@@ -47,6 +49,11 @@ export async function clearGoogleApiKey() {
 export async function saveSelectedModel(modelId: string) {
     const user = await requireCurrentUser();
     return await userSettingsService.saveSelectedModel(user.id, modelId);
+}
+
+export async function saveCliPreferences(domainSlug: string | null, modelId: string | null) {
+    const user = await requireCurrentUser();
+    return await userSettingsService.saveCliPreferences(user.id, domainSlug, modelId);
 }
 
 export async function completeOnboarding() {
@@ -99,22 +106,22 @@ export async function getDomainInstructions(domainSlug: string): Promise<string>
     return res.rows[0]?.content ?? '';
 }
 
-export async function saveDomainInstructions(
+export async function getDomainInstructionDetails(domainSlug: string) {
+    const user = await requireCurrentUser();
+    await assertDomainAccess(user, domainSlug);
+    return domainInstructionsService.list(user.id, domainSlug);
+}
+
+export async function revokeDomainInstruction(
     domainSlug: string,
-    content: string
+    instructionId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const user = await requireCurrentUser();
         await assertDomainAccess(user, domainSlug);
-        await pool.query(
-            `INSERT INTO user_domain_instructions (user_id, domain_slug, content)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (user_id, domain_slug) DO UPDATE SET content = $3, updated_at = NOW()`,
-            [user.id, domainSlug, content]
-        );
-        return { success: true };
+        const revoked = await domainInstructionsService.revoke(user.id, domainSlug, instructionId);
+        return revoked ? { success: true } : { success: false, error: 'Instruction not found' };
     } catch (error: unknown) {
-        console.error('[user] saveDomainInstructions error:', error);
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to save instructions' };
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to revoke instruction' };
     }
 }

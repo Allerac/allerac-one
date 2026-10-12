@@ -87,6 +87,23 @@ allerac backup
 allerac restore allerac-manual-2026-06-09_10-00-00.sql.gz
 ```
 
+### Disaster Recovery
+
+```bash
+allerac verify                          # Check this install's backup readiness
+allerac disaster-backup                 # Create a portable recovery package (db + config + inventory)
+allerac disaster-inspect <package>      # Verify checksums and show package contents
+allerac disaster-restore <package>      # Restore a recovery package onto this host
+```
+
+Unlike `backup`/`restore`, a disaster-recovery package is meant to travel to a
+**different machine** — it bundles a manifest (commit, release, schema
+version), a checksum for every file, and inventories of containers, volumes,
+and installed Ollama models alongside the database dump. No secret values are
+ever included, only which `.env` keys were set. See
+[Database Backup and Restore](../database-backup-restore.md) for the full
+step-by-step recovery workflow.
+
 ### Models (Ollama)
 
 ```bash

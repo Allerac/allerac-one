@@ -19,8 +19,11 @@ interface Document {
   error_message?: string;
 }
 
+type DocumentDetails = Awaited<ReturnType<typeof docActions.getDocumentDetails>>;
+
 interface DocumentUploadProps {
-  githubToken: string;
+  /** @deprecated Embeddings are local; retained temporarily for caller compatibility. */
+  githubToken?: string;
   userId: string;
   isDarkMode: boolean;
   onDocumentsChange?: () => void;
@@ -29,11 +32,14 @@ interface DocumentUploadProps {
 
 const POLLING_INTERVAL = 3000;
 
-export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocumentsChange, domainSlug }: DocumentUploadProps) {
+export default function DocumentUpload({ userId, isDarkMode, onDocumentsChange, domainSlug }: DocumentUploadProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -42,7 +48,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
    */
   const loadDocuments = useCallback(async (): Promise<Document[]> => {
     try {
-      if (!githubToken || !userId) return [];
+      if (!userId) return [];
       const data = await docActions.getAllDocuments(domainSlug);
       setDocuments(data || []);
       return data || [];
@@ -50,7 +56,7 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
       console.error('Error loading documents:', error);
       return [];
     }
-  }, [githubToken, userId]);
+  }, [userId, domainSlug]);
 
   /**
    * Starts polling for document status updates
@@ -207,6 +213,23 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
     }
   };
 
+  const openDocument = useCallback(async (documentId: string) => {
+    setDetailsLoading(true);
+    setDetailsError('');
+    try {
+      setSelectedDocument(await docActions.getDocumentDetails(documentId));
+    } catch (error) {
+      setDetailsError(error instanceof Error ? error.message : 'Failed to load document');
+    } finally {
+      setDetailsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const documentId = new URLSearchParams(window.location.search).get('document');
+    if (documentId) void openDocument(documentId);
+  }, [openDocument]);
+
   /**
    * Formats file size for display
    */
@@ -285,7 +308,13 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
             {documents.map((doc) => (
               <div
                 key={doc.id}
-                className={`flex items-center justify-between p-3 rounded-lg transition-colors ${isDarkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => openDocument(doc.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') openDocument(doc.id);
+                }}
+                className={`flex items-center justify-between p-3 rounded-lg transition-colors cursor-pointer ${isDarkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'}`}
               >
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
@@ -318,7 +347,10 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
 
                   {/* Delete Button */}
                   <button
-                    onClick={() => handleDeleteDocument(doc.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDeleteDocument(doc.id);
+                    }}
                     className="text-gray-400 hover:text-red-600 transition-colors"
                     title="Delete document"
                   >
@@ -330,6 +362,80 @@ export default function DocumentUpload({ githubToken, userId, isDarkMode, onDocu
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {(detailsLoading || detailsError) && (
+        <p className={`text-sm ${detailsError ? 'text-red-500' : isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          {detailsError || 'Loading document…'}
+        </p>
+      )}
+
+      {selectedDocument && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Document: ${selectedDocument.filename}`}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setSelectedDocument(null)}
+        >
+          <section
+            className={`max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl border p-5 shadow-2xl ${
+              isDarkMode ? 'border-gray-700 bg-gray-900 text-gray-100' : 'border-gray-200 bg-white text-gray-900'
+            }`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">{selectedDocument.filename}</h2>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {selectedDocument.file_type} · {formatFileSize(selectedDocument.file_size)}
+                  {' · '}{selectedDocument.chunks.length} chunk{selectedDocument.chunks.length === 1 ? '' : 's'}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedDocument(null)}
+                className={`rounded px-2 py-1 text-sm ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}
+                aria-label="Close document"
+              >
+                ✕
+              </button>
+            </div>
+
+            {selectedDocument.crawler && (
+              <div className={`mt-4 rounded-lg border p-3 text-sm ${
+                isDarkMode ? 'border-indigo-500/30 bg-indigo-500/10' : 'border-indigo-200 bg-indigo-50'
+              }`}>
+                <p><strong>Crawler source:</strong> {selectedDocument.crawler.source_id}</p>
+                <p><strong>External ID:</strong> {selectedDocument.crawler.external_id}</p>
+                <a
+                  href={selectedDocument.crawler.canonical_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-indigo-500 hover:underline"
+                >
+                  Open original source ↗
+                </a>
+              </div>
+            )}
+
+            <div className="mt-5 space-y-3">
+              {selectedDocument.chunks.length === 0 ? (
+                <p className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>No chunks stored yet.</p>
+              ) : selectedDocument.chunks.map((chunk) => (
+                <article
+                  key={chunk.id}
+                  className={`rounded-lg border p-4 ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}
+                >
+                  <header className={`mb-2 flex justify-between text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <span>Chunk {chunk.chunk_index + 1}</span>
+                    <span>{chunk.has_embedding ? '✓ Embedding stored' : 'No embedding'}</span>
+                  </header>
+                  <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6">{chunk.content}</pre>
+                </article>
+              ))}
+            </div>
+          </section>
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ import { requireCurrentUser } from '@/app/lib/auth-session';
 import { clearBenchmarkRuns, getBenchmarkModelAvailability, listBenchmarkRuns } from '@/app/services/benchmark/benchmark-query.service';
 
 export interface BenchmarkAvailability {
-  providers: Record<'github' | 'gemini' | 'anthropic' | 'ollama', boolean>;
+  providers: Record<'github' | 'gemini' | 'anthropic' | 'openai' | 'ollama', boolean>;
   ollamaModels: string[];
 }
 

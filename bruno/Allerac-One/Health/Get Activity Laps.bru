@@ -1,0 +1,20 @@
+meta {
+  name: Get Activity Laps
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/activities/{{activityId}}/laps
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "List Activities" first to populate activityId.
+  Required scope: health:read. 404s if the activity has no detail sync yet.
+}

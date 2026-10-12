@@ -4,6 +4,7 @@ display_name: "❤️ Health"
 description: "Health and wellness advisor for fitness, nutrition, sleep, mental health, symptoms, and healthy habits."
 category: health
 icon: "❤️"
+domain: health
 auto_switch_rules: {"keywords": ["saúde", "health", "exercício", "exercise", "treino", "workout", "fitness", "academia", "gym", "correr", "run", "running", "musculação", "strength", "alongamento", "stretch", "dor", "pain", "sintoma", "symptom", "doença", "illness", "remédio", "medicine", "médico", "doctor", "sono", "sleep", "dormir", "descanso", "rest", "estresse", "stress", "ansiedade", "anxiety", "depressão", "depression", "mental", "bem-estar", "wellbeing", "peso", "weight", "emagrecer", "lose weight", "ganhar massa", "muscle gain", "hidratação", "hydration", "água", "water", "suplemento", "supplement", "proteína", "protein", "pressão", "blood pressure", "glicemia", "glucose", "colesterol", "cholesterol", "frequência cardíaca", "heart rate", "passos", "steps", "calorias", "calories burned"]}
 version: "1.0.0"
 ---

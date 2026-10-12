@@ -125,3 +125,25 @@ export const JOBS_TOOL_DEFINITIONS = [
     },
   },
 ];
+
+export const SCHEDULE_TASK_TOOL_DEFINITION = {
+  type: 'function',
+  function: {
+    name: 'schedule_task',
+    description: 'Schedule a recurring task in the current domain. The caller domain is assigned automatically and must not be supplied. Convert the user\'s schedule to a valid 5-field UTC cron expression before calling.',
+    parameters: {
+      type: 'object',
+      properties: {
+        cron: {
+          type: 'string',
+          description: 'Valid 5-field cron expression in UTC, for example "0 9 * * *".',
+        },
+        prompt: {
+          type: 'string',
+          description: 'Self-contained prompt Allerac should execute on each scheduled run.',
+        },
+      },
+      required: ['cron', 'prompt'],
+    },
+  },
+};

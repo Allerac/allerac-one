@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { NotesService } from '@/app/services/notes/notes.service';
 import { requireApiUser } from '../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../_lib/responses';
-import { noteDto, resolveNotesToken } from '../_lib/notes';
+import { noteDto } from '../_lib/notes';
 
 const notesService = new NotesService();
 
@@ -54,11 +54,9 @@ export async function POST(request: Request): Promise<Response> {
       return apiError('validation_error', 'Invalid note payload', 400, parsed.error.flatten());
     }
 
-    const token = await resolveNotesToken(user.id);
     const note = await notesService.createNote(
       user.id,
       { ...parsed.data, source: parsed.data.source ?? 'api' },
-      token,
     );
 
     return apiData({ note: noteDto(note) }, { status: 201 });

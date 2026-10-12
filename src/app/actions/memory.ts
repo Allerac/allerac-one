@@ -5,6 +5,7 @@ import { ConversationSummary } from '@/app/services/memory/conversation-memory.s
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 import pool from '@/app/clients/db';
+import { instructionDistillerService } from '@/app/services/memory/instruction-distiller.service';
 
 const systemSettingsService = new SystemSettingsService();
 
@@ -32,7 +33,20 @@ export async function generateConversationSummary(conversationId: string, domain
     if (domainSlug) await assertDomainAccess(user, domainSlug);
     const llmConfig = await resolveLLMConfig();
     const memoryService = new ConversationMemoryService(llmConfig, domainSlug);
-    return await memoryService.generateConversationSummary(conversationId, user.id);
+    const summary = await memoryService.generateConversationSummary(conversationId, user.id);
+    if (summary) {
+        try {
+            await instructionDistillerService.distill({
+                userId: user.id,
+                domainSlug: domainSlug ?? 'chat',
+                llmConfig,
+                sourceSummaryId: summary.id,
+            });
+        } catch (error) {
+            console.error('[Memory] Instruction distillation failed:', error);
+        }
+    }
+    return summary;
 }
 
 export async function getRecentSummaries(limit?: number, minImportance?: number, domainSlug?: string | null) {

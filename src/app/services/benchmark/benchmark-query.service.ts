@@ -61,6 +61,7 @@ export async function getBenchmarkModelAvailability(userId: string): Promise<Ben
       github: Boolean(settings?.github_token || systemSettings.github_token || process.env.GITHUB_TOKEN),
       gemini: Boolean(settings?.google_api_key || systemSettings.google_api_key),
       anthropic: Boolean(settings?.anthropic_api_key || systemSettings.anthropic_api_key),
+      openai: Boolean(settings?.openai_api_key || systemSettings.openai_api_key || process.env.OPENAI_API_KEY),
       ollama: ollamaModels.length > 0,
     },
     ollamaModels,

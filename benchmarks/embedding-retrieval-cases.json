@@ -1,0 +1,98 @@
+[
+  {
+    "id": "backup-pt",
+    "domain": "documents",
+    "language": "pt",
+    "query": "Como faço uma cópia de segurança dos meus dados?",
+    "relevant": "O backup portátil inclui o banco PostgreSQL, volumes e configurações criptografadas.",
+    "negatives": ["A previsão do tempo indica chuva durante a tarde.", "As recomendações musicais usam o histórico recente do Spotify."]
+  },
+  {
+    "id": "jobs-es",
+    "domain": "documents",
+    "language": "es",
+    "query": "¿Dónde puedo cambiar una tarea programada?",
+    "relevant": "Las tareas recurrentes se administran en el dominio Jobs y pueden editarse o eliminarse.",
+    "negatives": ["El panel de salud muestra actividades y ejercicios recientes.", "La búsqueda web utiliza una caché para evitar solicitudes repetidas."]
+  },
+  {
+    "id": "anthropic-key-en",
+    "domain": "documents",
+    "language": "en",
+    "query": "Which credential is required for Anthropic chat?",
+    "relevant": "Anthropic chat requests require an Anthropic API key configured by the user or system administrator.",
+    "negatives": ["Document chunks are compared with cosine distance in PostgreSQL.", "The Android robot connects to the Control API using a scoped API key."]
+  },
+  {
+    "id": "memory-pt",
+    "domain": "documents",
+    "language": "pt",
+    "query": "onde ficam as memórias das conversas?",
+    "relevant": "Conversation summaries and memories are stored in PostgreSQL and can be scoped by domain.",
+    "negatives": ["O Ollama executa modelos locais dentro de um container.", "As playlists do Spotify possuem nome, descrição e imagem."]
+  },
+  {
+    "id": "notes-es",
+    "domain": "notes",
+    "language": "es",
+    "query": "buscar una nota sobre facturas pendientes",
+    "relevant": "La búsqueda semántica de notas encuentra contenido relacionado aunque no use las mismas palabras.",
+    "negatives": ["Los documentos PDF se dividen en fragmentos antes de indexarse.", "La aplicación puede enviar notificaciones por Telegram."]
+  },
+  {
+    "id": "restore-en",
+    "domain": "documents",
+    "language": "en",
+    "query": "find documentation about restoring on a clean server",
+    "relevant": "The portable restore procedure reconstructs Allerac on a clean Docker host and validates checksums.",
+    "negatives": ["The finance domain tracks market prices and portfolio information.", "The design domain can help create interface concepts."]
+  },
+  {
+    "id": "garmin-pt",
+    "domain": "notes",
+    "language": "pt",
+    "query": "qual foi meu treino mais recente?",
+    "relevant": "O painel de saúde mostra as atividades recentes sincronizadas da conta Garmin.",
+    "negatives": ["A área de finanças acompanha preços e posições da carteira.", "As notas podem receber etiquetas e datas de vencimento."]
+  },
+  {
+    "id": "invoice-en-pt",
+    "domain": "notes",
+    "language": "cross-language",
+    "query": "which bills do I still need to pay?",
+    "relevant": "Nota: pagar as faturas pendentes de eletricidade e internet antes de sexta-feira.",
+    "negatives": ["Receita de pão com farinha, água, fermento e sal.", "Resumo da corrida de domingo com distância e frequência cardíaca."]
+  },
+  {
+    "id": "robot-api-key-es",
+    "domain": "documents",
+    "language": "es",
+    "query": "¿cómo se autentica el robot Android?",
+    "relevant": "The Android robot authenticates to the Control API with a dedicated scoped API key.",
+    "negatives": ["Spotify synchronization imports recently played tracks.", "PDF documents are split into overlapping chunks."]
+  },
+  {
+    "id": "spotify-pt",
+    "domain": "music",
+    "language": "pt",
+    "query": "quero músicas parecidas com as que ouvi recentemente",
+    "relevant": "As recomendações do Spotify comparam embeddings das faixas com o histórico recente do usuário.",
+    "negatives": ["O backup exporta os dados necessários para reconstruir a aplicação.", "Os jobs agendados podem enviar notificações por Telegram."]
+  },
+  {
+    "id": "spotify-es-en",
+    "domain": "music",
+    "language": "cross-language",
+    "query": "recomiéndame canciones similares a Midnight City",
+    "relevant": "Midnight City by M83 — genres: synthpop, indietronica — album: Hurry Up, We're Dreaming",
+    "negatives": ["Run Boy Run by Woodkid — genres: chamber pop — album: The Golden Age", "Take Five by Dave Brubeck — genres: jazz — album: Time Out"]
+  },
+  {
+    "id": "web-cache-en",
+    "domain": "search",
+    "language": "en",
+    "query": "reuse a previous search written in another language",
+    "relevant": "The semantic web-search cache can match equivalent cross-language queries using local embeddings.",
+    "negatives": ["Scheduled jobs store execution history and retry metadata.", "Notes are ordered by due date and creation date."]
+  }
+]

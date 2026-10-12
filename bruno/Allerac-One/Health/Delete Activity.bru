@@ -1,0 +1,21 @@
+meta {
+  name: Delete Activity
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/health/activities/{{activityId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "List Activities" first to populate activityId.
+  Required scope: health:write. Deletes the activity and all derived data
+  (laps, zones, samples cascade via FK) — this is destructive and permanent.
+}

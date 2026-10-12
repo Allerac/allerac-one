@@ -55,4 +55,15 @@ describe('NotesService ownership', () => {
     expect(mockQuery.mock.calls[0][0]).toContain('AND user_id = $3');
     expect(mockQuery.mock.calls[0][1]).toEqual(['Updated', 'note-b', 'user-a']);
   });
+
+  it('does not reindex when only note metadata changes', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 'note-a', document_id: 'doc-a', title: 'Updated', content: 'Original' }],
+      rowCount: 1,
+    } as never);
+
+    await notesService.updateNote('user-a', 'note-a', { title: 'Updated' });
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+  });
 });

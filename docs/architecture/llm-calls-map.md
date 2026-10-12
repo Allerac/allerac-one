@@ -20,7 +20,7 @@ Every place the platform calls an LLM, what model it uses, and the full system p
 | 10 | Skill eval — judge | `gpt-4o-mini` | LLM-as-judge, pass/fail per criteria |
 | 11 | Skill eval — improve | `gpt-4o` | Propose prompt fixes |
 | 12 | Benchmark | all models | `"You are a helpful assistant."` |
-| 13 | Embeddings | `text-embedding-3-small` (GitHub Models) | RAG vectors — not a chat call |
+| 13 | Embeddings | `embeddinggemma` (local Ollama) | RAG vectors — not a chat call |
 
 ---
 
@@ -360,10 +360,12 @@ You are a helpful assistant. Be concise.
 ## Embeddings (not a chat call)
 
 **File:** `src/app/services/rag/embedding.service.ts`  
-**Model:** `text-embedding-3-small` via GitHub Models — **hardcoded, never user-selectable**  
-**Purpose:** Generate 1536-dim vectors for RAG (documents, notes)
+**Model:** `embeddinggemma` via local Ollama by default; configurable through
+embedding-specific environment settings.
+**Purpose:** Generate 768-dim vectors for RAG (documents, notes)
 
-This model cannot change after vectors are stored — switching models would require re-embedding the entire corpus.
+Changing the model or version requires the resumable reindex process; vectors from
+different spaces must never be mixed.
 
 ---
 

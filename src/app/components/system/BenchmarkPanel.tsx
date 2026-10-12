@@ -190,19 +190,35 @@ export default function BenchmarkPanel({ isDarkMode, userId, MODELS, selectedMod
   return (
     <div className="space-y-6 p-4 sm:p-6">
 
-      {/* Vision Benchmark Link */}
-      <div className={`rounded-xl border p-4 ${cardBg} ${border}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className={`text-sm font-semibold ${textPrimary} mb-1`}>Vision Benchmark</h3>
-            <p className={`text-xs ${textMuted}`}>Test which models can see and describe images</p>
+      {/* Specialized benchmark links */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className={`rounded-xl border p-4 ${cardBg} ${border}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className={`text-sm font-semibold ${textPrimary} mb-1`}>Vision Benchmark</h3>
+              <p className={`text-xs ${textMuted}`}>Test which models can see and describe images</p>
+            </div>
+            <Link
+              href="/benchmark/vision"
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-brand-900 hover:bg-brand-800 text-white transition-all"
+            >
+              Open →
+            </Link>
           </div>
-          <Link
-            href="/benchmark/vision"
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-brand-900 hover:bg-brand-800 text-white transition-all"
-          >
-            Open →
-          </Link>
+        </div>
+        <div className={`rounded-xl border p-4 ${cardBg} ${border}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className={`text-sm font-semibold ${textPrimary} mb-1`}>Embedding Benchmark</h3>
+              <p className={`text-xs ${textMuted}`}>Compare local retrieval quality and latency</p>
+            </div>
+            <Link
+              href="/benchmark/embeddings"
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-brand-900 hover:bg-brand-800 text-white transition-all"
+            >
+              Open →
+            </Link>
+          </div>
         </div>
       </div>
 

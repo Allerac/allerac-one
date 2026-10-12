@@ -1,17 +1,18 @@
 import { requireDomainAccess } from '@/app/lib/domain-access';
 import { getDomainSkillDefault } from '@/app/actions/skills';
-import EmailClient from './EmailClient';
+import ChatClient from '../chat/ChatClient';
 
 export default async function EmailPage() {
   const user = await requireDomainAccess('email');
   const skill = await getDomainSkillDefault('email');
   return (
-    <EmailClient
-      userId={user.id}
-      userName={user.name ?? null}
-      userEmail={user.email}
-      isAdmin={user.is_admin}
+    <ChatClient
+      domainSlug="email"
+      domainName="Email"
       defaultSkillName={skill?.skill_name}
+      defaultSidebarCollapsed
+      showEmail
+      isAdmin={user.is_admin}
     />
   );
 }

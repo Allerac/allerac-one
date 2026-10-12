@@ -39,6 +39,23 @@ interface SystemData {
       error?: string;
     };
   };
+  embeddings: {
+    healthy: boolean;
+    provider: string;
+    model: string;
+    dimensions: number;
+    version: string;
+    runtimeCompatible: boolean;
+    modelInstalled: boolean;
+    latencyMs: number;
+    queue: {
+      active: number;
+      queuedInteractive: number;
+      queuedBackground: number;
+      maxConcurrent: number;
+    };
+    error?: string;
+  };
   database: {
     connected: boolean;
     version?: string;
@@ -460,6 +477,31 @@ export default function SystemTab({ isDarkMode, userId }: SystemTabProps) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Database */}
+      <div className={`p-4 rounded-lg md:col-span-2 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+        <h3 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          Local embeddings
+          <span className={`ml-auto px-2 py-0.5 rounded-full text-xs ${
+            data.embeddings.healthy ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+          }`}>
+            {data.embeddings.healthy ? 'healthy' : 'degraded'}
+          </span>
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+          <div><span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>Runtime</span><div>{data.embeddings.provider}</div></div>
+          <div><span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>Model</span><div className="font-mono">{data.embeddings.model}</div></div>
+          <div><span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>Vector space</span><div>{data.embeddings.dimensions}d · {data.embeddings.version}</div></div>
+          <div><span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>Health latency</span><div>{data.embeddings.latencyMs} ms</div></div>
+        </div>
+        <div className={`mt-3 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          Queue: {data.embeddings.queue.active} active, {data.embeddings.queue.queuedInteractive} interactive,
+          {' '}{data.embeddings.queue.queuedBackground} background · concurrency {data.embeddings.queue.maxConcurrent}
+        </div>
+        {data.embeddings.error && (
+          <div className={`mt-2 text-xs ${isDarkMode ? 'text-red-300' : 'text-red-600'}`}>{data.embeddings.error}</div>
+        )}
       </div>
 
       {/* Database */}

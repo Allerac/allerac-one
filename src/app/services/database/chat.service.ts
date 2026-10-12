@@ -126,6 +126,22 @@ export class ChatService {
     }
 
     /**
+     * Count messages in a conversation, without loading their content.
+     */
+    async countMessages(conversationId: string): Promise<number> {
+        try {
+            const res = await pool.query(
+                'SELECT COUNT(*)::int AS count FROM chat_messages WHERE conversation_id = $1',
+                [conversationId]
+            );
+            return res.rows[0]?.count ?? 0;
+        } catch (error) {
+            console.error('[DB] countMessages failed:', error);
+            return 0;
+        }
+    }
+
+    /**
      * Create a new conversation
      */
     async createConversation(userId: string, title: string, domainSlug?: string | null) {

@@ -53,7 +53,7 @@ export const GITHUB_TOOL_DEFINITIONS = [
         properties: {
           branch: {
             type: 'string',
-            description: 'Name for the new branch (e.g. "fix/ticket-123-login-bug" or "feat/ticket-456-add-filter").',
+            description: 'Name for the new branch, in English (e.g. "fix/ticket-123-login-bug" or "feat/ticket-456-add-filter"), regardless of the conversation language.',
           },
           from_branch: {
             type: 'string',
@@ -82,7 +82,7 @@ export const GITHUB_TOOL_DEFINITIONS = [
           },
           message: {
             type: 'string',
-            description: 'Commit message describing the change.',
+            description: 'Commit message describing the change, written in English regardless of the conversation language.',
           },
           branch: {
             type: 'string',
@@ -123,7 +123,7 @@ export const GITHUB_TOOL_DEFINITIONS = [
           },
           message: {
             type: 'string',
-            description: 'Commit message (optional).',
+            description: 'Commit message (optional), written in English regardless of the conversation language.',
           },
         },
         required: ['path', 'start_line', 'end_line', 'new_content', 'branch'],
@@ -152,7 +152,7 @@ export const GITHUB_TOOL_DEFINITIONS = [
           },
           message: {
             type: 'string',
-            description: 'Commit message describing the change (optional — defaults to "chore: edit <path>").',
+            description: 'Commit message describing the change (optional — defaults to "chore: edit <path>"), written in English regardless of the conversation language.',
           },
           branch: {
             type: 'string',
@@ -167,17 +167,17 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'github_create_pr',
-      description: 'Open a pull request in the Allerac One repository. Call this after committing all changes to a branch.',
+      description: 'Open a pull request in the Allerac One repository. Call this after committing all changes to a branch. The title and body must always be written in English, regardless of the conversation language.',
       parameters: {
         type: 'object',
         properties: {
           title: {
             type: 'string',
-            description: 'Pull request title (concise, under 70 characters).',
+            description: 'Pull request title in English (concise, under 70 characters), regardless of the conversation language.',
           },
           body: {
             type: 'string',
-            description: 'Pull request description in markdown. Include what changed, why, and how to test.',
+            description: 'Pull request description in markdown, written in English regardless of the conversation language. Include what changed, why, and how to test.',
           },
           head: {
             type: 'string',

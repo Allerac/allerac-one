@@ -1,5 +1,6 @@
 export type ExpensiveOperation =
   | 'chat'
+  | 'public-chat'
   | 'benchmark'
   | 'image-edit'
   | 'model-download';
@@ -58,6 +59,19 @@ function getLimit(operation: ExpensiveOperation): OperationLimit {
         concurrency: positiveInteger('CONCURRENCY_LIMIT_CHAT', 2),
         scope: 'user',
       };
+    // Extra daily budget cap stacked on top of 'chat' for public-facing domains
+    // (see PUBLIC_DOMAINS in chat-tool-registry.ts). Every website visitor shares
+    // the same service account, so 'chat's per-minute window alone doesn't stop
+    // sustained abuse (VPN/IP rotation) from running up real LLM spend over a day.
+    // Concurrency is set high — this is a volume cap, not a concurrency cap;
+    // 'chat' already enforces concurrency for this account.
+    case 'public-chat':
+      return {
+        requests: positiveInteger('RATE_LIMIT_PUBLIC_CHAT_REQUESTS', 300),
+        windowMs: positiveInteger('RATE_LIMIT_PUBLIC_CHAT_WINDOW_SECONDS', 86_400) * 1_000,
+        concurrency: positiveInteger('CONCURRENCY_LIMIT_PUBLIC_CHAT', 20),
+        scope: 'user',
+      };
     case 'benchmark':
       return {
         requests: positiveInteger('RATE_LIMIT_BENCHMARK_REQUESTS', 5),
@@ -94,12 +108,27 @@ function limitHeaders(
   };
 }
 
+export interface OperationLimitOverride {
+  requests?: number;
+  windowMs?: number;
+}
+
+function applyOverride(limit: OperationLimit, override?: OperationLimitOverride): OperationLimit {
+  if (!override) return limit;
+  return {
+    ...limit,
+    requests: override.requests ?? limit.requests,
+    windowMs: override.windowMs ?? limit.windowMs,
+  };
+}
+
 export function acquireOperationLimit(
   operation: ExpensiveOperation,
   userId: string,
   now = Date.now(),
+  override?: OperationLimitOverride,
 ): OperationLimitResult {
-  const limit = getLimit(operation);
+  const limit = applyOverride(getLimit(operation), override);
   const subject = limit.scope === 'global' ? 'global' : userId;
   const key = `${operation}:${subject}`;
   const entry: LimiterEntry = store.entries.get(key) ?? { active: 0, requests: [] };
@@ -161,6 +190,42 @@ export function acquireOperationLimit(
         }
       },
     },
+  };
+}
+
+export interface OperationLimitStatus {
+  used: number;
+  limit: number;
+  windowSeconds: number;
+  resetSeconds: number;
+}
+
+/**
+ * Read-only view of current usage for the window — does not consume a slot or
+ * mutate the store. Used to power usage indicators (e.g. the per-domain rate
+ * limit panel) without affecting the actual limiter state.
+ */
+export function peekOperationLimit(
+  operation: ExpensiveOperation,
+  userId: string,
+  override?: OperationLimitOverride,
+  now = Date.now(),
+): OperationLimitStatus {
+  const limit = applyOverride(getLimit(operation), override);
+  const subject = limit.scope === 'global' ? 'global' : userId;
+  const key = `${operation}:${subject}`;
+  const entry = store.entries.get(key);
+  const windowStart = now - limit.windowMs;
+  const requests: number[] = entry ? entry.requests.filter((timestamp: number) => timestamp > windowStart) : [];
+  const resetSeconds = requests.length > 0
+    ? Math.ceil((requests[0] + limit.windowMs - now) / 1_000)
+    : 0;
+
+  return {
+    used: requests.length,
+    limit: limit.requests,
+    windowSeconds: Math.ceil(limit.windowMs / 1_000),
+    resetSeconds,
   };
 }
 

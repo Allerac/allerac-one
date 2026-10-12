@@ -1,0 +1,36 @@
+meta {
+  name: 02 Queue DUIMP Run
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/crawler/runs
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "sourceId": "receita-federal-duimp",
+    "maxPages": 3
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.run?.id) {
+    bru.setEnvVar("crawlerRunId", body.data.run.id);
+  }
+}
+
+docs {
+  Queues a crawl and stores data.run.id in crawlerRunId.
+  Required scope: crawler:runs:write.
+}
+

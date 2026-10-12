@@ -1,0 +1,33 @@
+meta {
+  name: Create Manual Memory
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/memories
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "content": "The user prefers concise answers.",
+    "keyTopics": ["preference"],
+    "importanceScore": 8,
+    "emotion": 1,
+    "domainSlug": "chat"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.memory?.id) {
+    bru.setEnvVar("memoryId", body.data.memory.id);
+  }
+}

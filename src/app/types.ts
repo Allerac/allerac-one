@@ -42,19 +42,11 @@ export interface Model {
   name: string;
   icon: string;
   description?: string;
-  provider: 'github' | 'ollama' | 'gemini' | 'anthropic';
+  provider: 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai';
   baseUrl?: string;
   requiresToken?: boolean;
   category: 'Fast' | 'Thinking' | 'Pro';
   shortName: string;
-}
-
-export interface MemorySaveResult {
-  success: boolean;
-  message: string;
-  summary?: string;
-  importance?: number;
-  topics?: string[];
 }
 
 export interface SearchWebResult {
@@ -78,9 +70,10 @@ export interface ScheduledJob {
   cronExpr: string;
   prompt: string;
   channels: string[];
+  webhookUrl: string | null;
   domainSlug: string | null;
   llmModel: string | null;
-  llmProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | null;
+  llmProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai' | null;
   enabled: boolean;
   lastRunAt: string | null;
   createdAt: string;

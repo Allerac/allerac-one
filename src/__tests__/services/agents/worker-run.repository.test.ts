@@ -229,6 +229,7 @@ describe('WorkerRunRepository', () => {
         google_api_key: null,
         google_key_preference: 'allerac',
         anthropic_api_key: 'sk-ant-user',
+        openai_api_key: null,
         location: null,
         timezone: null,
         onboarding_completed: true,
@@ -241,8 +242,12 @@ describe('WorkerRunRepository', () => {
         tavily_api_key: null,
         anthropic_api_key: null,
         google_api_key: null,
+        openai_api_key: null,
         resend_api_key: null,
         resend_from_email: null,
+        robot_speech_voice: null,
+        robot_speech_speed: null,
+        robot_speech_style: null,
       });
       mockQuery.mockResolvedValueOnce({ rows: [{ is_admin: true }] });
 
@@ -268,8 +273,12 @@ describe('WorkerRunRepository', () => {
         tavily_api_key: null,
         anthropic_api_key: null,
         google_api_key: null,
+        openai_api_key: null,
         resend_api_key: null,
         resend_from_email: null,
+        robot_speech_voice: null,
+        robot_speech_speed: null,
+        robot_speech_style: null,
       });
       mockQuery.mockResolvedValueOnce({ rows: [] });
 

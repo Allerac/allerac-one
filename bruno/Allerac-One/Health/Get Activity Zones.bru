@@ -1,0 +1,20 @@
+meta {
+  name: Get Activity Zones
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/activities/{{activityId}}/zones
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "List Activities" first to populate activityId.
+  Required scope: health:read. Heart-rate and power time-in-zone aggregates.
+}

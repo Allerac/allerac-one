@@ -1,0 +1,26 @@
+{
+  "id": "3becf291-cff9-4325-bc69-d896725f0218",
+  "name": "Demo: Receive Allerac Job Webhook",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "allerac-job",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "6c2e6a7a-6e0b-4a2a-8b1a-9a4b6b6f6a1a",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "3becf291-cff9-4325-bc69-d896725f0219"
+    }
+  ],
+  "connections": {},
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

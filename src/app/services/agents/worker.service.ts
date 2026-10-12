@@ -15,9 +15,10 @@ export interface WorkerExecutionConfig {
   githubToken: string;
   geminiToken?: string;
   anthropicToken?: string;
+  openaiToken?: string;
   tavilyApiKey?: string;
   selectedModel: string;
-  modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic';
+  modelProvider: 'github' | 'ollama' | 'gemini' | 'anthropic' | 'openai';
   modelBaseUrl: string;
   systemMessage: string;
   isAdmin: boolean;
@@ -41,11 +42,11 @@ export class WorkerService {
     onToolCall?: (tool: string, args: any) => void,
     onToolResult?: (tool: string, success: boolean, detail: string) => void
   ): Promise<WorkerResult> {
-    const { userId, githubToken, geminiToken, anthropicToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage } =
+    const { userId, githubToken, geminiToken, anthropicToken, openaiToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage } =
       config;
 
     try {
-      const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken, geminiToken, anthropicToken });
+      const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken, geminiToken, anthropicToken, openaiToken });
 
       // Build worker-specific system message
       let enrichedSystemMessage = ALLERAC_SOUL;

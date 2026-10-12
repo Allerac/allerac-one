@@ -1,0 +1,21 @@
+meta {
+  name: Get Activity Route
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/health/activities/{{activityId}}/route?detail=true
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+docs {
+  Run "List Activities" first to populate activityId.
+  Required scope: health:read. Returns redacted, bounded GPS coordinates
+  when ?detail=true — handle this response carefully, never log it.
+}

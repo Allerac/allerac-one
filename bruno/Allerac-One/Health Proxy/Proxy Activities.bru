@@ -14,6 +14,14 @@ headers {
   Authorization: Bearer {{apiKey}}
 }
 
+script:post-response {
+  const body = res.getBody();
+  const first = body?.data?.activities?.[0];
+  if (first?.activityId) {
+    bru.setEnvVar("proxyActivityId", first.activityId);
+  }
+}
+
 docs {
   Live read from Garmin via the health-worker — never written to
   health_activities, never logged with payload content. `date` is required

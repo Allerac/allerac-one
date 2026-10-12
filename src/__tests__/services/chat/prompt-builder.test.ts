@@ -55,4 +55,31 @@ describe('buildChatSystemPrompt', () => {
     expect(prompt).toContain('/workspace/projects/user-1/project-a');
     expect(prompt).toContain('RAG');
   });
+
+  test('excludes private account context and persistence guidance from public domains', () => {
+    const prompt = buildChatSystemPrompt({
+      user,
+      locale: 'pt',
+      domain: 'sales',
+      userLocation: 'PRIVATE_LOCATION_CANARY',
+      tavilyConfigured: true,
+      userInstructions: 'PRIVATE_INSTRUCTION_CANARY',
+      postContext: 'UNTRUSTED_POST_CONTEXT',
+      conversationMemories: 'PRIVATE_MEMORY_CANARY',
+      relevantContext: 'PRIVATE_RAG_CANARY',
+      now: new Date('2026-09-05T10:11:12Z'),
+      timezone: 'UTC',
+    });
+
+    expect(prompt).not.toContain('- Name: Ada');
+    expect(prompt).not.toContain('PRIVATE_LOCATION_CANARY');
+    expect(prompt).not.toContain('PRIVATE_INSTRUCTION_CANARY');
+    expect(prompt).not.toContain('UNTRUSTED_POST_CONTEXT');
+    expect(prompt).not.toContain('PRIVATE_MEMORY_CANARY');
+    expect(prompt).not.toContain('PRIVATE_RAG_CANARY');
+    expect(prompt).not.toContain('## Memory, notes, and reminders');
+    expect(prompt).not.toContain('use the search_web tool');
+    expect(prompt).not.toContain('private AI assistant');
+    expect(prompt).toContain('- Language: Portuguese');
+  });
 });

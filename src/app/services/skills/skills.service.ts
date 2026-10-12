@@ -327,7 +327,7 @@ export class SkillsService {
     // Note: This requires a GitHub token. For now, we'll return empty if not available.
     // In production, consider passing token from context or using a service account.
     try {
-      const embeddingService = new EmbeddingService(''); // Empty token - will fail gracefully
+      const embeddingService = new EmbeddingService();
       const vectorSearch = new VectorSearchService(embeddingService);
       
       const context = await vectorSearch.getRelevantContext(query, userId, {

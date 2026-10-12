@@ -7,6 +7,7 @@ export function jobDto(job: ScheduledJob & { domainSlug?: string | null }) {
     cronExpr: job.cronExpr,
     prompt: job.prompt,
     channels: job.channels,
+    webhookUrl: job.webhookUrl,
     domainSlug: job.domainSlug ?? null,
     llmModel: job.llmModel,
     llmProvider: job.llmProvider,

@@ -69,11 +69,12 @@ export async function POST(request: Request): Promise<Response> {
     const tavilyApiKey   = settings?.tavily_api_key  || sysSettings.tavily_api_key  || process.env.TAVILY_API_KEY || undefined;
     const googleApiKey   = settings?.google_api_key  || sysSettings.google_api_key  || '';
     const anthropicApiKey = settings?.anthropic_api_key || sysSettings.anthropic_api_key || '';
+    const openaiApiKey = settings?.openai_api_key || sysSettings.openai_api_key || process.env.OPENAI_API_KEY || '';
 
     const { selectedModel, modelProvider, modelBaseUrl } = resolveJobModel(
       job.llm_model,
       job.llm_provider,
-      { githubToken, googleApiKey, anthropicApiKey },
+      { githubToken, googleApiKey, anthropicApiKey, openaiApiKey },
     );
 
     // Build system message
@@ -100,6 +101,7 @@ export async function POST(request: Request): Promise<Response> {
       githubToken,
       geminiToken:    googleApiKey || undefined,
       anthropicToken: anthropicApiKey || undefined,
+      openaiToken:    openaiApiKey || undefined,
       tavilyApiKey,
       selectedModel,
       modelProvider,

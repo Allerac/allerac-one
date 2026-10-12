@@ -14,8 +14,18 @@ import {
 import { ChatProviderConfigurationError } from '@/app/services/chat/chat-runtime-context';
 import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
+import { PUBLIC_DOMAINS } from '@/app/services/chat/chat-tool-registry';
+import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { domainRateLimitSettingsService } from '@/app/services/domains/domain-rate-limit-settings.service';
 
 const chatService = new ChatService();
+const userSettingsService = new UserSettingsService();
+
+// Anonymous website visitors share one service account per public domain — cap how
+// long a single conversation can run so no visitor can turn one thread into an
+// unbounded, ever-growing (and ever more expensive) context. See
+// docs/domains/expose-agent-to-website.md.
+const PUBLIC_DOMAIN_MAX_MESSAGES_PER_CONVERSATION = 40;
 
 const sendMessageSchema = z.object({
   message: z.string().max(100_000).optional(),
@@ -32,6 +42,9 @@ const sendMessageSchema = z.object({
   preSelectedSkillId: z.string().uuid().optional(),
   defaultSkillName: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,49}$/).optional(),
   postContext: z.string().max(20_000).optional(),
+  // Server-to-server callers (e.g. the website's Worker) have no browser session/cookie to read
+  // locale from — let them state it explicitly. Falls back to the locale cookie, then 'en'.
+  locale: z.string().trim().regex(/^[a-z]{2}(-[A-Z]{2})?$/).optional(),
 }).refine(
   value => Boolean(value.message?.trim()) || Boolean(value.imageAttachments?.length),
   { message: 'Message or imageAttachments is required', path: ['message'] },
@@ -62,6 +75,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
 
 export async function POST(request: Request, context: RouteContext): Promise<Response> {
   let limitResult: ReturnType<typeof acquireOperationLimit> | null = null;
+  let publicLimitResult: ReturnType<typeof acquireOperationLimit> | null = null;
   try {
     const user = await requireApiUser('chat:write', request);
     const { id } = await context.params;
@@ -84,6 +98,31 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       created_at: new Date(),
     }, domain);
 
+    const isPublicDomain = PUBLIC_DOMAINS.includes(domain);
+
+    if (isPublicDomain && (
+      parsed.data.preSelectedSkillId
+      || parsed.data.defaultSkillName
+      || parsed.data.postContext
+    )) {
+      return apiError(
+        'validation_error',
+        'Skill selection and post context are not allowed for public domains',
+        400,
+      );
+    }
+
+    if (isPublicDomain) {
+      const existingCount = await chatService.countMessages(id);
+      if (existingCount >= PUBLIC_DOMAIN_MAX_MESSAGES_PER_CONVERSATION) {
+        return apiError(
+          'conversation_limit_reached',
+          'This conversation has reached its message limit. Please start a new conversation.',
+          403,
+        );
+      }
+    }
+
     limitResult = acquireOperationLimit('chat', user.id);
     if (!limitResult.allowed) {
       const code = limitResult.reason === 'concurrency' ? 'concurrency_limited' : 'rate_limited';
@@ -102,6 +141,33 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       );
     }
 
+    // Extra daily volume cap for public domains — every anonymous visitor shares this
+    // one service account, so 'chat's per-minute window alone doesn't stop sustained
+    // abuse (VPN/IP rotation) from running up real LLM spend over a day.
+    let domainRateLimitSettings: Awaited<ReturnType<typeof domainRateLimitSettingsService.get>> | null = null;
+    if (isPublicDomain) {
+      domainRateLimitSettings = await domainRateLimitSettingsService.get(domain);
+      const override = domainRateLimitSettingsService.toOverride(domainRateLimitSettings);
+      publicLimitResult = acquireOperationLimit('public-chat', user.id, Date.now(), override);
+      if (!publicLimitResult.allowed) {
+        // `finally` below releases the already-acquired 'chat' lease.
+        return Response.json(
+          {
+            error: {
+              code: 'rate_limited',
+              message: 'Daily chat volume limit exceeded for this domain',
+              details: { retryAfterSeconds: publicLimitResult.retryAfterSeconds },
+            },
+          },
+          { status: 429, headers: publicLimitResult.headers },
+        );
+      }
+
+      // Fire-and-forget: never let alert delivery affect the chat response.
+      const usage = domainRateLimitSettingsService.usageFromSettings(domainRateLimitSettings, user.id);
+      void domainRateLimitSettingsService.checkAndAlert(domain, usage, domainRateLimitSettings);
+    }
+
     let modelId = parsed.data.model;
     let provider = parsed.data.provider;
     if (!modelId || !provider) {
@@ -117,8 +183,30 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       provider = domainDefault.provider;
     }
 
+    // Tagged '[ChatRoute]' (same context the internal /api/chat route uses) so this
+    // shows up under the /logs viewer's existing "CHAT" filter — previously this
+    // endpoint (used by the CLI and public-facing domains like sales/openworld)
+    // logged nothing at all, making it impossible to see which model actually
+    // answered a given request.
+    const providerLabel = provider === 'ollama' ? `● LOCAL · ${modelId}` : `◌ ${provider} · ${modelId}`;
+    console.log(`[ChatRoute] ► ${domain} — ${providerLabel} (api-v1)`);
+
     const cookieStore = await cookies();
-    const locale = cookieStore.get('locale')?.value || 'en';
+    // API-key callers (e.g. the CLI) send no session cookies at all, so the
+    // locale cookie is never present for them — fall back to the account's
+    // saved language (user_settings.language, set via the Hub's language
+    // picker) before defaulting to English, so non-browser clients still get
+    // the right language instead of silently always landing on 'en'.
+    const cookieLocale = cookieStore.get('locale')?.value;
+    let rawLocale = parsed.data.locale || cookieLocale;
+    if (!rawLocale) {
+      const settings = await userSettingsService.loadUserSettings(user.id);
+      rawLocale = settings?.language || 'en';
+    }
+    // prompt-builder.ts only recognizes bare 2-letter codes (LANGUAGE_NAMES) — strip any
+    // region suffix (e.g. the website's 'pt-BR' -> 'pt') or the language instruction silently
+    // falls back to English.
+    const locale = rawLocale.split('-')[0];
     const events: Array<Record<string, any>> = [];
     const result = await executeChatMessage({
       user: {
@@ -165,6 +253,9 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
   } finally {
     if (limitResult?.allowed) {
       limitResult.lease.release();
+    }
+    if (publicLimitResult?.allowed) {
+      publicLimitResult.lease.release();
     }
   }
 }

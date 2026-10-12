@@ -15,7 +15,7 @@ import pool from '@/app/clients/db';
 
 export interface ConversationSummary {
   id: string;
-  conversation_id: string;
+  conversation_id: string | null;
   user_id: string;
   summary: string;
   key_topics: string[];
@@ -38,6 +38,13 @@ interface LLMConfig {
 }
 
 export interface MemoryGenerationOptions {
+  importanceScore?: number;
+  emotion?: -1 | 0 | 1 | null;
+}
+
+export interface ManualMemoryInput {
+  content: string;
+  keyTopics?: string[];
   importanceScore?: number;
   emotion?: -1 | 0 | 1 | null;
 }
@@ -236,6 +243,54 @@ ${conversationText}`;
       console.error('[Memory] getRecentSummaries failed:', error);
       return [];
     }
+  }
+
+  async searchSummaries(
+    userId: string,
+    query: string,
+    limit: number = 20,
+    minImportance: number = 1,
+  ): Promise<ConversationSummary[]> {
+    const pattern = `%${query.trim()}%`;
+    const res = this.domainSlug
+      ? await pool.query(
+          `SELECT * FROM conversation_summaries
+           WHERE user_id = $1
+             AND importance_score >= $2
+             AND domain_slug = $3
+             AND (summary ILIKE $4 OR array_to_string(key_topics, ' ') ILIKE $4)
+           ORDER BY importance_score DESC, created_at DESC
+           LIMIT $5`,
+          [userId, minImportance, this.domainSlug, pattern, limit],
+        )
+      : await pool.query(
+          `SELECT * FROM conversation_summaries
+           WHERE user_id = $1
+             AND importance_score >= $2
+             AND (summary ILIKE $3 OR array_to_string(key_topics, ' ') ILIKE $3)
+           ORDER BY importance_score DESC, created_at DESC
+           LIMIT $4`,
+          [userId, minImportance, pattern, limit],
+        );
+    return (res.rows || []) as ConversationSummary[];
+  }
+
+  async createManualMemory(userId: string, input: ManualMemoryInput): Promise<ConversationSummary> {
+    const res = await pool.query(
+      `INSERT INTO conversation_summaries
+         (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion, domain_slug)
+       VALUES (NULL, $1, $2, $3, $4, 1, $5, $6)
+       RETURNING *`,
+      [
+        userId,
+        input.content.trim(),
+        input.keyTopics ?? [],
+        input.importanceScore ?? 7,
+        input.emotion == null ? null : String(input.emotion),
+        this.domainSlug,
+      ],
+    );
+    return res.rows[0] as ConversationSummary;
   }
 
   /**

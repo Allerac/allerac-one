@@ -7,6 +7,7 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.inter
 const GITHUB_BASE_URL = 'https://models.inference.ai.azure.com';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
 const userSettingsService = new UserSettingsService();
 const systemSettingsService = new SystemSettingsService();
@@ -37,6 +38,7 @@ export async function loadChatRuntimeContext(
     || undefined;
   const googleApiKey = settings?.google_api_key || systemSettings.google_api_key || '';
   const anthropicApiKey = settings?.anthropic_api_key || systemSettings.anthropic_api_key || '';
+  const openaiApiKey = settings?.openai_api_key || systemSettings.openai_api_key || process.env.OPENAI_API_KEY || '';
 
   if (provider === 'anthropic' && !anthropicApiKey) {
     throw new ChatProviderConfigurationError(
@@ -46,6 +48,11 @@ export async function loadChatRuntimeContext(
   if (provider === 'gemini' && !googleApiKey) {
     throw new ChatProviderConfigurationError(
       'Google API key is not configured. Please add it in Configuration → API Keys.',
+    );
+  }
+  if (provider === 'openai' && !openaiApiKey) {
+    throw new ChatProviderConfigurationError(
+      '❌ **OpenAI API key not configured**\n\nPlease add your OpenAI API key in Settings → Developer API Keys.',
     );
   }
 
@@ -69,13 +76,15 @@ export async function loadChatRuntimeContext(
   const modelBaseUrl = provider === 'ollama' ? OLLAMA_BASE_URL
     : provider === 'gemini' ? GEMINI_BASE_URL
       : provider === 'anthropic' ? ANTHROPIC_BASE_URL
-        : GITHUB_BASE_URL;
+        : provider === 'openai' ? OPENAI_BASE_URL
+          : GITHUB_BASE_URL;
 
   return {
     githubToken,
     tavilyApiKey,
     googleApiKey,
     anthropicApiKey,
+    openaiApiKey,
     userLocation: settings?.location || null,
     userInstructions,
     modelBaseUrl,

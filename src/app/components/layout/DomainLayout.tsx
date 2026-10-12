@@ -23,8 +23,12 @@ export default function DomainLayout({
 }: Props) {
   const router = useRouter();
   const [isDark, setIsDark]               = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [chatCollapsed, setChatCollapsed]       = useState(false);
+  // Default both rails collapsed on phones/small tablets — at full width they
+  // add up to 640px (240px sidebar + 400px chat), leaving no room for the
+  // domain content itself on a typical mobile viewport.
+  const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth < 1024;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(isMobileViewport);
+  const [chatCollapsed, setChatCollapsed]       = useState(isMobileViewport);
   const [lastToolCall, setLastToolCall]   = useState<ToolCallEvent | null>(null);
   const [postContext, setPostContext]     = useState('');
   const [alleracOpen, setAlleracOpen]     = useState(false);

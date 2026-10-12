@@ -182,6 +182,7 @@ interface FormData {
   name: string;
   prompt: string;
   channels: string[];
+  webhookUrl: string;
   enabled: boolean;
   preset: Preset;
   hour: string;
@@ -203,6 +204,7 @@ const defaultForm: FormData = {
   name: '',
   prompt: '',
   channels: ['telegram'],
+  webhookUrl: '',
   enabled: true,
   preset: 'daily',
   hour: '8',
@@ -311,6 +313,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
       name: job.name,
       prompt: job.prompt,
       channels: job.channels,
+      webhookUrl: job.webhookUrl ?? '',
       enabled: job.enabled,
       preset: 'custom',
       cronExpr: job.cronExpr,
@@ -348,6 +351,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
     if (!formData.name.trim()) { setError(t('errors.nameRequired')); return; }
     if (!formData.prompt.trim()) { setError(t('errors.promptRequired')); return; }
     if (formData.channels.length === 0) { setError(t('errors.channelRequired')); return; }
+    if (formData.channels.includes('webhook') && !formData.webhookUrl.trim()) { setError(t('errors.webhookUrlRequired')); return; }
 
     const cron = derivedCron.trim();
 
@@ -360,6 +364,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
         cronExpr: cron,
         prompt: formData.prompt,
         channels: formData.channels,
+        webhookUrl: formData.channels.includes('webhook') ? formData.webhookUrl.trim() : null,
         enabled: formData.enabled,
         domainSlug: domainSlug ?? null,
       });
@@ -377,6 +382,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
         cronExpr: cron,
         prompt: formData.prompt,
         channels: formData.channels,
+        webhookUrl: formData.channels.includes('webhook') ? formData.webhookUrl.trim() : null,
         enabled: formData.enabled,
       });
       setLoading(false);
@@ -597,7 +603,7 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
               <div>
                 <label className={labelCls}>{t('fields.channels')}</label>
                 <div className="flex gap-4 flex-wrap">
-                  {['telegram'].map(ch => (
+                  {['telegram', 'webhook'].map(ch => (
                     <label key={ch} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -609,6 +615,14 @@ export default function ScheduledJobsModal({ isOpen, onClose, isDarkMode, userId
                     </label>
                   ))}
                 </div>
+                {formData.channels.includes('webhook') && (
+                  <input
+                    value={formData.webhookUrl}
+                    onChange={e => setFormData(p => ({ ...p, webhookUrl: e.target.value }))}
+                    className={`${inputCls} mt-2`}
+                    placeholder={t('placeholderWebhookUrl')}
+                  />
+                )}
               </div>
 
               {/* Enabled */}

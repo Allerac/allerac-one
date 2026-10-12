@@ -1,4 +1,4 @@
-export const CHAT_PROVIDERS = ['github', 'ollama', 'gemini', 'anthropic'] as const;
+export const CHAT_PROVIDERS = ['github', 'ollama', 'gemini', 'anthropic', 'openai'] as const;
 
 export type ChatProvider = typeof CHAT_PROVIDERS[number];
 

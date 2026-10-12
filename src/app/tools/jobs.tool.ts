@@ -1,8 +1,32 @@
 import { scheduledJobsService } from '@/app/services/scheduled-jobs/scheduled-jobs.service';
-export { JOBS_TOOL_DEFINITIONS } from './jobs.tool.definitions';
+import { validateCronExpression } from '@/app/services/scheduled-jobs/cron-validation';
+export { JOBS_TOOL_DEFINITIONS, SCHEDULE_TASK_TOOL_DEFINITION } from './jobs.tool.definitions';
 
-export function buildJobsTools(userId: string) {
+export function buildJobsTools(userId: string, callerDomain: string = 'jobs') {
   return {
+    schedule_task: async (args: { cron: string; prompt: string }) => {
+      const cronExpr = args.cron?.trim();
+      const prompt = args.prompt?.trim();
+      if (!prompt) return { success: false, error: 'Prompt is required' };
+      const cronError = validateCronExpression(cronExpr || '');
+      if (cronError) return { success: false, error: cronError };
+      const job = await scheduledJobsService.createScheduledJob(userId, {
+        name: prompt.length > 60 ? `${prompt.slice(0, 57)}...` : prompt,
+        prompt,
+        cronExpr,
+        channels: ['telegram'],
+        enabled: true,
+        domainSlug: callerDomain,
+      });
+      return {
+        success: true,
+        job_id: job.id,
+        name: job.name,
+        cron_expr: job.cronExpr,
+        domain_slug: job.domainSlug,
+      };
+    },
+
     list_jobs: async () => {
       const jobs = await scheduledJobsService.getScheduledJobs(userId);
       return {

@@ -93,7 +93,7 @@ export default function AdminClient({
   const [password, setPassword] = useState('');
   const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
   const [makeAdmin, setMakeAdmin] = useState(false);
-  const [issueHealthApiKey, setIssueHealthApiKey] = useState(false);
+  const [issueBridgeApiKey, setIssueBridgeApiKey] = useState(false);
   const [createdApiKeySecret, setCreatedApiKeySecret] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
@@ -214,8 +214,8 @@ export default function AdminClient({
     );
   };
 
-  const healthDomainId = domains.find(d => d.slug === 'health')?.id;
-  const canIssueHealthApiKey = !makeAdmin && !!healthDomainId && selectedDomains.includes(healthDomainId);
+  const bridgeDomainId = domains.find(d => d.slug === 'bridge')?.id;
+  const canIssueBridgeApiKey = !makeAdmin && !!bridgeDomainId && selectedDomains.includes(bridgeDomainId);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,7 +223,7 @@ export default function AdminClient({
     setFormSuccess('');
     setCreatedApiKeySecret(null);
     startTransition(async () => {
-      const scopes = canIssueHealthApiKey && issueHealthApiKey ? ['health:proxy:read'] : undefined;
+      const scopes = canIssueBridgeApiKey && issueBridgeApiKey ? ['health:proxy:read'] : undefined;
       const result = await adminActions.createDomainUser(email, password, selectedDomains, makeAdmin, scopes);
       if (result.success) {
         setFormSuccess('User created successfully.');
@@ -231,7 +231,7 @@ export default function AdminClient({
         setPassword('');
         setSelectedDomains([]);
         setMakeAdmin(false);
-        setIssueHealthApiKey(false);
+        setIssueBridgeApiKey(false);
         if (result.apiKeySecret) setCreatedApiKeySecret(result.apiKeySecret);
         refreshUsers();
       } else {
@@ -850,7 +850,7 @@ export default function AdminClient({
                   value={sysSettings.github_token ?? ''}
                   onChange={v => setSysSettings(prev => ({ ...prev, github_token: v }))}
                   isDarkMode={isDarkMode}
-                  helpText="Used for GitHub Models API (GPT-4o, embeddings)."
+                  helpText="Used for GitHub API and legacy GitHub-hosted chat models. Embeddings run locally."
                 />
                 <ApiKeyField
                   label="Anthropic API Key"
@@ -896,7 +896,7 @@ export default function AdminClient({
                   label="GitHub Repo Token"
                   description="(tickets agent — create branches & PRs)"
                   placeholder="ghp_..."
-                  provider="github"
+                  provider="github-repo"
                   hasStoredValue={!!sysSettings.github_repo_token}
                   value={sysSettings.github_repo_token ?? ''}
                   onChange={v => setSysSettings(prev => ({ ...prev, github_repo_token: v }))}
@@ -1323,7 +1323,7 @@ export default function AdminClient({
                   ))}
                 </select>
               </div>
-              {inviteDomain === 'health' && (
+              {inviteDomain === 'bridge' && (
                 <div>
                   <label className={`flex items-center gap-2 cursor-pointer select-none ${d ? 'text-gray-300' : 'text-gray-700'}`}>
                     <input
@@ -1441,13 +1441,13 @@ export default function AdminClient({
                 </div>
               )}
 
-              {canIssueHealthApiKey && (
+              {canIssueBridgeApiKey && (
                 <div>
                   <label className={`flex items-center gap-2 cursor-pointer select-none ${d ? 'text-gray-300' : 'text-gray-700'}`}>
                     <input
                       type="checkbox"
-                      checked={issueHealthApiKey}
-                      onChange={e => setIssueHealthApiKey(e.target.checked)}
+                      checked={issueBridgeApiKey}
+                      onChange={e => setIssueBridgeApiKey(e.target.checked)}
                       disabled={isPending}
                       className="w-4 h-4 rounded accent-indigo-600"
                     />

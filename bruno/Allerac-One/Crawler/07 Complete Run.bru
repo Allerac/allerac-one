@@ -1,0 +1,31 @@
+meta {
+  name: 07 Complete Run
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/crawler/runs/{{crawlerRunId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "schemaVersion": "1.0",
+    "status": "completed",
+    "checkpoint": "bruno-smoke-batch-1"
+  }
+}
+
+docs {
+  Marks the integration smoke-test run completed.
+  Expected response: 204 No Content.
+  Required scope: crawler:runs:write.
+}
+

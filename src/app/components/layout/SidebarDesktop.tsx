@@ -29,9 +29,15 @@ interface SidebarDesktopProps {
   renameConversation: (conversationId: string, title: string) => void;
   showWorkspace?: boolean;
   showHealth?: boolean;
+  hasSidePanel?: boolean;
+  isSidePanelCollapsed?: boolean;
+  onToggleSidePanel?: () => void;
+  sidePanelLabel?: string;
   showInstagramDM?: boolean;
   onOpenInstagramPost?: () => void;
   instagramConnected?: boolean;
+  showNotesConnectors?: boolean;
+  onOpenNotesConnectors?: () => void;
   isAdmin?: boolean;
   onNewConversation?: () => void;
   userName?: string;
@@ -52,9 +58,15 @@ export default function SidebarDesktop({
   renameConversation,
   showWorkspace,
   showHealth,
+  hasSidePanel,
+  isSidePanelCollapsed,
+  onToggleSidePanel,
+  sidePanelLabel = 'painel',
   showInstagramDM,
   onOpenInstagramPost,
   instagramConnected,
+  showNotesConnectors,
+  onOpenNotesConnectors,
   isAdmin,
   onNewConversation,
   userName,
@@ -149,12 +161,35 @@ export default function SidebarDesktop({
           </svg>
           {!isSidebarCollapsed && <span>My Allerac</span>}
         </button>
+        {showNotesConnectors && onOpenNotesConnectors && (
+          <button onClick={onOpenNotesConnectors} className={`${actionBtn} ${isSidebarCollapsed ? 'justify-center' : ''}`} title="External connections">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-4 4a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l4-4a4 4 0 015.656 5.656l-1.5 1.5" />
+            </svg>
+            {!isSidebarCollapsed && <span>Connections</span>}
+          </button>
+        )}
         {isAdmin && (
           <button onClick={() => router.push('/')} className={`${actionBtn} ${isSidebarCollapsed ? 'justify-center' : ''}`} title="Hub">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             {!isSidebarCollapsed && <span>Hub</span>}
+          </button>
+        )}
+        {hasSidePanel && onToggleSidePanel && (
+          <button
+            onClick={onToggleSidePanel}
+            className={`${actionBtn} ${isSidebarCollapsed ? 'justify-center' : ''}`}
+            title={isSidePanelCollapsed ? `Mostrar ${sidePanelLabel}` : 'Chat em tela cheia'}
+          >
+            <svg className={`w-4 h-4 flex-shrink-0 ${isSidePanelCollapsed ? 'opacity-50' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="9" rx="1" strokeWidth={2} />
+              <rect x="14" y="3" width="7" height="5" rx="1" strokeWidth={2} />
+              <rect x="14" y="12" width="7" height="9" rx="1" strokeWidth={2} />
+              <rect x="3" y="16" width="7" height="5" rx="1" strokeWidth={2} />
+            </svg>
+            {!isSidebarCollapsed && <span>{isSidePanelCollapsed ? `Mostrar ${sidePanelLabel}` : 'Chat em tela cheia'}</span>}
           </button>
         )}
       </div>

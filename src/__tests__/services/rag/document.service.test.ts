@@ -42,4 +42,34 @@ describe('DocumentService ownership', () => {
       ['user-a', 'notes']
     );
   });
+
+  it('removes stale chunks before reprocessing changed content', async () => {
+    const embeddingService = {
+      generateEmbeddingsBatch: jest.fn().mockResolvedValue([
+        { embedding: [0.1, 0.2], tokenCount: 2 },
+      ]),
+    } as unknown as EmbeddingService;
+    documentService = new DocumentService(embeddingService);
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 1 } as never);
+
+    await documentService.reprocessDocumentContent('doc-a', 'Replacement content');
+
+    expect(mockQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("SET status = 'processing'"),
+      ['doc-a'],
+    );
+    expect(mockQuery).toHaveBeenNthCalledWith(
+      2,
+      'DELETE FROM document_chunks WHERE document_id = $1',
+      ['doc-a'],
+    );
+    expect(embeddingService.generateEmbeddingsBatch).toHaveBeenCalledWith(
+      ['Replacement content'],
+    );
+    expect(mockQuery).toHaveBeenCalledWith(
+      'UPDATE documents SET status = $1, error_message = $2 WHERE id = $3',
+      ['completed', null, 'doc-a'],
+    );
+  });
 });

@@ -49,6 +49,7 @@ describe('runChatPipeline', () => {
       githubToken: '',
       googleApiKey: '',
       anthropicApiKey: '',
+      openaiApiKey: '',
       user,
       conversationId: 'conv-1',
       message: 'hi',
@@ -61,6 +62,37 @@ describe('runChatPipeline', () => {
     })).resolves.toBe('hello world');
 
     expect(emit).toHaveBeenCalledWith({ type: 'token', content: 'hello' });
+  });
+
+  test('never sends tool_choice when there are no tools available (e.g. NO_TOOL_DOMAINS)', async () => {
+    // OpenAI rejects the whole request with 'tool_choice is only allowed when tools are
+    // specified' if tool_choice is present without tools — regressed for domains with
+    // zero tools (like openworld) on any non-gemini provider.
+    chatCompletion.mockResolvedValue({ choices: [{ message: { role: 'assistant', content: '' } }] });
+    streamChatCompletion.mockReturnValue(asyncTokens(['ok']));
+
+    await runChatPipeline({
+      provider: 'openai',
+      modelBaseUrl: 'https://api.openai.com/v1',
+      modelId: 'gpt-5.6-sol',
+      githubToken: '',
+      googleApiKey: '',
+      anthropicApiKey: '',
+      openaiApiKey: 'key',
+      user,
+      conversationId: 'conv-1',
+      message: 'hi',
+      locale: 'en',
+      activeSkill: null,
+      activeTools: [],
+      messages: [{ role: 'user', content: 'hi' }],
+      emit: jest.fn(),
+      keepalive: jest.fn(),
+    });
+
+    const callArgs = chatCompletion.mock.calls[0][0];
+    expect(callArgs.tool_choice).toBeUndefined();
+    expect(callArgs.tools).toBeUndefined();
   });
 
   test('executes tools before streaming', async () => {
@@ -89,13 +121,14 @@ describe('runChatPipeline', () => {
       githubToken: 'token',
       googleApiKey: '',
       anthropicApiKey: '',
+      openaiApiKey: '',
       tavilyApiKey: 'tavily',
       user,
       conversationId: 'conv-1',
       message: 'news',
       locale: 'en',
       activeSkill: null,
-      activeTools: [],
+      activeTools: [{ type: 'function', function: { name: 'search_web' } }],
       messages,
       emit,
       keepalive: jest.fn(),
@@ -109,6 +142,161 @@ describe('runChatPipeline', () => {
     expect(messages).toContainEqual(expect.objectContaining({
       role: 'tool',
       tool_call_id: 'call-1',
+    }));
+  });
+
+  test('refuses a tool call that was not in the active allowlist', async () => {
+    chatCompletion
+      .mockResolvedValueOnce({
+        choices: [{
+          message: {
+            role: 'assistant',
+            tool_calls: [{
+              id: 'call-1',
+              function: { name: 'execute_shell', arguments: '{"command":"whoami"}' },
+            }],
+          },
+        }],
+      })
+      .mockResolvedValueOnce({ choices: [{ message: { role: 'assistant', content: '' } }] });
+    streamChatCompletion.mockReturnValue(asyncTokens(['denied']));
+    const messages: any[] = [{ role: 'user', content: 'run this' }];
+    const emit = jest.fn();
+
+    await expect(runChatPipeline({
+      provider: 'openai',
+      modelBaseUrl: 'https://api.openai.com/v1',
+      modelId: 'model',
+      githubToken: '',
+      googleApiKey: '',
+      anthropicApiKey: '',
+      openaiApiKey: 'key',
+      user,
+      conversationId: 'conv-1',
+      domain: 'sales',
+      message: 'run this',
+      locale: 'en',
+      activeSkill: null,
+      activeTools: [],
+      messages,
+      emit,
+      keepalive: jest.fn(),
+    })).resolves.toBe('denied');
+
+    expect(executeChatTool).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledWith({
+      type: 'tool_result',
+      name: 'execute_shell',
+      success: false,
+    });
+    expect(messages).toContainEqual(expect.objectContaining({
+      role: 'tool',
+      content: expect.stringContaining('not allowed'),
+    }));
+  });
+
+  test('forces create_memory when the user explicitly asks to remember something', async () => {
+    chatCompletion.mockResolvedValue({
+      choices: [{ message: { role: 'assistant', content: '' } }],
+    });
+    streamChatCompletion.mockReturnValue(asyncTokens(['saved']));
+
+    await runChatPipeline({
+      provider: 'anthropic',
+      modelBaseUrl: 'https://anthropic',
+      modelId: 'model',
+      githubToken: '',
+      googleApiKey: '',
+      anthropicApiKey: 'token',
+      openaiApiKey: '',
+      user,
+      conversationId: 'conv-1',
+      domain: 'chat',
+      message: 'Guarde na sua memória que eu torço para o Barcelona',
+      locale: 'pt',
+      activeSkill: null,
+      activeTools: [{ type: 'function', function: { name: 'create_memory' } }],
+      messages: [{ role: 'user', content: 'Guarde na sua memória que eu torço para o Barcelona' }],
+      emit: jest.fn(),
+      keepalive: jest.fn(),
+    });
+
+    expect(chatCompletion).toHaveBeenCalledWith(expect.objectContaining({
+      tool_choice: { type: 'function', function: { name: 'create_memory' } },
+    }));
+  });
+
+  test.each([
+    'Guarda isso: também torço para o Barcelona',
+    'Não esqueça que prefiro respostas curtas',
+  ])('forces create_memory for natural memory request: %s', async (message) => {
+    chatCompletion.mockResolvedValue({
+      choices: [{ message: { role: 'assistant', content: '' } }],
+    });
+    streamChatCompletion.mockReturnValue(asyncTokens(['saved']));
+
+    await runChatPipeline({
+      provider: 'anthropic',
+      modelBaseUrl: 'https://anthropic',
+      modelId: 'model',
+      githubToken: '',
+      googleApiKey: '',
+      anthropicApiKey: 'token',
+      openaiApiKey: '',
+      user,
+      conversationId: 'conv-1',
+      domain: 'chat',
+      message,
+      locale: 'pt',
+      activeSkill: null,
+      activeTools: [{ type: 'function', function: { name: 'create_memory' } }],
+      messages: [{ role: 'user', content: message }],
+      emit: jest.fn(),
+      keepalive: jest.fn(),
+    });
+
+    expect(chatCompletion).toHaveBeenLastCalledWith(expect.objectContaining({
+      tool_choice: { type: 'function', function: { name: 'create_memory' } },
+    }));
+  });
+
+  test.each([
+    ['Anota que preciso comprar azeite', 'save_note'],
+    ['Me lembre amanhã que tenho médico', 'schedule_task'],
+    ['Daqui para frente, sempre responda de forma curta', 'learn_instruction'],
+  ])('routes persistence intent "%s" to %s', async (message, expectedTool) => {
+    chatCompletion.mockResolvedValue({
+      choices: [{ message: { role: 'assistant', content: '' } }],
+    });
+    streamChatCompletion.mockReturnValue(asyncTokens(['done']));
+
+    await runChatPipeline({
+      provider: 'anthropic',
+      modelBaseUrl: 'https://anthropic',
+      modelId: 'model',
+      githubToken: '',
+      googleApiKey: '',
+      anthropicApiKey: 'token',
+      openaiApiKey: '',
+      user,
+      conversationId: 'conv-1',
+      domain: 'chat',
+      message,
+      locale: 'pt',
+      activeSkill: null,
+      activeTools: [
+        { type: 'function', function: { name: 'create_memory' } },
+        { type: 'function', function: { name: 'save_note' } },
+        { type: 'function', function: { name: 'schedule_task' } },
+        { type: 'function', function: { name: 'learn_instruction' } },
+      ],
+      messages: [{ role: 'user', content: message }],
+      emit: jest.fn(),
+      keepalive: jest.fn(),
+    });
+
+    expect(chatCompletion).toHaveBeenLastCalledWith(expect.objectContaining({
+      tool_choice: { type: 'function', function: { name: expectedTool } },
     }));
   });
 
@@ -137,6 +325,7 @@ describe('runChatPipeline', () => {
       githubToken: 'token',
       googleApiKey: '',
       anthropicApiKey: '',
+      openaiApiKey: '',
       user,
       conversationId: 'conv-1',
       message: 'hi',

@@ -58,7 +58,15 @@ nav:
       - Overview: roadmap/README.md
       - Control API v1: roadmap/control-api-v1.md
       - Portable Backup and Restore: roadmap/portable-backup-restore.md
+      - Sustain Agent: roadmap/sustain-agent.md
       - Multi-Cloud Provisioning: roadmap/multi-cloud-environment-provisioning.md
+      - Provider-Independent Local Embeddings: roadmap/provider-independent-local-embeddings.md
+      - Ambient Instructions, Memory, and Tasks: roadmap/ambient-instructions-memory-tasks.md
+      - Knowledge: roadmap/knowledge.md
+      - Unified Knowledge Graph Execution: roadmap/unified-knowledge-graph-execution.md
+      - Detailed Health Activities and Maps: roadmap/health-detailed-activities.md
+      - Strava Integration for Health: roadmap/health-strava-integration.md
+      - n8n Workflow Integration: roadmap/n8n-workflow-integration.md
       - Native iOS Client: roadmap/ios-client.md
       - Control API v1 Gap Audit (2026-06-29): roadmap/control-api-v1-gap-audit-2026-06-29.md
       - Control API v1 Duplication Audit (2026-07-25): roadmap/control-api-v1-duplication-audit-2026-07-25.md
@@ -137,6 +145,7 @@ nav:
           - Overview: deploy/README.md
           - Sandbox Home: deploy/sandbox-home.md
           - Prod Azure: deploy/prod-azure.md
+      - Database Backup and Restore: database-backup-restore.md
       - Containers: containers/containers.md
       - Infrastructure: infrastructure/infrastructure.md
       - Local Setup: local-setup/local-setup.md

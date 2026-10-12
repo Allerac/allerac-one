@@ -22,9 +22,11 @@ export interface RunChatPipelineInput {
   githubToken: string;
   googleApiKey: string;
   anthropicApiKey: string;
+  openaiApiKey: string;
   tavilyApiKey?: string;
   user: User;
   conversationId: string;
+  domain?: string;
   message: string;
   locale: string;
   activeSkill: Skill | null;
@@ -44,12 +46,37 @@ function parseToolArguments(rawArguments: unknown): Record<string, any> {
   }
 }
 
+function explicitlyRequestedPersistenceTool(message: string): string | null {
+  const normalized = message.toLocaleLowerCase();
+  const temporalReference = /(?:^|\s)(?:amanh[aã]|hoje|depois|mais tarde|pr[oó]xim[oa]|segunda|terça|quarta|quinta|sexta|sábado|domingo|\d{1,2}(?::\d{2})?\s*(?:h|horas?)?|tomorrow|today|tonight|next|at\s+\d|mañana|hoy)(?=\s|[,.!?]|$)/iu;
+  const reminderRequest = /\b(?:me\s+lembre|lembre-me|me\s+avise|avise-me|n[aã]o\s+esqueça|remind\s+me|don'?t\s+forget|recu[eé]rdame|no\s+olvides)\b/i;
+  const noteRequest = /\b(?:anote|anota|tome\s+nota|crie\s+uma\s+nota|salve\s+(?:isso\s+)?(?:nas?|como)\s+notas?|write\s+(?:this\s+)?down|take\s+(?:a\s+)?note|create\s+(?:a\s+)?note)\b/i;
+  const standingInstruction = /\b(?:daqui\s+(?:em\s+diante|pra\s+frente|para\s+frente)|a\s+partir\s+de\s+agora|de\s+agora\s+em\s+diante|from\s+now\s+on|going\s+forward|a\s+partir\s+de\s+ahora)\b/i;
+  const writeVerb = '(?:guard(?:e|a|ar|asse)|salv(?:e|a|ar)|lembr(?:e|a|ar)|memoriz(?:e|a|ar)|remember|save|memorize|recuerd(?:a|e)|guardar)';
+  const memoryNoun = '(?:mem[oó]ria|memory|memoria)';
+
+  if (reminderRequest.test(normalized) && temporalReference.test(normalized)) return 'schedule_task';
+  if (noteRequest.test(normalized)) return 'save_note';
+  if (standingInstruction.test(normalized)) return 'learn_instruction';
+
+  const memoryRequest = new RegExp(`${writeVerb}.{0,100}${memoryNoun}|${memoryNoun}.{0,100}${writeVerb}`, 'i').test(normalized)
+    || /\b(?:lembre|remember|recuerda)(?:-se)?\s+(?:de\s+)?(?:que|that)\b/i.test(normalized)
+    || /\b(?:guarde|guarda|memorize|memoriza)\b.{0,50}\b(?:isso|isto|que|o seguinte|essa|esta|esse|este)\b/i.test(normalized)
+    || /\b(?:n[aã]o\s+esqueça|don'?t\s+forget|do\s+not\s+forget|no\s+olvides)\b/i.test(normalized)
+    || /\bkeep\s+(?:this|that|it)\s+in\s+mind\b/i.test(normalized);
+  return memoryRequest ? 'create_memory' : null;
+}
+
 export async function runChatPipeline(input: RunChatPipelineInput): Promise<string> {
+  const allowedToolNames = new Set(
+    input.activeTools.map(tool => tool.function?.name).filter(Boolean),
+  );
   let activeModelId = input.modelId;
   let llmService = new LLMService(input.provider, input.modelBaseUrl, {
     githubToken: input.githubToken,
     geminiToken: input.googleApiKey,
     anthropicToken: input.anthropicApiKey,
+    openaiToken: input.openaiApiKey,
   });
   let fallbackActivated = false;
   const activateFallback = () => {
@@ -66,6 +93,7 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
         githubToken: input.githubToken,
         geminiToken: input.googleApiKey,
         anthropicToken: input.anthropicApiKey,
+        openaiToken: input.openaiApiKey,
       },
     );
     input.emit({ type: 'model_fallback', model: fallback.id, provider: fallback.provider });
@@ -80,7 +108,18 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
     }
   };
   const forceTool = input.activeSkill?.force_tool ?? null;
-  const initialToolChoice = forceTool
+  const requestedPersistenceTool = explicitlyRequestedPersistenceTool(input.message);
+  const availableRequestedTool = requestedPersistenceTool
+    && input.activeTools.some(tool => tool.function?.name === requestedPersistenceTool)
+    ? requestedPersistenceTool
+    : null;
+  // tool_choice is only meaningful (and, for OpenAI, only accepted at all) when there's
+  // at least one tool to choose from — domains with zero tools (e.g. NO_TOOL_DOMAINS)
+  // must never send it, or the OpenAI provider rejects the whole request outright.
+  const initialToolChoice = input.activeTools.length === 0 ? undefined
+    : availableRequestedTool
+    ? { type: 'function', function: { name: availableRequestedTool } }
+    : forceTool
     ? { type: 'function', function: { name: forceTool } }
     : input.provider !== 'gemini' ? 'auto' : undefined;
 
@@ -92,7 +131,11 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       model: activeModelId,
       temperature: input.temperature ?? 0.7,
       max_tokens: input.maxTokens ?? 2000,
-      tools: input.activeTools,
+      // Some providers reject an explicit empty tools array outright (only
+      // omitting the field or a non-empty array is valid) — a domain with zero
+      // tools (NO_TOOL_DOMAINS in chat-tool-registry.ts) would otherwise 500
+      // on every message.
+      ...(input.activeTools.length > 0 && { tools: input.activeTools }),
       ...(initialToolChoice !== undefined && { tool_choice: initialToolChoice }),
       userId: input.user.id,
       conversationId: input.conversationId,
@@ -111,6 +154,19 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       const toolArgs = parseToolArguments(toolCall.function.arguments);
       input.emit({ type: 'tool_call', name: toolName, args: toolArgs });
 
+      // Treat the active tool list as an authorization boundary, not merely a
+      // hint sent to the model. Providers can return malformed or unexpected
+      // tool calls and those must never reach the runner.
+      if (!allowedToolNames.has(toolName)) {
+        input.emit({ type: 'tool_result', name: toolName, success: false });
+        input.messages.push({
+          role: 'tool',
+          tool_call_id: toolCallId,
+          content: JSON.stringify({ error: `Tool ${toolName} is not allowed` }),
+        });
+        continue;
+      }
+
       try {
         const toolResult = await executeChatTool(toolName, toolArgs, {
           user: input.user,
@@ -118,6 +174,8 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
           tavilyApiKey: input.tavilyApiKey,
           message: input.message,
           locale: input.locale,
+          conversationId: input.conversationId,
+          domain: input.domain || 'chat',
           emit: input.emit,
         });
         const resultEvent: Record<string, any> = {
@@ -147,8 +205,8 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       model: activeModelId,
       temperature: input.temperature ?? 0.7,
       max_tokens: input.maxTokens ?? 2000,
-      tools: input.activeTools,
-      tool_choice: 'auto',
+      ...(input.activeTools.length > 0 && { tools: input.activeTools }),
+      ...(input.activeTools.length > 0 && input.provider !== 'gemini' && { tool_choice: 'auto' }),
       userId: input.user.id,
       conversationId: input.conversationId,
     });

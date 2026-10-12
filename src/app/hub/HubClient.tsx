@@ -24,6 +24,7 @@ const DOMAINS_ALL = [
   { id: 'email',   label: 'Email',   icon: '✉️', path: '/email',    desc: 'Email inbox & AI' },
   { id: 'notes',   label: 'Notes',   icon: '📝', path: '/notes',    desc: 'Personal knowledge base' },
   { id: 'jobs',    label: 'Jobs',    icon: '⏰', path: '/jobs',     desc: 'Scheduled tasks & automation' },
+  { id: 'memory',  label: 'Knowledge', icon: '🗂️', path: '/memory', desc: 'Your personal knowledge graph' },
   { id: 'space',   label: 'Space',   icon: '🛰️', path: '/space',   desc: '3D satellite orbit simulator' },
   { id: 'learn',   label: 'Learn',   icon: '🧠', path: '/learn',   desc: 'Interactive model learning lab' },
   { id: 'robot-assistant', label: 'Robot', icon: 'R', path: '/robot-assistant', desc: 'Physical robot assistant' },

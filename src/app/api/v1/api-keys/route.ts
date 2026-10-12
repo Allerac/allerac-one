@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { apiKeyService } from '@/app/services/api-keys/api-key.service';
 import { requireSessionApiUser } from '../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../_lib/responses';
-import { apiKeyDto, SELF_SERVICE_SCOPES } from './_lib';
+import { apiKeyDto, DEFAULT_DOMAIN_USERS_SCOPES } from './_lib';
 
 const createApiKeySchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -31,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     if (!user.isAdmin) {
-      const disallowed = (parsed.data.scopes ?? []).filter(scope => !SELF_SERVICE_SCOPES.includes(scope));
+      const disallowed = (parsed.data.scopes ?? []).filter(scope => !DEFAULT_DOMAIN_USERS_SCOPES.includes(scope));
       if (disallowed.length > 0) {
         return apiError('forbidden_scope', `Scope(s) not available for self-service: ${disallowed.join(', ')}`, 403);
       }

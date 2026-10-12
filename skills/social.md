@@ -4,6 +4,7 @@ display_name: "📸 Social Media"
 description: "Instagram content creator and community manager — posts, captions, hashtags, and brand storytelling for Allerac and small businesses."
 category: productivity
 icon: "📸"
+domain: social
 auto_switch_rules: {"keywords": ["instagram", "caption", "legenda", "hashtag", "comentario", "comment", "responder", "reply", "seguidores", "followers", "reel", "stories", "story", "feed", "engajamento", "engagement", "social media", "redes sociais", "dm", "direct", "mensagem direta", "campanha social", "viral", "alcance", "reach", "impressoes", "impressions"]}
 version: "2.0.0"
 ---

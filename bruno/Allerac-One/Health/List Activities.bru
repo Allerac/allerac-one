@@ -13,3 +13,11 @@ get {
 headers {
   Authorization: Bearer {{apiKey}}
 }
+
+script:post-response {
+  const body = res.getBody();
+  const first = body?.data?.activities?.[0];
+  if (first?.activity_id) {
+    bru.setEnvVar("activityId", first.activity_id);
+  }
+}

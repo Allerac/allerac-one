@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { NotesService } from '@/app/services/notes/notes.service';
 import { requireApiUser } from '../../_lib/auth';
 import { apiAuthError, apiData, apiError, apiInternalError } from '../../_lib/responses';
-import { noteFromKeyword, noteSearchResultDto, resolveNotesToken } from '../../_lib/notes';
+import { noteFromKeyword, noteSearchResultDto } from '../../_lib/notes';
 
 const notesService = new NotesService();
 
@@ -18,12 +18,12 @@ export async function GET(request: Request): Promise<Response> {
       return apiError('validation_error', 'q is required', 400, parsed.error.flatten());
     }
 
-    const token = await resolveNotesToken(user.id);
-    if (token) {
-      const results = await notesService.searchNotes(user.id, parsed.data.q, token);
+    try {
+      const results = await notesService.searchNotes(user.id, parsed.data.q);
       return apiData({ results: results.map(noteSearchResultDto) });
+    } catch (embeddingError) {
+      console.warn('[Notes API] Semantic search unavailable, using keyword fallback:', embeddingError);
     }
-
     const notes = await notesService.keywordSearchNotes(user.id, parsed.data.q);
     return apiData({ results: notes.map(noteFromKeyword) });
   } catch (error: unknown) {

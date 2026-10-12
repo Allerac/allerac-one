@@ -23,6 +23,7 @@ interface SystemDashboardProps {
   googleApiKey: string;
   setGoogleApiKey: (v: string) => void;
   anthropicApiKey: string;
+  openaiApiKey: string;
   tokenInput: string;
   setTokenInput: (v: string) => void;
   tavilyKeyInput: string;
@@ -31,6 +32,8 @@ interface SystemDashboardProps {
   setGoogleKeyInput: (v: string) => void;
   anthropicKeyInput: string;
   setAnthropicKeyInput: (v: string) => void;
+  openaiKeyInput: string;
+  setOpenaiKeyInput: (v: string) => void;
   locationInput: string;
   setLocationInput: (v: string) => void;
   timezoneInput: string;
@@ -60,6 +63,7 @@ export default function SystemDashboardModal({
   googleApiKey,
   setGoogleApiKey,
   anthropicApiKey,
+  openaiApiKey,
   tokenInput,
   setTokenInput,
   tavilyKeyInput,
@@ -68,6 +72,8 @@ export default function SystemDashboardModal({
   setGoogleKeyInput,
   anthropicKeyInput,
   setAnthropicKeyInput,
+  openaiKeyInput,
+  setOpenaiKeyInput,
   locationInput,
   setLocationInput,
   timezoneInput,
@@ -355,6 +361,7 @@ export default function SystemDashboardModal({
                 googleApiKey={googleApiKey}
                 setGoogleApiKey={setGoogleApiKey}
                 anthropicApiKey={anthropicApiKey}
+                openaiApiKey={openaiApiKey}
                 tokenInput={tokenInput}
                 setTokenInput={setTokenInput}
                 tavilyKeyInput={tavilyKeyInput}
@@ -363,6 +370,8 @@ export default function SystemDashboardModal({
                 setGoogleKeyInput={setGoogleKeyInput}
                 anthropicKeyInput={anthropicKeyInput}
                 setAnthropicKeyInput={setAnthropicKeyInput}
+                openaiKeyInput={openaiKeyInput}
+                setOpenaiKeyInput={setOpenaiKeyInput}
                 onSave={handleSaveApiKeys}
                 isSavingKeys={isSavingKeys}
                 keySaveMessage={keySaveMessage}

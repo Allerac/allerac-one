@@ -43,7 +43,9 @@ CREATE TABLE user_notes (
 );
 ```
 
-The `document_id` FK links to the RAG `documents` table — when a GitHub token is present, notes are embedded via `text-embedding-3-small` for semantic search. Without a token, keyword search (`ILIKE`) is used as fallback.
+The `document_id` FK links to the RAG `documents` table. Notes are embedded locally
+with `embeddinggemma` through Ollama for semantic search; keyword search (`ILIKE`)
+is used when local embeddings are unavailable.
 
 Relevant migrations:
 - `054_notes.sql` — creates `user_notes` table
@@ -145,3 +147,4 @@ See `src/app/services/telegram/telegram-bot.service.ts` → `getOrCreateVirtualU
 
 - **File upload:** Paste a PDF or `.md` file directly into the vault (chunked + embedded as a note). Not yet implemented.
 - **Folders:** Tags cover grouping by context (`projeto-x`, `pessoal`). Full folder hierarchy deferred until there's a clear need beyond tags.
+- **External connectors (OneNote, Google Drive):** Read-only OAuth import of the user's own notes/files into the vault, so the assistant can read them and the data ends up fully local/private. Designed in [`docs/roadmap/notes-external-connectors.md`](../roadmap/notes-external-connectors.md); not yet implemented.
