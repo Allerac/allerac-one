@@ -102,7 +102,6 @@ Common error codes:
 | [Skills](skills.md) | list, get, create, update, delete |
 | [Health](health.md) | status, summary, daily, activities |
 | [Search](search.md) | web search |
-| [Robot](robot.md) | speech synthesis, get/update robot settings |
 | [Email](email.md) | list messages, get message, send |
 | [Music](music.md) | status, recommendations, top tracks, recently played, playlists list/create, playlist tracks list/add, sync |
 
@@ -180,8 +179,6 @@ the authenticated resource flow:
 45. `Health / Daily Health`
 46. `Health / List Activities`
 47. `Search / Web Search`
-48. `Robot / Get Settings`
-49. `Robot / Synthesize Speech`
 50. `Email / List Messages`
 51. `Email / Get Message`
 52. `Email / Send Email`

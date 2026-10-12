@@ -26,7 +26,6 @@ src/__tests__/api/control-api-health.test.ts	@typescript-eslint/no-explicit-any	
 src/__tests__/api/control-api-jobs.test.ts	@typescript-eslint/no-explicit-any	error	8
 src/__tests__/api/control-api-memories.test.ts	no-var	error	3
 src/__tests__/api/control-api-notes.test.ts	@typescript-eslint/no-explicit-any	error	2
-src/__tests__/api/control-api-robot.test.ts	no-var	error	4
 src/__tests__/api/control-api-search.test.ts	no-var	error	3
 src/__tests__/api/control-api-skills.test.ts	@typescript-eslint/no-explicit-any	error	1
 src/__tests__/components/document-upload.test.tsx	@typescript-eslint/no-explicit-any	error	2

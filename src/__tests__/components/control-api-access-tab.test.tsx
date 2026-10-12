@@ -21,7 +21,7 @@ describe('ControlApiAccessTab', () => {
       data: {
         apiKeys: [{
           id: 'key-id',
-          name: 'Android Robot',
+          name: 'Chat client',
           prefix: 'alr_live_abc123',
           scopes: ['chat:read', 'chat:write'],
           lastUsedAt: null,
@@ -39,14 +39,14 @@ describe('ControlApiAccessTab', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/v1/api-keys', { cache: 'no-store' });
   });
 
-  it('creates a scoped Android Robot key and shows its secret once', async () => {
+  it('creates a scoped Chat client key and shows its secret once', async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ data: { apiKeys: [] } }))
       .mockResolvedValueOnce(jsonResponse({
         data: {
           apiKey: {
             id: 'new-key',
-            name: 'Android Robot',
+            name: 'Chat client',
             prefix: 'alr_live_new123',
             scopes: ['profile:read', 'chat:read', 'chat:write', 'capabilities:read'],
             lastUsedAt: null,
@@ -73,7 +73,7 @@ describe('ControlApiAccessTab', () => {
       headers: { 'Content-Type': 'application/json' },
     });
     expect(JSON.parse(request[1].body)).toEqual({
-      name: 'Android Robot',
+      name: 'Chat client',
       scopes: ['profile:read', 'chat:read', 'chat:write', 'capabilities:read'],
       expiresAt: null,
     });

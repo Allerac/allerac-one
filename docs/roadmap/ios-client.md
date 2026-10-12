@@ -59,7 +59,7 @@ session.
 
 - Request microphone and speech-recognition permissions contextually.
 - Convert speech to text and reuse the text conversation flow.
-- Call `/api/v1/speech` when server speech is available.
+- Server speech (`/api/v1/speech`) was removed in 2026-10; restore it from `archive/pre-cleanup-2026-10` if needed.
 - Manage playback interruption, headphones, silent mode, and cancellation.
 - Keep text chat available when any audio permission is denied.
 

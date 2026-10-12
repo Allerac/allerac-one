@@ -30,7 +30,6 @@ const DOMAINS = [
   { slug: 'memory',  label: 'Knowledge', icon: '🗂️' },
   { slug: 'sales',   label: 'Sales',   icon: '📣' },
   { slug: 'openworld', label: 'OpenWorld', icon: '🌐' },
-  { slug: 'robot-assistant', label: 'Robot', icon: 'R' },
 ];
 
 type MobileTab = 'prompt' | 'tools' | 'assistant';

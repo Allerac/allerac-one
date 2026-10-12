@@ -30,7 +30,7 @@ const legacyCases = [
     relevant: 'Anthropic chat requests require an Anthropic API key configured by the user or system administrator.',
     negatives: [
       'Document chunks are compared with cosine distance in PostgreSQL.',
-      'The Android robot connects to the Control API using a scoped API key.',
+      'The CLI client connects to the Control API using a scoped API key.',
     ],
   },
   {

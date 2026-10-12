@@ -73,7 +73,6 @@ nav:
   - Releases:
       - Overview: releases/README.md
       - v0.1.0 Beta Release Plan: releases/v0.1.0-beta.md
-      - Robot Beta Handoff: releases/robot-beta-handoff.md
   - API Reference:
       - Overview: api/README.md
       - Control API v1:
@@ -90,7 +89,6 @@ nav:
           - Skills: api/control-api-v1/skills.md
           - Health: api/control-api-v1/health.md
           - Search: api/control-api-v1/search.md
-          - Robot: api/control-api-v1/robot.md
           - Email: api/control-api-v1/email.md
           - Music: api/control-api-v1/music.md
       - OpenAPI:
@@ -100,7 +98,6 @@ nav:
       - Control API v1: architecture/control-api-v1.md
       - Allerac Units: architecture/allerac-units.md
       - Allerac Federation: architecture/allerac-federation.md
-      - Mobile & Robot Clients: architecture/mobile-and-robot-clients.md
       - Native iOS Client: architecture/ios-client.md
       - Decisions:
           - Index: architecture/decisions/README.md
