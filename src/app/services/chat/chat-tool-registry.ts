@@ -18,7 +18,7 @@ import { SHELL_TOOL_NAMES, withoutShellTools } from '@/app/lib/shell-policy';
 export { GITHUB_TOOL_NAMES };
 export { LOGS_TOOL_NAMES };
 
-export const NOTE_TOOL_NAMES = ['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note'];
+export const NOTE_TOOL_NAMES = ['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note', 'get_note', 'list_children'];
 export const EMAIL_TOOL_NAMES = ['list_emails', 'read_email', 'send_email'];
 export const JOB_TOOL_NAMES = ['list_jobs', 'create_job', 'update_job', 'delete_job', 'toggle_job'];
 export const SCHEDULE_TASK_TOOL_NAME = 'schedule_task';

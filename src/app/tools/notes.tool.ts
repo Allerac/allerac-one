@@ -1,4 +1,7 @@
 import { NotesService } from '@/app/services/notes/notes.service';
+import { NotePagesService } from '@/app/services/notes/note-pages.service';
+
+const PAGE_SUMMARY_CHARS = 200;
 export { NOTES_TOOL_DEFINITIONS } from './notes.tool.definitions';
 
 export interface NotesUser {
@@ -8,17 +11,19 @@ export interface NotesUser {
 
 export function buildNotesTools(user: NotesUser) {
   const notesService = new NotesService();
+  const pagesService = new NotePagesService();
 
   return {
-    save_note: async (args: { content: string; title?: string; tags?: string[]; due_date?: string }) => {
+    save_note: async (args: { content: string; title?: string; tags?: string[]; due_date?: string; parent_id?: string }) => {
       const note = await notesService.createNote(user.id, {
+        parent_id: args.parent_id || null,
         content: args.content,
         title: args.title,
         tags: args.tags ?? [],
         source: 'chat',
         due_date: args.due_date ?? null,
       }, user.githubToken);
-      return { success: true, note_id: note.id, title: note.title, tags: note.tags, due_date: note.due_date };
+      return { success: true, note_id: note.id, title: note.title, tags: note.tags, due_date: note.due_date, parent_id: note.parent_id ?? null };
     },
 
     query_vault: async (args: { query: string; limit?: number }) => {
@@ -52,6 +57,41 @@ export function buildNotesTools(user: NotesUser) {
         due_date: args.due_date === undefined ? undefined : (args.due_date || null),
       });
       return { success: !!note, note_id: note?.id };
+    },
+
+    get_note: async (args: { note_id: string }) => {
+      const note = await notesService.getNote(user.id, args.note_id);
+      if (!note) return { success: false, error: 'Note not found' };
+      const [breadcrumbs, children] = await Promise.all([
+        pagesService.getBreadcrumbs(user.id, note.id),
+        pagesService.listChildren(user.id, note.id, { limit: 50 }),
+      ]);
+      return {
+        success: true,
+        note: {
+          note_id: note.id, title: note.title, content: note.content, tags: note.tags,
+          due_date: note.due_date, parent_id: note.parent_id ?? null, archived: !!note.archived_at,
+          created_at: note.created_at, updated_at: note.updated_at,
+        },
+        path: breadcrumbs.map(b => ({ note_id: b.id, title: b.title })),
+        children: children.map(c => ({ note_id: c.id, title: c.title })),
+      };
+    },
+
+    list_children: async (args: { parent_id?: string | null; limit?: number }) => {
+      const parentId = args.parent_id || null;
+      if (parentId && !(await notesService.getNote(user.id, parentId))) {
+        return { success: false, error: 'Parent note not found' };
+      }
+      const limit = Math.min(Math.max(Number(args.limit) || 50, 1), 200);
+      const children = await pagesService.listChildren(user.id, parentId, { limit });
+      return {
+        success: true,
+        parent_id: parentId,
+        children: children.map(c => ({
+          note_id: c.id, title: c.title, content: c.content.slice(0, PAGE_SUMMARY_CHARS), tags: c.tags, updated_at: c.updated_at,
+        })),
+      };
     },
   };
 }
