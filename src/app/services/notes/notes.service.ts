@@ -1,6 +1,7 @@
 import pool from '@/app/clients/db';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { DocumentService } from '@/app/services/rag/document.service';
+import { noteLinksService } from './note-links.service';
 import {
   NoteReindexQueue,
   buildNoteIndexText,
@@ -18,6 +19,10 @@ export interface Note {
   source: string;
   due_date: Date | null;
   content_hash?: string | null;
+  parent_id?: string | null;
+  position?: number;
+  icon?: string | null;
+  archived_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -37,6 +42,8 @@ export interface CreateNoteInput {
   tags?: string[];
   source?: string;
   due_date?: string | null;
+  /** Parent page; must belong to the same user. Omit or null for the root. */
+  parent_id?: string | null;
 }
 
 export interface UpdateNoteInput {
@@ -49,7 +56,18 @@ export interface UpdateNoteInput {
 export class NotesService {
   async createNote(userId: string, input: CreateNoteInput, legacyGithubToken?: string | null): Promise<Note> {
     void legacyGithubToken;
-    const { content, title = null, tags = [], source = 'chat', due_date = null } = input;
+    const { content, title = null, tags = [], source = 'chat', due_date = null, parent_id = null } = input;
+
+    let position = 0;
+    if (parent_id) {
+      const parent = await pool.query(
+        `SELECT COALESCE((SELECT MAX(position) + 1 FROM user_notes WHERE user_id = $2 AND parent_id = $1), 0) AS next
+         FROM user_notes WHERE id = $1 AND user_id = $2`,
+        [parent_id, userId],
+      );
+      if (parent.rows.length === 0) throw new Error('Parent note not found');
+      position = Number(parent.rows[0].next ?? 0);
+    }
 
     let documentId: string | null = null;
     const indexText = buildNoteIndexText(title, content);
@@ -76,10 +94,10 @@ export class NotesService {
     }
 
     const res = await pool.query(
-      `INSERT INTO user_notes (user_id, document_id, title, content, tags, source, due_date, content_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO user_notes (user_id, document_id, title, content, tags, source, due_date, content_hash, parent_id, position)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [userId, documentId, title, content, tags, source, due_date ?? null, contentHash]
+      [userId, documentId, title, content, tags, source, due_date ?? null, contentHash, parent_id, position]
     );
 
     if (documentId) {
@@ -89,7 +107,14 @@ export class NotesService {
       ).catch((err: unknown) => console.error('[Notes] Failed to link note document:', err));
     }
 
-    return res.rows[0] as Note;
+    const created = res.rows[0] as Note;
+    await updateNoteLinks(userId, created.id, { content, title, titleChanged: !!title });
+    return created;
+  }
+
+  async getNote(userId: string, noteId: string): Promise<Note | null> {
+    const res = await pool.query('SELECT * FROM user_notes WHERE id = $1 AND user_id = $2', [noteId, userId]);
+    return (res.rows[0] as Note | undefined) ?? null;
   }
 
   async listNotes(userId: string, options: {
@@ -98,9 +123,11 @@ export class NotesService {
     due_on?: string;
     due_before?: string;
     overdue?: boolean;
+    includeArchived?: boolean;
   } = {}): Promise<Note[]> {
     const limit = options.limit ?? 20;
     const conditions: string[] = ['user_id = $1'];
+    if (!options.includeArchived) conditions.push('archived_at IS NULL');
     const values: unknown[] = [userId];
     let i = 2;
 
@@ -194,6 +221,12 @@ export class NotesService {
       );
     }
 
+    try {
+      await noteLinksService.deleteLinksForNote(userId, noteId);
+    } catch (err) {
+      console.error('[Notes] Failed to delete note links:', err);
+    }
+
     return true;
   }
 
@@ -223,6 +256,13 @@ export class NotesService {
     // the background (debounced) and is skipped when the text hash is unchanged.
     if (input.content !== undefined || input.title !== undefined) {
       noteReindexQueue.schedule(userId, note.id);
+    }
+    if (input.content !== undefined || input.title !== undefined) {
+      await updateNoteLinks(userId, note.id, {
+        content: input.content !== undefined ? note.content : undefined,
+        title: note.title,
+        titleChanged: input.title !== undefined,
+      });
     }
 
     return note;
@@ -299,6 +339,28 @@ export class NotesService {
       [userId]
     );
     return res.rows.map(r => r.tag);
+  }
+}
+
+/**
+ * Keeps knowledge_links in sync after a save. Link maintenance never fails the
+ * save itself: a missing table or a transient error only logs.
+ */
+async function updateNoteLinks(
+  userId: string,
+  noteId: string,
+  change: { content?: string; title: string | null; titleChanged: boolean },
+): Promise<void> {
+  try {
+    if (change.content !== undefined) await noteLinksService.syncNoteLinks(userId, noteId, change.content);
+    if (change.titleChanged) {
+      // Can touch many notes, so it runs after the save returns.
+      noteLinksService.resyncReferencesTo(userId, change.title, noteId).catch(err => {
+        console.error('[Notes] Failed to resync references to renamed note:', err);
+      });
+    }
+  } catch (err) {
+    console.error('[Notes] Failed to update note links:', err);
   }
 }
 

@@ -2,6 +2,8 @@
 
 import { NotesService, CreateNoteInput, UpdateNoteInput } from '@/app/services/notes/notes.service';
 import { requireCurrentUser } from '@/app/lib/auth-session';
+import { notePagesService, NoteMoveError } from '@/app/services/notes/note-pages.service';
+import { noteLinksService } from '@/app/services/notes/note-links.service';
 
 const notesService = new NotesService();
 
@@ -77,5 +79,68 @@ export async function getAllTags() {
     return { success: true, tags };
   } catch (err: unknown) {
     return { success: false, tags: [], error: getErrorMessage(err) };
+  }
+}
+
+export async function moveNote(noteId: string, parentId: string | null, position?: number) {
+  try {
+    const user = await requireCurrentUser();
+    const note = await notePagesService.moveNote(user.id, noteId, parentId, position);
+    return { success: true, note };
+  } catch (err: unknown) {
+    if (!(err instanceof NoteMoveError)) console.error('[notes] moveNote error:', err);
+    return { success: false, error: getErrorMessage(err) };
+  }
+}
+
+export async function setNoteArchived(noteId: string, archived: boolean) {
+  try {
+    const user = await requireCurrentUser();
+    const count = await notePagesService.setArchived(user.id, noteId, archived);
+    return { success: count > 0, count };
+  } catch (err: unknown) {
+    console.error('[notes] setNoteArchived error:', err);
+    return { success: false, count: 0, error: getErrorMessage(err) };
+  }
+}
+
+export async function listNoteTree(options: { includeArchived?: boolean } = {}) {
+  try {
+    const user = await requireCurrentUser();
+    const items = await notePagesService.listTree(user.id, options);
+    return { success: true, items };
+  } catch (err: unknown) {
+    console.error('[notes] listNoteTree error:', err);
+    return { success: false, items: [], error: getErrorMessage(err) };
+  }
+}
+
+export async function getNoteBreadcrumbs(noteId: string) {
+  try {
+    const user = await requireCurrentUser();
+    const breadcrumbs = await notePagesService.getBreadcrumbs(user.id, noteId);
+    return { success: true, breadcrumbs };
+  } catch (err: unknown) {
+    return { success: false, breadcrumbs: [], error: getErrorMessage(err) };
+  }
+}
+
+export async function getNote(noteId: string) {
+  try {
+    const user = await requireCurrentUser();
+    const note = await notesService.getNote(user.id, noteId);
+    return { success: !!note, note };
+  } catch (err: unknown) {
+    return { success: false, note: null, error: getErrorMessage(err) };
+  }
+}
+
+export async function getNoteBacklinks(noteId: string) {
+  try {
+    const user = await requireCurrentUser();
+    const backlinks = await noteLinksService.getBacklinks(user.id, noteId);
+    return { success: true, backlinks };
+  } catch (err: unknown) {
+    return { success: false, backlinks: [], error: getErrorMessage(err) };
   }
 }

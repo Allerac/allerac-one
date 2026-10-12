@@ -3,7 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { listNotes, searchNotes, createNote, updateNote, deleteNote, getAllTags } from '@/app/actions/notes';
+import {
+  listNotes, searchNotes, createNote, updateNote, deleteNote, getAllTags,
+  listNoteTree, getNote, moveNote, setNoteArchived, getNoteBreadcrumbs, getNoteBacklinks,
+} from '@/app/actions/notes';
+import { NoteTree, Breadcrumbs } from './NoteTree';
+import { buildTree, subtreeIds, TreeItem } from './note-tree';
+import { applyWikiCompletion, getWikiQuery, linkifyWikiLinks, matchTitles, WIKI_HREF_PREFIX, WikiQuery } from './wiki-links';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 
 interface Note {
@@ -13,6 +19,9 @@ interface Note {
   tags: string[];
   source: string;
   due_date: string | null;
+  parent_id?: string | null;
+  icon?: string | null;
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -108,7 +117,7 @@ function NoteRow({ note, selected, onSelect, onDelete, d }: {
   );
 }
 
-function mdComponents(d: boolean) {
+function mdComponents(d: boolean, onWikiLink?: (title: string) => void) {
   const text = d ? 'text-gray-300' : 'text-gray-700';
   const heading = d ? 'text-gray-100' : 'text-gray-900';
   const border = d ? 'border-gray-700' : 'border-gray-200';
@@ -140,7 +149,15 @@ function mdComponents(d: boolean) {
       }
       return <code className={`px-1.5 py-0.5 rounded text-xs font-mono ${code}`} {...props}>{children}</code>;
     },
-    a: ({ children, href }: any) => (
+    a: ({ children, href }: any) => typeof href === 'string' && href.startsWith(WIKI_HREF_PREFIX) ? (
+      <a
+        href={href}
+        onClick={e => { e.preventDefault(); onWikiLink?.(decodeURIComponent(href.slice(WIKI_HREF_PREFIX.length))); }}
+        className="text-indigo-400 hover:text-indigo-300 underline decoration-dotted"
+      >
+        {children}
+      </a>
+    ) : (
       <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
         {children}
       </a>
@@ -171,8 +188,21 @@ function toDateInputValue(due_date: string | null): string {
   return d.toISOString().slice(0, 10);
 }
 
-function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListCollapsed, onExpandList }: {
+interface PageControls {
+  breadcrumbs: Array<{ id: string; title: string | null; icon: string | null }>;
+  moveTargets: Array<{ id: string; label: string }>;
+  onNavigate: (id: string) => void;
+  /** Titles offered by [[ autocomplete. */
+  linkTitles: string[];
+  onOpenTitle: (title: string) => void;
+  backlinks: Array<{ note_id: string; title: string | null; icon: string | null; snippet: string }>;
+  onMove: (parentId: string | null) => void;
+  onArchive: (archived: boolean) => void;
+}
+
+function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListCollapsed, onExpandList, page }: {
   note: Note;
+  page?: PageControls;
   isDarkMode: boolean;
   onSave: (id: string, content: string, title: string, tags: string[], due_date: string | null) => Promise<void>;
   onClose: () => void;
@@ -190,6 +220,23 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
   const [dirty, setDirty]         = useState(false);
   const autoSaveRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef               = useRef<HTMLTextAreaElement>(null);
+  const [wikiQuery, setWikiQuery] = useState<WikiQuery | null>(null);
+  const [wikiIndex, setWikiIndex] = useState(0);
+  const wikiMatches = wikiQuery && page ? matchTitles(page.linkTitles.filter(t => t !== title), wikiQuery.query) : [];
+
+  const updateWikiQuery = (el: HTMLTextAreaElement) => {
+    setWikiQuery(getWikiQuery(el.value, el.selectionStart));
+    setWikiIndex(0);
+  };
+
+  const completeWikiLink = (picked: string) => {
+    const el = textareaRef.current;
+    if (!el || !wikiQuery) return;
+    const next = applyWikiCompletion(content, wikiQuery, el.selectionStart, picked);
+    handleContentChange(next.text);
+    setWikiQuery(null);
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(next.cursor, next.cursor); });
+  };
 
   // Reset when note changes
   useEffect(() => {
@@ -264,6 +311,7 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
 
       {/* Editor header */}
       <div className={`flex-shrink-0 border-b px-4 py-2.5 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+        {page && <Breadcrumbs items={page.breadcrumbs} onSelect={page.onNavigate} d={d} />}
         <div className="flex items-center gap-2 mb-2">
           {/* Back to list — mobile only */}
           <button
@@ -295,6 +343,27 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
               d ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'
             }`}
           />
+          {page && (
+            <>
+              <select
+                aria-label="Move page"
+                title="Move under…"
+                value={note.parent_id ?? ''}
+                onChange={e => page.onMove(e.target.value || null)}
+                className={`text-xs max-w-[8rem] bg-transparent outline-none flex-shrink-0 ${d ? 'text-gray-500' : 'text-gray-400'}`}
+              >
+                <option value="">Top level</option>
+                {page.moveTargets.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+              <button
+                onClick={() => page.onArchive(!note.archived_at)}
+                className={`flex-shrink-0 text-xs px-1.5 py-0.5 rounded transition-colors ${d ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
+                title={note.archived_at ? 'Unarchive page and its sub-pages' : 'Archive page and its sub-pages'}
+              >
+                {note.archived_at ? 'Unarchive' : 'Archive'}
+              </button>
+            </>
+          )}
           {onDelete && (
             <button
               onClick={() => onDelete(note.id)}
@@ -369,28 +438,70 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
 
       {/* Editor body */}
       {editMode ? (
+        <div className="relative flex-1 min-h-0 flex flex-col">
         <textarea
           ref={textareaRef}
           value={content}
-          onChange={e => handleContentChange(e.target.value)}
+          onChange={e => { handleContentChange(e.target.value); updateWikiQuery(e.target); }}
+          onKeyDown={e => {
+            if (wikiMatches.length === 0) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); setWikiIndex(i => (i + 1) % wikiMatches.length); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiIndex(i => (i - 1 + wikiMatches.length) % wikiMatches.length); }
+            else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); completeWikiLink(wikiMatches[wikiIndex]); }
+            else if (e.key === 'Escape') { e.preventDefault(); setWikiQuery(null); }
+          }}
+          onBlur={() => setTimeout(() => setWikiQuery(null), 150)}
           spellCheck={false}
           className={`flex-1 min-h-0 resize-none outline-none font-mono text-sm leading-relaxed px-5 py-4 ${
             d
               ? 'bg-gray-900 text-gray-200 placeholder-gray-700'
               : 'bg-white text-gray-800 placeholder-gray-300'
           }`}
-          placeholder="Write in Markdown…"
+          placeholder="Write in Markdown… Type [[ to link a page."
         />
+        {wikiMatches.length > 0 && (
+          <ul role="listbox" aria-label="Link to page" className={`absolute left-5 top-4 z-10 w-64 rounded-lg border shadow-lg text-xs overflow-hidden ${d ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}>
+            {wikiMatches.map((t, i) => (
+              <li
+                key={t}
+                role="option"
+                aria-selected={i === wikiIndex}
+                onMouseDown={e => { e.preventDefault(); completeWikiLink(t); }}
+                className={`px-3 py-1.5 cursor-pointer truncate ${i === wikiIndex ? (d ? 'bg-indigo-900/60' : 'bg-indigo-50') : ''}`}
+              >
+                {t}
+              </li>
+            ))}
+          </ul>
+        )}
+        </div>
       ) : (
         <div className={`flex-1 overflow-y-auto px-5 py-4 text-sm ${d ? 'text-gray-300' : 'text-gray-700'}`}>
           {content ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents(d)}>
-              {content}
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents(d, page?.onOpenTitle)}>
+              {linkifyWikiLinks(content)}
             </ReactMarkdown>
           ) : (
             <p className={`italic ${d ? 'text-gray-600' : 'text-gray-400'}`}>
               Empty note. Switch to Edit to start writing.
             </p>
+          )}
+          {page && page.backlinks.length > 0 && (
+            <section aria-label="Backlinks" className={`mt-8 pt-3 border-t ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+              <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+                Linked from · {page.backlinks.length}
+              </h4>
+              <ul className="space-y-1.5">
+                {page.backlinks.map(b => (
+                  <li key={b.note_id}>
+                    <button type="button" onClick={() => page.onNavigate(b.note_id)} className="text-left w-full">
+                      <span className={`text-xs font-medium ${d ? 'text-indigo-300' : 'text-indigo-700'}`}>{b.icon ? `${b.icon} ` : ''}{b.title || 'Untitled'}</span>
+                      <span className={`block text-xs truncate ${d ? 'text-gray-500' : 'text-gray-400'}`}>{b.snippet.replace(/\s+/g, ' ')}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </div>
       )}
@@ -410,6 +521,11 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
   const [confirmDeleteNote, setConfirmDeleteNote] = useState<Note | null>(null);
+  const [treeItems, setTreeItems]       = useState<TreeItem[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+  // Keyed by note id so a stale result for another note is never shown.
+  const [crumbState, setCrumbState]     = useState<{ id: string; items: PageControls['breadcrumbs'] } | null>(null);
+  const [backlinkState, setBacklinkState] = useState<{ id: string; items: PageControls['backlinks'] } | null>(null);
 
   // Let the chat see whatever note is open, so the user can ask about "this
   // note" without pasting it in. Re-runs whenever the selected note or its
@@ -438,10 +554,86 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
         return fresh && fresh.updated_at !== prev.updated_at ? fresh : prev;
       });
     }
+    const treeRes = await listNoteTree({ includeArchived: showArchived });
+    if (treeRes.success) setTreeItems(treeRes.items as unknown as TreeItem[]);
     const tagRes = await getAllTags();
     if (tagRes.success) setTags(tagRes.tags);
     setLoading(false);
-  }, [userId]);
+  }, [userId, showArchived]);
+
+  const selectedId = selectedNote?.id ?? null;
+  const selectedParentId = selectedNote?.parent_id ?? null;
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    getNoteBreadcrumbs(selectedId).then(res => { if (!cancelled && res.success) setCrumbState({ id: selectedId, items: res.breadcrumbs }); });
+    return () => { cancelled = true; };
+  }, [selectedId, selectedParentId]);
+
+  const selectedUpdatedAt = selectedNote?.updated_at;
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    getNoteBacklinks(selectedId).then(res => { if (!cancelled && res.success) setBacklinkState({ id: selectedId, items: res.backlinks }); });
+    return () => { cancelled = true; };
+  }, [selectedId, selectedUpdatedAt, treeItems]);
+
+  const breadcrumbs = crumbState && crumbState.id === selectedId ? crumbState.items : [];
+  const backlinks = backlinkState && backlinkState.id === selectedId ? backlinkState.items : [];
+
+  const openNoteByTitle = (title: string) => {
+    const key = title.trim().toLowerCase();
+    const match = treeItems.find(t => (t.title ?? '').trim().toLowerCase() === key);
+    if (match) void openNoteById(match.id);
+  };
+
+  const openNoteById = async (id: string) => {
+    const res = await getNote(id);
+    if (res.success && res.note) {
+      setSelectedNote(res.note as unknown as Note);
+      onEditorToggle?.(true);
+    }
+  };
+
+  const handleAddChild = async (parentId: string | null) => {
+    setSaving(true);
+    const res = await createNote({ content: '', source: 'manual', parent_id: parentId });
+    if (res.success && res.note) {
+      await loadNotes(activeTag ?? undefined);
+      setSelectedNote(res.note as unknown as Note);
+      onEditorToggle?.(true);
+    }
+    setSaving(false);
+  };
+
+  const handleArchive = async (id: string, archived: boolean) => {
+    await setNoteArchived(id, archived);
+    await loadNotes(activeTag ?? undefined);
+    if (selectedNote?.id === id) await openNoteById(id);
+  };
+
+  const handleMove = async (id: string, parentId: string | null) => {
+    const res = await moveNote(id, parentId);
+    if (!res.success) { window.alert(res.error || 'Could not move the page'); return; }
+    await loadNotes(activeTag ?? undefined);
+    if (res.note) setSelectedNote(prev => prev?.id === id ? { ...prev, ...(res.note as unknown as Note) } : prev);
+  };
+
+  const treeRoots = buildTree(treeItems);
+  const treeMode = !query.trim() && !activeTag;
+  const moveTargets = selectedNote
+    ? (() => {
+        const blocked = subtreeIds(treeItems, selectedNote.id);
+        const out: Array<{ id: string; label: string }> = [];
+        const walk = (nodes: typeof treeRoots, depth: number) => nodes.forEach(n => {
+          if (blocked.has(n.id)) return;
+          out.push({ id: n.id, label: `${'\u00a0\u00a0'.repeat(depth)}${n.title || 'Untitled'}` });
+          walk(n.children, depth + 1);
+        });
+        walk(treeRoots, 0);
+        return out;
+      })()
+    : [];
 
   useEffect(() => { loadNotes(activeTag ?? undefined); }, [loadNotes, activeTag, refreshTrigger]);
 
@@ -523,6 +715,10 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
           <span className={`text-xs font-semibold uppercase tracking-wider ${d ? 'text-gray-500' : 'text-gray-400'}`}>
             Notes · {notes.length}
           </span>
+          <label className={`flex items-center gap-1 text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`} title="Show archived pages">
+            <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="h-3 w-3" />
+            Archived
+          </label>
           <div className="flex items-center gap-1">
             <button
               onClick={async () => {
@@ -583,6 +779,15 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
             <div className={`text-xs text-center py-8 ${d ? 'text-gray-600' : 'text-gray-400'}`}>
               {searching ? 'searching…' : 'loading…'}
             </div>
+          ) : treeMode && treeItems.length > 0 ? (
+            <NoteTree
+              roots={treeRoots}
+              selectedId={selectedNote?.id ?? null}
+              onSelect={openNoteById}
+              onAddChild={handleAddChild}
+              onArchive={handleArchive}
+              d={d}
+            />
           ) : notes.length === 0 ? (
             <div className={`text-xs text-center py-8 px-3 ${d ? 'text-gray-600' : 'text-gray-400'}`}>
               {query ? 'No notes found.' : 'No notes yet.'}
@@ -636,6 +841,16 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
             onDelete={() => setConfirmDeleteNote(selectedNote)}
             isListCollapsed={listCollapsed}
             onExpandList={() => setListCollapsed(false)}
+            page={{
+              breadcrumbs,
+              moveTargets,
+              onNavigate: openNoteById,
+              linkTitles: treeItems.map(t => t.title ?? '').filter(Boolean),
+              onOpenTitle: openNoteByTitle,
+              backlinks,
+              onMove: parentId => handleMove(selectedNote.id, parentId),
+              onArchive: archived => handleArchive(selectedNote.id, archived),
+            }}
           />
         ) : (
           <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${d ? 'bg-gray-900' : 'bg-white'}`}>
