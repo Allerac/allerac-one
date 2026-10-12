@@ -245,9 +245,6 @@ describe('WorkerRunRepository', () => {
         openai_api_key: null,
         resend_api_key: null,
         resend_from_email: null,
-        robot_speech_voice: null,
-        robot_speech_speed: null,
-        robot_speech_style: null,
       });
       mockQuery.mockResolvedValueOnce({ rows: [{ is_admin: true }] });
 
@@ -276,9 +273,6 @@ describe('WorkerRunRepository', () => {
         openai_api_key: null,
         resend_api_key: null,
         resend_from_email: null,
-        robot_speech_voice: null,
-        robot_speech_speed: null,
-        robot_speech_style: null,
       });
       mockQuery.mockResolvedValueOnce({ rows: [] });
 

@@ -10,7 +10,6 @@ import type { Model } from '@/app/types';
 const MetricsTab      = dynamic(() => import('./MetricsTab'),    { ssr: false });
 const BotsTab         = dynamic(() => import('./BotsTab'),       { ssr: false });
 const BenchmarkPanel  = dynamic(() => import('@/app/components/system/BenchmarkPanel'), { ssr: false });
-const SkillEvalPanel  = dynamic(() => import('@/app/components/system/SkillEvalPanel'), { ssr: false });
 const AgentRunsTab    = dynamic(() => import('@/app/components/agents/AgentRunsTab'),   { ssr: false });
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
@@ -84,7 +83,7 @@ interface LogsClientProps {
 
 export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientProps) {
   const router = useRouter();
-  const [tab, setTab] = useState<'logs' | 'metrics' | 'bots' | 'benchmark' | 'evals' | 'agents'>('logs');
+  const [tab, setTab] = useState<'logs' | 'metrics' | 'bots' | 'benchmark' | 'agents'>('logs');
 
   // Logs state
   const [entries, setEntries]       = useState<LogEntry[]>([]);
@@ -233,9 +232,6 @@ export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientP
         <button style={tabBtnStyle(tab === 'benchmark')}  onClick={() => setTab('benchmark')}>
           🏃 BENCHMARK
         </button>
-        <button style={tabBtnStyle(tab === 'evals')}      onClick={() => setTab('evals')}>
-          🧪 EVALS
-        </button>
         <button style={tabBtnStyle(tab === 'agents')}     onClick={() => setTab('agents')}>
           🤖 AGENTS
         </button>
@@ -330,17 +326,6 @@ export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientP
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
           <BenchmarkPanel
             isDarkMode={true}
-            userId={userId}
-            MODELS={MODELS}
-            selectedModel={defaultModel}
-          />
-        </div>
-      )}
-
-      {/* ── EVALS tab ── */}
-      {tab === 'evals' && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <SkillEvalPanel
             userId={userId}
             MODELS={MODELS}
             selectedModel={defaultModel}

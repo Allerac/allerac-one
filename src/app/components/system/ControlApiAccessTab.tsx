@@ -96,8 +96,8 @@ const PRESETS = {
       'crawler:documents:write',
     ],
   },
-  robot: {
-    label: 'Android Robot',
+  client: {
+    label: 'Chat client',
     scopes: ['profile:read', 'chat:read', 'chat:write', 'capabilities:read'],
   },
   readonly: {
@@ -167,9 +167,9 @@ export default function ControlApiAccessTab({ isDarkMode }: ControlApiAccessTabP
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState('Android Robot');
-  const [preset, setPreset] = useState<PresetId>('robot');
-  const [scopes, setScopes] = useState<string[]>([...PRESETS.robot.scopes]);
+  const [name, setName] = useState('Chat client');
+  const [preset, setPreset] = useState<PresetId>('client');
+  const [scopes, setScopes] = useState<string[]>([...PRESETS.client.scopes]);
   const [expiresAt, setExpiresAt] = useState('');
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -209,7 +209,7 @@ export default function ControlApiAccessTab({ isDarkMode }: ControlApiAccessTabP
   const selectPreset = (value: PresetId) => {
     setPreset(value);
     setScopes([...PRESETS[value].scopes]);
-    if (value === 'robot' && !name.trim()) setName('Android Robot');
+    if (value === 'client' && !name.trim()) setName('Chat client');
   };
 
   const toggleScope = (scope: string) => {
@@ -352,7 +352,7 @@ export default function ControlApiAccessTab({ isDarkMode }: ControlApiAccessTabP
               value={name}
               maxLength={100}
               onChange={event => setName(event.target.value)}
-              placeholder="Android Robot"
+              placeholder="Chat client"
               className={`w-full rounded-md border px-3 py-2 ${field}`}
             />
           </label>

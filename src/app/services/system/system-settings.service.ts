@@ -10,9 +10,6 @@ const KEYS = [
   'openai_api_key',
   'resend_api_key',
   'resend_from_email',
-  'robot_speech_voice',
-  'robot_speech_speed',
-  'robot_speech_style',
 ] as const;
 const KEY_SET = new Set<string>(KEYS);
 export type SystemSettingKey = typeof KEYS[number];
@@ -26,9 +23,6 @@ export interface SystemSettings {
   openai_api_key: string | null;
   resend_api_key: string | null;
   resend_from_email: string | null;
-  robot_speech_voice: string | null;
-  robot_speech_speed: string | null;
-  robot_speech_style: string | null;
 }
 
 export class SystemSettingsService {
@@ -47,9 +41,6 @@ export class SystemSettingsService {
       openai_api_key: map['openai_api_key'] ?? null,
       resend_api_key: map['resend_api_key'] ?? null,
       resend_from_email: map['resend_from_email'] ?? null,
-      robot_speech_voice: map['robot_speech_voice'] ?? null,
-      robot_speech_speed: map['robot_speech_speed'] ?? null,
-      robot_speech_style: map['robot_speech_style'] ?? null,
     };
   }
 

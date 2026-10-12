@@ -3,7 +3,6 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --ignore-scripts
 COPY tsconfig.json ./
-COPY src/telegram-bot.ts ./src/
 COPY src/telegram-multi-bot.ts ./src/
 COPY src/lib/ ./src/lib/
 COPY src/app/clients/ ./src/app/clients/

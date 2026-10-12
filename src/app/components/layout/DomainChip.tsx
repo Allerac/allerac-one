@@ -7,11 +7,7 @@ import { getUserAccessibleDomains } from '@/app/actions/domains';
 const DOMAIN_META: Record<string, { label: string; icon: string }> = {
   chat:    { label: 'Chat',    icon: '💬' },
   code:    { label: 'Code',    icon: '💻' },
-  design:  { label: 'Design',  icon: '🎨' },
   health:  { label: 'Health',  icon: '❤️' },
-  finance: { label: 'Finance', icon: '💰' },
-  recipes: { label: 'Recipes', icon: '🍳' },
-  write:   { label: 'Content', icon: '✍️' },
   social:  { label: 'Social',  icon: '📸' },
   tickets: { label: 'Tickets', icon: '🎫' },
 };

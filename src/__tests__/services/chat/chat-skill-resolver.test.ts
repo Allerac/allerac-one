@@ -53,14 +53,14 @@ describe('resolveActiveChatSkill', () => {
   });
 
   test('activates the domain default skill for a new conversation', async () => {
-    const domainDefault = { id: 'skill-domain', name: 'robot-assistant', display_name: 'Robot Assistant' };
+    const domainDefault = { id: 'skill-domain', name: 'notes', display_name: 'Notes' };
     (skillsService.getDefaultDomainSkill as jest.Mock).mockResolvedValue(domainDefault);
 
     await expect(resolveActiveChatSkill({
       conversationId: 'conv-1',
       userId: 'user-1',
       message: 'hey allerac',
-      domain: 'robot-assistant',
+      domain: 'notes',
       isNewConversation: true,
       emit: jest.fn(),
     })).resolves.toBe(domainDefault);

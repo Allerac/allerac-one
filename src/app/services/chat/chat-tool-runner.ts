@@ -201,10 +201,6 @@ export async function executeChatTool(
     return musicTool.getSpotifyStatus(musicUser);
   }
 
-  if (toolName === 'draw_canvas') {
-    return { success: true, rendered: (toolArgs.elements || []).length };
-  }
-
   if (toolName === 'edit_file') {
     const { path: rawPath, new_content: newContent, explanation } = toolArgs;
     const resolved = resolveUserWorkspaceFilePath(

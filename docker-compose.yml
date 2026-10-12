@@ -28,7 +28,6 @@
 #
 # Optional (but useful for cloud/tunnel access):
 #   TUNNEL_TOKEN                     - Cloudflare Tunnel token (for remote access)
-#   GRAFANA_PASSWORD                 - Grafana admin password (defaults to 'admin')
 #   WEBHOOK_SECRET                   - Webhook secret (for auto-deploy)
 #   DEPLOY_BRANCH                    - Branch accepted by deploy webhook (default: main)
 #   GITHUB_TOKEN                     - GitHub API token (not used for embeddings)
@@ -38,8 +37,8 @@
 #
 # All services enabled by default:
 # - Core: app, docs, db, executor, health-worker, ollama
-# - Monitoring: prometheus, grafana, loki, promtail, node-exporter
-# - Notifications: redis, notifier, telegram-bot
+# - Monitoring: prometheus, loki, promtail, node-exporter
+# - Notifications: redis, notifier, allerac-telegram
 # - Management: portainer
 # - Tunnel: cloudflare tunnel (optional, requires TUNNEL_TOKEN)
 # - Webhooks: auto-deploy on git push (optional, requires WEBHOOK_SECRET)
@@ -476,57 +475,9 @@ services:
     depends_on:
       - loki
 
-  # grafana: disabled 2026-07-30. Its "unified storage" subsystem (mandatory
-  # dashboard/folder auto-migration on small instances, Grafana v12.4+) drives
-  # sustained ~250 MB/s host disk reads independent of GF_DATABASE_TYPE, which
-  # has repeatedly saturated the production VM's single disk and caused
-  # production deploys to blow past GitHub Actions' 30-minute timeout
-  # (2026-07-25, and twice more on 2026-07-30). The documented upstream
-  # mitigation (GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true) only delayed
-  # recurrence by ~2.5 hours rather than fixing it. Likely an upstream
-  # Grafana bug — see docs/monitoring/grafana-unified-storage-disk-io-report.md
-  # for the full investigation before re-enabling. Prometheus/Loki/Promtail
-  # are unaffected and keep running; only Grafana (the consumer/UI for them)
-  # is disabled. The `grafana_data` volume below is left in place
-  # (unreferenced) so re-enabling doesn't require restoring from backup.
-  #
-  # grafana:
-  #   image: grafana/grafana:13.1.1
-  #   container_name: ${ALLERAC_UNIT:-allerac}-grafana
-  #   restart: unless-stopped
-  #   environment:
-  #     - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-  #     - GF_USERS_ALLOW_SIGN_UP=false
-  #     - GF_ANALYTICS_REPORTING_ENABLED=false
-  #     - GF_ANALYTICS_CHECK_FOR_UPDATES=false
-  #     - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
-  #     - GF_PLUGINS_PREINSTALL_DISABLED=true
-  #     - GF_DATABASE_TYPE=postgres
-  #     - GF_DATABASE_HOST=db:5432
-  #     - GF_DATABASE_NAME=grafana
-  #     - GF_DATABASE_USER=${POSTGRES_USER:-postgres}
-  #     - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-  #     - GF_DATABASE_SSL_MODE=disable
-  #     - GF_UNIFIED_STORAGE_MIGRATION_PARQUET_BUFFER=true
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana
-  #     - ./infra/monitoring/grafana/provisioning/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml
-  #     - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-  #     - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
-  #   ports:
-  #     - "${GRAFANA_PORT:-3001}:3000"
-  #   depends_on:
-  #     prometheus:
-  #       condition: service_started
-  #     loki:
-  #       condition: service_started
-  #     db:
-  #       condition: service_healthy
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 256M
+  # grafana: removed (disabled since 2026-07-30 due to disk I/O issues, see
+  # docs/monitoring/grafana-unified-storage-disk-io-report.md). The block is in
+  # the archive/pre-cleanup-2026-10 branch / v0.0.22 tag. grafana_data volume kept.
 
   # ============================================
   # Notifications

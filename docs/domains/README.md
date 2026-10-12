@@ -1,6 +1,6 @@
 # Domains
 
-A **domain** is a focused AI workspace with its own identity, memory, and behaviour. Each domain lives at its own URL (e.g. `/recipes`, `/finance`) and gives the user a context-specific experience without exposing configuration or other users' data.
+A **domain** is a focused AI workspace with its own identity, memory, and behaviour. Each domain lives at its own URL (e.g. `/health`, `/notes`) and gives the user a context-specific experience without exposing configuration or other users' data.
 
 ## Concept
 
@@ -25,13 +25,9 @@ Allerac One
 | [code](code.md) | Code | Active | 💻 | programmer | Git / Node / Python |
 | [social](social.md) | Social | Active | 📸 | social | Instagram Graph API |
 | [health](health.md) | Health | Active | ❤️ | health | Garmin Connect |
-| [design](design.md) | Design | Active | 🎨 | design | None |
 | [search](search.md) | Search | Active | 🔍 | search | Tavily API |
 | [email](email.md) | Email | Active | ✉️ | — | IMAP / SMTP |
-| [write](write.md) | Write | Active | ✍️ | writer | None |
 | [tickets](tickets.md) | Tickets | Active | 🎫 | tickets | GitHub API |
-| [recipes](recipes.md) | Recipes | Inactive | 🍳 | chef | None |
-| [finance](finance.md) | Finance | Inactive | 💰 | finance | None |
 | sales | Sales | Active | 📣 | sales | None (public, text-only — see [public-domain-isolation-review.md](./public-domain-isolation-review.md)) |
 
 ## What a domain owns
