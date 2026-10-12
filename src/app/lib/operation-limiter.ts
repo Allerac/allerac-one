@@ -1,7 +1,6 @@
 export type ExpensiveOperation =
   | 'chat'
   | 'public-chat'
-  | 'benchmark'
   | 'image-edit'
   | 'model-download';
 
@@ -70,13 +69,6 @@ function getLimit(operation: ExpensiveOperation): OperationLimit {
         requests: positiveInteger('RATE_LIMIT_PUBLIC_CHAT_REQUESTS', 300),
         windowMs: positiveInteger('RATE_LIMIT_PUBLIC_CHAT_WINDOW_SECONDS', 86_400) * 1_000,
         concurrency: positiveInteger('CONCURRENCY_LIMIT_PUBLIC_CHAT', 20),
-        scope: 'user',
-      };
-    case 'benchmark':
-      return {
-        requests: positiveInteger('RATE_LIMIT_BENCHMARK_REQUESTS', 5),
-        windowMs: positiveInteger('RATE_LIMIT_BENCHMARK_WINDOW_SECONDS', 600) * 1_000,
-        concurrency: positiveInteger('CONCURRENCY_LIMIT_BENCHMARK', 1),
         scope: 'user',
       };
     case 'image-edit':

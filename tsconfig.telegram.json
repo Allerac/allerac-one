@@ -16,7 +16,7 @@
     "baseUrl": "."
   },
   "include": [
-    "src/telegram-bot.ts",
+    "src/telegram-multi-bot.ts",
     "src/app/services/**/*.ts",
     "src/app/clients/**/*.ts",
     "src/app/tools/**/*.ts",

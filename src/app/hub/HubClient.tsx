@@ -12,23 +12,15 @@ type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 const DOMAINS_ALL = [
   { id: 'chat',    label: 'Chat',    icon: '💬', path: '/chat',     desc: 'General assistant' },
   { id: 'code',    label: 'Code',    icon: '💻', path: '/code',     desc: 'Programmer mode' },
-  { id: 'recipes', label: 'Recipes', icon: '🍳', path: '/recipes',  desc: 'Chef & nutrition' },
-  { id: 'finance', label: 'Finance', icon: '💰', path: '/finance',  desc: 'Financial advisor' },
   { id: 'health',  label: 'Health',  icon: '❤️', path: '/health',   desc: 'Health & wellness' },
   { id: 'music',   label: 'Music',   icon: '🎵', path: '/music',    desc: 'Spotify-based music recommendations' },
-  { id: 'write',   label: 'Content', icon: '✍️', path: '/write',    desc: 'Content creator' },
   { id: 'social',  label: 'Social',  icon: '📸', path: '/social',   desc: 'Instagram manager' },
   { id: 'tickets', label: 'Tickets', icon: '🎫', path: '/tickets',  desc: 'Bug tracker & tasks' },
-  { id: 'design',  label: 'Design',  icon: '🎨', path: '/design',   desc: 'Design system assistant' },
   { id: 'search',  label: 'Search',  icon: '🔍', path: '/search',   desc: 'Web search' },
   { id: 'email',   label: 'Email',   icon: '✉️', path: '/email',    desc: 'Email inbox & AI' },
   { id: 'notes',   label: 'Notes',   icon: '📝', path: '/notes',    desc: 'Personal knowledge base' },
   { id: 'jobs',    label: 'Jobs',    icon: '⏰', path: '/jobs',     desc: 'Scheduled tasks & automation' },
   { id: 'memory',  label: 'Knowledge', icon: '🗂️', path: '/memory', desc: 'Your personal knowledge graph' },
-  { id: 'space',   label: 'Space',   icon: '🛰️', path: '/space',   desc: '3D satellite orbit simulator' },
-  { id: 'learn',   label: 'Learn',   icon: '🧠', path: '/learn',   desc: 'Interactive model learning lab' },
-  { id: 'robot-assistant', label: 'Robot', icon: 'R', path: '/robot-assistant', desc: 'Physical robot assistant' },
-  { id: 'benchmark', label: 'Benchmark', icon: 'Q', path: '/benchmark', desc: 'Model quality & performance' },
   { id: 'channels', label: 'Channels', icon: '📡', path: '/channels', desc: 'Messaging channels & bots' },
 ];
 

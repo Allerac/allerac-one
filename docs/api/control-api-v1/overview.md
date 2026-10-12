@@ -104,9 +104,7 @@ Common error codes:
 | [Search](search.md) | web search |
 | [Robot](robot.md) | speech synthesis, get/update robot settings |
 | [Email](email.md) | list messages, get message, send |
-| [Finance](finance.md) | quotes, symbol search, candles, watchlist list, add, remove |
 | [Music](music.md) | status, recommendations, top tracks, recently played, playlists list/create, playlist tracks list/add, sync |
-| [Benchmark](benchmark.md) | LLM and embedding model availability, execution, and LLM run history |
 
 ## Bruno Collection
 

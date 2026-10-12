@@ -19,22 +19,18 @@ interface DomainBinding {
 const DOMAINS = [
   { slug: 'chat',    label: 'Chat',    icon: '💬' },
   { slug: 'code',    label: 'Code',    icon: '💻' },
-  { slug: 'recipes', label: 'Recipes', icon: '🍳' },
-  { slug: 'finance', label: 'Finance', icon: '💰' },
   { slug: 'health',  label: 'Health',  icon: '❤️' },
   { slug: 'music',   label: 'Music',   icon: '🎵' },
-  { slug: 'write',   label: 'Content', icon: '✍️' },
   { slug: 'social',  label: 'Social',  icon: '📸' },
   { slug: 'tickets', label: 'Tickets', icon: '🎫' },
-  { slug: 'design',  label: 'Design',  icon: '🎨' },
   { slug: 'search',  label: 'Search',  icon: '🔍' },
   { slug: 'email',   label: 'Email',   icon: '✉️' },
   { slug: 'notes',   label: 'Notes',   icon: '📝' },
   { slug: 'jobs',    label: 'Jobs',    icon: '⏰' },
   { slug: 'memory',  label: 'Knowledge', icon: '🗂️' },
-  { slug: 'robot-assistant', label: 'Robot', icon: 'R' },
   { slug: 'sales',   label: 'Sales',   icon: '📣' },
   { slug: 'openworld', label: 'OpenWorld', icon: '🌐' },
+  { slug: 'robot-assistant', label: 'Robot', icon: 'R' },
 ];
 
 type MobileTab = 'prompt' | 'tools' | 'assistant';
