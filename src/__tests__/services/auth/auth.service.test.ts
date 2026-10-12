@@ -229,6 +229,94 @@ describe('AuthService', () => {
     });
   });
 
+  describe('registration policy (ALLOW_REGISTRATION)', () => {
+    const originalAllowRegistration = process.env.ALLOW_REGISTRATION;
+
+    beforeEach(() => {
+      delete process.env.ALLOW_REGISTRATION;
+    });
+
+    afterAll(() => {
+      if (originalAllowRegistration === undefined) delete process.env.ALLOW_REGISTRATION;
+      else process.env.ALLOW_REGISTRATION = originalAllowRegistration;
+    });
+
+    const insertCalls = () => mockQuery.mock.calls.filter(
+      ([sql]: [string]) => typeof sql === 'string' && sql.includes('INSERT INTO users'),
+    );
+
+    it('rejects public sign-up by default once a user exists', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // No existing user with this email
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }] }); // An admin already exists
+
+      const result = await authService.register('stranger@test.com', 'password123');
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Registration is closed on this instance. Ask an administrator for an invite.',
+      });
+      expect(insertCalls()).toHaveLength(0);
+    });
+
+    it('still lets the first user register while closed (first-admin setup)', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '0' }] });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'admin_1', email: 'owner@test.com', name: null, is_admin: true, created_at: new Date() }],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // Session
+
+      const result = await authService.register('owner@test.com', 'password123');
+
+      expect(result.success).toBe(true);
+      expect(insertCalls()[0][1][3]).toBe(true); // is_admin
+    });
+
+    it('lets an invited user register while closed', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '3' }] });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'user_2', email: 'invited@test.com', name: null, is_admin: false, created_at: new Date() }],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // Session
+
+      const result = await authService.register('invited@test.com', 'password123', undefined, true, { invited: true });
+
+      expect(result.success).toBe(true);
+      expect(insertCalls()[0][1][3]).toBe(false); // never admin
+    });
+
+    it('allows open sign-up (as non-admin) only when ALLOW_REGISTRATION=true', async () => {
+      process.env.ALLOW_REGISTRATION = 'true';
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'user_3', email: 'open@test.com', name: null, is_admin: false, created_at: new Date() }],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // Default chat domain grant
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // Session
+
+      const result = await authService.register('open@test.com', 'password123');
+
+      expect(result.success).toBe(true);
+      expect(insertCalls()[0][1][3]).toBe(false);
+    });
+
+    it('rejects brand-new Google accounts by default once a user exists', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // No user with this google_id
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // No user with this email
+      mockQuery.mockResolvedValueOnce({ rows: [{ count: '1' }] }); // Not the first user
+
+      const result = await authService.loginWithGoogle('google-123', 'stranger@gmail.com', 'Stranger');
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Registration is closed on this instance. Ask an administrator for an invite.',
+      });
+      expect(insertCalls()).toHaveLength(0);
+    });
+  });
+
   describe('login()', () => {
     it('should login v2 user with correct credentials', async () => {
       const email = 'user@test.com';

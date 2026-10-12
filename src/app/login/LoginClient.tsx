@@ -19,6 +19,7 @@ export default function LoginClient() {
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [checking, setChecking] = useState(true);
   const [mode, setMode] = useState<Mode>('login');
+  const [registrationOpen, setRegistrationOpen] = useState(false);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -35,11 +36,13 @@ export default function LoginClient() {
     ? new URLSearchParams(window.location.search).get('error') ?? ''
     : '';
   const noAccess = urlError === 'no-access';
-  const googleError = urlError.startsWith('google_');
+  const googleRegistrationClosed = urlError === 'google_registration_closed';
+  const googleError = urlError.startsWith('google_') && !googleRegistrationClosed;
 
   useEffect(() => {
     authActions.checkFirstRun().then(result => {
       if (result.isFirstRun) setShowSetupWizard(true);
+      setRegistrationOpen(result.registrationOpen);
       setChecking(false);
     });
   }, []);
@@ -289,6 +292,11 @@ export default function LoginClient() {
                   Google sign-in failed. Please try again or use email/password.
                 </div>
               )}
+              {googleRegistrationClosed && (
+                <div style={{ fontSize: '10px', color: '#cc0000', marginTop: '6px' }}>
+                  Registration is closed on this instance. Ask an administrator for an invite.
+                </div>
+              )}
             </div>
           )}
 
@@ -296,13 +304,15 @@ export default function LoginClient() {
             {/* Toggle links */}
             {!isMigration && !isForgot && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <button
-                  type="button"
-                  onClick={() => { setMode(isLogin ? 'register' : 'login'); setError(''); }}
-                  style={{ background: 'none', border: 'none', fontSize: '10px', color: '#000080', cursor: 'pointer', textDecoration: 'underline', padding: 0, textAlign: 'left' }}
-                >
-                  {isLogin ? 'Create account' : 'Back to login'}
-                </button>
+                {(registrationOpen || !isLogin) && (
+                  <button
+                    type="button"
+                    onClick={() => { setMode(isLogin ? 'register' : 'login'); setError(''); }}
+                    style={{ background: 'none', border: 'none', fontSize: '10px', color: '#000080', cursor: 'pointer', textDecoration: 'underline', padding: 0, textAlign: 'left' }}
+                  >
+                    {isLogin ? 'Create account' : 'Back to login'}
+                  </button>
+                )}
                 {isLogin && (
                   <button
                     type="button"

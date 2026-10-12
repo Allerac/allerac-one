@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AuthService } from '@/app/services/auth/auth.service';
+import { validateInviteToken } from '@/app/actions/invites';
+import { REGISTRATION_CLOSED_MESSAGE } from '@/app/lib/registration-policy';
 
 const authService = new AuthService();
 const SESSION_COOKIE_NAME = 'session_token';
@@ -55,9 +57,28 @@ export async function GET(req: NextRequest) {
   const pendingInvite = cookieStore.get('pending_invite')?.value;
   cookieStore.delete('pending_invite');
 
+  // A brand-new account may only be created through Google when public
+  // sign-up is open, it is the first user, or the pending invite is valid and
+  // issued to this exact e-mail (the cookie alone is not trusted).
+  let invited = false;
+  if (pendingInvite) {
+    const invite = await validateInviteToken(pendingInvite);
+    invited = invite.valid && invite.email === profile.email.toLowerCase();
+  }
+
   // Find or create user
-  const result = await authService.loginWithGoogle(profile.id, profile.email, profile.name ?? null, Boolean(pendingInvite));
-  if (!result.success) redirect('/login?error=google_login_failed');
+  const result = await authService.loginWithGoogle(
+    profile.id,
+    profile.email,
+    profile.name ?? null,
+    Boolean(pendingInvite),
+    { invited },
+  );
+  if (!result.success) {
+    redirect(result.error === REGISTRATION_CLOSED_MESSAGE
+      ? '/login?error=google_registration_closed'
+      : '/login?error=google_login_failed');
+  }
 
   cookieStore.set(SESSION_COOKIE_NAME, result.session.token, {
     httpOnly: true,

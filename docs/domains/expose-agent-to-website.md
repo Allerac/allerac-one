@@ -73,6 +73,13 @@ Also: an **empty** `skill_tools` allowlist for a skill means "no restriction" (f
 full general-purpose `TOOLS` array, which includes `execute_shell`), not "no tools." Always give a
 restricted skill an explicit, non-empty tool list.
 
+Backstop (in code): for every domain in `PUBLIC_DOMAINS`, `resolveChatTools` always removes the
+executor-backed tools (`execute_shell`, `edit_file`), all `github_*` tools and `read_logs`
+(`PUBLIC_DOMAIN_FORBIDDEN_TOOL_NAMES`), and `executeChatTool` refuses them there — even when the
+calling account is an admin or the skill's tool list is empty. Shell tools are additionally
+admin-only everywhere (`src/app/lib/shell-access.ts`). This is a safety net, not a substitute for the
+checklist above: the other personal tools still follow the account's permissions.
+
 ## Skill definition: use the modern pattern, not raw SQL
 
 `add-domain.md` documents the current standard: a `skills/<name>.md` file with `domain: <slug>` in

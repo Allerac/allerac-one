@@ -20,9 +20,12 @@ Completed or substantially implemented:
 - Benchmark, finance, Instagram, search, skill evaluation, logs, chat support, Ollama pull, and the Ollama chat proxy now use shared authentication helpers.
 - Finance, search, Instagram, chat, image editing, and Clippy enforce domain access where applicable.
 - System logs, model downloads, skill evaluation/mutation, backups, updates, pricing, and aggregate metrics are admin-only.
-- Shell working directories, file edit paths, and codebase reads are bounded to the user's workspace.
+- Shell execution is admin-only by default (2026-10): every path that reaches the executor — the `/api/workspace/*` routes, the `/workspace` pages, the `execute_shell` / `edit_file` chat tools (web chat, Control API, Telegram, scheduled jobs) and agent-run workers — checks `src/app/lib/shell-access.ts`. Non-admins can be allowed individually with `SHELL_ALLOWED_USER_IDS`; an unknown role is denied.
+- Public self-registration is closed by default (`ALLOW_REGISTRATION=false`); only the first user (setup) and invited users can create accounts, including via Google sign-in.
+- The executor container runs as a non-root user with all capabilities dropped, `no-new-privileges`, a read-only root filesystem and no host mounts (no `/home`, no install folder / `.env`). It refuses to start without a ≥ 32-character `EXECUTOR_SECRET`. See `infra/executor/README.md`.
+- Shell working directories and file edit paths are pinned to the user's workspace. This is a convenience boundary, **not** isolation: a command can `cd` anywhere inside the executor container, and all shell users share one container and uid.
 - Workspace shell arguments are quoted, and codebase reads reject real-path/symlink escapes.
-- Workspace file, tree, project, process, delete, and command APIs use shared authentication and strict path boundaries.
+- Workspace file, tree, project, process, delete, and command APIs use shared authentication, the shell-access check, and strict path boundaries.
 - Chat validates provider/model/domain identifiers and payload limits before opening the stream, and preselected skills must be visible to the current user.
 - Instagram DM routes use the account assigned to the current user instead of assuming the user's own credential row.
 - Central log submission requires either an admin session or the internal
@@ -184,6 +187,9 @@ Shell execution is one of the highest-risk capabilities in the product.
 
 Required rules:
 
+- Only administrators (or users listed in `SHELL_ALLOWED_USER_IDS`) may reach the executor. Use `requireShellUser()` in routes, `isShellAllowedFor(user)` when a `User` is available, and `canUserIdUseShell(userId)` when only an id is known. Fail closed.
+- Executor-backed tools must be removed from the tool list for users without shell access, and also rejected at execution time (the model can name a tool it was not offered).
+- The `cwd` checks below are not a sandbox; they keep honest commands in the right folder. The real boundary is the access check plus the hardened executor container.
 - Shell tools must always execute inside the user's workspace root.
 - The route or tool runner must reject `cwd` outside `/workspace/projects/{user.id}`.
 - File edit proposals must reject paths outside `/workspace/projects/{user.id}`.
@@ -219,7 +225,8 @@ Minimum test cases:
 - User A cannot list or mutate User B's tickets.
 - User A cannot access User B's email account.
 - User A cannot access User B's agent run.
-- User A cannot execute shell commands outside their workspace.
+- A non-admin user cannot execute shell commands at all (routes return 403, chat tools return an error); admins are allowed.
+- Registration is closed unless `ALLOW_REGISTRATION=true`, except for the first user and valid invites.
 - Non-admin users cannot access admin APIs.
 - Non-domain users cannot access restricted domain pages or domain actions.
 

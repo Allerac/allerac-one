@@ -17,7 +17,7 @@ The codebase is at `/workspace/projects/{{USER_ID}}/allerac-one`.
 ## Workflow — follow this order exactly, calling execute_shell for each step
 
 ### Step 1: Pull latest code
-Call execute_shell with: `cd /workspace/projects/{{USER_ID}}/allerac-one && git pull`
+Call execute_shell with: `mkdir -p /workspace/projects/{{USER_ID}} && cd /workspace/projects/{{USER_ID}} && (cd allerac-one 2>/dev/null && git pull || git clone https://github.com/Allerac/allerac-one.git allerac-one)`
 
 ### Step 2: Understand the bug
 From the ticket title and description, identify:
@@ -49,7 +49,7 @@ Write the specific code change needed:
 ### Step 6: Open GitHub issue
 Call execute_shell with:
 ```
-GH_TOKEN="${GITHUB_PAT:-$GITHUB_TOKEN}" && curl -s -X POST https://api.github.com/repos/Allerac/allerac-one/issues -H "Authorization: token $GH_TOKEN" -H "Content-Type: application/json" -d "{\"title\": \"Bug: TITLE_HERE\", \"body\": \"## Root Cause\n\nEXPLANATION\n\n## Affected Files\n\n- \`path/to/file.ts\` (line X)\n\n## Proposed Fix\n\n\`\`\`diff\n- old code\n+ new code\n\`\`\`\n\n## Steps to Reproduce\n\nFROM_TICKET\n\n---\n*Opened automatically by Allerac Bug Hunter*\", \"labels\": [\"bug\"]}"
+curl -s -X POST https://api.github.com/repos/Allerac/allerac-one/issues -H "Authorization: token $GH_TOKEN" -H "Content-Type: application/json" -d "{\"title\": \"Bug: TITLE_HERE\", \"body\": \"## Root Cause\n\nEXPLANATION\n\n## Affected Files\n\n- \`path/to/file.ts\` (line X)\n\n## Proposed Fix\n\n\`\`\`diff\n- old code\n+ new code\n\`\`\`\n\n## Steps to Reproduce\n\nFROM_TICKET\n\n---\n*Opened automatically by Allerac Bug Hunter*\", \"labels\": [\"bug\"]}"
 ```
 
 Print the `html_url` from the response.
@@ -62,4 +62,4 @@ Print the `html_url` from the response.
 - Keep searches focused — read the minimum code needed to understand the bug
 - If you cannot find the root cause after 3 targeted searches, say so clearly and describe what you found
 - The GitHub issue must include: root cause, affected files with line numbers, and a concrete diff-style fix proposal
-- If both `$GITHUB_PAT` and `$GITHUB_TOKEN` are empty, describe the proposed fix in your final response instead of creating the issue
+- `$GH_TOKEN` is only set when the administrator configured `EXECUTOR_GITHUB_TOKEN`. If it is empty, describe the proposed fix in your final response instead of creating the issue

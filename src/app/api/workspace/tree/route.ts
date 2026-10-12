@@ -1,6 +1,7 @@
 import { ShellTool } from '@/app/tools/shell.tool';
 import path from 'path';
-import { authenticationErrorResponse, requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
+import { authenticationErrorResponse } from '@/app/lib/auth-session';
+import { requireShellUser } from '@/app/lib/shell-access';
 import { resolveUserWorkspacePath } from '@/app/lib/workspace-paths';
 
 function shellQuote(value: string): string {
@@ -58,7 +59,7 @@ function buildTree(lines: string[], rootPath: string): TreeNode {
 
 export async function GET(request: Request): Promise<Response> {
   try {
-    const user = await requireCurrentUser();
+    const user = await requireShellUser();
 
     const url = new URL(request.url);
     const inputPath = url.searchParams.get('path') || '';
