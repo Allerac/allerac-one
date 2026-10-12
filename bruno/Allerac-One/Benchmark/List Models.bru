@@ -1,0 +1,15 @@
+meta {
+  name: List Benchmark Models
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/benchmark/models
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

@@ -21,7 +21,7 @@
     "language": "en",
     "query": "Which credential is required for Anthropic chat?",
     "relevant": "Anthropic chat requests require an Anthropic API key configured by the user or system administrator.",
-    "negatives": ["Document chunks are compared with cosine distance in PostgreSQL.", "The Android robot connects to the Control API using a scoped API key."]
+    "negatives": ["Document chunks are compared with cosine distance in PostgreSQL.", "The CLI client connects to the Control API using a scoped API key."]
   },
   {
     "id": "memory-pt",
@@ -45,7 +45,7 @@
     "language": "en",
     "query": "find documentation about restoring on a clean server",
     "relevant": "The portable restore procedure reconstructs Allerac on a clean Docker host and validates checksums.",
-    "negatives": ["The finance domain tracks market prices and portfolio information.", "The design domain can help create interface concepts."]
+    "negatives": ["The health domain tracks activities and daily wellness metrics.", "The tickets domain tracks bugs and tasks."]
   },
   {
     "id": "garmin-pt",
@@ -64,11 +64,11 @@
     "negatives": ["Receita de pão com farinha, água, fermento e sal.", "Resumo da corrida de domingo com distância e frequência cardíaca."]
   },
   {
-    "id": "robot-api-key-es",
+    "id": "cli-api-key-es",
     "domain": "documents",
     "language": "es",
-    "query": "¿cómo se autentica el robot Android?",
-    "relevant": "The Android robot authenticates to the Control API with a dedicated scoped API key.",
+    "query": "¿cómo se autentica el cliente CLI?",
+    "relevant": "The CLI client authenticates to the Control API with a dedicated scoped API key.",
     "negatives": ["Spotify synchronization imports recently played tracks.", "PDF documents are split into overlapping chunks."]
   },
   {

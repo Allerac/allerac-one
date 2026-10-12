@@ -1,0 +1,15 @@
+meta {
+  name: List Benchmark Runs
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/benchmark/runs?limit=5
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

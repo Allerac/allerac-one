@@ -21,6 +21,7 @@ const DOMAINS_ALL = [
   { id: 'notes',   label: 'Notes',   icon: '📝', path: '/notes',    desc: 'Personal knowledge base' },
   { id: 'jobs',    label: 'Jobs',    icon: '⏰', path: '/jobs',     desc: 'Scheduled tasks & automation' },
   { id: 'memory',  label: 'Knowledge', icon: '🗂️', path: '/memory', desc: 'Your personal knowledge graph' },
+  { id: 'benchmark', label: 'Benchmark', icon: 'Q', path: '/benchmark', desc: 'Model quality & performance' },
   { id: 'channels', label: 'Channels', icon: '📡', path: '/channels', desc: 'Messaging channels & bots' },
 ];
 

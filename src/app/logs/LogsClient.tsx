@@ -9,6 +9,7 @@ import type { Model } from '@/app/types';
 // Lazy-load heavy tabs
 const MetricsTab      = dynamic(() => import('./MetricsTab'),    { ssr: false });
 const BotsTab         = dynamic(() => import('./BotsTab'),       { ssr: false });
+const BenchmarkPanel  = dynamic(() => import('@/app/components/system/BenchmarkPanel'), { ssr: false });
 const AgentRunsTab    = dynamic(() => import('@/app/components/agents/AgentRunsTab'),   { ssr: false });
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
@@ -80,9 +81,9 @@ interface LogsClientProps {
   defaultModel: string;
 }
 
-export default function LogsClient({ userId }: LogsClientProps) {
+export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientProps) {
   const router = useRouter();
-  const [tab, setTab] = useState<'logs' | 'metrics' | 'bots' | 'agents'>('logs');
+  const [tab, setTab] = useState<'logs' | 'metrics' | 'bots' | 'benchmark' | 'agents'>('logs');
 
   // Logs state
   const [entries, setEntries]       = useState<LogEntry[]>([]);
@@ -228,6 +229,9 @@ export default function LogsClient({ userId }: LogsClientProps) {
         <button style={tabBtnStyle(tab === 'bots')}       onClick={() => setTab('bots')}>
           🌐 BOTS
         </button>
+        <button style={tabBtnStyle(tab === 'benchmark')}  onClick={() => setTab('benchmark')}>
+          🏃 BENCHMARK
+        </button>
         <button style={tabBtnStyle(tab === 'agents')}     onClick={() => setTab('agents')}>
           🤖 AGENTS
         </button>
@@ -314,6 +318,18 @@ export default function LogsClient({ userId }: LogsClientProps) {
       {tab === 'bots' && (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           <BotsTab />
+        </div>
+      )}
+
+      {/* ── BENCHMARK tab ── */}
+      {tab === 'benchmark' && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+          <BenchmarkPanel
+            isDarkMode={true}
+            userId={userId}
+            MODELS={MODELS}
+            selectedModel={defaultModel}
+          />
         </div>
       )}
 

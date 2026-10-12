@@ -53,6 +53,10 @@ src/app/actions/system.ts	@typescript-eslint/no-explicit-any	error	4
 src/app/actions/updates.ts	@typescript-eslint/no-explicit-any	error	4
 src/app/admin/AdminClient.tsx	react-hooks/set-state-in-effect	error	1
 src/app/api/agents/route.ts	@typescript-eslint/no-unused-vars	warning	1
+src/app/api/benchmark/route.ts	@typescript-eslint/no-explicit-any	error	2
+src/app/api/benchmark/route.ts	@typescript-eslint/no-unused-vars	warning	2
+src/app/api/benchmark/vision/route.ts	@typescript-eslint/no-explicit-any	error	5
+src/app/api/benchmark/vision/route.ts	@typescript-eslint/no-unused-vars	warning	2
 src/app/api/chat/extract-text/route.ts	@typescript-eslint/no-unused-vars	warning	1
 src/app/api/chat/route.ts	@typescript-eslint/no-explicit-any	error	6
 src/app/api/chat/route.ts	@typescript-eslint/no-unused-vars	warning	2
@@ -92,6 +96,7 @@ src/app/api/v1/documents/route.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/api/v1/health/activities/[activityId]/route/route.ts	@typescript-eslint/no-explicit-any	error	1
 src/app/api/v1/health/activities/[activityId]/series/route.ts	@typescript-eslint/no-explicit-any	error	2
 src/app/api/v1/health/activities/[activityId]/series/route.ts	@typescript-eslint/no-unused-vars	warning	2
+src/app/benchmark/BenchmarkClient.tsx	react-hooks/set-state-in-effect	error	1
 src/app/chat/ChatClient.tsx	@typescript-eslint/no-explicit-any	error	8
 src/app/chat/ChatClient.tsx	@typescript-eslint/no-unused-vars	warning	6
 src/app/chat/ChatClient.tsx	react-hooks/exhaustive-deps	warning	3
@@ -106,6 +111,8 @@ src/app/components/agents/AgentRunView.tsx	react-hooks/set-state-in-effect	error
 src/app/components/agents/AgentRunsTab.tsx	@typescript-eslint/no-unused-vars	warning	3
 src/app/components/allerac/MyAlleracModal.tsx	@next/next/no-img-element	warning	1
 src/app/components/auth/UserSettingsModal.tsx	@typescript-eslint/no-unused-vars	warning	2
+src/app/components/benchmark/vision-benchmark.tsx	@next/next/no-img-element	warning	1
+src/app/components/benchmark/vision-benchmark.tsx	@typescript-eslint/no-explicit-any	error	1
 src/app/components/chat/ChatHeader.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/components/chat/ChatInput.tsx	@next/next/no-img-element	warning	1
 src/app/components/chat/ChatInput.tsx	@typescript-eslint/no-explicit-any	error	5
@@ -182,6 +189,7 @@ src/app/components/social/SocialPostStudio.tsx	@next/next/no-img-element	warning
 src/app/components/social/SocialPostStudio.tsx	@typescript-eslint/no-explicit-any	error	2
 src/app/components/social/SocialPostStudio.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/components/social/SocialPostStudio.tsx	react-hooks/exhaustive-deps	warning	5
+src/app/components/system/BenchmarkPanel.tsx	@typescript-eslint/no-explicit-any	error	2
 src/app/components/system/PreferencesTab.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/components/system/SystemDashboard.tsx	react-hooks/exhaustive-deps	warning	1
 src/app/components/system/SystemTab.tsx	@typescript-eslint/no-explicit-any	error	10

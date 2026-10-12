@@ -53,8 +53,8 @@ const legacyCases = [
     query: 'find documentation about restoring on a clean server',
     relevant: 'The portable restore procedure reconstructs Allerac on a clean Docker host and validates checksums.',
     negatives: [
-      'The finance domain tracks market prices and portfolio information.',
-      'The design domain can help create interface concepts.',
+      'The health domain tracks activities and daily wellness metrics.',
+      'The tickets domain tracks bugs and tasks.',
     ],
   },
 ];

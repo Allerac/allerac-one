@@ -1,0 +1,15 @@
+meta {
+  name: Clear Benchmark Runs
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/benchmark/runs
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

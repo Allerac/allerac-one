@@ -86,6 +86,7 @@ nav:
           - Documents: api/control-api-v1/documents.md
           - Notes: api/control-api-v1/notes.md
           - Scheduled Jobs: api/control-api-v1/scheduled-jobs.md
+          - Benchmark: api/control-api-v1/benchmark.md
           - Skills: api/control-api-v1/skills.md
           - Health: api/control-api-v1/health.md
           - Search: api/control-api-v1/search.md
