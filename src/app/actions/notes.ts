@@ -123,3 +123,13 @@ export async function getNoteBreadcrumbs(noteId: string) {
     return { success: false, breadcrumbs: [], error: getErrorMessage(err) };
   }
 }
+
+export async function getNote(noteId: string) {
+  try {
+    const user = await requireCurrentUser();
+    const note = await notesService.getNote(user.id, noteId);
+    return { success: !!note, note };
+  } catch (err: unknown) {
+    return { success: false, note: null, error: getErrorMessage(err) };
+  }
+}

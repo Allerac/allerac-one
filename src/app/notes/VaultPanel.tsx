@@ -3,7 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { listNotes, searchNotes, createNote, updateNote, deleteNote, getAllTags } from '@/app/actions/notes';
+import {
+  listNotes, searchNotes, createNote, updateNote, deleteNote, getAllTags,
+  listNoteTree, getNote, moveNote, setNoteArchived, getNoteBreadcrumbs,
+} from '@/app/actions/notes';
+import { NoteTree, Breadcrumbs } from './NoteTree';
+import { buildTree, subtreeIds, TreeItem } from './note-tree';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 
 interface Note {
@@ -13,6 +18,9 @@ interface Note {
   tags: string[];
   source: string;
   due_date: string | null;
+  parent_id?: string | null;
+  icon?: string | null;
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -171,8 +179,17 @@ function toDateInputValue(due_date: string | null): string {
   return d.toISOString().slice(0, 10);
 }
 
-function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListCollapsed, onExpandList }: {
+interface PageControls {
+  breadcrumbs: Array<{ id: string; title: string | null; icon: string | null }>;
+  moveTargets: Array<{ id: string; label: string }>;
+  onNavigate: (id: string) => void;
+  onMove: (parentId: string | null) => void;
+  onArchive: (archived: boolean) => void;
+}
+
+function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListCollapsed, onExpandList, page }: {
   note: Note;
+  page?: PageControls;
   isDarkMode: boolean;
   onSave: (id: string, content: string, title: string, tags: string[], due_date: string | null) => Promise<void>;
   onClose: () => void;
@@ -264,6 +281,7 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
 
       {/* Editor header */}
       <div className={`flex-shrink-0 border-b px-4 py-2.5 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+        {page && <Breadcrumbs items={page.breadcrumbs} onSelect={page.onNavigate} d={d} />}
         <div className="flex items-center gap-2 mb-2">
           {/* Back to list — mobile only */}
           <button
@@ -295,6 +313,27 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
               d ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'
             }`}
           />
+          {page && (
+            <>
+              <select
+                aria-label="Move page"
+                title="Move under…"
+                value={note.parent_id ?? ''}
+                onChange={e => page.onMove(e.target.value || null)}
+                className={`text-xs max-w-[8rem] bg-transparent outline-none flex-shrink-0 ${d ? 'text-gray-500' : 'text-gray-400'}`}
+              >
+                <option value="">Top level</option>
+                {page.moveTargets.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+              <button
+                onClick={() => page.onArchive(!note.archived_at)}
+                className={`flex-shrink-0 text-xs px-1.5 py-0.5 rounded transition-colors ${d ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
+                title={note.archived_at ? 'Unarchive page and its sub-pages' : 'Archive page and its sub-pages'}
+              >
+                {note.archived_at ? 'Unarchive' : 'Archive'}
+              </button>
+            </>
+          )}
           {onDelete && (
             <button
               onClick={() => onDelete(note.id)}
@@ -410,6 +449,9 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
   const [confirmDeleteNote, setConfirmDeleteNote] = useState<Note | null>(null);
+  const [treeItems, setTreeItems]       = useState<TreeItem[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [breadcrumbs, setBreadcrumbs]   = useState<PageControls['breadcrumbs']>([]);
 
   // Let the chat see whatever note is open, so the user can ask about "this
   // note" without pasting it in. Re-runs whenever the selected note or its
@@ -438,10 +480,69 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
         return fresh && fresh.updated_at !== prev.updated_at ? fresh : prev;
       });
     }
+    const treeRes = await listNoteTree({ includeArchived: showArchived });
+    if (treeRes.success) setTreeItems(treeRes.items as unknown as TreeItem[]);
     const tagRes = await getAllTags();
     if (tagRes.success) setTags(tagRes.tags);
     setLoading(false);
-  }, [userId]);
+  }, [userId, showArchived]);
+
+  const selectedId = selectedNote?.id ?? null;
+  const selectedParentId = selectedNote?.parent_id ?? null;
+  useEffect(() => {
+    if (!selectedId) { setBreadcrumbs([]); return; }
+    let cancelled = false;
+    getNoteBreadcrumbs(selectedId).then(res => { if (!cancelled && res.success) setBreadcrumbs(res.breadcrumbs); });
+    return () => { cancelled = true; };
+  }, [selectedId, selectedParentId]);
+
+  const openNoteById = async (id: string) => {
+    const res = await getNote(id);
+    if (res.success && res.note) {
+      setSelectedNote(res.note as unknown as Note);
+      onEditorToggle?.(true);
+    }
+  };
+
+  const handleAddChild = async (parentId: string | null) => {
+    setSaving(true);
+    const res = await createNote({ content: '', source: 'manual', parent_id: parentId });
+    if (res.success && res.note) {
+      await loadNotes(activeTag ?? undefined);
+      setSelectedNote(res.note as unknown as Note);
+      onEditorToggle?.(true);
+    }
+    setSaving(false);
+  };
+
+  const handleArchive = async (id: string, archived: boolean) => {
+    await setNoteArchived(id, archived);
+    await loadNotes(activeTag ?? undefined);
+    if (selectedNote?.id === id) await openNoteById(id);
+  };
+
+  const handleMove = async (id: string, parentId: string | null) => {
+    const res = await moveNote(id, parentId);
+    if (!res.success) { window.alert(res.error || 'Could not move the page'); return; }
+    await loadNotes(activeTag ?? undefined);
+    if (res.note) setSelectedNote(prev => prev?.id === id ? { ...prev, ...(res.note as unknown as Note) } : prev);
+  };
+
+  const treeRoots = buildTree(treeItems);
+  const treeMode = !query.trim() && !activeTag;
+  const moveTargets = selectedNote
+    ? (() => {
+        const blocked = subtreeIds(treeItems, selectedNote.id);
+        const out: Array<{ id: string; label: string }> = [];
+        const walk = (nodes: typeof treeRoots, depth: number) => nodes.forEach(n => {
+          if (blocked.has(n.id)) return;
+          out.push({ id: n.id, label: `${'\u00a0\u00a0'.repeat(depth)}${n.title || 'Untitled'}` });
+          walk(n.children, depth + 1);
+        });
+        walk(treeRoots, 0);
+        return out;
+      })()
+    : [];
 
   useEffect(() => { loadNotes(activeTag ?? undefined); }, [loadNotes, activeTag, refreshTrigger]);
 
@@ -523,6 +624,10 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
           <span className={`text-xs font-semibold uppercase tracking-wider ${d ? 'text-gray-500' : 'text-gray-400'}`}>
             Notes · {notes.length}
           </span>
+          <label className={`flex items-center gap-1 text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`} title="Show archived pages">
+            <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="h-3 w-3" />
+            Archived
+          </label>
           <div className="flex items-center gap-1">
             <button
               onClick={async () => {
@@ -583,6 +688,15 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
             <div className={`text-xs text-center py-8 ${d ? 'text-gray-600' : 'text-gray-400'}`}>
               {searching ? 'searching…' : 'loading…'}
             </div>
+          ) : treeMode && treeItems.length > 0 ? (
+            <NoteTree
+              roots={treeRoots}
+              selectedId={selectedNote?.id ?? null}
+              onSelect={openNoteById}
+              onAddChild={handleAddChild}
+              onArchive={handleArchive}
+              d={d}
+            />
           ) : notes.length === 0 ? (
             <div className={`text-xs text-center py-8 px-3 ${d ? 'text-gray-600' : 'text-gray-400'}`}>
               {query ? 'No notes found.' : 'No notes yet.'}
@@ -636,6 +750,13 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
             onDelete={() => setConfirmDeleteNote(selectedNote)}
             isListCollapsed={listCollapsed}
             onExpandList={() => setListCollapsed(false)}
+            page={{
+              breadcrumbs,
+              moveTargets,
+              onNavigate: openNoteById,
+              onMove: parentId => handleMove(selectedNote.id, parentId),
+              onArchive: archived => handleArchive(selectedNote.id, archived),
+            }}
           />
         ) : (
           <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${d ? 'bg-gray-900' : 'bg-white'}`}>

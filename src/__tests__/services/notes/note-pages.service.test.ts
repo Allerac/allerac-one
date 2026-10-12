@@ -101,7 +101,7 @@ describe('NotePagesService tree queries', () => {
   it('archives a whole subtree scoped to the user', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 3 } as never);
     expect(await service.setArchived('u1', 'a', true)).toBe(3);
-    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const [sql, params] = mockQuery.mock.calls[0] as unknown as [string, unknown[]];
     expect(sql).toContain('WITH RECURSIVE subtree');
     expect(sql).toContain('COALESCE(archived_at, NOW())');
     expect(params).toEqual(['a', 'u1']);

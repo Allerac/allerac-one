@@ -41,6 +41,8 @@ export interface CreateNoteInput {
   tags?: string[];
   source?: string;
   due_date?: string | null;
+  /** Parent page; must belong to the same user. Omit or null for the root. */
+  parent_id?: string | null;
 }
 
 export interface UpdateNoteInput {
@@ -53,7 +55,18 @@ export interface UpdateNoteInput {
 export class NotesService {
   async createNote(userId: string, input: CreateNoteInput, legacyGithubToken?: string | null): Promise<Note> {
     void legacyGithubToken;
-    const { content, title = null, tags = [], source = 'chat', due_date = null } = input;
+    const { content, title = null, tags = [], source = 'chat', due_date = null, parent_id = null } = input;
+
+    let position = 0;
+    if (parent_id) {
+      const parent = await pool.query(
+        `SELECT COALESCE((SELECT MAX(position) + 1 FROM user_notes WHERE user_id = $2 AND parent_id = $1), 0) AS next
+         FROM user_notes WHERE id = $1 AND user_id = $2`,
+        [parent_id, userId],
+      );
+      if (parent.rows.length === 0) throw new Error('Parent note not found');
+      position = Number(parent.rows[0].next ?? 0);
+    }
 
     let documentId: string | null = null;
     const indexText = buildNoteIndexText(title, content);
@@ -80,10 +93,10 @@ export class NotesService {
     }
 
     const res = await pool.query(
-      `INSERT INTO user_notes (user_id, document_id, title, content, tags, source, due_date, content_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO user_notes (user_id, document_id, title, content, tags, source, due_date, content_hash, parent_id, position)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [userId, documentId, title, content, tags, source, due_date ?? null, contentHash]
+      [userId, documentId, title, content, tags, source, due_date ?? null, contentHash, parent_id, position]
     );
 
     if (documentId) {
@@ -96,15 +109,22 @@ export class NotesService {
     return res.rows[0] as Note;
   }
 
+  async getNote(userId: string, noteId: string): Promise<Note | null> {
+    const res = await pool.query('SELECT * FROM user_notes WHERE id = $1 AND user_id = $2', [noteId, userId]);
+    return (res.rows[0] as Note | undefined) ?? null;
+  }
+
   async listNotes(userId: string, options: {
     limit?: number;
     tag?: string;
     due_on?: string;
     due_before?: string;
     overdue?: boolean;
+    includeArchived?: boolean;
   } = {}): Promise<Note[]> {
     const limit = options.limit ?? 20;
     const conditions: string[] = ['user_id = $1'];
+    if (!options.includeArchived) conditions.push('archived_at IS NULL');
     const values: unknown[] = [userId];
     let i = 2;
 
