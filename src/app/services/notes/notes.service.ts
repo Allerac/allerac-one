@@ -2,6 +2,7 @@ import pool from '@/app/clients/db';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
 import { DocumentService } from '@/app/services/rag/document.service';
 import { noteLinksService } from './note-links.service';
+import { NoteMoveError } from './note-pages.service';
 import {
   NoteReindexQueue,
   buildNoteIndexText,
@@ -65,7 +66,7 @@ export class NotesService {
          FROM user_notes WHERE id = $1 AND user_id = $2`,
         [parent_id, userId],
       );
-      if (parent.rows.length === 0) throw new Error('Parent note not found');
+      if (parent.rows.length === 0) throw new NoteMoveError('Parent note not found', 'parent_not_found');
       position = Number(parent.rows[0].next ?? 0);
     }
 
@@ -176,6 +177,7 @@ export class NotesService {
          JOIN documents d  ON d.id = dc.document_id
          JOIN user_notes n ON n.document_id = d.id AND n.user_id = d.uploaded_by
          WHERE d.uploaded_by = $2
+           AND n.archived_at IS NULL
            AND d.domain_slug = 'notes'
            AND d.status = 'completed'
            AND dc.embedding IS NOT NULL
@@ -194,6 +196,7 @@ export class NotesService {
     const res = await pool.query(
       `SELECT * FROM user_notes
        WHERE user_id = $1
+         AND archived_at IS NULL
          AND (content ILIKE $2 OR title ILIKE $2 OR $3 ILIKE ANY(tags))
        ORDER BY created_at DESC
        LIMIT $4`,

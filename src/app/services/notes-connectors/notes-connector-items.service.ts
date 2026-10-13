@@ -1,7 +1,13 @@
 import { createHash } from 'crypto';
 import pool from '@/app/clients/db';
 import { NotesService } from '@/app/services/notes/notes.service';
+import { NotePagesService } from '@/app/services/notes/note-pages.service';
 import type { NotesConnector, NotesConnectorItem, NotesConnectorProvider } from './types';
+
+const PROVIDER_PAGE_TITLES: Record<NotesConnectorProvider, string> = {
+  google_drive: 'Google Drive',
+  onenote: 'OneNote',
+};
 
 function hash(content: string): string {
   return createHash('sha256').update(content).digest('hex');
@@ -44,6 +50,7 @@ export interface ConflictRow {
  */
 export class NotesConnectorItemsService {
   private readonly notes = new NotesService();
+  private readonly pages = new NotePagesService();
 
   constructor(
     private readonly provider: NotesConnectorProvider,
@@ -53,6 +60,7 @@ export class NotesConnectorItemsService {
   /** Explicit, user-selected import (Picker result or OneNote checkbox tree). Always applies the fetched content. */
   async importSelected(userId: string, credentialId: string, accessToken: string, items: NotesConnectorItem[]): Promise<ImportSummary> {
     const summary: ImportSummary = { imported: 0, updated: 0, failed: [] };
+    let parentId: string | null | undefined;
 
     for (const item of items) {
       try {
@@ -77,7 +85,18 @@ export class NotesConnectorItemsService {
           );
           summary.updated += 1;
         } else {
-          const note = await this.notes.createNote(userId, { content: markdown, title: item.title, tags, source: this.provider });
+          if (parentId === undefined) {
+            // New imports go under one page per provider. If that fails, import at the top level.
+            parentId = await this.pages
+              .ensureProviderRootPage(userId, this.provider, PROVIDER_PAGE_TITLES[this.provider] ?? this.provider)
+              .catch((err: unknown) => {
+                console.error('[NotesConnectors] Failed to prepare provider page:', err);
+                return null;
+              });
+          }
+          const note = await this.notes.createNote(userId, {
+            content: markdown, title: item.title, tags, source: this.provider, parent_id: parentId,
+          });
           await pool.query(
             `INSERT INTO notes_connector_items (
                credential_id, external_id, note_id, source_url, external_content_hash, imported_content_hash, provider_modified_at

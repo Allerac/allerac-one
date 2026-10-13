@@ -42,6 +42,8 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'list_notes',               label: 'List Notes',          description: 'List recent notes from the vault',              group: 'Notes'     },
   { name: 'delete_note',              label: 'Delete Note',         description: 'Delete a note from the vault',                  group: 'Notes'     },
   { name: 'update_note',              label: 'Update Note',         description: 'Edit the content, title, or tags of a note',    group: 'Notes'     },
+  { name: 'get_note',                 label: 'Get Note',            description: 'Read a note with its path and sub-pages',        group: 'Notes'     },
+  { name: 'list_children',            label: 'List Sub-pages',      description: 'List the sub-pages of a note',                   group: 'Notes'     },
   { name: 'list_emails',              label: 'List Emails',         description: 'List messages from the inbox',                   group: 'Email'     },
   { name: 'read_email',               label: 'Read Email',          description: 'Read the full content of an email',              group: 'Email'     },
   { name: 'send_email',               label: 'Send Email',          description: 'Send or reply to an email',                      group: 'Email'     },

@@ -330,7 +330,7 @@ export async function handleChatMessage(
         } else if (toolName === 'search_web' && tavilyApiKey) {
           const searchTool = new SearchWebTool(tavilyApiKey);
           toolResult = await searchTool.execute(toolArgs.query);
-        } else if (['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note'].includes(toolName)) {
+        } else if (['save_note', 'query_vault', 'list_notes', 'delete_note', 'update_note', 'get_note', 'list_children'].includes(toolName)) {
           const noteHandlers = buildNotesTools({ id: userId, githubToken });
           const handler = noteHandlers[toolName as keyof typeof noteHandlers];
           toolResult = await handler(toolArgs);

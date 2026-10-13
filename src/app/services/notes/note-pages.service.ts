@@ -170,6 +170,38 @@ export class NotePagesService {
     );
     return res.rows as NoteBreadcrumb[];
   }
+
+  /**
+   * Returns the user's top-level page for a connector provider, creating it on
+   * first use, so imports land under one page instead of cluttering the root.
+   * The page is identified by its source marker, so renaming or moving it is
+   * safe; if the user deletes it, the next import creates a new one.
+   */
+  async ensureProviderRootPage(userId: string, provider: string, title: string): Promise<string> {
+    const source = providerRootSource(provider);
+    return withUserTreeLock(userId, async (db) => {
+      const existing = await db.query(
+        `SELECT id FROM user_notes WHERE user_id = $1 AND source = $2 ORDER BY created_at ASC LIMIT 1`,
+        [userId, source],
+      );
+      if (existing.rows[0]) return existing.rows[0].id as string;
+      const next = await db.query(
+        `SELECT COALESCE(MAX(position), -1) + 1 AS next FROM user_notes WHERE user_id = $1 AND parent_id IS NULL`,
+        [userId],
+      );
+      const created = await db.query(
+        `INSERT INTO user_notes (user_id, title, content, tags, source, position)
+         VALUES ($1, $2, '', '{}', $3, $4) RETURNING id`,
+        [userId, title, source, Number(next.rows[0]?.next ?? 0)],
+      );
+      return created.rows[0].id as string;
+    });
+  }
+}
+
+/** Source marker of a connector's parent page (never used for real imports). */
+export function providerRootSource(provider: string): string {
+  return `connector_root:${provider}`;
 }
 
 export const notePagesService = new NotePagesService();

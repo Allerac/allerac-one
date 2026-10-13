@@ -27,6 +27,10 @@ export const NOTES_TOOL_DEFINITIONS = [
             type: 'string',
             description: 'Due date in ISO format YYYY-MM-DD or YYYY-MM-DDTHH:mm. Set when the note has a specific deadline or appointment, e.g. "médico amanhã às 10h" → "2026-06-04T10:00". Use get_today_info to resolve relative dates like "amanhã", "sexta".',
           },
+          parent_id: {
+            type: 'string',
+            description: 'Optional UUID of an existing page to nest this note under (from list_children or get_note). Omit for a top-level note.',
+          },
         },
         required: ['content'],
       },
@@ -134,6 +138,35 @@ export const NOTES_TOOL_DEFINITIONS = [
           },
         },
         required: ['note_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_note',
+      description: 'Read one note (page) in full by id, with its parent, breadcrumb path and direct sub-pages. Use after query_vault, list_notes or list_children when the full content is needed.',
+      parameters: {
+        type: 'object',
+        properties: {
+          note_id: { type: 'string', description: 'The UUID of the note.' },
+        },
+        required: ['note_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_children',
+      description: 'List the sub-pages of a page, in page order. Omit parent_id to list top-level pages. Archived pages are excluded.',
+      parameters: {
+        type: 'object',
+        properties: {
+          parent_id: { type: 'string', description: 'UUID of the parent page (omit for top-level pages).' },
+          limit: { type: 'number', description: 'Maximum number of pages to return (default 50, max 200).' },
+        },
+        required: [],
       },
     },
   },

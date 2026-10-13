@@ -9,7 +9,8 @@ import {
 } from '@/app/actions/notes';
 import { NoteTree, Breadcrumbs } from './NoteTree';
 import { buildTree, subtreeIds, TreeItem } from './note-tree';
-import { applyWikiCompletion, getWikiQuery, linkifyWikiLinks, matchTitles, WIKI_HREF_PREFIX, WikiQuery } from './wiki-links';
+import { linkifyWikiLinks, WIKI_HREF_PREFIX } from './wiki-links';
+import { MarkdownEditor } from './MarkdownEditor';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 
 interface Note {
@@ -219,24 +220,6 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
   const [savedAt, setSavedAt]     = useState<Date | null>(null);
   const [dirty, setDirty]         = useState(false);
   const autoSaveRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textareaRef               = useRef<HTMLTextAreaElement>(null);
-  const [wikiQuery, setWikiQuery] = useState<WikiQuery | null>(null);
-  const [wikiIndex, setWikiIndex] = useState(0);
-  const wikiMatches = wikiQuery && page ? matchTitles(page.linkTitles.filter(t => t !== title), wikiQuery.query) : [];
-
-  const updateWikiQuery = (el: HTMLTextAreaElement) => {
-    setWikiQuery(getWikiQuery(el.value, el.selectionStart));
-    setWikiIndex(0);
-  };
-
-  const completeWikiLink = (picked: string) => {
-    const el = textareaRef.current;
-    if (!el || !wikiQuery) return;
-    const next = applyWikiCompletion(content, wikiQuery, el.selectionStart, picked);
-    handleContentChange(next.text);
-    setWikiQuery(null);
-    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(next.cursor, next.cursor); });
-  };
 
   // Reset when note changes
   useEffect(() => {
@@ -247,11 +230,6 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
     setDirty(false);
     setSavedAt(null);
   }, [note.id]);
-
-  // Auto-focus textarea in edit mode
-  useEffect(() => {
-    if (editMode) setTimeout(() => textareaRef.current?.focus(), 50);
-  }, [editMode]);
 
   const parseTags = (input: string) =>
     input.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
@@ -438,43 +416,15 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
 
       {/* Editor body */}
       {editMode ? (
-        <div className="relative flex-1 min-h-0 flex flex-col">
-        <textarea
-          ref={textareaRef}
+        <MarkdownEditor
           value={content}
-          onChange={e => { handleContentChange(e.target.value); updateWikiQuery(e.target); }}
-          onKeyDown={e => {
-            if (wikiMatches.length === 0) return;
-            if (e.key === 'ArrowDown') { e.preventDefault(); setWikiIndex(i => (i + 1) % wikiMatches.length); }
-            else if (e.key === 'ArrowUp') { e.preventDefault(); setWikiIndex(i => (i - 1 + wikiMatches.length) % wikiMatches.length); }
-            else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); completeWikiLink(wikiMatches[wikiIndex]); }
-            else if (e.key === 'Escape') { e.preventDefault(); setWikiQuery(null); }
-          }}
-          onBlur={() => setTimeout(() => setWikiQuery(null), 150)}
-          spellCheck={false}
-          className={`flex-1 min-h-0 resize-none outline-none font-mono text-sm leading-relaxed px-5 py-4 ${
-            d
-              ? 'bg-gray-900 text-gray-200 placeholder-gray-700'
-              : 'bg-white text-gray-800 placeholder-gray-300'
-          }`}
-          placeholder="Write in Markdown… Type [[ to link a page."
+          onChange={handleContentChange}
+          linkTitles={page ? page.linkTitles.filter(t => t !== title) : []}
+          onOpenLink={page?.onOpenTitle}
+          isDarkMode={d}
+          placeholder="Write in Markdown… Type [[ to link a page (Ctrl/Cmd+click opens it)."
+          autoFocus
         />
-        {wikiMatches.length > 0 && (
-          <ul role="listbox" aria-label="Link to page" className={`absolute left-5 top-4 z-10 w-64 rounded-lg border shadow-lg text-xs overflow-hidden ${d ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}>
-            {wikiMatches.map((t, i) => (
-              <li
-                key={t}
-                role="option"
-                aria-selected={i === wikiIndex}
-                onMouseDown={e => { e.preventDefault(); completeWikiLink(t); }}
-                className={`px-3 py-1.5 cursor-pointer truncate ${i === wikiIndex ? (d ? 'bg-indigo-900/60' : 'bg-indigo-50') : ''}`}
-              >
-                {t}
-              </li>
-            ))}
-          </ul>
-        )}
-        </div>
       ) : (
         <div className={`flex-1 overflow-y-auto px-5 py-4 text-sm ${d ? 'text-gray-300' : 'text-gray-700'}`}>
           {content ? (

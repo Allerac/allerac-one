@@ -129,3 +129,26 @@ describe('NotePagesService tree queries', () => {
     expect(sql).toContain('ORDER BY depth DESC');
   });
 });
+
+describe('NotePagesService.ensureProviderRootPage', () => {
+  const service = new NotePagesService();
+  beforeEach(() => jest.clearAllMocks());
+
+  it('reuses the existing provider page found by source marker', async () => {
+    const { calls } = fakeClient(sql => (sql.includes('source = $2') ? { rows: [{ id: 'root-1' }] } : undefined));
+    expect(await service.ensureProviderRootPage('u1', 'onenote', 'OneNote')).toBe('root-1');
+    expect(calls.find(c => c.sql.includes('source = $2'))?.params).toEqual(['u1', 'connector_root:onenote']);
+    expect(calls.some(c => c.sql.startsWith('INSERT'))).toBe(false);
+  });
+
+  it('creates the provider page at the end of the top level', async () => {
+    const { calls } = fakeClient(sql => {
+      if (sql.includes('COALESCE(MAX(position)')) return { rows: [{ next: 4 }] };
+      if (sql.startsWith('INSERT')) return { rows: [{ id: 'new-root' }] };
+      return undefined;
+    });
+    expect(await service.ensureProviderRootPage('u1', 'google_drive', 'Google Drive')).toBe('new-root');
+    expect(calls.find(c => c.sql.startsWith('INSERT'))?.params).toEqual(['u1', 'Google Drive', 'connector_root:google_drive', 4]);
+    expect(calls[1].sql).toContain('pg_advisory_xact_lock');
+  });
+});
