@@ -29,6 +29,10 @@ export async function register() {
       // Re-embed notes whose semantic index is missing or stale, slowly and in the background.
       const { startNoteReindexSweep } = await import('./app/services/notes/note-reindex-sweep');
       startNoteReindexSweep();
+
+      // Parse [[Page]] links of notes written before link tracking existed.
+      const { startNoteLinksBackfill } = await import('./app/services/notes/note-links-backfill');
+      startNoteLinksBackfill();
     }
   }
 }
