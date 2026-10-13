@@ -1,6 +1,12 @@
-export type KnowledgeNodeType = 'memory' | 'document';
-export type KnowledgeSourceType = 'conversation' | 'manual' | 'upload' | 'crawler';
-export type KnowledgeRelation = 'same_domain' | 'same_source' | 'shared_topic';
+// Tickets are intentionally not a node type: they stay out of the knowledge graph.
+export type KnowledgeNodeType = 'memory' | 'document' | 'note';
+export type KnowledgeSourceType = 'conversation' | 'manual' | 'upload' | 'crawler' | 'note';
+export type KnowledgeRelation =
+  | 'same_domain' | 'same_source' | 'shared_topic'
+  // Explicit, user-authored note relations.
+  | 'links_to' | 'child_of';
+
+export type KnowledgeEdgeProvenance = 'deterministic' | 'user';
 
 export interface KnowledgeNode {
   id: string;
@@ -27,7 +33,7 @@ export interface KnowledgeEdge {
   targetNodeId: string;
   relation: KnowledgeRelation;
   weight: number;
-  provenance: 'deterministic';
+  provenance: KnowledgeEdgeProvenance;
   reason: string;
 }
 

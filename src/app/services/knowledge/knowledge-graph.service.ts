@@ -1,5 +1,8 @@
 import pool from '@/app/clients/db';
+import { isDomainEnabled } from '@/modules/registry';
 import { KnowledgeEdge, KnowledgeGraph, KnowledgeNode } from './knowledge-graph.types';
+
+const NOTES_DOMAIN = 'notes';
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 500;
@@ -19,6 +22,60 @@ interface DocumentRow {
   has_embeddings: boolean; first_chunk: string | null;
 }
 
+interface NoteRow {
+  id: string; title: string | null; content: string; tags: string[] | null;
+  parent_id: string | null; icon: string | null; source: string;
+  archived_at: Date | string | null; created_at: Date | string; updated_at: Date | string;
+}
+
+interface NoteLinkRow { from_id: string; to_id: string }
+
+function noteLabel(row: Pick<NoteRow, 'title' | 'content'>): string {
+  const title = row.title?.trim();
+  if (title) return title.slice(0, 80);
+  const firstLine = row.content.replace(/\s+/g, ' ').trim().slice(0, 80);
+  return firstLine || 'Untitled';
+}
+
+function pairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/**
+ * Explicit note edges: [[Page]] links (links_to) and the page hierarchy
+ * (child_of). Only edges whose two ends are in the node set are returned.
+ */
+export function buildNoteEdges(nodes: KnowledgeNode[], links: NoteLinkRow[]): KnowledgeEdge[] {
+  const ids = new Set(nodes.map(n => n.id));
+  const labels = new Map(nodes.map(n => [n.id, n.label]));
+  const seen = new Set<string>();
+  const edges: KnowledgeEdge[] = [];
+  for (const link of links) {
+    const from = `note:${link.from_id}`;
+    const to = `note:${link.to_id}`;
+    if (from === to || !ids.has(from) || !ids.has(to)) continue;
+    const id = `links_to:${from}:${to}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    edges.push({
+      id, sourceNodeId: from, targetNodeId: to, relation: 'links_to', weight: 1,
+      provenance: 'user', reason: `Links to [[${labels.get(to)}]]`,
+    });
+  }
+  for (const node of nodes) {
+    const parentId = node.type === 'note' ? node.metadata.parentId : null;
+    if (typeof parentId !== 'string') continue;
+    const parent = `note:${parentId}`;
+    if (!ids.has(parent) || parent === node.id) continue;
+    edges.push({
+      id: `child_of:${node.id}:${parent}`, sourceNodeId: node.id, targetNodeId: parent,
+      relation: 'child_of', weight: 0.9, provenance: 'user',
+      reason: `Sub-page of ${labels.get(parent)}`,
+    });
+  }
+  return edges;
+}
+
 function iso(value: Date | string): string {
   return new Date(value).toISOString();
 }
@@ -29,12 +86,13 @@ function documentSummary(content: string | null): string | null {
   return normalized.length > 320 ? `${normalized.slice(0, 317)}…` : normalized;
 }
 
-export function buildKnowledgeEdges(nodes: KnowledgeNode[]): KnowledgeEdge[] {
+export function buildKnowledgeEdges(nodes: KnowledgeNode[], skipPairs: Set<string> = new Set()): KnowledgeEdge[] {
   const candidates: Array<KnowledgeEdge & { priority: number }> = [];
   for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
       const left = nodes[leftIndex];
       const right = nodes[rightIndex];
+      if (skipPairs.has(pairKey(left.id, right.id))) continue;
       const shared = left.topics.filter(topic => right.topics.includes(topic));
       if (shared.length) {
         candidates.push({
@@ -85,12 +143,13 @@ export function buildKnowledgeEdges(nodes: KnowledgeNode[]): KnowledgeEdge[] {
 export class KnowledgeGraphService {
   async getGraph(
     userId: string,
-    options: { limit?: number; domainSlug?: string | null; isAdmin?: boolean } = {},
+    options: { limit?: number; domainSlug?: string | null; isAdmin?: boolean; includeArchivedNotes?: boolean } = {},
   ): Promise<KnowledgeGraph> {
     const limit = Math.min(Math.max(options.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
     const domainSlug = options.domainSlug ?? null;
     const isAdmin = options.isAdmin ?? false;
-    const [memoriesResult, documentsResult] = await Promise.all([
+    const includeNotes = (domainSlug === null || domainSlug === NOTES_DOMAIN) && isDomainEnabled(NOTES_DOMAIN);
+    const [memoriesResult, documentsResult, notesResult] = await Promise.all([
       pool.query<MemoryRow>(
         `SELECT id, conversation_id, summary, key_topics, importance_score,
                 domain_slug, emotion, created_at
@@ -126,6 +185,24 @@ export class KnowledgeGraphService {
          ORDER BY d.uploaded_at DESC LIMIT $3`,
         [userId, domainSlug, limit, isAdmin],
       ),
+      // Notes are projected from user_notes (never from their hidden index
+      // documents), gated by the same notes-domain access as the /notes page.
+      includeNotes
+        ? pool.query<NoteRow>(
+          `SELECT n.id, n.title, n.content, n.tags, n.parent_id, n.icon, n.source,
+                  n.archived_at, n.created_at, n.updated_at
+           FROM user_notes n
+           WHERE n.user_id = $1
+             AND ($3::boolean OR n.archived_at IS NULL)
+             AND ($4::boolean OR EXISTS (
+               SELECT 1 FROM domains d
+               JOIN user_domain_access uda ON uda.domain_id = d.id
+               WHERE uda.user_id = $1 AND d.slug = 'notes' AND d.is_active = true
+             ))
+           ORDER BY n.updated_at DESC LIMIT $2`,
+          [userId, limit, options.includeArchivedNotes ?? false, isAdmin],
+        )
+        : Promise.resolve({ rows: [] as NoteRow[] }),
     ]);
 
     const memoryNodes: KnowledgeNode[] = memoriesResult.rows.map(row => ({
@@ -146,8 +223,30 @@ export class KnowledgeGraphService {
       createdAt: iso(row.uploaded_at), updatedAt: iso(row.uploaded_at),
       metadata: { ...(row.metadata ?? {}), sourceId: row.source_id, attribution: row.attribution ?? {} },
     }));
-    const nodes = [...memoryNodes, ...documentNodes]
+    const noteNodes: KnowledgeNode[] = notesResult.rows.map(row => ({
+      id: `note:${row.id}`, sourceId: row.id, type: 'note', sourceType: 'note',
+      label: noteLabel(row), summary: documentSummary(row.content), domainSlug: NOTES_DOMAIN,
+      importance: 5, status: row.archived_at ? 'archived' : null, topics: row.tags ?? [],
+      canonicalUrl: null, chunkCount: 0, hasEmbeddings: false,
+      createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
+      metadata: { parentId: row.parent_id, icon: row.icon, noteSource: row.source },
+    }));
+    const nodes = [...memoryNodes, ...documentNodes, ...noteNodes]
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, limit);
-    return { nodes, edges: buildKnowledgeEdges(nodes) };
+
+    const keptNoteIds = nodes.filter(n => n.type === 'note').map(n => n.sourceId);
+    const links = keptNoteIds.length > 1
+      ? (await pool.query<NoteLinkRow>(
+        `SELECT from_id, to_id FROM knowledge_links
+         WHERE user_id = $1 AND from_type = 'note' AND to_type = 'note' AND relation = 'links_to'
+           AND from_id = ANY($2::uuid[]) AND to_id = ANY($2::uuid[])`,
+        [userId, keptNoteIds],
+      )).rows
+      : [];
+    // Explicit, user-authored edges come first; deterministic ones only fill
+    // in pairs that are not already explicitly connected.
+    const explicit = buildNoteEdges(nodes, links);
+    const explicitPairs = new Set(explicit.map(e => pairKey(e.sourceNodeId, e.targetNodeId)));
+    return { nodes, edges: [...explicit, ...buildKnowledgeEdges(nodes, explicitPairs)] };
   }
 }
