@@ -57,7 +57,9 @@ describe('NoteLinksService', () => {
     expect(sqls[2]).toContain("'note', t.id, 'links_to'");
     expect(sqls[2]).toContain('id <> $2');
     expect(client.query.mock.calls[2][1]).toEqual(['u1', 'n1', ['target page']]);
-    expect(sqls[3]).toBe('COMMIT');
+    expect(sqls[3]).toContain('SET links_synced_at = NOW()');
+    expect(client.query.mock.calls[3][1]).toEqual(['n1', 'u1']);
+    expect(sqls[4]).toBe('COMMIT');
     expect(client.release).toHaveBeenCalled();
   });
 
@@ -65,7 +67,8 @@ describe('NoteLinksService', () => {
     const client = fakeClient();
     expect(await service.syncNoteLinks('u1', 'n1', 'no links')).toEqual([]);
     const sqls = client.query.mock.calls.map(c => c[0] as string);
-    expect(sqls).toHaveLength(3);
+    expect(sqls).toHaveLength(4);
+    expect(sqls[2]).toContain('links_synced_at');
     expect(sqls.some(s => s.startsWith('INSERT'))).toBe(false);
   });
 

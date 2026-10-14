@@ -545,6 +545,21 @@ export default function VaultPanel({ userId, isDarkMode: d, refreshTrigger, onEd
     }
   };
 
+  // Deep link from the Knowledge graph: /notes?note=<id> opens that page once.
+  const deepLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandledRef.current || typeof window === 'undefined') return;
+    deepLinkHandledRef.current = true;
+    const noteId = new URLSearchParams(window.location.search).get('note');
+    if (!noteId) return;
+    getNote(noteId).then(res => {
+      if (res.success && res.note) {
+        setSelectedNote(res.note as unknown as Note);
+        onEditorToggle?.(true);
+      }
+    });
+  }, [onEditorToggle]);
+
   const handleAddChild = async (parentId: string | null) => {
     setSaving(true);
     const res = await createNote({ content: '', source: 'manual', parent_id: parentId });

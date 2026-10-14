@@ -45,6 +45,10 @@ export class NoteLinksService {
         );
         targetIds = res.rows.map((r: { to_id: string }) => r.to_id);
       }
+      await client.query(
+        'UPDATE user_notes SET links_synced_at = NOW() WHERE id = $1 AND user_id = $2',
+        [noteId, userId],
+      );
       await client.query('COMMIT');
       return targetIds;
     } catch (err) {

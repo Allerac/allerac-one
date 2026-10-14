@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as documentActions from '@/app/actions/documents';
 import * as knowledgeActions from '@/app/actions/knowledge';
 import * as memoryActions from '@/app/actions/memory';
+import * as noteActions from '@/app/actions/notes';
 import { useDomainContext } from '@/app/context/DomainContext';
 import {
   KnowledgeEdge,
@@ -113,7 +114,9 @@ function GraphCanvas({
       const size = 0.16 + Math.max(1, node.importance) * 0.024;
       const geometry = node.type === 'document'
         ? new THREE.BoxGeometry(size * 1.45, size * 1.45, size * 1.45)
-        : new THREE.SphereGeometry(size, 32, 32);
+        : node.type === 'note'
+          ? new THREE.OctahedronGeometry(size * 1.35)
+          : new THREE.SphereGeometry(size, 32, 32);
       const isHovered = node.id === hoveredId;
       const color = isHovered ? '#facc15' : domainColor(node.domainSlug || 'general');
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
@@ -169,9 +172,12 @@ function GraphCanvas({
       geometry.setAttribute('position', new THREE.Float32BufferAttribute([...start, ...end], 3));
       group.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
         color: isHoveredConnection ? 0xfacc15
-          : (isConnected ? 0x22d3ee : (isDark ? 0x64748b : 0x94a3b8)),
+          : (isConnected ? 0x22d3ee
+            // User-authored note edges ([[links]], sub-pages) stand out from inferred ones.
+            : edge.provenance === 'user' ? 0xa78bfa : (isDark ? 0x64748b : 0x94a3b8)),
         transparent: true,
-        opacity: isHoveredConnection ? 1 : (selectedId ? (isConnected ? 0.95 : 0.04) : 0.3),
+        opacity: isHoveredConnection ? 1
+          : (selectedId ? (isConnected ? 0.95 : 0.04) : (edge.provenance === 'user' ? 0.6 : 0.3)),
       })));
     });
 
@@ -258,7 +264,7 @@ export default function MemoryGraphPanel() {
   }, []);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    if (lastToolCall && ['create_memory', 'delete_memory'].includes(lastToolCall.name)) {
+    if (lastToolCall && ['create_memory', 'delete_memory', 'save_note', 'update_note', 'delete_note'].includes(lastToolCall.name)) {
       const timer = window.setTimeout(load, 500);
       return () => window.clearTimeout(timer);
     }
@@ -299,6 +305,7 @@ export default function MemoryGraphPanel() {
   const deleteSelected = async () => {
     if (!selected || !window.confirm(`Delete this ${selected.type} permanently?`)) return;
     if (selected.type === 'document') await documentActions.deleteDocument(selected.sourceId);
+    else if (selected.type === 'note') await noteActions.deleteNote(selected.sourceId);
     else await memoryActions.deleteSummary(selected.sourceId);
     setSelected(null);
     await load();
@@ -336,6 +343,7 @@ export default function MemoryGraphPanel() {
             <option value="all">All types</option>
             <option value="memory">Memories</option>
             <option value="document">Documents</option>
+            <option value="note">Note pages</option>
             <option value="crawler">Crawler documents</option>
           </select>
           <select value={domain} onChange={event => setDomain(event.target.value)}
@@ -363,6 +371,7 @@ export default function MemoryGraphPanel() {
         <div className="absolute z-10 bottom-4 left-4 right-4 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
           <span>● Conversation memory — remembered from a chat</span>
           <span>■ Document — uploaded or collected by the crawler</span>
+          <span>◆ Note page — linked with [[Page]] or nested under a parent</span>
         </div>
         {selected && (
           <aside className={`absolute z-20 top-4 right-4 w-[min(350px,calc(100%-2rem))] max-h-[calc(100%-2rem)] overflow-y-auto rounded-2xl border p-4 shadow-2xl backdrop-blur-xl ${
@@ -370,7 +379,8 @@ export default function MemoryGraphPanel() {
           }`}>
           <button onClick={() => setSelected(null)} className="float-right text-slate-400">×</button>
           <div className="text-[10px] uppercase tracking-widest text-slate-500">
-            {selected.sourceType === 'conversation' ? 'Conversation memory'
+            {selected.type === 'note' ? 'Note page'
+              : selected.sourceType === 'conversation' ? 'Conversation memory'
               : selected.sourceType === 'crawler' ? 'Crawler document'
                 : selected.sourceType === 'upload' ? 'Uploaded document' : 'Manual memory'}
             {' · '}{selected.domainSlug || 'general'}
@@ -387,6 +397,12 @@ export default function MemoryGraphPanel() {
           {selected.canonicalUrl && (
             <a href={selected.canonicalUrl} target="_blank" rel="noreferrer"
               className="mt-3 block text-xs text-cyan-500 hover:underline">Open original source ↗</a>
+          )}
+          {selected.type === 'note' && (
+            <a href={`/notes?note=${encodeURIComponent(selected.sourceId)}`}
+              className="mt-3 block text-xs text-violet-500 hover:underline">
+              Open page in Notes →
+            </a>
           )}
           {selected.type === 'document' && (
             <a href={`/memory/documents?document=${encodeURIComponent(selected.sourceId)}`}
