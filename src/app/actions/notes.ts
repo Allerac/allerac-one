@@ -1,7 +1,8 @@
 'use server';
 
 import { NotesService, CreateNoteInput, UpdateNoteInput } from '@/app/services/notes/notes.service';
-import { requireCurrentUser } from '@/app/lib/auth-session';
+import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
+import { noteRelatedService } from '@/app/services/knowledge/note-related.service';
 import { notePagesService, NoteMoveError } from '@/app/services/notes/note-pages.service';
 import { noteLinksService } from '@/app/services/notes/note-links.service';
 
@@ -142,5 +143,16 @@ export async function getNoteBacklinks(noteId: string) {
     return { success: true, backlinks };
   } catch (err: unknown) {
     return { success: false, backlinks: [], error: getErrorMessage(err) };
+  }
+}
+
+export async function getNoteRelated(noteId: string) {
+  try {
+    const user = await requireCurrentUser();
+    await assertDomainAccess(user, 'notes');
+    const related = await noteRelatedService.getRelated(user.id, noteId, { isAdmin: user.is_admin });
+    return { success: !!related, related };
+  } catch (err: unknown) {
+    return { success: false, related: null, error: getErrorMessage(err) };
   }
 }
