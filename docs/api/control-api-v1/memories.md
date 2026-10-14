@@ -10,6 +10,7 @@ Required scopes:
 |---|---|
 | `GET /api/v1/memories` | `memory:read` |
 | `DELETE /api/v1/memories/:id` | `memory:write` |
+| `POST /api/v1/memories/:id/promote` | `notes:write` and `memory:read` |
 | `POST /api/v1/conversations/:id/memory` | `memory:write` |
 
 Browser sessions can call these endpoints without API key scopes.
@@ -105,3 +106,21 @@ Response:
   }
 }
 ```
+
+## `POST /api/v1/memories/:id/promote`
+
+Creates a note page from a memory. The memory is kept unchanged; the page is
+linked to it (`derived_from`), so promoting the same memory again returns the
+existing page with `alreadyPromoted: true` and status `200` (`201` when created).
+
+Requires access to the `notes` domain and to the memory's own domain.
+
+Request body (optional):
+
+| Field | Type | Notes |
+|---|---|---|
+| `parent_id` | UUID or null | Create the page under this note page (`404` if it is not yours) |
+| `title` | string | Page title; defaults to the memory's first sentence |
+
+Response: `{ "data": { "note": { ...note }, "alreadyPromoted": false } }`.
+

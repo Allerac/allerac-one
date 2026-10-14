@@ -3,6 +3,7 @@
 import { NotesService, CreateNoteInput, UpdateNoteInput } from '@/app/services/notes/notes.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
 import { noteRelatedService } from '@/app/services/knowledge/note-related.service';
+import { promoteMemoryService, PromoteMemoryError } from '@/app/services/knowledge/promote-memory.service';
 import { notePagesService, NoteMoveError } from '@/app/services/notes/note-pages.service';
 import { noteLinksService } from '@/app/services/notes/note-links.service';
 
@@ -154,5 +155,19 @@ export async function getNoteRelated(noteId: string) {
     return { success: !!related, related };
   } catch (err: unknown) {
     return { success: false, related: null, error: getErrorMessage(err) };
+  }
+}
+
+export async function promoteMemoryToPage(memoryId: string, options: { parentId?: string | null; title?: string | null } = {}) {
+  try {
+    const user = await requireCurrentUser();
+    await assertDomainAccess(user, 'notes');
+    const result = await promoteMemoryService.promote(user, memoryId, options);
+    return { success: true, note: result.note, alreadyPromoted: result.alreadyPromoted };
+  } catch (err: unknown) {
+    if (!(err instanceof PromoteMemoryError) && !(err instanceof NoteMoveError)) {
+      console.error('[notes] promoteMemoryToPage error:', err);
+    }
+    return { success: false, note: null, alreadyPromoted: false, error: getErrorMessage(err) };
   }
 }

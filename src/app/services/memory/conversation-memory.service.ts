@@ -374,6 +374,11 @@ ${memoryItems.join('\n\n')}
         'DELETE FROM conversation_summaries WHERE id = $1 AND user_id = $2',
         [summaryId, userId]
       );
+      // Drop note -> memory links (e.g. derived_from after "Promote to page").
+      await pool.query(
+        `DELETE FROM knowledge_links WHERE user_id = $1 AND to_type = 'memory' AND to_id = $2`,
+        [userId, summaryId],
+      );
     } catch (error: unknown) {
       throw new Error(`Failed to delete summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
