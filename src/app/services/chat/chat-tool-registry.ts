@@ -6,6 +6,7 @@ import {
   CREATE_MEMORY_TOOL_DEFINITION,
   MEMORY_DOMAIN_TOOL_DEFINITIONS,
   RECALL_MEMORY_TOOL_DEFINITION,
+  SEARCH_KNOWLEDGE_TOOL_DEFINITION,
 } from '@/app/tools/memory.tool.definitions';
 import { JOBS_TOOL_DEFINITIONS, SCHEDULE_TASK_TOOL_DEFINITION } from '@/app/tools/jobs.tool';
 import { NOTES_TOOL_DEFINITIONS } from '@/app/tools/notes.tool';
@@ -24,7 +25,7 @@ export const JOB_TOOL_NAMES = ['list_jobs', 'create_job', 'update_job', 'delete_
 export const SCHEDULE_TASK_TOOL_NAME = 'schedule_task';
 export const LEARN_INSTRUCTION_TOOL_NAME = 'learn_instruction';
 export const TICKET_TOOL_NAMES = ['list_tickets', 'create_ticket', 'update_ticket_status', 'get_ticket'];
-export const MEMORY_TOOL_NAMES = ['recall_memory', 'search_memory', 'create_memory', 'delete_memory'];
+export const MEMORY_TOOL_NAMES = ['recall_memory', 'search_memory', 'create_memory', 'delete_memory', 'search_knowledge'];
 
 const DOMAIN_TOOL_NAMES = [
   ...NOTE_TOOL_NAMES,
@@ -115,12 +116,13 @@ export async function resolveChatTools(
 
   return filterEnabledTools([
     ...tools.filter((tool) => !DOMAIN_TOOL_NAMES.includes(tool.function.name)
-      && !['recall_memory', 'create_memory'].includes(tool.function.name)),
+      && !['recall_memory', 'create_memory', 'search_knowledge'].includes(tool.function.name)),
     // Memory, scheduling, and self-instruction tools are otherwise unconditional across every
     // domain — withheld here for public-facing domains (no personal memory/automation access,
     // and learn_instruction in particular would let a visitor durably alter the agent's behavior).
     ...(PUBLIC_DOMAINS.includes(domain) ? [] : [
       RECALL_MEMORY_TOOL_DEFINITION,
+      SEARCH_KNOWLEDGE_TOOL_DEFINITION,
       CREATE_MEMORY_TOOL_DEFINITION,
       SCHEDULE_TASK_TOOL_DEFINITION,
       LEARN_INSTRUCTION_TOOL_DEFINITION,

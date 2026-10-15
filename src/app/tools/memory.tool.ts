@@ -2,8 +2,14 @@ import pool from '@/app/clients/db';
 import { assertDomainAccess } from '@/app/lib/domain-access-check';
 import type { User } from '@/app/services/auth/auth.service';
 import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
+import { isUnifiedRecallEnabled } from '@/app/services/knowledge/knowledge-flags';
+import { clampKnowledgeLimit, getKnowledgeSearchService } from '@/app/services/knowledge/knowledge-search.service';
 
-export { MEMORY_DOMAIN_TOOL_DEFINITIONS, RECALL_MEMORY_TOOL_DEFINITION } from './memory.tool.definitions';
+export {
+  MEMORY_DOMAIN_TOOL_DEFINITIONS,
+  RECALL_MEMORY_TOOL_DEFINITION,
+  SEARCH_KNOWLEDGE_TOOL_DEFINITION,
+} from './memory.tool.definitions';
 
 interface MemoryToolContext {
   user: User;
@@ -89,16 +95,91 @@ async function searchMemories(
   return { memories: result.rows };
 }
 
+/**
+ * Memory recall through the unified knowledge search (semantic plus lexical),
+ * keeping the response shape of the keyword search. Falls back to the keyword
+ * search when the flag is off or the unified search fails.
+ */
+async function recallMemories(
+  user: User,
+  query: string,
+  domainSlug: string | undefined,
+  limit: number,
+) {
+  await ensureDomainAccess(user, domainSlug);
+  if (isUnifiedRecallEnabled()) {
+    try {
+      const result = await getKnowledgeSearchService().search(user, query, {
+        sourceTypes: ['memory'],
+        domainSlug: domainSlug ?? null,
+        limit,
+      });
+      return {
+        memories: result.hits.map(hit => ({
+          id: hit.source_id,
+          summary: hit.content,
+          key_topics: hit.key_topics ?? [],
+          importance_score: hit.importance,
+          domain_slug: hit.domain_slug,
+          created_at: hit.created_at,
+          similarity: hit.similarity,
+          match: hit.match,
+        })),
+      };
+    } catch (error) {
+      console.warn('[MemoryTool] Unified recall failed, using keyword search:', error instanceof Error ? error.message : error);
+    }
+  }
+  return searchMemories(user, query, domainSlug, limit);
+}
+
 export function buildMemoryTools({ user, callerDomain }: MemoryToolContext) {
   return {
     recall_memory: async (args: { query: string; domain_slug?: string; limit?: number }) => {
       const domainSlug = args.domain_slug?.trim() || callerDomain;
-      return searchMemories(user, args.query, domainSlug, clampLimit(args.limit, 5, 20));
+      return recallMemories(user, args.query, domainSlug, clampLimit(args.limit, 5, 20));
     },
 
     search_memory: async (args: { query: string; domain_slug?: string; limit?: number }) => {
       const domainSlug = args.domain_slug?.trim() || undefined;
-      return searchMemories(user, args.query, domainSlug, clampLimit(args.limit, 10, 50));
+      // The unified search caps results at 25; larger requests keep the keyword path.
+      const limit = clampLimit(args.limit, 10, 50);
+      return limit <= 25
+        ? recallMemories(user, args.query, domainSlug, limit)
+        : searchMemories(user, args.query, domainSlug, limit);
+    },
+
+    search_knowledge: async (args: {
+      query: string;
+      source_types?: string[];
+      domain_slug?: string;
+      limit?: number;
+      include_archived?: boolean;
+    }) => {
+      const query = typeof args.query === 'string' ? args.query.trim() : '';
+      if (!query) return { success: false, error: 'Query is required' };
+      const domainSlug = args.domain_slug?.trim() || undefined;
+      await ensureDomainAccess(user, domainSlug);
+      const result = await getKnowledgeSearchService().search(user, query, {
+        sourceTypes: Array.isArray(args.source_types) ? args.source_types : undefined,
+        domainSlug: domainSlug ?? null,
+        limit: clampKnowledgeLimit(args.limit),
+        includeArchived: args.include_archived === true,
+      });
+      return {
+        semantic_available: result.semanticAvailable,
+        results: result.hits.map(hit => ({
+          source_type: hit.source_type,
+          source_id: hit.source_id,
+          title: hit.title,
+          snippet: hit.snippet,
+          domain_slug: hit.domain_slug,
+          score: Number(hit.score.toFixed(4)),
+          similarity: hit.similarity === null ? null : Number(hit.similarity.toFixed(4)),
+          match: hit.match,
+          created_at: hit.created_at,
+        })),
+      };
     },
 
     create_memory: async (args: {
