@@ -4,7 +4,7 @@ export type KnowledgeSourceType = 'conversation' | 'manual' | 'upload' | 'crawle
 export type KnowledgeRelation =
   | 'same_domain' | 'same_source' | 'shared_topic'
   // Explicit, user-authored note relations.
-  | 'links_to' | 'child_of';
+  | 'links_to' | 'child_of' | 'derived_from';
 
 export type KnowledgeEdgeProvenance = 'deterministic' | 'user';
 

@@ -164,4 +164,30 @@ describe('KnowledgeGraphService note nodes', () => {
     await new KnowledgeGraphService().getGraph('user-id');
     expect(query.mock.calls.some(c => String(c[0]).includes('FROM knowledge_links'))).toBe(false);
   });
+
+  it('adds derived_from edges from promoted pages to their memory', async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM conversation_summaries')) return { rows: [{
+        id: 'm1', conversation_id: null, summary: 'Remembered fact', key_topics: [], importance_score: 7,
+        domain_slug: null, emotion: null, created_at: '2026-08-01T00:00:00.000Z',
+      }] };
+      if (sql.includes('FROM user_notes')) return { rows: [noteRow('a')] };
+      if (sql.includes("to_type = 'memory'")) return { rows: [{ from_id: 'a', to_id: 'm1', to_type: 'memory', relation: 'derived_from' }] };
+      return { rows: [] };
+    });
+    const graph = await new KnowledgeGraphService().getGraph('user-id');
+    expect(graph.edges[0]).toEqual(expect.objectContaining({
+      id: 'derived_from:note:a:memory:m1', relation: 'derived_from', provenance: 'user', reason: 'Promoted from this memory',
+    }));
+    const call = query.mock.calls.find(c => String(c[0]).includes("to_type = 'memory'"))!;
+    expect(call[1]).toEqual(['user-id', ['a'], ['m1']]);
+  });
+
+  it('ignores ticket rows even if they reach the edge builder', () => {
+    const nodes = [
+      node({ id: 'note:a', sourceId: 'a', type: 'note', sourceType: 'note', metadata: {} }),
+      node({ id: 'note:t', sourceId: 't', type: 'note', sourceType: 'note', metadata: {} }),
+    ];
+    expect(buildNoteEdges(nodes, [{ from_id: 'a', to_id: 't', to_type: 'ticket', relation: 'links_to' }])).toEqual([]);
+  });
 });

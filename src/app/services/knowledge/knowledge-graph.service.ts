@@ -28,7 +28,7 @@ interface NoteRow {
   archived_at: Date | string | null; created_at: Date | string; updated_at: Date | string;
 }
 
-interface NoteLinkRow { from_id: string; to_id: string }
+interface NoteLinkRow { from_id: string; to_id: string; to_type?: string; relation?: string }
 
 function noteLabel(row: Pick<NoteRow, 'title' | 'content'>): string {
   const title = row.title?.trim();
@@ -51,15 +51,20 @@ export function buildNoteEdges(nodes: KnowledgeNode[], links: NoteLinkRow[]): Kn
   const seen = new Set<string>();
   const edges: KnowledgeEdge[] = [];
   for (const link of links) {
+    // Only note->note links and note->memory provenance; any other target
+    // type (tickets in particular) never becomes an edge.
+    const derived = link.relation === 'derived_from' && link.to_type === 'memory';
+    if (!derived && (link.to_type ?? 'note') !== 'note') continue;
     const from = `note:${link.from_id}`;
-    const to = `note:${link.to_id}`;
+    const to = derived ? `memory:${link.to_id}` : `note:${link.to_id}`;
     if (from === to || !ids.has(from) || !ids.has(to)) continue;
-    const id = `links_to:${from}:${to}`;
+    const relation = derived ? 'derived_from' : 'links_to';
+    const id = `${relation}:${from}:${to}`;
     if (seen.has(id)) continue;
     seen.add(id);
     edges.push({
-      id, sourceNodeId: from, targetNodeId: to, relation: 'links_to', weight: 1,
-      provenance: 'user', reason: `Links to [[${labels.get(to)}]]`,
+      id, sourceNodeId: from, targetNodeId: to, relation, weight: 1, provenance: 'user',
+      reason: derived ? 'Promoted from this memory' : `Links to [[${labels.get(to)}]]`,
     });
   }
   for (const node of nodes) {
@@ -235,14 +240,23 @@ export class KnowledgeGraphService {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, limit);
 
     const keptNoteIds = nodes.filter(n => n.type === 'note').map(n => n.sourceId);
+    const keptMemoryIds = nodes.filter(n => n.type === 'memory').map(n => n.sourceId);
     const links = keptNoteIds.length > 1
       ? (await pool.query<NoteLinkRow>(
-        `SELECT from_id, to_id FROM knowledge_links
+        `SELECT from_id, to_id, to_type, relation FROM knowledge_links
          WHERE user_id = $1 AND from_type = 'note' AND to_type = 'note' AND relation = 'links_to'
            AND from_id = ANY($2::uuid[]) AND to_id = ANY($2::uuid[])`,
         [userId, keptNoteIds],
       )).rows
       : [];
+    if (keptNoteIds.length > 0 && keptMemoryIds.length > 0) {
+      links.push(...(await pool.query<NoteLinkRow>(
+        `SELECT from_id, to_id, to_type, relation FROM knowledge_links
+         WHERE user_id = $1 AND from_type = 'note' AND to_type = 'memory' AND relation = 'derived_from'
+           AND from_id = ANY($2::uuid[]) AND to_id = ANY($3::uuid[])`,
+        [userId, keptNoteIds, keptMemoryIds],
+      )).rows);
+    }
     // Explicit, user-authored edges come first; deterministic ones only fill
     // in pairs that are not already explicitly connected.
     const explicit = buildNoteEdges(nodes, links);

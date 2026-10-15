@@ -12,6 +12,7 @@ available when the local embedding service is unavailable.
 | `GET /api/v1/notes/search` | `notes:read` |
 | `GET /api/v1/notes/tags` | `notes:read` |
 | `GET /api/v1/notes/:id` | `notes:read` |
+| `GET /api/v1/notes/:id/related` | `notes:read` |
 | `POST /api/v1/notes` | `notes:write` |
 | `PATCH /api/v1/notes/:id` | `notes:write` |
 | `DELETE /api/v1/notes/:id` | `notes:write` |
@@ -198,6 +199,15 @@ Returns one note with its ancestor path (root first) and its direct, non-archive
   }
 }
 ```
+
+## `GET /api/v1/notes/:id/related`
+
+Items related to a note page. Tickets are never included; archived notes are never returned.
+
+- `notes`, `documents`: ranked by vector similarity to the note's own embeddings (minimum similarity 0.35). Empty, with `semanticAvailable: false`, while the note has no embeddings yet.
+- `memories`: memories the page was promoted from (`reason: "derived_from"`), memories sharing a tag (`shared_topic`), or mentioning the page title (`mentions_title`). Memories are matched by keyword, not semantically.
+
+Documents and memories are filtered by domain access. Query parameter: `limit` (1–20, default 5 per group).
 
 ## `PATCH /api/v1/notes/:id`
 

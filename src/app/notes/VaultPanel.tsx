@@ -11,6 +11,7 @@ import { NoteTree, Breadcrumbs } from './NoteTree';
 import { buildTree, subtreeIds, TreeItem } from './note-tree';
 import { linkifyWikiLinks, WIKI_HREF_PREFIX } from './wiki-links';
 import { MarkdownEditor } from './MarkdownEditor';
+import { NoteRelatedPanel } from './NoteRelatedPanel';
 import { AlleracIcon } from '@/app/components/ui/AlleracIcon';
 
 interface Note {
@@ -452,6 +453,9 @@ function NoteEditor({ note, isDarkMode: d, onSave, onClose, onDelete, isListColl
                 ))}
               </ul>
             </section>
+          )}
+          {page && (
+            <NoteRelatedPanel noteId={note.id} refreshKey={savedAt?.toISOString()} onOpenNote={page.onNavigate} d={d} />
           )}
         </div>
       )}

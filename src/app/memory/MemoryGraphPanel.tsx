@@ -404,6 +404,20 @@ export default function MemoryGraphPanel() {
               Open page in Notes →
             </a>
           )}
+          {selected.type === 'memory' && (
+            <button
+              type="button"
+              onClick={async () => {
+                const res = await noteActions.promoteMemoryToPage(selected.sourceId);
+                if (res.success && res.note) window.location.href = `/notes?note=${encodeURIComponent((res.note as { id: string }).id)}`;
+                else window.alert(res.error || 'Could not create the page');
+              }}
+              title="Create a note page from this memory (the memory is kept)"
+              className="mt-3 block text-xs text-violet-500 hover:underline"
+            >
+              Promote to page →
+            </button>
+          )}
           {selected.type === 'document' && (
             <a href={`/memory/documents?document=${encodeURIComponent(selected.sourceId)}`}
               className="mt-2 block text-xs text-violet-500 hover:underline">

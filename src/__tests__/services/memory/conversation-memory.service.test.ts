@@ -571,6 +571,15 @@ describe('ConversationMemoryService', () => {
       );
     });
 
+    it('removes note links that point at the deleted memory', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+      await memoryService.deleteSummary('summary_123', 'user_456');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining("to_type = 'memory' AND to_id = $2"),
+        ['user_456', 'summary_123'],
+      );
+    });
+
     it('should throw error on database failure', async () => {
       mockQuery.mockRejectedValueOnce(new Error('Delete failed'));
 

@@ -17,6 +17,8 @@ jest.mock('@/app/actions/notes', () => ({
   setNoteArchived: jest.fn(),
   getNoteBreadcrumbs: jest.fn().mockResolvedValue({ success: true, breadcrumbs: [] }),
   getNoteBacklinks: jest.fn().mockResolvedValue({ success: true, backlinks: [] }),
+  getNoteRelated: jest.fn().mockResolvedValue({ success: true, related: null }),
+  promoteMemoryToPage: jest.fn(),
 }));
 
 const note = {
