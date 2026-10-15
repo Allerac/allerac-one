@@ -7,8 +7,8 @@
 
 import { LLMService } from '../llm/llm.service';
 import { ConversationMemoryService } from '../memory/conversation-memory.service';
-import { VectorSearchService } from '../rag/vector-search.service';
-import { EmbeddingService } from '../rag/embedding.service';
+import { loadChatKnowledgeContext } from '../knowledge/chat-knowledge-context';
+import { PUBLIC_DOMAINS } from './chat-tool-registry';
 import { SearchWebTool } from '../../tools/search-web.tool';
 import { ShellTool } from '../../tools/shell.tool';
 import { ChatService } from '../database/chat.service';
@@ -163,9 +163,12 @@ export async function handleChatMessage(
   // 3. Load RAG context
   let relevantContext = '';
   try {
-    const embeddingService = new EmbeddingService();
-    const vectorService = new VectorSearchService(embeddingService);
-    relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: domainSlug ?? null });
+    relevantContext = await loadChatKnowledgeContext({
+      userId,
+      query: message,
+      domainSlug: domainSlug ?? null,
+      publicDomain: PUBLIC_DOMAINS.includes(domainSlug ?? ''),
+    });
   } catch (error) {
     console.log('[ChatHandler] No documents or RAG search failed:', error);
   }

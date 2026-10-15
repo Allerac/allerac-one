@@ -1,7 +1,6 @@
 import type { User } from '@/app/services/auth/auth.service';
 import { ChatService } from '@/app/services/database/chat.service';
-import { VectorSearchService } from '@/app/services/rag/vector-search.service';
-import { EmbeddingService } from '@/app/services/rag/embedding.service';
+import { loadChatKnowledgeContext } from '@/app/services/knowledge/chat-knowledge-context';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
 import { PUBLIC_DOMAINS, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
@@ -107,9 +106,12 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
   let relevantContext = '';
   if (!isPublicDomain) {
     try {
-      const embeddingService = new EmbeddingService();
-      const vectorService = new VectorSearchService(embeddingService);
-      relevantContext = await vectorService.getRelevantContext(input.message, input.user.id, { domainSlug: input.domain });
+      relevantContext = await loadChatKnowledgeContext({
+        userId: input.user.id,
+        isAdmin: input.user.is_admin === true,
+        query: input.message,
+        domainSlug: input.domain,
+      });
     } catch (error) {
       console.log('[ChatExecution] RAG search failed:', error);
     }
