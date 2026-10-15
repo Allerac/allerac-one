@@ -85,6 +85,7 @@ nav:
           - Agent Runs: api/control-api-v1/agent-runs.md
           - Documents: api/control-api-v1/documents.md
           - Notes: api/control-api-v1/notes.md
+          - Knowledge Search: api/control-api-v1/knowledge.md
           - Scheduled Jobs: api/control-api-v1/scheduled-jobs.md
           - Benchmark: api/control-api-v1/benchmark.md
           - Skills: api/control-api-v1/skills.md

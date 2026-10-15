@@ -70,3 +70,26 @@ export const RECALL_MEMORY_TOOL_DEFINITION = {
     },
   },
 };
+
+export const SEARCH_KNOWLEDGE_TOOL_DEFINITION = {
+  type: 'function',
+  function: {
+    name: 'search_knowledge',
+    description: 'Search the user\'s knowledge (note pages, uploaded documents and durable memories) by meaning, in one call. Returns one hit per source with its type and id. Tickets are not part of knowledge. Archived notes are excluded unless include_archived is true.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to look for, in natural language.' },
+        source_types: {
+          type: 'array',
+          items: { type: 'string', enum: ['note', 'document', 'memory'] },
+          description: 'Optional subset of sources to search. Defaults to all three.',
+        },
+        domain_slug: { type: 'string', description: 'Optional accessible domain to limit the search to. Omit to search every accessible domain.' },
+        limit: { type: 'number', description: 'Maximum results to return (default 8, maximum 25).' },
+        include_archived: { type: 'boolean', description: 'Include archived note pages (default false).' },
+      },
+      required: ['query'],
+    },
+  },
+};

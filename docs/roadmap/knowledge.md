@@ -222,6 +222,14 @@ service boundary:
 5. optional reranking;
 6. domain and user-access filtering at every stage.
 
+Status (Phase 3 of the pages plan): `KnowledgeSearchService` and the
+`search_knowledge` tool / `GET /api/v1/knowledge/search` provide one hybrid
+search over notes, documents and memories. Memories are embedded into
+`knowledge_semantic_index` in the background. `recall_memory` and chat auto-RAG
+use it behind feature flags (`KNOWLEDGE_UNIFIED_RECALL`, `KNOWLEDGE_UNIFIED_RAG`).
+Tickets are never indexed or returned. See
+[Knowledge Search API](../api/control-api-v1/knowledge.md).
+
 The chat runtime should receive a small, relevant context package rather than the
 entire graph. Returned context should preserve source references and relationship
 provenance.

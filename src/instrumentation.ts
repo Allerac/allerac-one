@@ -33,6 +33,10 @@ export async function register() {
       // Parse [[Page]] links of notes written before link tracking existed.
       const { startNoteLinksBackfill } = await import('./app/services/notes/note-links-backfill');
       startNoteLinksBackfill();
+
+      // Embed new or changed memories for semantic recall, slowly and in the background.
+      const { startMemoryIndexSweep } = await import('./app/services/knowledge/memory-index-sweep');
+      startMemoryIndexSweep();
     }
   }
 }

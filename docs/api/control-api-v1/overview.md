@@ -98,6 +98,7 @@ Common error codes:
 | [Agent Runs](agent-runs.md) | list, create, get, cancel |
 | [Documents](documents.md) | list, upload, delete |
 | [Notes](notes.md) | list, search, tags, create, update, delete |
+| [Knowledge Search](knowledge.md) | one semantic search over notes, documents and memories |
 | [Scheduled Jobs](scheduled-jobs.md) | list, create, update, toggle, executions, delete |
 | [Skills](skills.md) | list, get, create, update, delete |
 | [Health](health.md) | status, summary, daily, activities |

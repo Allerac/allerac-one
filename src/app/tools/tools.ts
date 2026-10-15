@@ -55,6 +55,7 @@ export const TOOL_REGISTRY: Array<{ name: string; label: string; description: st
   { name: 'schedule_task',            label: 'Schedule Task',       description: 'Schedule a recurring task for the current domain', group: 'Jobs'     },
   { name: 'learn_instruction',        label: 'Learn Instruction',   description: 'Learn a durable instruction for the current domain', group: 'Memory'  },
   { name: 'recall_memory',            label: 'Recall Memory',       description: 'Search relevant durable conversation memories',  group: 'Memory'    },
+  { name: 'search_knowledge',         label: 'Search Knowledge',    description: 'Search notes, documents and memories by meaning', group: 'Memory'    },
   { name: 'search_memory',            label: 'Search Memory',       description: 'Search memories across accessible domains',      group: 'Memory'    },
   { name: 'create_memory',            label: 'Create Memory',       description: 'Create a durable conversation memory',           group: 'Memory'    },
   { name: 'delete_memory',            label: 'Delete Memory',       description: 'Delete a durable conversation memory',           group: 'Memory'    },

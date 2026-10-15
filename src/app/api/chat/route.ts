@@ -21,8 +21,7 @@ import {
   UnauthorizedError,
 } from '@/app/lib/auth-session';
 import { ChatService } from '@/app/services/database/chat.service';
-import { VectorSearchService } from '@/app/services/rag/vector-search.service';
-import { EmbeddingService } from '@/app/services/rag/embedding.service';
+import { loadChatKnowledgeContext } from '@/app/services/knowledge/chat-knowledge-context';
 import { skillsService } from '@/app/services/skills/skills.service';
 import {
   InvalidChatRequestError,
@@ -34,7 +33,7 @@ import {
   SseWriter,
 } from '@/app/services/chat/sse-writer';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
-import { resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { PUBLIC_DOMAINS, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
 import { isShellAllowedFor } from '@/app/lib/shell-access';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
@@ -195,9 +194,13 @@ export async function POST(request: Request): Promise<Response> {
         // 8. Load RAG context (domain-scoped)
         let relevantContext = '';
         try {
-          const embeddingService = new EmbeddingService();
-          const vectorService = new VectorSearchService(embeddingService);
-          relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: effectiveDomain });
+          relevantContext = await loadChatKnowledgeContext({
+            userId,
+            isAdmin: user.is_admin === true,
+            query: message,
+            domainSlug: effectiveDomain,
+            publicDomain: PUBLIC_DOMAINS.includes(effectiveDomain),
+          });
         } catch (e) {
           console.log('[ChatRoute] RAG search failed:', e);
         }

@@ -7,8 +7,8 @@
 
 import { LLMService } from '../llm/llm.service';
 import { ConversationMemoryService } from '../memory/conversation-memory.service';
-import { VectorSearchService } from '../rag/vector-search.service';
-import { EmbeddingService } from '../rag/embedding.service';
+import { loadChatKnowledgeContext } from '../knowledge/chat-knowledge-context';
+import { PUBLIC_DOMAINS } from './chat-tool-registry';
 import { SearchWebTool } from '../../tools/search-web.tool';
 import { ShellTool } from '../../tools/shell.tool';
 import { ChatService } from '../database/chat.service';
@@ -17,7 +17,7 @@ import { TOOLS } from '../../tools/tools';
 import { buildNotesTools } from '../../tools/notes.tool';
 import { buildEmailTools } from '../../tools/email.tool';
 import { buildMemoryTools } from '../../tools/memory.tool';
-import { CREATE_MEMORY_TOOL_DEFINITION, MEMORY_DOMAIN_TOOL_DEFINITIONS, RECALL_MEMORY_TOOL_DEFINITION } from '../../tools/memory.tool.definitions';
+import { CREATE_MEMORY_TOOL_DEFINITION, MEMORY_DOMAIN_TOOL_DEFINITIONS, RECALL_MEMORY_TOOL_DEFINITION, SEARCH_KNOWLEDGE_TOOL_DEFINITION } from '../../tools/memory.tool.definitions';
 import { buildJobsTools } from '../../tools/jobs.tool';
 import { SCHEDULE_TASK_TOOL_DEFINITION } from '../../tools/jobs.tool.definitions';
 import { buildInstructionTools } from '../../tools/instructions.tool';
@@ -138,8 +138,9 @@ export async function handleChatMessage(
     }
   }
   activeTools = [
-    ...activeTools.filter(tool => !['recall_memory', 'create_memory'].includes(tool.function.name)),
+    ...activeTools.filter(tool => !['recall_memory', 'create_memory', 'search_knowledge'].includes(tool.function.name)),
     RECALL_MEMORY_TOOL_DEFINITION,
+    SEARCH_KNOWLEDGE_TOOL_DEFINITION,
     CREATE_MEMORY_TOOL_DEFINITION,
     SCHEDULE_TASK_TOOL_DEFINITION,
     LEARN_INSTRUCTION_TOOL_DEFINITION,
@@ -162,9 +163,12 @@ export async function handleChatMessage(
   // 3. Load RAG context
   let relevantContext = '';
   try {
-    const embeddingService = new EmbeddingService();
-    const vectorService = new VectorSearchService(embeddingService);
-    relevantContext = await vectorService.getRelevantContext(message, userId, { domainSlug: domainSlug ?? null });
+    relevantContext = await loadChatKnowledgeContext({
+      userId,
+      query: message,
+      domainSlug: domainSlug ?? null,
+      publicDomain: PUBLIC_DOMAINS.includes(domainSlug ?? ''),
+    });
   } catch (error) {
     console.log('[ChatHandler] No documents or RAG search failed:', error);
   }
@@ -338,7 +342,7 @@ export async function handleChatMessage(
           const emailHandlers = buildEmailTools(userId);
           const handler = emailHandlers[toolName as keyof typeof emailHandlers];
           toolResult = await handler(toolArgs as any);
-        } else if (['recall_memory', 'search_memory', 'create_memory', 'delete_memory'].includes(toolName)) {
+        } else if (['recall_memory', 'search_memory', 'create_memory', 'delete_memory', 'search_knowledge'].includes(toolName)) {
           const userResult = await pool.query(
             'SELECT id, email, name, is_admin, created_at FROM users WHERE id = $1',
             [userId],
