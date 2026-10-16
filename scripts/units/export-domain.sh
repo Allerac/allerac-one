@@ -20,6 +20,8 @@
 # tokens). Re-enter those in the new Unit.
 #
 # --dry-run prints the summary without writing the file.
+# --allow-admin only allows exporting an admin account; import-domain.sh always
+# creates the account as non-admin.
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db.sh"
 
@@ -59,7 +61,7 @@ SQL
 [ "$CHECK" != missing ] || { echo "error: no user with email $ACCOUNT" >&2; exit 1; }
 IFS='|' read -r USER_ID IS_ADMIN IS_ACTIVE HAS_ACCESS OTHER_DOMAINS <<< "$CHECK"
 if [ "$IS_ADMIN" = t ] && [ "$ALLOW_ADMIN" != 1 ]; then
-    echo "error: $ACCOUNT is an admin. A public bot must run on a non-admin service account (--allow-admin to override)." >&2; exit 1
+    echo "error: $ACCOUNT is an admin. A public bot must run on a non-admin service account (--allow-admin to export it anyway; it is imported as non-admin)." >&2; exit 1
 fi
 [ "$HAS_ACCESS" = t ] || { echo "error: $ACCOUNT has no access to domain '$DOMAIN'" >&2; exit 1; }
 [ -n "$OTHER_DOMAINS" ] && echo "warning: $ACCOUNT also has access to: $OTHER_DOMAINS (exported too)" >&2

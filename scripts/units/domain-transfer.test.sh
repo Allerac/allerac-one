@@ -17,8 +17,8 @@ set -euo pipefail
 : "${UNITS_TEST_TEMPLATE:?set UNITS_TEST_TEMPLATE to a migrated database name}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUFFIX="$$"
-SRC_DB="units_test_src_$SUFFIX"; DST_DB="units_test_dst_$SUFFIX"
-SRC="$UNITS_TEST_PG/$SRC_DB"; DST="$UNITS_TEST_PG/$DST_DB"
+SRC_DB="units_test_src_$SUFFIX"; DST_DB="units_test_dst_$SUFFIX"; ADM_DB="units_test_adm_$SUFFIX"
+SRC="$UNITS_TEST_PG/$SRC_DB"; DST="$UNITS_TEST_PG/$DST_DB"; ADM="$UNITS_TEST_PG/$ADM_DB"
 TMP="$(mktemp -d)"
 export UNITS_DB_URL=""
 
@@ -29,14 +29,15 @@ check() { if [ "$2" = "$3" ]; then ok "$1"; else fail "$1: expected '$2', got '$
 q() { psql "$1" -X -q -At -v ON_ERROR_STOP=1 -c "$2"; }
 
 cleanup() {
-    psql "$UNITS_TEST_PG/postgres" -X -q -c "DROP DATABASE IF EXISTS $SRC_DB" -c "DROP DATABASE IF EXISTS $DST_DB" >/dev/null 2>&1 || true
+    psql "$UNITS_TEST_PG/postgres" -X -q -c "DROP DATABASE IF EXISTS $SRC_DB" -c "DROP DATABASE IF EXISTS $DST_DB" -c "DROP DATABASE IF EXISTS $ADM_DB" >/dev/null 2>&1 || true
     rm -rf "$TMP"
 }
 trap cleanup EXIT
 
 psql "$UNITS_TEST_PG/postgres" -X -q -v ON_ERROR_STOP=1 \
     -c "CREATE DATABASE $SRC_DB TEMPLATE $UNITS_TEST_TEMPLATE" \
-    -c "CREATE DATABASE $DST_DB TEMPLATE $UNITS_TEST_TEMPLATE" >/dev/null
+    -c "CREATE DATABASE $DST_DB TEMPLATE $UNITS_TEST_TEMPLATE" \
+    -c "CREATE DATABASE $ADM_DB TEMPLATE $UNITS_TEST_TEMPLATE" >/dev/null
 
 SVC=11111111-1111-4111-8111-111111111111
 ADMIN=22222222-2222-4222-8222-222222222222
@@ -158,6 +159,19 @@ fi
 q "$DST" "DELETE FROM skill_tools WHERE skill_id = '$SYS_DST' AND tool_name = 'search_web'" >/dev/null
 bash "$HERE/import-domain.sh" "$EXPORT" --db-url "$DST" --verify-only > "$TMP/drift2.txt" 2>&1 || true
 grep -q "skill openworld differs" "$TMP/drift2.txt" && ok "verify-only detects a removed tool grant" || fail "verify-only detects a removed tool grant"
+
+# ── An admin source account is never imported as admin ───────────────────────
+q "$SRC" "INSERT INTO user_domain_access (user_id, domain_id) SELECT '$ADMIN', id FROM domains WHERE slug = 'openworld'" >/dev/null
+bash "$HERE/export-domain.sh" --domain openworld --account admin@example.test --db-url "$SRC" --allow-admin --out "$TMP/admin.json" > /dev/null
+check "--allow-admin exports the admin flag as it is" "1" "$(grep -c '"is_admin": true' "$TMP/admin.json")"
+bash "$HERE/import-domain.sh" "$TMP/admin.json" --db-url "$ADM" --dry-run > "$TMP/adm-dry.txt" 2>&1 || true
+grep -q "created as NON-admin" "$TMP/adm-dry.txt" && ok "dry run reports the admin demotion" || fail "dry run reports the admin demotion"
+bash "$HERE/import-domain.sh" "$TMP/admin.json" --db-url "$ADM" > "$TMP/adm.txt" 2>&1 \
+    && ok "admin export imports" || { fail "admin export imports"; cat "$TMP/adm.txt"; }
+grep -q "created as NON-admin" "$TMP/adm.txt" && ok "import reports the admin demotion" || fail "import reports the admin demotion"
+check "imported account is not admin" "f" "$(q "$ADM" "SELECT is_admin FROM users WHERE id = '$ADMIN'")"
+check "a regular account reports non-admin" "1" "$(grep -c "created (non-admin)" "$TMP/import.txt")"
+check "the moved bot is not admin" "f" "$(q "$DST" "SELECT is_admin FROM users WHERE id = '$SVC'")"
 
 echo ""
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
