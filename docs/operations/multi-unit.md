@@ -220,7 +220,9 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.public.yml:docker-compose.no-olla
 It moves `ollama` and `ollama-setup` behind the `ollama` profile, so no
 Ollama container runs and **no model is downloaded** at install or update
 (`install.sh` skips the model download step when `ollama-setup` is not in the
-Unit's services), and it turns off the note and memory embedding sweeps.
+Unit's services), it turns off the note and memory embedding sweeps, and it
+sets `GRAMPEADOR_ENABLED=false` so the Hub's Grampeador shows static phrases
+instead of generating them with Ollama every minute.
 Chat runs on a cloud provider; local models and document/note embeddings are
 not available in that Unit.
 
