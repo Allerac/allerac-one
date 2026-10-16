@@ -21,7 +21,7 @@ import type { Message } from '@/app/types';
 
 // ── Theme definitions ─────────────────────────────────────────────────────────
 
-export type TerminalTheme = 'code' | 'health' | 'finance' | 'recipes' | 'write' | 'social';
+export type TerminalTheme = 'code' | 'health' | 'social';
 
 interface ThemeConfig {
   bg: string;
@@ -54,36 +54,6 @@ const THEMES: Record<TerminalTheme, ThemeConfig> = {
     action: '#2a5070',
     bootLabel: 'Health monitoring active. Shift+Enter for newline.',
     scanline: 'rgba(0,30,50,0.12)',
-  },
-  finance: {
-    bg: '#0a0800',
-    primary: '#f0c040',
-    secondary: '#d4c090',
-    codeLabel: '#ffd700',
-    dim: '#302800',
-    action: '#504010',
-    bootLabel: 'Financial analysis active. Shift+Enter for newline.',
-    scanline: 'rgba(30,20,0,0.12)',
-  },
-  recipes: {
-    bg: '#120900',
-    primary: '#ff9f43',
-    secondary: '#e8c8a0',
-    codeLabel: '#ffb347',
-    dim: '#3a1a00',
-    action: '#5a2a00',
-    bootLabel: 'Recipe mode active. Shift+Enter for newline.',
-    scanline: 'rgba(40,10,0,0.10)',
-  },
-  write: {
-    bg: '#0c0905',
-    primary: '#e2c9a0',
-    secondary: '#c8b090',
-    codeLabel: '#c9a870',
-    dim: '#2a1e10',
-    action: '#4a3820',
-    bootLabel: 'Writer mode active. Shift+Enter for newline.',
-    scanline: 'rgba(30,15,0,0.10)',
   },
   social: {
     bg: '#0d0610',

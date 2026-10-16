@@ -13,6 +13,7 @@ import {
 } from '@/app/services/credits/credit.service';
 import { apiKeyService } from '@/app/services/api-keys/api-key.service';
 import { unknownScopes } from '@/app/services/api-keys/api-key-scopes';
+import { filterEnabledDomainSlugs, isModuleEnabled } from '@/modules/registry';
 
 const authService = new AuthService();
 const systemSettingsService = new SystemSettingsService();
@@ -21,6 +22,19 @@ const creditService = new CreditService();
 async function assertAdmin() {
   return requireCurrentAdmin();
 }
+
+/** Drops domains owned by modules that are off in this Unit (ALLERAC_PROFILE / ALLERAC_MODULES). */
+function onlyEnabledDomains<T extends { slug: string }>(rows: T[]): T[] {
+  const enabled = new Set(filterEnabledDomainSlugs(rows.map((r) => r.slug)));
+  return rows.filter((r) => enabled.has(r.slug));
+}
+
+/** Instagram and TikTok accounts belong to the social module. */
+function socialEnabled(): boolean {
+  return isModuleEnabled('social');
+}
+
+const SOCIAL_DISABLED = { success: false as const, error: 'Social module is not enabled in this Unit' };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_DOMAIN_ASSIGNMENTS = 100;
@@ -89,7 +103,7 @@ export async function listActiveDomains(): Promise<AdminDomain[]> {
   const result = await pool.query(
     `SELECT id, slug, display_name, is_active, sort_order FROM domains WHERE is_active = true ORDER BY sort_order ASC`
   );
-  return result.rows;
+  return onlyEnabledDomains(result.rows);
 }
 
 export async function listAllDomains(): Promise<AdminDomain[]> {
@@ -97,7 +111,7 @@ export async function listAllDomains(): Promise<AdminDomain[]> {
   const result = await pool.query(
     `SELECT id, slug, display_name, is_active, sort_order FROM domains ORDER BY sort_order ASC`
   );
-  return result.rows;
+  return onlyEnabledDomains(result.rows);
 }
 
 export async function reorderDomains(orderedIds: string[]): Promise<void> {
@@ -464,6 +478,7 @@ export interface InstagramAccountEntry {
 
 export async function listInstagramAccounts(): Promise<InstagramAccountEntry[]> {
   await assertAdmin();
+  if (!socialEnabled()) return [];
   const result = await pool.query(`
     SELECT
       ia.id,
@@ -492,6 +507,7 @@ export async function registerInstagramAccount(
   label: string
 ): Promise<{ success: true; id: string } | { success: false; error: string }> {
   await assertAdmin();
+  if (!socialEnabled()) return SOCIAL_DISABLED;
   if (!isUuid(ownerUserId)) return { success: false, error: 'Invalid owner ID' };
   if (!label.trim() || label.trim().length > 100) return { success: false, error: 'Invalid label' };
 
@@ -513,6 +529,7 @@ export async function deleteInstagramAccount(
   accountId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!socialEnabled()) return SOCIAL_DISABLED;
   if (!isUuid(accountId)) return { success: false, error: 'Invalid account ID' };
   await pool.query('DELETE FROM instagram_accounts WHERE id = $1', [accountId]);
   return { success: true };
@@ -523,6 +540,7 @@ export async function assignInstagramAccount(
   accountId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!socialEnabled()) return SOCIAL_DISABLED;
   if (!isUuid(userId) || !isUuid(accountId)) {
     return { success: false, error: 'Invalid user or account ID' };
   }
@@ -539,6 +557,7 @@ export async function unassignInstagramAccount(
   userId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!socialEnabled()) return SOCIAL_DISABLED;
   if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   await pool.query('DELETE FROM user_instagram_account WHERE user_id = $1', [userId]);
   return { success: true };
@@ -547,6 +566,7 @@ export async function unassignInstagramAccount(
 // Returns admin users who have an active Instagram connection (candidates for registering an account)
 export async function listInstagramConnectedAdmins(): Promise<Array<{ id: string; email: string; username: string }>> {
   await assertAdmin();
+  if (!socialEnabled()) return [];
   const result = await pool.query(`
     SELECT u.id, u.email, ic.username
     FROM users u
@@ -571,6 +591,7 @@ export interface TikTokAccountEntry {
 
 export async function listTikTokAccounts(): Promise<TikTokAccountEntry[]> {
   await assertAdmin();
+  if (!socialEnabled()) return [];
   const result = await pool.query(`
     SELECT
       ta.id,
@@ -599,6 +620,7 @@ export async function registerTikTokAccount(
   label: string,
 ): Promise<{ success: true; id: string } | { success: false; error: string }> {
   await assertAdmin();
+  if (!socialEnabled()) return SOCIAL_DISABLED;
   if (!isUuid(ownerUserId)) return { success: false, error: 'Invalid owner ID' };
   if (!label.trim() || label.trim().length > 100) {
     return { success: false, error: 'Invalid label' };
@@ -629,6 +651,7 @@ export async function deleteTikTokAccount(
   accountId: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!socialEnabled()) return SOCIAL_DISABLED;
   if (!isUuid(accountId)) return { success: false, error: 'Invalid account ID' };
   await pool.query('DELETE FROM tiktok_accounts WHERE id = $1', [accountId]);
   return { success: true };
@@ -639,6 +662,7 @@ export async function assignTikTokAccount(
   accountId: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!socialEnabled()) return SOCIAL_DISABLED;
   if (!isUuid(userId) || !isUuid(accountId)) {
     return { success: false, error: 'Invalid user or account ID' };
   }
@@ -657,6 +681,7 @@ export async function unassignTikTokAccount(
   userId: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
   await assertAdmin();
+  if (!socialEnabled()) return SOCIAL_DISABLED;
   if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   await pool.query('DELETE FROM user_tiktok_account WHERE user_id = $1', [userId]);
   return { success: true };
@@ -668,6 +693,7 @@ export async function listTikTokConnectedAdmins(): Promise<Array<{
   display_name: string;
 }>> {
   await assertAdmin();
+  if (!socialEnabled()) return [];
   const result = await pool.query(`
     SELECT u.id, u.email, tc.display_name
     FROM users u

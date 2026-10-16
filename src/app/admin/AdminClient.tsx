@@ -16,6 +16,7 @@ import type {
 import type { CreditPlan, OperationPricing } from '@/app/services/credits/credit.service';
 import type { SystemSettings } from '@/app/services/system/system-settings.service';
 import ApiKeyField from '@/app/components/settings/ApiKeyField';
+import type { AdminIntegration } from './integrations';
 
 interface AdminClientProps {
   initialUsers: AdminUser[];
@@ -28,13 +29,15 @@ interface AdminClientProps {
   initialTikTokConnectedAdmins: Array<{ id: string; email: string; display_name: string }>;
   initialCreditPlans: CreditPlan[];
   initialOperationPricing: OperationPricing[];
+  /** Integrations whose module is enabled in this Unit; the tab is hidden when empty. */
+  integrations: AdminIntegration[];
 }
 
 export default function AdminClient({
   initialUsers, initialDomains, initialAllDomains,
   initialSystemSettings, initialInstagramAccounts, initialConnectedAdmins,
   initialTikTokAccounts, initialTikTokConnectedAdmins,
-  initialCreditPlans, initialOperationPricing,
+  initialCreditPlans, initialOperationPricing, integrations,
 }: AdminClientProps) {
   const { isDark: isDarkMode, toggleDark } = useTheme();
   const [users, setUsers] = useState<AdminUser[]>(initialUsers);
@@ -470,7 +473,7 @@ export default function AdminClient({
     { id: 'credits' as const, label: 'Credits' },
     { id: 'domains' as const, label: 'Domains', count: allDomains.length },
     { id: 'apikeys' as const, label: 'API Keys' },
-    { id: 'integrations' as const, label: 'Integrations' },
+    ...(integrations.length > 0 ? [{ id: 'integrations' as const, label: 'Integrations' }] : []),
   ];
 
   return (
@@ -960,7 +963,8 @@ export default function AdminClient({
         }
 
         {/* ── Integrations tab ── */}
-        {activeTab === 'integrations' && <section>
+        {activeTab === 'integrations' && integrations.length > 0 && <section>
+          {integrations.includes('instagram') && <>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${textMuted}`}>Instagram Accounts</h2>
           <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
             {/* Registered accounts */}
@@ -1047,7 +1051,9 @@ export default function AdminClient({
               {igRegisterError && <p className="text-sm text-red-400 mt-2">{igRegisterError}</p>}
             </div>
           </div>
+          </>}
 
+          {integrations.includes('tiktok') && <>
           <h2 className={`text-sm font-semibold uppercase tracking-wider mt-8 mb-4 ${textMuted}`}>TikTok Accounts</h2>
           <div className={`border rounded-lg overflow-hidden ${cardBg}`}>
             {tiktokAccounts.length > 0 && (
@@ -1150,6 +1156,7 @@ export default function AdminClient({
               {tiktokRegisterError && <p className="text-sm text-red-400 mt-2">{tiktokRegisterError}</p>}
             </div>
           </div>
+          </>}
         </section>
         }
 
