@@ -132,6 +132,8 @@ services:
       # bug-hunter skill to open issues). Exposed to commands as GH_TOKEN/GITHUB_TOKEN.
       # The broad GITHUB_TOKEN / GITHUB_PAT are intentionally NOT passed here.
       - EXECUTOR_GITHUB_TOKEN=${EXECUTOR_GITHUB_TOKEN:-}
+      # Service logs go to this Unit's app (port 8080 inside the network).
+      - LOG_API_URL=http://app:8080/api/log-submit
     volumes:
       # Dedicated workspace. Defaults to the named volume below. To use a host
       # directory instead, set EXECUTOR_WORKSPACE to an absolute path that is

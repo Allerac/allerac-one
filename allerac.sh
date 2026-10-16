@@ -125,8 +125,8 @@ get_app_port() {
 
 compose_flags() {
     local flags=""
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${UNIT}-notifier"  && flags="$flags --profile notifications"
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${UNIT}-prometheus" && flags="$flags --profile monitoring"
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${UNIT}-notifier"  && flags="$flags --profile notifications"
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${UNIT}-prometheus" && flags="$flags --profile monitoring"
     echo "$flags"
 }
 
@@ -208,7 +208,7 @@ json_escape() {
 detect_product_line_value() {
     if [ -n "${ALLERAC_PRODUCT_LINE:-}" ]; then
         echo "$ALLERAC_PRODUCT_LINE"
-    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${UNIT}-tunnel"; then
+    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${UNIT}-tunnel"; then
         echo "cloud"
     else
         echo "local"

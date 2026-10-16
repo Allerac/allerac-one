@@ -89,8 +89,10 @@ else
     log_skip "Install directory not found"
 fi
 
-# Also remove any leftover allerac containers not caught by compose
-LEFTOVER=$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep "^${ALLERAC_UNIT:-allerac}-" || true)
+# Also remove any leftover containers of THIS Unit not caught by compose. Match
+# the Compose project label, not a name prefix: a name prefix would also hit
+# other Units whose names start with this one (e.g. allerac-foo).
+LEFTOVER=$(docker ps -a --filter "label=com.docker.compose.project=${ALLERAC_UNIT:-allerac}" --format '{{.Names}}' 2>/dev/null || true)
 if [ -n "$LEFTOVER" ]; then
     echo "$LEFTOVER" | while read -r name; do
         docker rm -f "$name" >/dev/null 2>&1 && log_ok "Removed leftover container: $name"

@@ -110,7 +110,7 @@ function installLogInterceptor(apiUrl, serviceName) {
   };
 }
 
-const LOG_API_URL = process.env.LOG_API_URL || 'http://allerac-app:3000/api/log-submit';
+const LOG_API_URL = process.env.LOG_API_URL || 'http://app:8080/api/log-submit';
 installLogInterceptor(LOG_API_URL);
 
 // Defense in depth ONLY. This regex blocklist is trivially bypassed
