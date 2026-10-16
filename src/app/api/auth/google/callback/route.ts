@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
   // Redirect based on role
   const { AuthService: AS } = await import('@/app/services/auth/auth.service');
   const as = new AS();
-  if (result.user.is_admin) redirect('/');
-  const slug = await as.getFirstDomainSlug(result.user.id);
-  redirect(slug ? `/${slug}` : '/login?error=no-access');
+  const { homePathFor } = await import('@/app/lib/home-path');
+  if (result.user.is_admin) redirect(homePathFor(true, null));
+  redirect(homePathFor(false, await as.getFirstDomainSlug(result.user.id)));
 }

@@ -144,9 +144,15 @@ BEGIN
 
   INSERT INTO users (id, email, name, password_hash, password_hash_version, is_admin, is_active, completed_onboarding_tour, created_at)
   VALUES (uid, u->>'email', u->>'name', u->>'password_hash', (u->>'password_hash_version')::int,
-          (u->>'is_admin')::boolean, (u->>'is_active')::boolean, (u->>'completed_onboarding_tour')::boolean,
+          false, (u->>'is_active')::boolean, (u->>'completed_onboarding_tour')::boolean,
           (u->>'created_at')::timestamptz);
-  RAISE NOTICE 'account %: created (admin=%)', u->>'email', u->>'is_admin';
+  -- A moved bot is a service account: never admin in the target, whatever the
+  -- source (export --allow-admin only allows exporting such an account).
+  IF coalesce((u->>'is_admin')::boolean, false) THEN
+    RAISE NOTICE 'account %: created as NON-admin (it was admin in the source Unit; admin is never imported)', u->>'email';
+  ELSE
+    RAISE NOTICE 'account %: created (non-admin)', u->>'email';
+  END IF;
 
   IF doc->'user_settings' IS NOT NULL AND jsonb_typeof(doc->'user_settings') = 'object' THEN
     r := doc->'user_settings';

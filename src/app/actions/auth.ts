@@ -1,5 +1,6 @@
 'use server';
 
+import { homePathFor } from '@/app/lib/home-path';
 import { cookies } from 'next/headers';
 import { AuthService, User } from '@/app/services/auth/auth.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
@@ -224,13 +225,12 @@ export async function getCurrentUser(): Promise<User | null> {
 /**
  * Returns the URL the user should be redirected to after login.
  * Admins go to the desktop (/). Domain users go to their first assigned domain.
- * If no domain is assigned, falls back to /.
+ * With no accessible domain: the login page's "no access" notice.
  */
 export async function getLoginRedirect(): Promise<string> {
   const user = await requireCurrentUser();
-  if (user.is_admin) return '/';
-  const slug = await authService.getFirstDomainSlug(user.id);
-  return slug ? `/${slug}` : '/login?error=no-access';
+  if (user.is_admin) return homePathFor(true, null);
+  return homePathFor(false, await authService.getFirstDomainSlug(user.id));
 }
 
 /**

@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { isDomainEnabled } from '@/modules/registry';
 import { AuthService, User } from '@/app/services/auth/auth.service';
+import { deniedDomainPathFor, homePathFor } from '@/app/lib/home-path';
 
 const authService = new AuthService();
 
@@ -37,7 +38,7 @@ export async function requireDomainAccess(slug: string): Promise<User> {
   const allowed = await authService.canAccessDomain(user.id, user.is_admin, slug);
   if (!allowed) {
     const firstSlug = await authService.getFirstDomainSlug(user.id);
-    redirect(firstSlug ? `/${firstSlug}` : '/login?error=no-access');
+    redirect(deniedDomainPathFor(firstSlug, slug));
   }
 
   return user;
@@ -58,7 +59,7 @@ export async function requireAdmin(): Promise<User> {
 
   if (!user.is_admin) {
     const slug = await authService.getFirstDomainSlug(user.id);
-    redirect(slug ? `/${slug}` : '/login?error=no-access');
+    redirect(homePathFor(false, slug));
   }
 
   return user;

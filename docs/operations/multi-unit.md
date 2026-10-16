@@ -84,6 +84,10 @@ pushes anything. It:
   `docker-compose.no-ollama.yml` (see below; `--with-ollama` to keep it,
   `--full` for every service).
 
+A new Unit's database has no account at all (the legacy `dev@local.host`
+bootstrap admin is no longer created, see migration 140): the first account
+registered on it becomes its admin.
+
 Back up the new `.env`: it holds the only copy of that Unit's
 `ENCRYPTION_KEY`. Never copy secrets between Units; a Unit cannot decrypt
 another Unit's stored tokens, and that is the point.
@@ -103,15 +107,26 @@ Other rules:
 `unit/<name>` is what that Unit runs. It is never deleted and never developed
 on directly:
 
-1. Work lands on `development` as usual.
-2. To ship it to a Unit, open a PR `development` → `unit/<name>` and merge it.
-   Unit-specific changes (e.g. its `skills/openworld.md`) go to that branch by PR too.
-3. On the host: `cd ~/allerac-units/<name> && ./update.sh` (it backs the Unit
-   up and pulls `DEPLOY_BRANCH`, i.e. `unit/<name>`). `update.sh` refuses to run in a
+1. **Fixes and features go to `development` only**, never straight to a Unit
+   branch, so every Unit gets them and the branches do not drift.
+2. To update a Unit, open a PR `development` → `unit/<name>` and merge it
+   (merge, not rebase: the branch is shared history).
+3. On the host: `cd ~/allerac-units/<name> && ./update.sh`. It backs the Unit
+   up and pulls `DEPLOY_BRANCH`, i.e. `unit/<name>`. `update.sh` refuses to run in a
    `unit/*` checkout whose `DEPLOY_BRANCH` points elsewhere, so it can never
    merge `main` into a Unit branch.
 4. Roll back: `git checkout` the previous commit printed by `update.sh` and
    restore the pre-update backup.
+
+The only commits that belong on a Unit branch alone are that Unit's skill
+files. **Skill file divergence:** the skills loader rewrites file-backed
+system skills (e.g. `skills/openworld.md`) from the checkout on every start.
+If a bot's skill was edited in the database (or `import-domain.sh` warns that
+the file differs), commit the database text to `skills/<file>` on
+`unit/<name>` by PR, then restart and run `import-domain.sh --verify-only`.
+Otherwise the next restart silently reverts the bot's behaviour. When a later
+`development` → `unit/<name>` PR conflicts on such a file, keep the Unit's
+version unless the change is meant for that bot too.
 
 The GitHub webhook auto-deploy stays on the primary Unit only.
 
@@ -159,7 +174,10 @@ skills (e.g. `skills/openworld.md`) are matched by file name and overwritten
 with the exported text. The loader rewrites them from the file on the next
 start, so when the import warns that a file differs, commit the exported text
 to that Unit branch's `skills/<file>` first. The importer refuses an account
-that already exists in the target.
+that already exists in the target, and always creates the account as
+**non-admin**: `export-domain.sh --allow-admin` only allows exporting an admin
+account; the import demotes it and says so. Give the Unit its own admin
+(the first account registered on it).
 
 ## Lean public profile
 
