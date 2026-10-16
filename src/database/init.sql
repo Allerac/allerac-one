@@ -12,10 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;
 
--- Insert default user
-INSERT INTO users (id, email)
-VALUES ('00000000-0000-0000-0000-000000000000', 'dev@local.host')
-ON CONFLICT (id) DO NOTHING;
+-- No default user: older versions inserted 'dev@local.host' here, which
+-- migration 034 then made admin. See migration 140.
 
 -- Table for user sessions
 CREATE TABLE IF NOT EXISTS user_sessions (
