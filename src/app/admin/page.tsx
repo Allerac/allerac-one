@@ -6,9 +6,13 @@ import {
   listCreditPlans, listOperationPricing,
 } from '@/app/actions/admin';
 import AdminClient from './AdminClient';
+import { getEnabledAdminIntegrations } from './integrations';
+import { isModuleEnabled } from '@/modules/registry';
 
 export default async function AdminPage() {
   await requireAdmin();
+  // The Instagram/TikTok actions return [] when the social module is off.
+  const integrations = getEnabledAdminIntegrations((id) => isModuleEnabled(id));
   const [
     users,
     activeDomains,
@@ -44,6 +48,7 @@ export default async function AdminPage() {
       initialTikTokConnectedAdmins={tiktokConnectedAdmins}
       initialCreditPlans={creditPlans}
       initialOperationPricing={operationPricing}
+      integrations={integrations}
     />
   );
 }
