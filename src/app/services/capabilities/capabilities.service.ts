@@ -123,7 +123,8 @@ export class CapabilitiesService {
     const geminiConfigured = configured(userSettings?.google_api_key)
       || configured(systemSettings.google_api_key);
     const anthropicConfigured = configured(userSettings?.anthropic_api_key)
-      || configured(systemSettings.anthropic_api_key);
+      || configured(systemSettings.anthropic_api_key)
+      || configured(process.env.ANTHROPIC_API_KEY);
     const openaiConfigured = configured(systemSettings.openai_api_key)
       || configured(process.env.OPENAI_API_KEY);
     const openaiLlmConfigured = configured(userSettings?.openai_api_key) || openaiConfigured;

@@ -1,0 +1,30 @@
+# Allerac One - override for a Unit without a local Ollama
+#
+# For Units whose chat runs on a cloud provider (Anthropic, OpenAI, Gemini)
+# configured in that Unit's settings, e.g. the public website bots:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.public.yml:docker-compose.no-ollama.yml
+#
+# What it changes (nothing else):
+# - ollama and ollama-setup move behind the `ollama` profile, so no Ollama
+#   container, model download or ollama_data volume is used;
+# - the background note and memory embedding sweeps are switched off (there
+#   is no embedding backend; chat falls back to the previous document search,
+#   which then finds nothing, and keyword recall keeps working).
+#
+# Local models (provider "ollama") and document/note embeddings are not
+# available in such a Unit. Remove this file from COMPOSE_FILE to get them back.
+# See docs/operations/multi-unit.md.
+
+x-no-embedding-sweeps: &no-embedding-sweeps
+  MEMORY_INDEX_SWEEP_ENABLED: "false"
+  NOTE_REINDEX_SWEEP_ENABLED: "false"
+
+services:
+  ollama:
+    profiles: [ollama]
+  ollama-setup:
+    profiles: [ollama]
+
+  app:
+    environment: *no-embedding-sweeps

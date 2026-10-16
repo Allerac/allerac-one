@@ -810,6 +810,11 @@ start_services() {
 # Follow model download in real time
 # ============================================
 follow_model_download() {
+    # Units without a local Ollama (docker-compose.no-ollama.yml) download nothing.
+    if ! $USE_SUDO docker compose config --services 2>/dev/null | grep -qx "ollama-setup"; then
+        log_info "Ollama is disabled for this Unit; skipping model download."
+        return
+    fi
     log_step "Downloading AI models..."
     echo -e "  ${YELLOW}${OLLAMA_MODELS}${NC}"
     echo -e "  This may take several minutes depending on your connection."

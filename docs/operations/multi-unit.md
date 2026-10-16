@@ -52,35 +52,114 @@ See [modules-and-profiles.md](modules-and-profiles.md).
 
 ## Add a second Unit
 
-All Units on a host share one checkout of the repository (same code, same
-`docker-compose.yml`); only the env file differs.
+Each Unit gets its own **git worktree** of this repository, checked out on its
+own long-lived branch `unit/<name>`, with its own `.env`. A worktree shares the
+git objects with the primary checkout but has its own files, so updating one
+Unit (`git pull`, rebuild, bind-mounted files) never changes another.
 
 ```bash
-cd ~/allerac-one
-cp .env.unit.example .env.website
-# edit .env.website: ALLERAC_UNIT, ALLERAC_ENV_FILE, ports, APP_URL and NEW secrets
-openssl rand -hex 32   # run once per secret: ENCRYPTION_KEY, TELEGRAM_TOKEN_ENCRYPTION_KEY, EXECUTOR_SECRET
-
-docker compose --env-file .env.website config --services   # check what will run
-docker compose --env-file .env.website up -d --build
-docker compose --env-file .env.website ps
+cd ~/allerac-one && git fetch origin
+scripts/units/new-unit.sh openworld --profile openworld --hostname openworld.allerac.ai --dry-run
+scripts/units/new-unit.sh openworld --profile openworld --hostname openworld.allerac.ai
+cd ~/allerac-units/openworld
+docker compose config --services     # check what will run
+docker compose up -d --build
+curl -s http://localhost:8081/api/v1/version
+git push -u origin unit/openworld    # publish the Unit branch once
 ```
 
-- Always pass `--env-file`. Without it Compose reads `.env`, which is the
-  primary Unit.
-- `ALLERAC_UNIT` already sets the project name, so `-p` is optional. If you
-  pass `-p`, use the same value as `ALLERAC_UNIT`.
-- Never copy secrets from another Unit. A Unit with its own
-  `ENCRYPTION_KEY` cannot decrypt another Unit's stored tokens, and that is
-  the point.
-- `EXECUTOR_SECRET` is still required on a lean Unit: besides the executor, it
-  authenticates internal calls (the notifier triggering `/api/jobs/run`, and
-  service logs posted to `/api/log-submit`).
-- The first account created on a new Unit becomes its admin. Registration is
-  closed after that (`ALLOW_REGISTRATION=false`); invite further users from
-  the Unit's admin page.
-- Each Unit builds its own images (`<unit>-app`, ...). Expect the build time
-  and image disk usage to grow with each Unit.
+`new-unit.sh` changes nothing outside the new worktree and never starts or
+pushes anything. It:
+
+- refuses names starting with `allerac` (reserved for the primary Unit, whose
+  scripts match `allerac-*` containers), names already used by an env file,
+  worktree, Compose project or volume, and a branch checked out elsewhere;
+- creates `unit/<name>` from `origin/development` (or reuses an existing local
+  or remote `unit/<name>`), in `~/allerac-units/<name>` (`--dir` to change);
+- writes `.env` from `.env.unit.example` (mode 600) with **fresh** secrets,
+  `ALLERAC_UNIT`, `ALLERAC_PROFILE`, `DEPLOY_BRANCH=unit/<name>`, `APP_URL`,
+  closed registration, and every host port shifted by the first free offset
+  (`APP_PORT=8081`, `8082`, ...; executor dev ports in blocks of 20);
+- selects the lean public override, and for `openworld`/`sales` also
+  `docker-compose.no-ollama.yml` (see below; `--with-ollama` to keep it,
+  `--full` for every service).
+
+Back up the new `.env`: it holds the only copy of that Unit's
+`ENCRYPTION_KEY`. Never copy secrets between Units; a Unit cannot decrypt
+another Unit's stored tokens, and that is the point.
+
+Other rules:
+
+- `EXECUTOR_SECRET` is still required on a lean Unit: it also authenticates
+  internal calls (notifier → `/api/jobs/run`, service logs → `/api/log-submit`).
+- The first account created on a new Unit becomes its admin (or import one,
+  see *Move a domain into a Unit*). Registration is closed after that.
+- Each Unit builds its own images. Expect build time and disk to grow per Unit.
+- A Unit can still live in the primary checkout with `--env-file .env.<unit>`,
+  but then both share files and `git pull`; prefer a worktree.
+
+### Unit branches
+
+`unit/<name>` is what that Unit runs. It is never deleted and never developed
+on directly:
+
+1. Work lands on `development` as usual.
+2. To ship it to a Unit, open a PR `development` → `unit/<name>` and merge it.
+   Unit-specific changes (e.g. its `skills/openworld.md`) go to that branch by PR too.
+3. On the host: `cd ~/allerac-units/<name> && ./update.sh` (it backs the Unit
+   up and pulls `DEPLOY_BRANCH`, i.e. `unit/<name>`). `update.sh` refuses to run in a
+   `unit/*` checkout whose `DEPLOY_BRANCH` points elsewhere, so it can never
+   merge `main` into a Unit branch.
+4. Roll back: `git checkout` the previous commit printed by `update.sh` and
+   restore the pre-update backup.
+
+The GitHub webhook auto-deploy stays on the primary Unit only.
+
+### Cloudflare hostname
+
+In Cloudflare Zero Trust → *Networks → Tunnels* → the host's tunnel →
+*Public hostnames* → *Add*: subdomain `openworld`, domain `allerac.ai`, service
+`http://localhost:<APP_PORT of the Unit>`. One tunnel serves every Unit; do
+not start a second `cloudflared` per Unit. See *One hostname per Unit* below.
+
+## Move a domain into a Unit
+
+`scripts/units/export-domain.sh` and `import-domain.sh` move a public bot
+(the service account behind `openworld` or `sales`) from one Unit's database
+to another. Conversation history is not copied.
+
+```bash
+cd ~/allerac-one   # source Unit
+scripts/units/export-domain.sh --domain openworld --account <bot email> --unit-dir . --dry-run
+scripts/units/export-domain.sh --domain openworld --account <bot email> --unit-dir . --out /tmp/openworld.json
+cd ~/allerac-units/openworld
+scripts/units/import-domain.sh /tmp/openworld.json --unit-dir . --dry-run
+scripts/units/import-domain.sh /tmp/openworld.json --unit-dir .
+scripts/units/import-domain.sh /tmp/openworld.json --unit-dir . --verify-only
+shred -u /tmp/openworld.json   # it contains the account's password hash
+```
+
+(`--db-url postgresql://...` instead of `--unit-dir` talks to a database directly.)
+
+Copied: the account (same id, email and password hash, never admin), its
+domain access (remapped by slug), its API key **hash** rows (the widget token
+keeps working), non-secret settings, domain model settings, instructions and
+their versions, learned domain instructions (without conversation links),
+the domain rate limit, the domain's default skill, every skill the account
+owns or enabled, with their tool grants.
+
+Not copied: conversations, memories, documents, and anything encrypted with
+the source Unit's key (provider API keys, Telegram bot tokens, GitHub tokens).
+Re-enter those in the new Unit.
+
+Skills define the bot's behaviour, so the import compares a fingerprint of
+each skill (content, metadata and tool grants) with the export and rolls back
+on any difference; `--verify-only` repeats the check later. File-backed system
+skills (e.g. `skills/openworld.md`) are matched by file name and overwritten
+with the exported text. The loader rewrites them from the file on the next
+start, so when the import warns that a file differs, commit the exported text
+to that Unit branch's `skills/<file>` first. The importer refuses an account
+that already exists in the target.
 
 ## Lean public profile
 
@@ -112,12 +191,38 @@ Public domains (`sales`, `openworld`) already refuse shell, GitHub and log
 tools at the application level; the lean profile also removes the executor
 and the Docker socket from the Unit, so there is nothing to reach.
 
-### Ollama on a lean Unit
+### Units without Ollama (cloud provider)
 
-By default every Unit runs its own Ollama, so it is self-contained. Keep its
-memory in check with `OLLAMA_MEM_LIMIT` and only the models it needs
-(`OLLAMA_MODELS`). A Unit can also use a cloud model provider configured in its
-own settings.
+`docker-compose.no-ollama.yml` runs a Unit without a local Ollama:
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.public.yml:docker-compose.no-ollama.yml
+```
+
+It moves `ollama` and `ollama-setup` behind the `ollama` profile, so no
+Ollama container runs and **no model is downloaded** at install or update
+(`install.sh` skips the model download step when `ollama-setup` is not in the
+Unit's services), and it turns off the note and memory embedding sweeps.
+Chat runs on a cloud provider; local models and document/note embeddings are
+not available in that Unit.
+
+Choosing the provider and model of a Unit:
+
+- **Key**: `ANTHROPIC_API_KEY` in the Unit's `.env` (env fallback), or the
+  Unit admin's *Settings → API keys* (stored encrypted, takes precedence; a
+  user's own key wins over both). OpenAI (`OPENAI_API_KEY`) and Gemini work
+  the same way through settings.
+- **Model**: the domain's model setting (`user_domain_model_settings.model_id`,
+  e.g. a `claude-*` model; the provider follows from the model), set in the
+  domain's model settings. The import carries this choice but never the key.
+
+Switch back to Ollama later: remove `docker-compose.no-ollama.yml` from
+`COMPOSE_FILE`, set `OLLAMA_MODELS`, `docker compose up -d` (the models are
+downloaded once), and pick a local model for the domain. Nothing else changes:
+the Ollama services and settings stay in the base file.
+
+A single Ollama shared by several Units is a possible future option; it is not
+needed while public Units use a cloud provider.
 
 ## One hostname per Unit (Cloudflare Tunnel)
 
@@ -181,7 +286,8 @@ without them its stored tokens cannot be decrypted).
 
 ## Updating
 
-The code is shared, so pull once and rebuild each Unit:
+A Unit in its own worktree is updated from its directory (`./update.sh`, see
+*Unit branches*). A Unit sharing the primary checkout is updated with:
 
 ```bash
 ./update.sh                                          # primary Unit (as before)

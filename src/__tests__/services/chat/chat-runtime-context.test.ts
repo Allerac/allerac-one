@@ -61,4 +61,17 @@ describe('loadChatRuntimeContext', () => {
         message: expect.stringContaining(message),
       }));
   });
+
+  test('uses ANTHROPIC_API_KEY from the Unit env when no stored key exists', async () => {
+    process.env.ANTHROPIC_API_KEY = 'unit-env-key';
+    try {
+      await expect(loadChatRuntimeContext('user-1', 'openworld', 'anthropic'))
+        .resolves.toEqual(expect.objectContaining({ anthropicApiKey: 'unit-env-key' }));
+      loadAll.mockResolvedValue({ anthropic_api_key: 'admin-key' });
+      await expect(loadChatRuntimeContext('user-1', 'openworld', 'anthropic'))
+        .resolves.toEqual(expect.objectContaining({ anthropicApiKey: 'admin-key' }));
+    } finally {
+      delete process.env.ANTHROPIC_API_KEY;
+    }
+  });
 });
