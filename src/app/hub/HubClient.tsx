@@ -40,7 +40,7 @@ function getDocsUrl(): string {
   return `http://${window.location.hostname}:8000`;
 }
 
-export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[] }) {
+export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains, grampeadorBubblesEnabled = true }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[]; grampeadorBubblesEnabled?: boolean }) {
   const router = useRouter();
   const [domains, setDomains] = useState<typeof DOMAINS_ALL>([]);
   const [booting, setBooting] = useState(() => {
@@ -251,6 +251,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
         githubToken={githubToken}
         domain="hub"
         bottomOffset={60}
+        bubblesEnabled={grampeadorBubblesEnabled}
       />
 
       {showTour && (
