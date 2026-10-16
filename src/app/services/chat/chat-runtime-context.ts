@@ -37,7 +37,7 @@ export async function loadChatRuntimeContext(
     || process.env.TAVILY_API_KEY
     || undefined;
   const googleApiKey = settings?.google_api_key || systemSettings.google_api_key || '';
-  const anthropicApiKey = settings?.anthropic_api_key || systemSettings.anthropic_api_key || '';
+  const anthropicApiKey = settings?.anthropic_api_key || systemSettings.anthropic_api_key || process.env.ANTHROPIC_API_KEY || '';
   const openaiApiKey = settings?.openai_api_key || systemSettings.openai_api_key || process.env.OPENAI_API_KEY || '';
 
   if (provider === 'anthropic' && !anthropicApiKey) {

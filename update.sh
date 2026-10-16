@@ -82,7 +82,7 @@ fail_update() {
 detect_product_line() {
     if [ -n "$ALLERAC_PRODUCT_LINE" ]; then
         PRODUCT_LINE="$ALLERAC_PRODUCT_LINE"
-    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "${UNIT}-tunnel"; then
+    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${UNIT}-tunnel"; then
         PRODUCT_LINE="cloud"
     else
         PRODUCT_LINE="local"
@@ -110,6 +110,18 @@ unit_env_value() {
 }
 UNIT="${ALLERAC_UNIT:-$(unit_env_value ALLERAC_UNIT)}"
 UNIT="${UNIT:-allerac}"
+# A Unit worktree pins its own branch (DEPLOY_BRANCH=unit/<name> in its env file);
+# the calling shell still wins.
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-$(unit_env_value DEPLOY_BRANCH)}"
+_current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+case "$_current_branch" in
+    unit/*)
+        if [ "${DEPLOY_BRANCH:-main}" != "$_current_branch" ]; then
+            echo "This checkout is on Unit branch $_current_branch but DEPLOY_BRANCH is '${DEPLOY_BRANCH:-main}'." >&2
+            echo "Refusing to merge another branch into a Unit branch; set DEPLOY_BRANCH=$_current_branch in its env file." >&2
+            exit 1
+        fi ;;
+esac
 if ! [[ "$UNIT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
     echo "Invalid ALLERAC_UNIT '$UNIT' (lowercase letters, digits, '-' and '_' only)." >&2
     exit 1
@@ -198,18 +210,18 @@ verify_deployment() {
 
     if [ "$PRODUCT_LINE" = "cloud" ]; then
         # Cloud-specific services
-        docker ps --format '{{.Names}}' | grep -q "${UNIT}-tunnel"   && echo -e "${GREEN}✓ Cloudflare tunnel is running${NC}" || echo -e "${YELLOW}⚠ Tunnel is not running${NC}"
-        docker ps --format '{{.Names}}' | grep -q "${UNIT}-telegram" && echo -e "${GREEN}✓ Telegram bot is running${NC}"   || echo -e "${YELLOW}⚠ Telegram bot is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -qx "${UNIT}-tunnel"   && echo -e "${GREEN}✓ Cloudflare tunnel is running${NC}" || echo -e "${YELLOW}⚠ Tunnel is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -qx "${UNIT}-telegram" && echo -e "${GREEN}✓ Telegram bot is running${NC}"   || echo -e "${YELLOW}⚠ Telegram bot is not running${NC}"
         docker ps --format '{{.Names}}' | grep -q "grafana"          && echo -e "${GREEN}✓ Grafana is running${NC}"        || echo -e "${YELLOW}⚠ Grafana is not running${NC}"
         docker ps --format '{{.Names}}' | grep -q "loki"             && echo -e "${GREEN}✓ Loki is running${NC}"           || echo -e "${YELLOW}⚠ Loki is not running${NC}"
-        docker ps --format '{{.Names}}' | grep -q "${UNIT}-notifier" && echo -e "${GREEN}✓ Notifier is running${NC}"       || echo -e "${YELLOW}⚠ Notifier is not running${NC}"
-        docker ps --format '{{.Names}}' | grep -q "${UNIT}-ollama"   && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
+        docker ps --format '{{.Names}}' | grep -qx "${UNIT}-notifier" && echo -e "${GREEN}✓ Notifier is running${NC}"       || echo -e "${YELLOW}⚠ Notifier is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -qx "${UNIT}-ollama"   && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
     else
         # Local-specific services (only check if they were running before)
-        docker ps --format '{{.Names}}' | grep -q "${UNIT}-ollama"        && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
-        docker ps --format '{{.Names}}' | grep -q "${UNIT}-health-worker" && echo -e "${GREEN}✓ Health worker is running${NC}"  || echo -e "${YELLOW}⚠ Health worker is not running${NC}"
-        docker ps --format '{{.Names}}' | grep -q "${UNIT}-notifier"      && echo -e "${GREEN}✓ Notifier is running${NC}"       || true
-        docker ps --format '{{.Names}}' | grep -q "${UNIT}-grafana"       && echo -e "${GREEN}✓ Grafana is running${NC}"        || true
+        docker ps --format '{{.Names}}' | grep -qx "${UNIT}-ollama"        && echo -e "${GREEN}✓ Ollama is running${NC}"         || true
+        docker ps --format '{{.Names}}' | grep -qx "${UNIT}-health-worker" && echo -e "${GREEN}✓ Health worker is running${NC}"  || echo -e "${YELLOW}⚠ Health worker is not running${NC}"
+        docker ps --format '{{.Names}}' | grep -qx "${UNIT}-notifier"      && echo -e "${GREEN}✓ Notifier is running${NC}"       || true
+        docker ps --format '{{.Names}}' | grep -qx "${UNIT}-grafana"       && echo -e "${GREEN}✓ Grafana is running${NC}"        || true
     fi
 }
 
@@ -366,8 +378,8 @@ else
     # Only rebuild images that exist in this deployment
     # executor and agent-worker carry the shell-hardening changes; rebuild them too.
     BUILD_TARGETS="$(active_services app health-worker executor agent-worker)"
-    docker ps --format '{{.Names}}' | grep -q "${UNIT}-telegram" && BUILD_TARGETS="$BUILD_TARGETS allerac-telegram"
-    docker ps --format '{{.Names}}' | grep -q "${UNIT}-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
+    docker ps --format '{{.Names}}' | grep -qx "${UNIT}-telegram" && BUILD_TARGETS="$BUILD_TARGETS allerac-telegram"
+    docker ps --format '{{.Names}}' | grep -qx "${UNIT}-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
     docker compose $COMPOSE_ARGS $COMPOSE_FLAGS build $BUILD_TARGETS \
         || fail_update "image build" "Failed to rebuild application images."
 fi
