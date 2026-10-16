@@ -157,9 +157,11 @@ interface Props {
   githubToken?: string;
   bottomOffset?: number;
   domain?: string;
+  /** When false, no LLM bubbles are generated; static fallback phrases still rotate. */
+  bubblesEnabled?: boolean;
 }
 
-export default function ClippyAssistant({ userId, defaultSkillName, displayName, githubToken = '', bottomOffset = 24, domain = 'jobs' }: Props) {
+export default function ClippyAssistant({ userId, defaultSkillName, displayName, githubToken = '', bottomOffset = 24, domain = 'jobs', bubblesEnabled = true }: Props) {
   const locale = useLocale();
   const t = useTranslations('grampeador');
 
@@ -183,18 +185,22 @@ export default function ClippyAssistant({ userId, defaultSkillName, displayName,
   const generatedRef = useRef<string>(BUBBLES[Math.floor(Math.random() * BUBBLES.length)]);
 
   const refreshBubble = useCallback(async () => {
+    if (!bubblesEnabled) return;
     const result = await generateClippyBubble(domain, locale);
     if (result) generatedRef.current = result;
-  }, [locale]);
+  }, [domain, locale, bubblesEnabled]);
 
   // Generate on mount (silent, no loading state)
-  useEffect(() => { refreshBubble(); }, [refreshBubble]);
+  useEffect(() => {
+    if (bubblesEnabled) refreshBubble();
+  }, [refreshBubble, bubblesEnabled]);
 
   // Rotate every 60s in background
   useEffect(() => {
+    if (!bubblesEnabled) return;
     const id = setInterval(refreshBubble, 60000);
     return () => clearInterval(id);
-  }, [refreshBubble]);
+  }, [refreshBubble, bubblesEnabled]);
 
   // Show initial bubble for 5s
   useEffect(() => {
@@ -206,11 +212,14 @@ export default function ClippyAssistant({ userId, defaultSkillName, displayName,
   useEffect(() => {
     if (isOpen) return;
     const t = setInterval(() => {
+      if (!bubblesEnabled) {
+        generatedRef.current = BUBBLES[Math.floor(Math.random() * BUBBLES.length)];
+      }
       setBubble(generatedRef.current);
       setTimeout(() => setBubble(null), 5000);
     }, 40000);
     return () => clearInterval(t);
-  }, [isOpen]);
+  }, [isOpen, bubblesEnabled]);
 
   // Focus input when window opens
   useEffect(() => {
@@ -316,7 +325,7 @@ export default function ClippyAssistant({ userId, defaultSkillName, displayName,
       setSending(false);
       inputRef.current?.focus();
     }
-  }, [input, sending, convId, selectedModel, defaultSkillName]);
+  }, [input, sending, convId, selectedModel, defaultSkillName, domain]);
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }

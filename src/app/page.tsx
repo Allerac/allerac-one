@@ -2,6 +2,7 @@ import HubClient from './hub/HubClient';
 import { requireAdmin } from '@/app/lib/domain-access';
 import { getUserAccessibleDomains } from '@/app/actions/domains';
 import pool from '@/app/clients/db';
+import { isGrampeadorEnabled } from '@/app/actions/clippy';
 
 export default async function RootPage() {
   const user = await requireAdmin();
@@ -26,6 +27,7 @@ export default async function RootPage() {
       userId={String(user.id)}
       completedHubTour={completedHubTour}
       allowedDomains={allowedDomains}
+      grampeadorBubblesEnabled={await isGrampeadorEnabled()}
     />
   );
 }
