@@ -36,8 +36,9 @@ const DOCS_SHORTCUT = {
 function getDocsUrl(): string {
   const configuredUrl = process.env.NEXT_PUBLIC_DOCS_URL?.trim();
   if (configuredUrl) return configuredUrl;
-  if (typeof window === 'undefined') return 'http://localhost:8000';
-  return `http://${window.location.hostname}:8000`;
+  // Bundled docs served by the app itself (src/app/docs), so the link works on
+  // every Unit hostname behind Cloudflare Tunnel.
+  return '/docs/index.html';
 }
 
 export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains, grampeadorBubblesEnabled = true }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[]; grampeadorBubblesEnabled?: boolean }) {

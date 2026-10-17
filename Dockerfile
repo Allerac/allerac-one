@@ -1,5 +1,13 @@
 FROM node:20-alpine AS base
 
+# Static documentation site served by the app at /docs (src/app/docs).
+# Same mkdocs-material version as the `docs` compose service.
+FROM squidfunk/mkdocs-material:9.6.14 AS docs
+WORKDIR /docs
+COPY mkdocs.yml mkdocs.app.yml ./
+COPY docs ./docs
+RUN mkdocs build --strict -f mkdocs.app.yml -d /site
+
 # Install dependencies only when needed
 FROM base AS deps
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
@@ -60,6 +68,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/build-info.json ./build-info.json
 COPY --from=builder --chown=nextjs:nodejs /app/skills ./skills
+COPY --from=docs --chown=nextjs:nodejs /site ./docs-site
 
 # Set the correct permission for prerender cache
 RUN mkdir -p .next && chown nextjs:nodejs .next
