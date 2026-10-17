@@ -79,9 +79,11 @@ interface LogsClientProps {
   userId: string;
   MODELS: Model[];
   defaultModel: string;
+  /** False when no public bot (PUBLIC_DOMAINS) belongs to an enabled module. */
+  showBotsTab?: boolean;
 }
 
-export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientProps) {
+export default function LogsClient({ userId, MODELS, defaultModel, showBotsTab = true }: LogsClientProps) {
   const router = useRouter();
   const [tab, setTab] = useState<'logs' | 'metrics' | 'bots' | 'benchmark' | 'agents'>('logs');
 
@@ -226,9 +228,11 @@ export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientP
         <button style={tabBtnStyle(tab === 'metrics')}    onClick={() => setTab('metrics')}>
           📊 METRICS
         </button>
-        <button style={tabBtnStyle(tab === 'bots')}       onClick={() => setTab('bots')}>
-          🌐 BOTS
-        </button>
+        {showBotsTab && (
+          <button style={tabBtnStyle(tab === 'bots')}       onClick={() => setTab('bots')}>
+            🌐 BOTS
+          </button>
+        )}
         <button style={tabBtnStyle(tab === 'benchmark')}  onClick={() => setTab('benchmark')}>
           🏃 BENCHMARK
         </button>
@@ -315,7 +319,7 @@ export default function LogsClient({ userId, MODELS, defaultModel }: LogsClientP
       )}
 
       {/* ── BOTS tab ── */}
-      {tab === 'bots' && (
+      {showBotsTab && tab === 'bots' && (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           <BotsTab />
         </div>

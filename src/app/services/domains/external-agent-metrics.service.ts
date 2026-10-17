@@ -1,5 +1,6 @@
 import pool from '@/app/clients/db';
 import { PUBLIC_DOMAINS } from '@/app/services/chat/chat-tool-registry';
+import { filterEnabledDomainSlugs } from '@/modules/registry';
 import { domainService } from '@/app/services/domains/domain.service';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
 import { domainRateLimitSettingsService } from '@/app/services/domains/domain-rate-limit-settings.service';
@@ -105,9 +106,12 @@ export class ExternalAgentMetricsService {
   }
 
 
-  /** One summary per domain in PUBLIC_DOMAINS — the admin dashboard for public-facing bots. */
+  /**
+   * One summary per PUBLIC_DOMAINS entry whose module is enabled in this Unit
+   * (ALLERAC_PROFILE / ALLERAC_MODULES) — the admin dashboard for public-facing bots.
+   */
   async getSummaries(): Promise<PublicAgentSummary[]> {
-    return Promise.all(PUBLIC_DOMAINS.map(domainSlug => this.getSummary(domainSlug)));
+    return Promise.all(filterEnabledDomainSlugs(PUBLIC_DOMAINS).map(domainSlug => this.getSummary(domainSlug)));
   }
 
   private async getSummary(domainSlug: string): Promise<PublicAgentSummary> {
