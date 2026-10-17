@@ -1,0 +1,10 @@
+# Build config for the docs bundled into the app image and served at /docs
+# (see Dockerfile and src/app/docs/[[...path]]/route.ts). Inherits everything
+# from mkdocs.yml; `docker compose up docs` keeps using mkdocs.yml directly.
+INHERIT: mkdocs.yml
+# Path matters (instant navigation, sitemap); the host is a placeholder because
+# each Unit serves the docs on its own hostname behind login (not indexed).
+site_url: http://localhost/docs/
+# Next.js strips trailing slashes, so serve pages as /docs/<page>.html instead
+# of /docs/<page>/ to keep the relative links mkdocs generates working.
+use_directory_urls: false

@@ -14,9 +14,9 @@ build/
 .git/
 .gitignore
 
-# Documentation
+# Documentation (docs/ is copied only into the `docs` build stage; the app
+# builder does not need it)
 *.md
-docs/
 
 # IDE and OS files
 .DS_Store
@@ -41,3 +41,6 @@ src/__tests__/
 # Misc large files not needed at runtime
 tsconfig.tsbuildinfo
 allerac-icon-1024.png
+
+# Locally built docs site (the image builds its own in the `docs` stage)
+docs-site/
