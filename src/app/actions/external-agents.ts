@@ -2,6 +2,7 @@
 
 import { assertDomainAccess, requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
 import { PUBLIC_DOMAINS } from '@/app/services/chat/chat-tool-registry';
+import { isDomainEnabled } from '@/modules/registry';
 import {
   externalAgentMetricsService,
   type UsageGranularity,
@@ -14,7 +15,7 @@ export async function getPublicAgentDashboard() {
 }
 
 function assertPublicDomain(domainSlug: string): void {
-  if (!PUBLIC_DOMAINS.includes(domainSlug)) {
+  if (!PUBLIC_DOMAINS.includes(domainSlug) || !isDomainEnabled(domainSlug)) {
     throw new Error(`"${domainSlug}" is not a public-facing domain`);
   }
 }
