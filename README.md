@@ -59,7 +59,7 @@ Next.js app + API routes  (localhost:8080)
         +--> Health worker
         +--> Optional Telegram, notifier, monitoring, tunnel, webhook services
 
-Docs site: localhost:8000
+Docs site: <app>/docs (bundled, login required); live editing: localhost:8000
 ```
 
 See the [Architecture Overview](docs/architecture/architecture.md) and
@@ -77,7 +77,8 @@ docker compose up -d
 Default local URLs:
 
 - App: `http://localhost:8080`
-- Docs: `http://localhost:8000`
+- Docs: `http://localhost:8080/docs` (bundled into the app image, login required)
+- Docs live editing: `http://localhost:8000` (`docs` service, `mkdocs serve`)
 
 The install scripts are still available for device-style setup:
 
