@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE
+FROM alpine:3.24 AS trust
+RUN apk add --no-cache 'ca-certificates>=20261020-r0' \
+    && mkdir -p /empty-certs
+
+FROM ${BASE_IMAGE}
+COPY --from=trust /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=trust /etc/ssl/certs/ca-certificates.crt /etc/ssl/cert.pem
+COPY --from=trust /empty-certs/ /opt/allerac/empty-certs/
+# Go and OpenSSL also scan CA directories. Prevent old hashed roots in the
+# vendor layer from being loaded alongside the corrected bundle.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_DIR=/opt/allerac/empty-certs \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    PIP_CERT=/etc/ssl/certs/ca-certificates.crt

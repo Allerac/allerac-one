@@ -1,0 +1,2 @@
+# Match Docker and CI; Python remains selected by the user globally.
+node = "22.23.4"

@@ -1,14 +1,9 @@
-FROM alpine:3.19
+FROM alpine:3.24
 
 # Runtime tools: git (pull), docker-cli (compose commands), curl + jq (Resend API), envsubst (config template)
-RUN apk add --no-cache bash curl git docker-cli jq gettext gcompat
+RUN apk add --no-cache bash curl git docker-cli docker-cli-compose jq gettext gcompat 'ca-certificates>=20261020-r0'
 
-# Docker Compose v2
-RUN curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64" \
-    -o /usr/local/bin/docker-compose \
-  && chmod +x /usr/local/bin/docker-compose \
-  && mkdir -p /usr/libexec/docker/cli-plugins \
-  && ln -s /usr/local/bin/docker-compose /usr/libexec/docker/cli-plugins/docker-compose
+# Compose is supplied by the distribution and uses its corrected CA store.
 
 # webhook binary (adnanh/webhook)
 ARG WEBHOOK_VERSION=2.8.1

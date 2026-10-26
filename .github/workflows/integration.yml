@@ -54,17 +54,21 @@ jobs:
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export COMMIT_HASH BUILD_DATE
           docker compose version
-          docker buildx bake -f docker-compose.yml --load \
+          docker buildx bake -f docker-compose.yml --load --pull \
             --set app.tags=allerac-app \
             --set agent-worker.tags=allerac-agent-worker \
             --set executor.tags=allerac-executor \
+            --set migrations.tags=allerac-migrations:ca-20261020 \
             --set app.cache-from=type=gha,scope=allerac-app \
             --set app.cache-to=type=gha,scope=allerac-app,mode=max \
             --set agent-worker.cache-from=type=gha,scope=allerac-agent-worker \
             --set agent-worker.cache-to=type=gha,scope=allerac-agent-worker,mode=max \
             --set executor.cache-from=type=gha,scope=allerac-executor \
             --set executor.cache-to=type=gha,scope=allerac-executor,mode=max \
-            app agent-worker executor
+            app agent-worker executor migrations
+
+      - name: Verify Node rejects compromised TLS chains
+        run: docker run --rm --entrypoint node -v "$PWD/scripts/ci/check-tls.cjs:/check-tls.cjs:ro" allerac-executor /check-tls.cjs
 
       - name: Security integration (default Unit)
         run: bash scripts/ci/security-integration.sh --logs-dir ci-logs

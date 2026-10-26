@@ -770,7 +770,7 @@ start_services() {
     # subsequent attempts are fast.  Drop --quiet so output is not buffered.
     local pull_ok=false
     for attempt in 1 2 3; do
-        if $USE_SUDO docker compose pull; then
+        if $USE_SUDO docker compose pull --ignore-buildable; then
             pull_ok=true
             break
         fi
@@ -783,12 +783,8 @@ start_services() {
     fi
 
     log_info "Building application..."
-    # health-worker only exists when the health profile is active (COMPOSE_PROFILES=health).
-    BUILD_TARGETS="app"
-    if $USE_SUDO docker compose config --services 2>/dev/null | grep -qx health-worker; then
-        BUILD_TARGETS="$BUILD_TARGETS health-worker"
-    fi
-    $USE_SUDO docker compose build $BUILD_TARGETS
+    # Includes the corrected CA wrappers; Compose profiles select the services.
+    $USE_SUDO docker compose build --pull
 
     log_info "Starting containers..."
     $USE_SUDO docker compose up -d

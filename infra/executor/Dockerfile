@@ -1,4 +1,5 @@
-FROM node:20-alpine
+FROM node:22.23.4-alpine3.24
+RUN apk add --no-cache 'ca-certificates>=20261020-r0'
 
 RUN apk add --no-cache bash curl git
 
