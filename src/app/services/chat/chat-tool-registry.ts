@@ -39,7 +39,8 @@ const DOMAIN_TOOL_NAMES = [
 // notes vault, even though every other domain does by default below. Also
 // used outside this file (e.g. the messages route) to apply extra abuse
 // limits — anonymous website visitors get less trust than logged-in users.
-export const PUBLIC_DOMAINS = ['sales', 'openworld'];
+export { PUBLIC_DOMAINS } from './public-domains';
+import { PUBLIC_DOMAINS } from './public-domains';
 
 // Domains that must get literally zero tools, not just the domain/personal
 // ones withheld from every PUBLIC_DOMAINS entry below. Deliberately NOT
