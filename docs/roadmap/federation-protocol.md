@@ -57,13 +57,58 @@ phase.
 - A revoked peer can no longer call the other Unit.
 - LAN discovery lists Units but never auto-pairs.
 
-## P3: Cross-Unit Agent Runs and Signed Webhooks
+## P3: Federation Client and Agent Tools
+
+**Goal:** one secure path for all Unit-to-Unit calls.
+
+**Deliverables**
+
+- Shared federation client module: the only code allowed to call peers. Applies
+  the pairing key, enforces granted scopes, signs requests, audit-logs every call,
+  and denies anything not granted.
+- Agent tools `list_peer_agents` and `ask_peer_agent` built on the client.
+- Tools hidden from public-domain bots (same mechanism as `PUBLIC_DOMAINS` in
+  `chat-tool-registry.ts`).
+- Inbound peer requests handled as service principals with their own scopes.
+
+**Acceptance criteria**
+
+- No other module makes outbound calls to peers.
+- A call outside the granted scopes is denied and logged.
+- Public-domain bots cannot see or call federation tools.
+
+## P4: Unified Inbox and Telegram Routing
+
+**Goal:** chat with any agent, local or remote, from the home Unit.
+
+**Deliverables**
+
+- WhatsApp-like inbox listing agents from all paired Units, one chat per agent.
+- Messages to remote agents relayed through the peer's `/api/v1` with the
+  pairing key; the peer keeps ownership of data and memory.
+- Optional: one Telegram bot routing to any agent by command (e.g. `/openworld`,
+  `/health`).
+
+**Acceptance criteria**
+
+- Remote agents appear next to local ones and can be chatted with.
+- Unpairing a peer removes its agents from the inbox.
+- Remote conversation data is stored on the owning Unit.
+
+## Milestone 1: Two Connected Units
+
+**P0–P4 together:** connect two Units and chat with a remote agent end to end.
+Pair Unit A and Unit B, see B's agents in A's inbox, send a message, and get a
+reply, with every call going through the federation client and audit log.
+
+## P5: Cross-Unit Agent Runs and Signed Webhooks
 
 **Goal:** delegate long work to a paired Unit.
 
 **Deliverables**
 
 - Create and track `agent_runs` on a peer (input, progress, artifacts, result).
+- `delegate_to_peer` tool on top of the federation client.
 - Signed `run completed` webhook to the caller, with polling fallback.
 
 **Acceptance criteria**
@@ -72,7 +117,7 @@ phase.
 - Unsigned or wrongly signed webhooks are rejected.
 - With webhooks disabled, polling still delivers the result.
 
-## P4: Published Memory and Home Memory Index
+## P6: Published Memory and Home Memory Index
 
 **Goal:** share curated context without sharing databases.
 
@@ -86,7 +131,7 @@ phase.
 - Unpublished memories are never returned to a peer.
 - A peer sees only memories it was granted at pairing.
 
-## P5: Multi-Unit Same-Host Deployment Tooling
+## P7: Multi-Unit Same-Host Deployment Tooling
 
 **Goal:** run several Units on one machine cheaply.
 

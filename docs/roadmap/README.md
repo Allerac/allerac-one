@@ -29,7 +29,7 @@ sequence of implementation.
 | [Read-Only External Connectors for Notes](notes-external-connectors.md) | Proposed | Import OneNote/Google Drive content into the Notes vault via read-only OAuth connectors, generic across providers |
 | [Provider-Independent Local Embeddings](provider-independent-local-embeddings.md) | Completed | Replace the retired GitHub Models integration with benchmarked local embeddings behind a provider-neutral contract |
 | [GitHub Models Chat Retirement](github-models-chat-retirement.md) | Proposed | Migrate the still-unmigrated chat-completions side of the GitHub Models retirement (`gpt-4o`, `ministral-3b`) — likely to an Azure AI Foundry project |
-| [Federation Protocol](federation-protocol.md) | Proposed | Phased plan for Unit-to-Unit pairing, discovery, cross-unit agent runs, and published memory |
+| [Federation Protocol](federation-protocol.md) | Proposed | Phased plan for Unit-to-Unit pairing, federation client and tools, unified inbox, cross-unit agent runs, and published memory |
 | [n8n Workflow Integration](n8n-workflow-integration.md) | Completed | Run n8n self-hosted alongside Allerac as an optional automation layer for multi-step logic and external-service integration |
 
 ## Long-Term Architecture
