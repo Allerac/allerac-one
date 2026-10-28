@@ -4,7 +4,8 @@ export type ExpensiveOperation =
   | 'benchmark'
   | 'image-edit'
   | 'model-download'
-  | 'federation-pairing';
+  | 'federation-pairing'
+  | 'federation-ask';
 
 interface OperationLimit {
   requests: number;
@@ -101,6 +102,14 @@ function getLimit(operation: ExpensiveOperation): OperationLimit {
         windowMs: positiveInteger('RATE_LIMIT_FEDERATION_PAIRING_WINDOW_SECONDS', 600) * 1_000,
         concurrency: positiveInteger('CONCURRENCY_LIMIT_FEDERATION_PAIRING', 2),
         scope: 'global',
+      };
+    // Questions from a paired Unit to one of our agents, keyed by service principal (federation P3).
+    case 'federation-ask':
+      return {
+        requests: positiveInteger('RATE_LIMIT_FEDERATION_ASK_REQUESTS', 20),
+        windowMs: positiveInteger('RATE_LIMIT_FEDERATION_ASK_WINDOW_SECONDS', 600) * 1_000,
+        concurrency: positiveInteger('CONCURRENCY_LIMIT_FEDERATION_ASK', 1),
+        scope: 'user',
       };
   }
 }

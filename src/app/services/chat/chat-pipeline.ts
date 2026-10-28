@@ -2,6 +2,7 @@ import type { User } from '@/app/services/auth/auth.service';
 import { LLMService } from '@/app/services/llm/llm.service';
 import type { Skill } from '@/app/services/skills/skills.service';
 import { executeChatTool } from './chat-tool-runner';
+import type { ChatToolPolicy } from './chat-tool-registry';
 import type { ChatProvider } from './chat-request-parser';
 import { MODELS } from '@/app/services/llm/models';
 
@@ -33,6 +34,7 @@ export interface RunChatPipelineInput {
   activeTools: any[];
   messages: ChatPipelineMessage[];
   emit: (event: object) => void;
+  toolPolicy?: ChatToolPolicy;
   keepalive: () => void;
 }
 
@@ -183,6 +185,7 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
           conversationId: input.conversationId,
           domain: input.domain || 'chat',
           emit: input.emit,
+          toolPolicy: input.toolPolicy,
         });
         const resultEvent: Record<string, any> = {
           type: 'tool_result',

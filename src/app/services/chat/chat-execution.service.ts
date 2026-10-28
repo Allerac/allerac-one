@@ -3,7 +3,8 @@ import { ChatService } from '@/app/services/database/chat.service';
 import { loadChatKnowledgeContext } from '@/app/services/knowledge/chat-knowledge-context';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
-import { PUBLIC_DOMAINS, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools, type ChatToolPolicy } from '@/app/services/chat/chat-tool-registry';
+import { hasActivePeers } from '@/federation/peer-presence';
 import { isShellAllowedFor } from '@/app/lib/shell-policy';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
@@ -27,6 +28,8 @@ export interface ChatExecutionInput {
   postContext?: string;
   emit?: (event: Record<string, any>) => void;
   keepalive?: () => void;
+  /** 'federated' when answering a paired Unit (federation P3). */
+  toolPolicy?: ChatToolPolicy;
 }
 
 export interface ChatExecutionResult {
@@ -145,6 +148,12 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
 
   const activeTools = await resolveChatTools(activeSkill?.id, input.domain, {
     allowShell: isShellAllowedFor(input.user),
+    toolPolicy: input.toolPolicy,
+    allowFederation: canUseFederationTools({
+      isAdmin: input.user.is_admin === true,
+      domain: input.domain,
+      policy: input.toolPolicy,
+    }) && await hasActivePeers(),
   });
   const conversationMessages: Array<{
     role: string;
@@ -189,6 +198,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     messages: conversationMessages,
     emit,
     keepalive: input.keepalive ?? (() => undefined),
+    toolPolicy: input.toolPolicy,
   });
 
   const savedAssistantMessage = await chatService.saveMessage(input.conversationId, 'assistant', content, { userId: input.user.id });

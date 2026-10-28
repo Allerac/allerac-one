@@ -528,6 +528,140 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /api/v1/federation/agents:
+    get:
+      tags: [Federation]
+      summary: List agents exposed to the calling peer (Unit to Unit)
+      description: Requires a peer service key with `federation:agents:list` and an active pairing. Only domains in `ALLERAC_FEDERATION_AGENTS` that the acting user can access are listed; public domains never are.
+      operationId: listFederationAgents
+      responses:
+        "200":
+          description: Exposed agents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [agents]
+                    properties:
+                      agents:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/FederationAgent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/federation/agents/{agent}/ask:
+    post:
+      tags: [Federation]
+      summary: Ask an exposed agent (Unit to Unit)
+      description: Requires a peer service key with `federation:agents:ask` and an active pairing. Runs a chat turn as the acting user with the restricted federated tool policy. Answers over 8000 characters are truncated.
+      operationId: askFederationAgent
+      parameters:
+        - name: agent
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+      responses:
+        "200":
+          description: Agent answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [answer, truncated]
+                    properties:
+                      answer:
+                        type: string
+                      truncated:
+                        type: boolean
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "504":
+          description: The agent did not answer in time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/peers/{id}/audit:
+    get:
+      tags: [Peers]
+      summary: Federation audit log for one peer
+      description: Admin only. Requires a browser session. Metadata only; no message content.
+      operationId: getPeerAudit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Recent audit entries, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [entries]
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/FederationAuditEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/service-principals:
     get:
       tags: [Service Principals]
@@ -2798,6 +2932,62 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    FederationAgent:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Domain slug
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+    FederationAuditEntry:
+      type: object
+      required: [id, at, direction, capability, outcome]
+      properties:
+        id:
+          type: string
+        at:
+          type: string
+          format: date-time
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        peerId:
+          type: string
+          nullable: true
+        principalId:
+          type: string
+          nullable: true
+        userId:
+          type: string
+          nullable: true
+        capability:
+          type: string
+        target:
+          type: string
+          nullable: true
+        outcome:
+          type: string
+          enum: [ok, denied, error]
+        httpStatus:
+          type: integer
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        durationMs:
+          type: integer
+          nullable: true
+        requestBytes:
+          type: integer
+          nullable: true
+        responseBytes:
+          type: integer
+          nullable: true
     VersionResponse:
       type: object
       required: [data]

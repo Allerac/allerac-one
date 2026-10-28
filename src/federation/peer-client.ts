@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import { envFlag, type Env } from './env';
-import { federationErrors } from './errors';
+import { FederationError, federationErrors } from './errors';
 import { FEDERATION_PROTOCOL_VERSION, federationManifestSchema, type FederationManifest } from './manifest.schema';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -109,6 +109,65 @@ export class PeerClient {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}` },
     });
+  }
+
+  /**
+   * Authenticated call to a paired peer's Control API. Used only by the shared
+   * FederationClient. Returns the `data` payload and response size.
+   */
+  async callPeer(params: {
+    origin: string;
+    path: string;
+    key: string;
+    method?: 'GET' | 'POST';
+    body?: unknown;
+    timeoutMs?: number;
+  }): Promise<{ data: unknown; status: number; responseBytes: number; requestBytes: number }> {
+    const payload = params.body === undefined ? undefined : JSON.stringify(params.body);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), params.timeoutMs ?? this.timeoutMs);
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${params.origin}${params.path}`, {
+        method: params.method ?? 'GET',
+        headers: {
+          Authorization: `Bearer ${params.key}`,
+          ...(payload ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: payload,
+        redirect: 'error',
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+    } catch {
+      throw federationErrors.peerUnreachable();
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const text = await response.text();
+    if (text.length > MAX_RESPONSE_BYTES) throw federationErrors.peerInvalidResponse('Peer response is too large');
+    if (response.status === 401 || response.status === 403) throw federationErrors.peerAccessDenied();
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      throw federationErrors.peerInvalidResponse();
+    }
+    if (!response.ok) {
+      const code = (json as { error?: { code?: string } } | null)?.error?.code;
+      throw new FederationError(
+        code === 'rate_limited' || response.status === 429 ? 'peer_rate_limited' : 'peer_error',
+        `Peer responded with HTTP ${response.status}${code ? ` (${code})` : ''}`,
+        502,
+      );
+    }
+    return {
+      data: (json as { data?: unknown } | null)?.data,
+      status: response.status,
+      responseBytes: text.length,
+      requestBytes: payload?.length ?? 0,
+    };
   }
 
   private async request(url: string, init: RequestInit): Promise<unknown> {

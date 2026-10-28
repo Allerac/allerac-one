@@ -15,6 +15,7 @@ import { TOOLS } from '@/app/tools/tools';
 import { filterEnabledTools } from '@/modules/registry';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '@/app/tools/instructions.tool.definitions';
 import { SHELL_TOOL_NAMES, withoutShellTools } from '@/app/lib/shell-policy';
+import { FEDERATION_TOOL_DEFINITIONS, FEDERATION_TOOL_NAMES } from '@/app/tools/federation.tool.definitions';
 
 export { GITHUB_TOOL_NAMES };
 export { LOGS_TOOL_NAMES };
@@ -68,7 +69,42 @@ export const PUBLIC_DOMAIN_FORBIDDEN_TOOL_NAMES = [
   ...SHELL_TOOL_NAMES,
   ...GITHUB_TOOL_NAMES,
   ...LOGS_TOOL_NAMES,
+  ...FEDERATION_TOOL_NAMES,
 ];
+
+export { FEDERATION_TOOL_NAMES };
+
+/**
+ * 'federated': the request comes from a paired Unit (federation P3). The peer
+ * must not get shell/GitHub/logs, must not durably change this Unit (memory,
+ * instructions, schedules), and must not call other Units through us.
+ */
+export type ChatToolPolicy = 'default' | 'federated';
+
+export const FEDERATED_FORBIDDEN_TOOL_NAMES = [
+  ...PUBLIC_DOMAIN_FORBIDDEN_TOOL_NAMES,
+  'create_memory',
+  'delete_memory',
+  'schedule_task',
+  'learn_instruction',
+];
+
+export function isToolForbiddenByPolicy(toolName: string, policy: ChatToolPolicy | undefined): boolean {
+  return policy === 'federated' && FEDERATED_FORBIDDEN_TOOL_NAMES.includes(toolName);
+}
+
+/** Federation tools are admin-only and never offered to public domains or federated requests. */
+export function canUseFederationTools(params: {
+  isAdmin: boolean;
+  domain: string | null | undefined;
+  policy?: ChatToolPolicy;
+}): boolean {
+  const domain = params.domain ?? 'chat';
+  return params.isAdmin
+    && params.policy !== 'federated'
+    && !PUBLIC_DOMAINS.includes(domain)
+    && !NO_TOOL_DOMAINS.includes(domain);
+}
 
 export function isToolForbiddenInDomain(toolName: string, domain: string | null | undefined): boolean {
   return PUBLIC_DOMAINS.includes(domain ?? '') && PUBLIC_DOMAIN_FORBIDDEN_TOOL_NAMES.includes(toolName);
@@ -81,6 +117,10 @@ export interface ResolveChatToolsOptions {
    * `isShellAllowedFor(user)`.
    */
   allowShell?: boolean;
+  /** Tool policy; 'federated' strips tools a paired Unit must not reach. */
+  toolPolicy?: ChatToolPolicy;
+  /** Offer federation tools (caller checked admin + active peers). Fails closed. */
+  allowFederation?: boolean;
 }
 
 export async function resolveChatTools(
@@ -115,7 +155,7 @@ export async function resolveChatTools(
     tools = tools.filter((tool) => !isToolForbiddenInDomain(tool.function.name, domain));
   }
 
-  return filterEnabledTools([
+  const resolved = filterEnabledTools([
     ...tools.filter((tool) => !DOMAIN_TOOL_NAMES.includes(tool.function.name)
       && !['recall_memory', 'create_memory', 'search_knowledge'].includes(tool.function.name)),
     // Memory, scheduling, and self-instruction tools are otherwise unconditional across every
@@ -133,5 +173,12 @@ export async function resolveChatTools(
     ...(domain === 'email' ? EMAIL_TOOL_DEFINITIONS : []),
     ...(domain === 'jobs' ? JOBS_TOOL_DEFINITIONS : []),
     ...(domain === 'tickets' ? TICKETS_TOOL_DEFINITIONS : []),
+    ...(options.allowFederation === true && !PUBLIC_DOMAINS.includes(domain) && options.toolPolicy !== 'federated'
+      ? FEDERATION_TOOL_DEFINITIONS
+      : []),
   ]);
+
+  return options.toolPolicy === 'federated'
+    ? resolved.filter((tool) => !isToolForbiddenByPolicy(tool.function.name, 'federated'))
+    : resolved;
 }

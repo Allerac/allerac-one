@@ -41,6 +41,13 @@ keys cannot call them.
 - `status`: `pending_outbound`, `pending_inbound`, `active`, `rejected`, `expired`, `revoked`.
 - `verificationCode` is only present while pending.
 
+## Audit log
+
+`GET /api/v1/peers/:id/audit?limit=50` returns recent federation calls to and
+from this peer (newest first, max 200). Entries hold metadata only: direction,
+capability, target agent, outcome, status, error code, duration and sizes. See
+[Federation Agents](../federation-agents.md#audit-log).
+
 ## Errors
 
 | Code | Status | Meaning |

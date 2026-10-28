@@ -1,4 +1,8 @@
-// In-memory fakes for federation pairing tests (not a test file).
+// In-memory fakes for federation tests (not a test file).
+import { AgentsService, type AgentsRuntime } from '@/federation/agents.service';
+import type { FederationAuditEntry, FederationAuditSink } from '@/federation/audit.repository';
+import { FederationClient } from '@/federation/federation-client';
+import type { User } from '@/app/services/auth/auth.service';
 import { FederationError } from '@/federation/errors';
 import { buildManifest, isPairingAccepted } from '@/federation/manifest';
 import { PairingService, type PairingDeps, type PrincipalPort, type SecretBox } from '@/federation/pairing.service';
@@ -83,6 +87,28 @@ export const fakeSecrets: SecretBox = {
   decrypt: value => Buffer.from(value.slice(4, -1), 'base64').toString(),
 };
 
+export class MemoryAudit implements FederationAuditSink {
+  entries: FederationAuditEntry[] = [];
+  async record(entry: FederationAuditEntry) { this.entries.push(entry); }
+}
+
+const allowAll = () => ({ allowed: true as const, lease: { release: () => undefined }, headers: {} });
+
+/** In-memory AgentsRuntime: every domain listed is active; chat echoes the question. */
+export function fakeAgentsRuntime(overrides: Partial<AgentsRuntime> = {}): AgentsRuntime & { chats: Array<Record<string, unknown>> } {
+  const chats: Array<Record<string, unknown>> = [];
+  return {
+    chats,
+    loadUser: async id => ({ id, email: `${id}@example.com`, name: id, is_admin: true, created_at: new Date() } as unknown as User),
+    listActiveDomains: async slugs => slugs.map(slug => ({ slug, displayName: slug[0].toUpperCase() + slug.slice(1) })),
+    canAccessDomain: async () => true,
+    findOrCreateConversation: async (_userId, slug, title) => `conv:${slug}:${title}`,
+    resolveModel: async () => ({ modelId: 'test-model', provider: 'ollama' }),
+    runChat: async input => { chats.push(input); return { content: `answer from ${input.domain}: ${input.message}` }; },
+    ...overrides,
+  };
+}
+
 export interface FakeUnit {
   origin: string;
   env: Record<string, string>;
@@ -90,6 +116,10 @@ export interface FakeUnit {
   principals: FakePrincipals;
   service: PairingService;
   deps: PairingDeps;
+  audit: MemoryAudit;
+  runtime: ReturnType<typeof fakeAgentsRuntime>;
+  agents: AgentsService;
+  client: FederationClient;
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -122,6 +152,24 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
         await unit.service.revokeByPeer(principalId);
         return json({ data: { revoked: true } });
       }
+      if (url.pathname === '/api/v1/federation/agents') {
+        const key = new Headers(init?.headers).get('authorization')?.replace(/^Bearer /, '');
+        const principalId = unit.principals.resolve(key, 'federation:agents:list');
+        if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
+        const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
+        return json({ data: { agents: await unit.agents.listAgents(principalId, actingUserId) } });
+      }
+      const ask = url.pathname.match(/^\/api\/v1\/federation\/agents\/([^/]+)\/ask$/);
+      if (ask) {
+        const key = new Headers(init?.headers).get('authorization')?.replace(/^Bearer /, '');
+        const principalId = unit.principals.resolve(key, 'federation:agents:ask');
+        if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
+        const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
+        const result = await unit.agents.ask({
+          principalId, actingUserId, agent: decodeURIComponent(ask[1]), question: body.question,
+        });
+        return json({ data: result });
+      }
       return json({ error: { code: 'not_found' } }, 404);
     } catch (error) {
       if (error instanceof FederationError) return json({ error: { code: error.code } }, error.status);
@@ -141,7 +189,11 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
     const principals = new FakePrincipals();
     const deps: PairingDeps = { store, principals, client: new PeerClient(fetchImpl, 1_000), secrets: fakeSecrets, env };
     const service = new PairingService(deps);
-    byOrigin.set(unit.origin, { origin: unit.origin, env, store, principals, service, deps });
+    const audit = new MemoryAudit();
+    const runtime = fakeAgentsRuntime();
+    const agents = new AgentsService({ runtime, store, audit, acquire: allowAll, env });
+    const client = new FederationClient({ store, transport: new PeerClient(fetchImpl, 1_000), secrets: fakeSecrets, audit });
+    byOrigin.set(unit.origin, { origin: unit.origin, env, store, principals, service, deps, audit, runtime, agents, client });
   }
 
   return { units: byOrigin, fetchImpl, calls };

@@ -13,3 +13,8 @@ export function envList(env: Env, name: string): string[] | null {
   if (!raw) return null;
   return raw.split(',').map(item => item.trim()).filter(Boolean);
 }
+
+/** Domain slugs this Unit exposes as agents to paired peers (ALLERAC_FEDERATION_AGENTS). */
+export function exposedAgentSlugs(env: Env = process.env): string[] {
+  return (envList(env, 'ALLERAC_FEDERATION_AGENTS') ?? []).map(slug => slug.toLowerCase());
+}

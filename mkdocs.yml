@@ -78,6 +78,7 @@ nav:
       - Overview: api/README.md
       - Federation Manifest: api/federation-manifest.md
       - Federation Pairing: api/federation-pairing.md
+      - Federation Agents: api/federation-agents.md
       - Control API v1:
           - Overview: api/control-api-v1/overview.md
           - System: api/control-api-v1/system.md
@@ -146,6 +147,7 @@ nav:
           - Prod Azure: deploy/prod-azure.md
       - Database Backup and Restore: database-backup-restore.md
       - Multiple Units on One Host: operations/multi-unit.md
+      - Federation Manual Checklist: operations/federation-pairing-checklist.md
       - Containers: containers/containers.md
       - Infrastructure: infrastructure/infrastructure.md
       - Local Setup: local-setup/local-setup.md

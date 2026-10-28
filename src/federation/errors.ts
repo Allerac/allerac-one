@@ -31,4 +31,13 @@ export const federationErrors = {
   expired: () => new FederationError('expired', 'Pairing request expired', 410),
   invalidPairingProof: () => new FederationError('forbidden', 'Pairing could not be verified', 403),
   unknownCapability: (message: string) => new FederationError('validation_error', message, 400),
+  capabilityNotGranted: (capability: string) => new FederationError(
+    'capability_not_granted', `This Unit was not granted ${capability} by the peer`, 403,
+  ),
+  peerNotActive: () => new FederationError('peer_not_active', 'Peer is not paired', 409),
+  peerAccessDenied: () => new FederationError(
+    'peer_access_denied', 'The peer refused the request (the pairing may have been revoked)', 403,
+  ),
+  agentNotFound: () => new FederationError('not_found', 'Agent not found', 404),
+  notPaired: () => new FederationError('forbidden', 'Caller is not a paired Unit', 403),
 };
