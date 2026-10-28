@@ -22,6 +22,7 @@ const DOMAINS = [
   { slug: 'recipes', label: 'Recipes', icon: '🍳' },
   { slug: 'finance', label: 'Finance', icon: '💰' },
   { slug: 'health',  label: 'Health',  icon: '❤️' },
+  { slug: 'medical', label: 'Medical', icon: '💊' },
   { slug: 'music',   label: 'Music',   icon: '🎵' },
   { slug: 'write',   label: 'Content', icon: '✍️' },
   { slug: 'social',  label: 'Social',  icon: '📸' },
