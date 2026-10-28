@@ -365,14 +365,80 @@ The federation vision supports the current roadmap:
 - identify which domains could become cells later;
 - keep the single-node deployment healthy.
 
+## Federation Protocol (Proposal)
+
+This section proposes concrete answers to earlier open questions. It is a
+proposal, not a committed contract. The implementation sequence lives in the
+[Federation Protocol roadmap](../roadmap/federation-protocol.md).
+
+### Transport
+
+Units talk over HTTP through each other's Control API (`/api/v1`). Calls are
+authenticated with scoped service keys exchanged at pairing. No Unit reads or
+writes another Unit's database.
+
+### Work Model
+
+- **Long work** is a cross-unit `agent_run`: input, progress, artifacts, and
+  result. The calling Unit creates the run on the target Unit and tracks it.
+- **Completion** is delivered via a signed webhook (`run completed`) to the
+  calling Unit, with polling of the run resource as a fallback.
+- **Synchronous calls** are reserved for quick reads, such as capability lookup
+  or status checks.
+
+### Discovery
+
+```text
+LAN       mDNS / DNS-SD announcement of nearby Units
+Internet  public manifest at /.well-known/allerac
+Registry  optional simple registry, later
+```
+
+The `/.well-known/allerac` manifest describes the Unit: name, version,
+federation protocol version, exposed capabilities, and public key. Internet
+Units are added by URL, for example `unit1.allerac.ai` and `unit2.allerac.ai`
+running on the same host behind the Cloudflare tunnel.
+
+### Pairing
+
+Discovery is not connection. Units connect through explicit pairing, similar to
+Bluetooth:
+
+1. Unit A sends a pairing request to Unit B.
+2. An owner of Unit B accepts it in **Settings > Discovery**.
+3. Both Units exchange scoped service keys that list the allowed capabilities
+   and published-memory access.
+4. Either side can revoke the pairing at any time.
+
+Public Units (for example `openworld`) do not accept pairing by default.
+
+### Identity
+
+Minimum model now: one service identity per peer, with scoped keys. Federation
+tokens can come later, once multiple hops or delegation are needed.
+
+### Memory
+
+Only published memories cross Unit boundaries. Local memory stays local (see
+[Memory Model](#memory-model) and
+[Allerac Units](allerac-units.md#memory-model)).
+
+### Shared Hosts
+
+Several Units may share one machine to reduce cost. Each keeps its own Compose
+stack, database, and hostname, so the isolation boundary is unchanged.
+
 ## Open Questions
 
-- What is the minimum federation identity model?
-- Should cells discover each other through configuration, registry, or DNS?
-- Are cross-cell calls synchronous API calls, asynchronous events, or both?
-- Which memories are publishable across cells?
+Resolved by the [Federation Protocol (Proposal)](#federation-protocol-proposal):
+identity baseline, discovery, sync vs. async calls, and which memories cross
+Units. Still open:
+
+- When are federation tokens needed beyond per-peer service keys?
 - Which cells should be allowed to execute untrusted code?
 - What is the artifact format for cross-cell agent work?
+- How are webhook signing keys rotated, and how are capabilities versioned?
+- Should a simple public registry exist, and who operates it?
 - When does the `api` container split from the web UI?
 - Which first cell should be separated from the monolith?
 
