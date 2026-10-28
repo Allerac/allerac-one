@@ -6,11 +6,32 @@ import { executeChatMessage } from '@/app/services/chat/chat-execution.service';
 import type { ChatProvider } from '@/app/services/chat/chat-request-parser';
 import { ChatService } from '@/app/services/database/chat.service';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { AgentsService } from './agents.service';
+import { resolveFederationModel, type ResolvedProvider } from './model-resolution';
 import { federationAuditRepository } from './audit.repository';
 import { peerRepository } from './peer.repository';
 
 const chatService = new ChatService();
+const userSettingsService = new UserSettingsService();
+const systemSettingsService = new SystemSettingsService();
+
+const present = (value: string | null | undefined) => typeof value === 'string' && value.trim().length > 0;
+
+async function configuredProviders(userId: string): Promise<Set<ResolvedProvider>> {
+  const [user, system] = await Promise.all([
+    userSettingsService.loadUserSettings(userId),
+    systemSettingsService.loadAll().catch(() => null),
+  ]);
+  const providers = new Set<ResolvedProvider>();
+  if (present(user?.anthropic_api_key) || present(system?.anthropic_api_key) || present(process.env.ANTHROPIC_API_KEY)) providers.add('anthropic');
+  if (present(user?.openai_api_key) || present(system?.openai_api_key) || present(process.env.OPENAI_API_KEY)) providers.add('openai');
+  if (present(user?.google_api_key) || present(system?.google_api_key) || present(process.env.GOOGLE_API_KEY)) providers.add('gemini');
+  if (present(user?.github_token) || present(system?.github_token) || present(process.env.GITHUB_TOKEN)) providers.add('github');
+  if (present(process.env.OLLAMA_BASE_URL)) providers.add('ollama');
+  return providers;
+}
 
 export const agentsService = new AgentsService({
   store: peerRepository,
@@ -51,7 +72,11 @@ export const agentsService = new AgentsService({
       if (!id) throw new Error('Failed to create federation conversation');
       return id;
     },
-    resolveModel: (userId, slug) => domainModelSettingsService.resolveDomainDefault(userId, slug),
+    resolveModel: (userId, slug) => resolveFederationModel({
+      domainDefault: (id, domain) => domainModelSettingsService.resolveDomainDefault(id, domain),
+      userSelectedModel: async id => (await userSettingsService.loadUserSettings(id))?.selected_model ?? null,
+      configuredProviders,
+    }, userId, slug),
     async runChat(input) {
       const result = await executeChatMessage({
         ...input,
