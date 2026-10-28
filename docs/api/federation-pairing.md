@@ -29,6 +29,13 @@ both     => peer is active
 - The key a peer issued to us is stored encrypted with `ENCRYPTION_KEY` and is
   never returned by any API.
 
+## Settings > Discovery
+
+Admins manage pairing from **Settings > Discovery**: look up a Unit by URL,
+choose what to request and what to allow, send the request, compare the
+verification code, accept or reject inbound requests, and disconnect paired
+Units. Keys are never displayed.
+
 ## Revocation
 
 `DELETE /api/v1/peers/:id` on either Unit disables the local principal for the

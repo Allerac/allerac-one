@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import SystemTab from './SystemTab';
 import ApiKeysTab from './ApiKeysTab';
 import ControlApiAccessTab from './ControlApiAccessTab';
+import DiscoveryTab from './DiscoveryTab';
 import PreferencesTab from './PreferencesTab';
 import { Model } from '@/app/types';
 
@@ -14,7 +15,7 @@ interface SystemDashboardProps {
   displayMode?: 'modal' | 'page';
   isDarkMode: boolean;
   userId?: string;
-  initialTab?: 'preferences' | 'system' | 'apiKeys' | 'apiAccess';
+  initialTab?: 'preferences' | 'system' | 'apiKeys' | 'apiAccess' | 'discovery';
   MODELS?: Model[];
   selectedModel?: string;
   setSelectedModel: (modelId: string) => void;
@@ -48,8 +49,11 @@ const TABS = [
   { id: 'preferences' as const, label: 'Preferences' },
   { id: 'apiAccess'   as const, label: 'Allerac API'   },
   { id: 'apiKeys'     as const, label: 'External APIs' },
+  { id: 'discovery'   as const, label: 'Discovery'   },
   { id: 'system'      as const, label: 'System'      },
 ];
+
+const ADMIN_TABS: readonly string[] = ['apiAccess', 'discovery'];
 
 export default function SystemDashboardModal({
   isOpen,
@@ -87,13 +91,14 @@ export default function SystemDashboardModal({
   isAdmin = false,
 }: SystemDashboardProps) {
   const t = useTranslations('system');
-  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'apiAccess' | 'preferences'>(
-    initialTab === 'apiAccess' && !isAdmin ? 'preferences' : (initialTab ?? 'preferences'),
+  const [activeTab, setActiveTab] = useState<'system' | 'apiKeys' | 'apiAccess' | 'discovery' | 'preferences'>(
+    ADMIN_TABS.includes(initialTab) && !isAdmin ? 'preferences' : (initialTab ?? 'preferences'),
   );
   // "Allerac API" exposes scopes across every domain — only admins get the
   // full picker. Domain-restricted users get a narrower, scope-locked panel
   // elsewhere (e.g. the Health dashboard's own agent-access panel).
-  const visibleTabs = TABS.filter(tab => tab.id !== 'apiAccess' || isAdmin);
+  // Discovery (federation pairing) is admin-only as well.
+  const visibleTabs = TABS.filter(tab => !ADMIN_TABS.includes(tab.id) || isAdmin);
   const [retroMode, setRetroMode] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('cfg-retro') !== 'off' : true
   );
@@ -107,7 +112,7 @@ export default function SystemDashboardModal({
   });
 
   useEffect(() => {
-    if (isOpen) setActiveTab(initialTab === 'apiAccess' && !isAdmin ? 'preferences' : (initialTab ?? 'preferences'));
+    if (isOpen) setActiveTab(ADMIN_TABS.includes(initialTab) && !isAdmin ? 'preferences' : (initialTab ?? 'preferences'));
   }, [isOpen]);
 
   useEffect(() => {
@@ -380,6 +385,10 @@ export default function SystemDashboardModal({
 
             {activeTab === 'apiAccess' && isAdmin && (
               <ControlApiAccessTab isDarkMode={retroMode || isDarkMode} />
+            )}
+
+            {activeTab === 'discovery' && isAdmin && (
+              <DiscoveryTab isDarkMode={retroMode || isDarkMode} />
             )}
 
             {activeTab === 'preferences' && (
