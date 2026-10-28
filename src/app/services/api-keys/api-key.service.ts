@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import pool from '@/app/clients/db';
 import type { User } from '@/app/services/auth/auth.service';
-import { hasScope, unknownScopes } from './api-key-scopes';
+import { hasScope, isServiceAllowedScope, unknownScopes } from './api-key-scopes';
 
 const TOKEN_PREFIX = 'alr_live_';
 const TOKEN_RANDOM_BYTES = 32;
@@ -18,6 +18,15 @@ export interface ControlApiKey {
   expiresAt: Date | null;
   createdAt: Date;
 }
+
+export interface ServicePrincipalRef {
+  id: string;
+  name: string;
+  kind: string;
+}
+
+/** User returned by bearer validation; `principal` is set for service keys. */
+export type BearerUser = User & { principal?: ServicePrincipalRef };
 
 export interface CreatedControlApiKey {
   apiKey: ControlApiKey;
@@ -70,6 +79,7 @@ export class ApiKeyService {
     name: string;
     scopes: string[];
     expiresAt?: Date | null;
+    principalId?: string | null;
   }): Promise<CreatedControlApiKey> {
     // A key without scopes would grant nothing, so refuse to create one.
     if (!Array.isArray(params.scopes) || params.scopes.length === 0) {
@@ -79,18 +89,32 @@ export class ApiKeyService {
     if (unknown.length > 0) {
       throw new ApiKeyInvalidScopesError(`Unknown scope(s): ${unknown.join(', ')}`);
     }
+    if (params.principalId) {
+      const disallowed = params.scopes.filter(scope => !isServiceAllowedScope(scope));
+      if (disallowed.length > 0) {
+        throw new ApiKeyInvalidScopesError(`Scope(s) not allowed for service keys: ${disallowed.join(', ')}`);
+      }
+    }
     const scopes = Array.from(new Set(params.scopes));
 
     const secret = this.generateToken();
     const tokenHash = this.hashToken(secret);
     const tokenPrefix = this.tokenLookupPrefix(secret);
 
-    const result = await pool.query(
-      `INSERT INTO control_api_keys (user_id, name, token_prefix, token_hash, scopes, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, user_id, name, token_prefix, scopes, last_used_at, revoked_at, expires_at, created_at`,
-      [params.userId, params.name, tokenPrefix, tokenHash, scopes, params.expiresAt ?? null],
-    );
+    const values: unknown[] = [params.userId, params.name, tokenPrefix, tokenHash, scopes, params.expiresAt ?? null];
+    const result = params.principalId
+      ? await pool.query(
+        `INSERT INTO control_api_keys (user_id, name, token_prefix, token_hash, scopes, expires_at, principal_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, user_id, name, token_prefix, scopes, last_used_at, revoked_at, expires_at, created_at`,
+        [...values, params.principalId],
+      )
+      : await pool.query(
+        `INSERT INTO control_api_keys (user_id, name, token_prefix, token_hash, scopes, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, user_id, name, token_prefix, scopes, last_used_at, revoked_at, expires_at, created_at`,
+        values,
+      );
 
     return {
       apiKey: mapRow(result.rows[0]),
@@ -102,7 +126,7 @@ export class ApiKeyService {
     const result = await pool.query(
       `SELECT id, user_id, name, token_prefix, scopes, last_used_at, revoked_at, expires_at, created_at
        FROM control_api_keys
-       WHERE user_id = $1
+       WHERE user_id = $1 AND principal_id IS NULL
        ORDER BY created_at DESC`,
       [userId],
     );
@@ -114,7 +138,7 @@ export class ApiKeyService {
     const result = await pool.query(
       `UPDATE control_api_keys
        SET revoked_at = COALESCE(revoked_at, NOW())
-       WHERE id = $1 AND user_id = $2
+       WHERE id = $1 AND user_id = $2 AND principal_id IS NULL
        RETURNING id`,
       [params.keyId, params.userId],
     );
@@ -122,7 +146,7 @@ export class ApiKeyService {
     return result.rowCount > 0;
   }
 
-  async validateBearerToken(token: string, requiredScope: string): Promise<User | null> {
+  async validateBearerToken(token: string, requiredScope: string): Promise<BearerUser | null> {
     if (!token.startsWith(TOKEN_PREFIX)) return null;
 
     const tokenHash = this.hashToken(token);
@@ -136,13 +160,18 @@ export class ApiKeyService {
          u.name,
          u.is_admin,
          u.created_at,
-         k.scopes
+         k.scopes,
+         k.principal_id,
+         sp.name AS principal_name,
+         sp.kind AS principal_kind
        FROM control_api_keys k
-       JOIN users u ON u.id = k.user_id
+       LEFT JOIN service_principals sp ON sp.id = k.principal_id
+       JOIN users u ON u.id = COALESCE(sp.acting_user_id, k.user_id)
        WHERE k.token_prefix = $1
          AND k.token_hash = $2
          AND k.revoked_at IS NULL
          AND (k.expires_at IS NULL OR k.expires_at > NOW())
+         AND (k.principal_id IS NULL OR sp.disabled_at IS NULL)
          AND u.is_active = true
        LIMIT 1`,
       [tokenPrefix, tokenHash],
@@ -151,8 +180,16 @@ export class ApiKeyService {
     if (result.rows.length === 0) return null;
 
     const row = result.rows[0];
+    const isService = Boolean(row.principal_id);
     // Deny by default: empty scope lists and unknown scopes grant nothing.
-    if (!hasScope(row.scopes, requiredScope)) {
+    // Service keys are additionally limited to the service allow-list.
+    const allowed = hasScope(row.scopes, requiredScope)
+      && (!isService || isServiceAllowedScope(requiredScope));
+
+    if (isService) {
+      await this.recordUsage(row.key_id, row.principal_id, requiredScope, allowed);
+    }
+    if (!allowed) {
       throw new ApiKeyMissingScopeError(requiredScope);
     }
 
@@ -167,7 +204,22 @@ export class ApiKeyService {
       name: row.name,
       is_admin: row.is_admin,
       created_at: row.created_at,
+      ...(isService
+        ? { principal: { id: row.principal_id, name: row.principal_name, kind: row.principal_kind } }
+        : {}),
     };
+  }
+
+  private async recordUsage(keyId: string, principalId: string, scope: string, allowed: boolean): Promise<void> {
+    try {
+      await pool.query(
+        'INSERT INTO control_api_key_usage (key_id, principal_id, scope, allowed) VALUES ($1, $2, $3, $4)',
+        [keyId, principalId, scope, allowed],
+      );
+    } catch (error) {
+      // Usage logging must never break request handling.
+      console.error('[ApiKeyService] failed to record key usage:', error);
+    }
   }
 }
 

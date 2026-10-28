@@ -1,0 +1,35 @@
+meta {
+  name: Create Service Key
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/service-principals/{{servicePrincipalId}}/keys
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Cookie: session_token={{sessionToken}}
+}
+
+body:json {
+  {
+    "name": "openworld federation",
+    "scopes": [
+      "profile:read",
+      "capabilities:read",
+      "federation:agents:list",
+      "federation:agents:ask"
+    ]
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.secret) {
+    bru.setEnvVar("serviceKey", body.data.secret);
+  }
+}

@@ -49,6 +49,11 @@ export const CONTROL_API_SCOPES = [
   'finance:write',
   'music:read',
   'music:write',
+  'federation:manifest:read',
+  'federation:agents:list',
+  'federation:agents:ask',
+  'federation:runs:create',
+  'federation:runs:read',
 ] as const;
 
 export type ControlApiScope = (typeof CONTROL_API_SCOPES)[number];
@@ -72,4 +77,22 @@ export function hasScope(grantedScopes: unknown, requiredScope: unknown): boolea
   if (!isKnownScope(requiredScope)) return false;
   if (!Array.isArray(grantedScopes) || grantedScopes.length === 0) return false;
   return grantedScopes.includes(requiredScope);
+}
+
+// Scopes a service principal (peer Unit) key may hold. Anything else is refused
+// at key creation and never granted at request time.
+export const SERVICE_ALLOWED_SCOPES = [
+  'profile:read',
+  'capabilities:read',
+  'federation:manifest:read',
+  'federation:agents:list',
+  'federation:agents:ask',
+  'federation:runs:create',
+  'federation:runs:read',
+] as const satisfies readonly ControlApiScope[];
+
+const SERVICE_ALLOWED: ReadonlySet<string> = new Set(SERVICE_ALLOWED_SCOPES);
+
+export function isServiceAllowedScope(scope: unknown): boolean {
+  return typeof scope === 'string' && SERVICE_ALLOWED.has(scope);
 }

@@ -107,6 +107,7 @@ describe('Control API v1 tickets', () => {
           isAdmin: false,
           authMode: 'session',
         },
+        principal: { type: 'user' },
         cliPreferences: {
           domainSlug: null,
           modelId: null,
