@@ -10,8 +10,10 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const caller = await requireApiPrincipal('federation:agents:list', request);
     if (caller.type !== 'service') return apiError('forbidden', 'Forbidden', 403);
-    const agents = await agentsService.listAgents(caller.principal.id, caller.actingUser.id);
-    return apiData({ agents });
+    // `unit` (identity & role, P3.5) rides on the agents list so existing
+    // pairings with federation.agents.list get it without a new scope.
+    const { agents, unit } = await agentsService.listAgentsWithUnit(caller.principal.id, caller.actingUser.id);
+    return apiData({ agents, unit });
   } catch (error: unknown) {
     return federationErrorResponse('GET /api/v1/federation/agents failed', error);
   }

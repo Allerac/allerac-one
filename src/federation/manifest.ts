@@ -33,7 +33,7 @@ export function isPairingAccepted(env: Env = process.env): boolean {
   return true;
 }
 
-function unitName(env: Env): string {
+export function unitName(env: Env = process.env): string {
   const raw = (env.ALLERAC_UNIT_NAME || env.ALLERAC_UNIT || DEFAULT_UNIT_NAME).trim().toLowerCase();
   return /^[a-z0-9][a-z0-9_-]{0,62}$/.test(raw) ? raw : DEFAULT_UNIT_NAME;
 }

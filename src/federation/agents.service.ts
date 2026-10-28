@@ -14,6 +14,7 @@ import { exposedAgentSlugs, type Env } from './env';
 import { FederationError, federationErrors } from './errors';
 import type { PeerAgent } from './federation-client';
 import type { PeerRecord, PeerStore } from './peer.types';
+import { toPeerProfile, type PeerUnitProfile, type UnitProfile } from './unit-profile';
 
 export const MAX_QUESTION_CHARS = 4_000;
 export const MAX_ANSWER_CHARS = 8_000;
@@ -43,6 +44,8 @@ export interface AgentsServiceDeps {
   store: PeerStore;
   audit: FederationAuditSink;
   acquire: Acquire;
+  /** Unit identity & role (P3.5). Optional so older wiring keeps working. */
+  loadProfile?: () => Promise<UnitProfile>;
   env?: Env;
   now?: () => number;
 }
@@ -75,23 +78,39 @@ export class AgentsService {
       .filter(slug => !PUBLIC_DOMAINS.includes(slug) && isDomainEnabled(slug, this.env));
     if (slugs.length === 0) return [];
     const domains = await this.deps.runtime.listActiveDomains(slugs);
+    const descriptions = (await this.loadProfile())?.agentDescriptions ?? {};
     const agents: PeerAgent[] = [];
     for (const domain of domains) {
       if (await this.deps.runtime.canAccessDomain(user, domain.slug)) {
-        agents.push({ id: domain.slug, name: domain.displayName, description: null });
+        agents.push({ id: domain.slug, name: domain.displayName, description: descriptions[domain.slug]?.slice(0, 500) || null });
       }
     }
     return agents;
   }
 
+  private async loadProfile(): Promise<UnitProfile | null> {
+    if (!this.deps.loadProfile) return null;
+    try {
+      return await this.deps.loadProfile();
+    } catch {
+      return null;
+    }
+  }
+
   async listAgents(principalId: string, actingUserId: string): Promise<PeerAgent[]> {
+    return (await this.listAgentsWithUnit(principalId, actingUserId)).agents;
+  }
+
+  /** Exposed agents plus this Unit's identity & role, for paired peers only. */
+  async listAgentsWithUnit(principalId: string, actingUserId: string): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null }> {
     const { peer, user } = await this.resolveCaller(principalId, actingUserId);
     const agents = await this.exposedAgents(user);
+    const profile = await this.loadProfile();
     await this.deps.audit.record({
       direction: 'inbound', peerId: peer.id, principalId, userId: user.id,
       capability: 'federation.agents.list', outcome: 'ok', httpStatus: 200,
     });
-    return agents;
+    return { agents, unit: profile ? toPeerProfile(profile) : null };
   }
 
   async ask(params: { principalId: string; actingUserId: string; agent: string; question: string }) {

@@ -13,6 +13,7 @@ import { FederationError, federationErrors } from './errors';
 import type { SecretBox } from './pairing.service';
 import type { PeerClient } from './peer-client';
 import type { PeerRecord, PeerStore } from './peer.types';
+import { peerUnitProfileSchema, type PeerUnitProfile } from './unit-profile';
 
 export const LIST_TIMEOUT_MS = 8_000;
 export const ASK_TIMEOUT_MS = 60_000;
@@ -24,7 +25,11 @@ export const peerAgentSchema = z.object({
 });
 export type PeerAgent = z.infer<typeof peerAgentSchema>;
 
-const listResponseSchema = z.object({ agents: z.array(peerAgentSchema).max(100) });
+const listResponseSchema = z.object({
+  agents: z.array(peerAgentSchema).max(100),
+  // Older Units (before P3.5) do not send `unit`; a malformed one is ignored.
+  unit: z.unknown().optional(),
+});
 const askResponseSchema = z.object({ answer: z.string(), truncated: z.boolean() });
 
 export interface FederationCallContext {
@@ -76,13 +81,19 @@ export class FederationClient {
   }
 
   async listAgents(peerId: string, ctx: FederationCallContext): Promise<PeerAgent[]> {
+    return (await this.listAgentsWithUnit(peerId, ctx)).agents;
+  }
+
+  /** Agents plus the peer's identity & role (null for older Units). */
+  async listAgentsWithUnit(peerId: string, ctx: FederationCallContext): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null }> {
     const data = await this.call({
       peerId, ctx, capability: 'federation.agents.list', target: null,
       path: '/api/v1/federation/agents', method: 'GET', timeoutMs: LIST_TIMEOUT_MS,
     });
     const parsed = listResponseSchema.safeParse(data);
     if (!parsed.success) throw federationErrors.peerInvalidResponse();
-    return parsed.data.agents;
+    const unit = peerUnitProfileSchema.safeParse(parsed.data.unit);
+    return { agents: parsed.data.agents, unit: unit.success ? unit.data : null };
   }
 
   async askAgent(peerId: string, agent: string, question: string, ctx: FederationCallContext) {

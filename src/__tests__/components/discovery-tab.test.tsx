@@ -1,6 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import DiscoveryTab, { type PeerDto } from '@/app/components/system/DiscoveryTab';
 
+// The "This Unit" card and peer roles fetch on their own; covered in unit-profile-card.test.tsx.
+jest.mock('@/app/components/system/UnitProfileCard', () => ({
+  __esModule: true,
+  default: () => null,
+  PeerRole: () => null,
+}));
+
 const mockFetch = jest.fn();
 
 function jsonResponse(body: unknown, ok = true) {

@@ -77,4 +77,11 @@ describe('federation agents between two Units (mocked network)', () => {
     await expect(a.client.listAgents(peerOnA.id, { initiatedByUserId: null }))
       .rejects.toMatchObject({ status: 409 });
   });
+
+  it('tolerates Units that do not send identity & role yet (pre-P3.5)', async () => {
+    const { a, peerOnA } = await pairedUnits(['federation.agents.list']);
+    const result = await a.client.listAgentsWithUnit(peerOnA.id, { initiatedByUserId: 'admin-a' });
+    expect(result.unit).toBeNull();
+    expect(result.agents.map(agent => agent.id)).toEqual(['health', 'music']);
+  });
 });

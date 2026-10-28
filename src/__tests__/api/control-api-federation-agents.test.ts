@@ -24,7 +24,7 @@ jest.mock('@/app/services/api-keys/api-key.service', () => ({
   apiKeyService: { validateBearerToken: jest.fn() },
 }));
 jest.mock('@/federation/agents.instance', () => ({
-  agentsService: { listAgents: jest.fn(), ask: jest.fn() },
+  agentsService: { listAgentsWithUnit: jest.fn(), ask: jest.fn() },
 }));
 jest.mock('@/federation/audit.repository', () => ({
   federationAuditRepository: { listForPeer: jest.fn().mockResolvedValue([]) },
@@ -47,12 +47,12 @@ describe('federation agents routes', () => {
 
   it('lists agents for a service caller with the list scope', async () => {
     validate.mockResolvedValueOnce(serviceCaller as never);
-    svc.listAgents.mockResolvedValueOnce([{ id: 'health', name: 'Health', description: null }]);
+    svc.listAgentsWithUnit.mockResolvedValueOnce({ agents: [{ id: 'health', name: 'Health', description: null }], unit: null });
     const response = await listAgents(new Request('http://x', { headers: auth }));
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: { agents: [{ id: 'health', name: 'Health', description: null }] } });
+    expect(await response.json()).toEqual({ data: { agents: [{ id: 'health', name: 'Health', description: null }], unit: null } });
     expect(validate).toHaveBeenCalledWith('alr_live_service', 'federation:agents:list');
-    expect(svc.listAgents).toHaveBeenCalledWith('principal-1', 'user-b');
+    expect(svc.listAgentsWithUnit).toHaveBeenCalledWith('principal-1', 'user-b');
   });
 
   it('rejects personal keys and missing keys', async () => {
@@ -60,7 +60,7 @@ describe('federation agents routes', () => {
     expect((await listAgents(new Request('http://x', { headers: auth }))).status).toBe(403);
     validate.mockResolvedValueOnce(null as never);
     expect((await listAgents(new Request('http://x', { headers: auth }))).status).toBe(401);
-    expect(svc.listAgents).not.toHaveBeenCalled();
+    expect(svc.listAgentsWithUnit).not.toHaveBeenCalled();
   });
 
   it('asks an agent with a validated question', async () => {

@@ -22,8 +22,16 @@ export function buildFederationTools(client: FederationClient, userId: string) {
         continue;
       }
       try {
-        const agents = await client.listAgents(peer.id, ctx);
-        units.push({ unit: peer.unitName, canAsk: peer.capabilities.includes('federation.agents.ask'), agents });
+        const { agents, unit } = await client.listAgentsWithUnit(peer.id, ctx);
+        units.push({
+          unit: peer.unitName,
+          displayName: unit?.displayName ?? peer.displayName ?? peer.unitName,
+          role: unit?.role ?? null,
+          description: unit?.description ?? null,
+          tags: unit?.tags ?? [],
+          canAsk: peer.capabilities.includes('federation.agents.ask'),
+          agents,
+        });
       } catch (error) {
         units.push({ unit: peer.unitName, agents: [], error: describe(error) });
       }

@@ -38,11 +38,46 @@ You have access to a real Linux shell via \`execute_shell\`. Use it instead of e
 - **The executor is sandboxed.** Servers you start are NOT accessible from the user's browser. After creating a project, tell the user the file path and how to run it locally.`;
 
 /**
+ * Unit identity & role (federation P3.5), already resolved by the caller.
+ * Callers pass it only when it applies to the domain (public domains need the
+ * admin opt-in), so buildSoul stays synchronous and DB-free.
+ */
+export interface SoulIdentity {
+  displayName: string;
+  role?: string | null;
+  description?: string | null;
+  /** Short description of the current domain's agent, when set by the admin. */
+  agentDescription?: string | null;
+}
+
+const ALLERAC_OPENING = 'You are Allerac, a private AI assistant.';
+const PUBLIC_OPENING = 'You are Allerac, an AI assistant speaking with a visitor on a public website.';
+
+function identityLines(identity: SoulIdentity): string {
+  const lines: string[] = [];
+  if (identity.role) lines.push(`Role: you take care of ${identity.role}.`);
+  if (identity.description) lines.push(identity.description);
+  if (identity.agentDescription) lines.push(`In this conversation: ${identity.agentDescription}`);
+  lines.push(identity.role
+    ? `When asked who you are, say you are ${identity.displayName} and that you take care of ${identity.role}.`
+    : `When asked who you are, say you are ${identity.displayName}.`);
+  return lines.join(' ');
+}
+
+/**
  * Returns the Soul for a given domain.
  * The code domain gets shell instructions; all others get the lean base.
+ * With an identity, the opening line names this Unit instead of "Allerac".
  */
-export function buildSoul(domain?: string | null): string {
-  if (domain === 'sales' || domain === 'openworld') return PUBLIC_AGENT_SOUL;
-  if (domain === 'code') return `${ALLERAC_SOUL}\n\n${ALLERAC_CODE_ADDENDUM}`;
-  return ALLERAC_SOUL;
+export function buildSoul(domain?: string | null, identity?: SoulIdentity | null): string {
+  if (domain === 'sales' || domain === 'openworld') {
+    return identity
+      ? PUBLIC_AGENT_SOUL.replace(PUBLIC_OPENING, `You are ${identity.displayName}, an Allerac unit speaking with a visitor on a public website. ${identityLines(identity)}`)
+      : PUBLIC_AGENT_SOUL;
+  }
+  const base = identity
+    ? ALLERAC_SOUL.replace(ALLERAC_OPENING, `You are ${identity.displayName}, an Allerac unit: a private AI assistant. ${identityLines(identity)}`)
+    : ALLERAC_SOUL;
+  if (domain === 'code') return `${base}\n\n${ALLERAC_CODE_ADDENDUM}`;
+  return base;
 }

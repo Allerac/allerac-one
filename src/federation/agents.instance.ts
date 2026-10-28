@@ -12,6 +12,7 @@ import { AgentsService } from './agents.service';
 import { resolveFederationModel, type ResolvedProvider } from './model-resolution';
 import { federationAuditRepository } from './audit.repository';
 import { peerRepository } from './peer.repository';
+import { loadUnitProfile } from './unit-profile.repository';
 
 const chatService = new ChatService();
 const userSettingsService = new UserSettingsService();
@@ -37,6 +38,7 @@ export const agentsService = new AgentsService({
   store: peerRepository,
   audit: federationAuditRepository,
   acquire: (operation, subject) => acquireOperationLimit(operation, subject),
+  loadProfile: loadUnitProfile,
   runtime: {
     async loadUser(userId) {
       const result = await pool.query(

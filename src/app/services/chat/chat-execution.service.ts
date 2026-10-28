@@ -1,6 +1,7 @@
 import type { User } from '@/app/services/auth/auth.service';
 import { ChatService } from '@/app/services/database/chat.service';
 import { loadChatKnowledgeContext } from '@/app/services/knowledge/chat-knowledge-context';
+import { loadSoulIdentity } from '@/federation/unit-profile.repository';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
 import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools, type ChatToolPolicy } from '@/app/services/chat/chat-tool-registry';
@@ -144,6 +145,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     activeSkill,
     skillContent,
     relevantContext,
+    unitIdentity: await loadSoulIdentity(input.domain),
   });
 
   const activeTools = await resolveChatTools(activeSkill?.id, input.domain, {

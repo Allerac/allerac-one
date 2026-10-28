@@ -12,7 +12,7 @@ jest.mock('@/federation/federation-client.instance', () => ({
       { id: 'p1', unitName: 'unit2', displayName: null, capabilities: ['federation.agents.list', 'federation.agents.ask'] },
     ]),
     findActivePeer: jest.fn().mockResolvedValue({ id: 'p1', unitName: 'unit2' }),
-    listAgents: (...args: unknown[]) => mockListAgents(...args),
+    listAgentsWithUnit: (...args: unknown[]) => mockListAgents(...args),
     askAgent: (...args: unknown[]) => mockAskAgent(...args),
   },
 }));
@@ -73,10 +73,16 @@ describe('federation tool policy', () => {
   });
 
   it('dispatches federation tools for admins', async () => {
-    mockListAgents.mockResolvedValue([{ id: 'health', name: 'Health' }]);
+    mockListAgents.mockResolvedValue({
+      agents: [{ id: 'health', name: 'Health' }],
+      unit: { name: 'unit2', displayName: 'Barcelona', emoji: null, role: 'my medical matters', description: null, tags: [] },
+    });
     mockAskAgent.mockResolvedValue({ answer: 'Slept well', truncated: false });
     await expect(executeChatTool('list_peer_agents', {}, ctx)).resolves.toEqual({
-      units: [{ unit: 'unit2', canAsk: true, agents: [{ id: 'health', name: 'Health' }] }],
+      units: [{
+        unit: 'unit2', displayName: 'Barcelona', role: 'my medical matters', description: null, tags: [],
+        canAsk: true, agents: [{ id: 'health', name: 'Health' }],
+      }],
     });
     await expect(executeChatTool('ask_peer_agent', { peer: 'unit2', agent: 'health', question: 'Sleep?' }, ctx))
       .resolves.toEqual({ unit: 'unit2', agent: 'health', answer: 'Slept well', truncated: false });
