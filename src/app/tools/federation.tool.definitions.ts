@@ -10,7 +10,7 @@ export const FEDERATION_TOOL_DEFINITIONS = [
     function: {
       name: 'list_peer_agents',
       description:
-        'List the agents available on paired Allerac Units (other Units this one is connected to). Use before ask_peer_agent to find the right Unit and agent.',
+        'List the agents available on paired Allerac Units (other Units this one is connected to). Each Unit reports its role (what it takes care of) and each agent a short description. Use before ask_peer_agent to pick the Unit and agent whose role fits the question.',
       parameters: {
         type: 'object',
         properties: {

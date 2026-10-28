@@ -59,7 +59,7 @@ active pairing. Personal API keys and browser sessions get `403`.
 
 | Endpoint | Scope | Response |
 |---|---|---|
-| `GET /api/v1/federation/agents` | `federation:agents:list` | `{ "data": { "agents": [{ "id", "name", "description" }] } }` |
+| `GET /api/v1/federation/agents` | `federation:agents:list` | `{ "data": { "agents": [{ "id", "name", "description" }], "unit": { "name", "displayName", "emoji", "role", "description", "tags" } } }` (`unit` since P3.5; may be absent on older Units) |
 | `POST /api/v1/federation/agents/:agent/ask` | `federation:agents:ask` | `{ "data": { "answer", "truncated" } }` |
 
 Request body for ask: `{ "question": "..." }`.
@@ -106,3 +106,10 @@ Asks also count against the acting user's normal `chat` limit.
 - Request signing (planned with P5).
 - `delegate_to_peer` and agent runs on peers (P5).
 - Audit log retention cleanup.
+
+## Unit identity and role (P3.5)
+
+Admins edit this Unit's role in Settings > Discovery > This Unit
+(`GET/PUT /api/v1/unit/profile`, session admin). Paired Units receive it in the
+`unit` field of the agents list; agent `description` comes from the per-agent
+text. `GET /api/v1/peers/:id/profile` (session admin) fetches a peer's role live.

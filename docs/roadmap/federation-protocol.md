@@ -91,6 +91,44 @@ Inbound calls are authenticated with the peer's scoped service key and every
 call is audit-logged. Request signing moves to P5 together with
 `delegate_to_peer`. Manual checks: [Federation Checklist](../operations/federation-pairing-checklist.md).
 
+## P3.5: Unit Identity and Role
+
+**Goal:** every Unit knows and tells who it is and what it takes care of.
+Asked "who are you?", Barcelona answers "I'm Barcelona, I take care of my
+documents", not a generic "Allerac".
+
+**Deliverables**
+
+- The Unit *name* (`ALLERAC_UNIT_NAME`: santos, barcelona, napols) stays the
+  stable identity. The *role* is a changeable property stored in the singleton
+  `unit_profile` table (migration 145): display name, emoji, role, description,
+  tags, a short description per exposed agent, and the
+  `identity_in_public_domains` toggle. Env fallbacks: `ALLERAC_UNIT_DISPLAY_NAME`,
+  `ALLERAC_UNIT_ROLE`, `ALLERAC_UNIT_DESCRIPTION`, `ALLERAC_UNIT_IDENTITY_PUBLIC`.
+- Admin-only "This Unit" card in Settings > Discovery, backed by
+  `GET/PUT /api/v1/unit/profile` (session admin, like `/api/v1/peers`).
+- The Soul (`buildSoul(domain, identity)`) opens with the Unit identity and role
+  in chat, federated asks, and jobs. Public domains (`sales`, `openworld`) keep
+  the generic public Soul unless the admin turns the toggle on.
+- Paired peers get the role through `GET /api/v1/federation/agents` (new `unit`
+  field, existing `federation:agents:list` scope, so existing pairings work).
+  Agent `description` is filled from the admin's per-agent text. The public
+  manifest is unchanged: it never carries the role.
+- Discovery shows each active peer's role and agents
+  (`GET /api/v1/peers/:id/profile`, live); `list_peer_agents` returns
+  `displayName`, `role`, `description`, `tags` per Unit.
+
+**Acceptance criteria**
+
+- With a role set, the Unit introduces itself by name and role; without one it
+  introduces itself by name (default: capitalized unit name).
+- Public domains never mention the Unit unless the toggle is on.
+- Units on older releases still list agents (`unit` is optional and ignored if malformed).
+
+**Later:** binding skills, tools, or memory scopes to a role (see P6).
+
+**Status:** implemented.
+
 ## P4: Unified Inbox and Telegram Routing
 
 **Goal:** chat with any agent, local or remote, from the home Unit.

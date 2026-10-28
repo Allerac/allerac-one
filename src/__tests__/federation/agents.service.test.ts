@@ -87,3 +87,27 @@ describe('AgentsService', () => {
     expect(audit.entries.at(-1)).toMatchObject({ outcome: 'error', errorCode: 'provider_not_configured' });
   });
 });
+
+describe('AgentsService unit identity (P3.5)', () => {
+  it('returns the unit role and agent descriptions to paired peers', async () => {
+    const { resolveUnitProfile } = await import('@/federation/unit-profile');
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      origin: 'https://santos.example', unitName: 'santos', displayName: null, direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.list'],
+    } as never);
+    const env = { ALLERAC_FEDERATION_AGENTS: 'health', ALLERAC_UNIT_NAME: 'barcelona' };
+    const service = new AgentsService({
+      runtime: fakeAgentsRuntime(), store, audit: new MemoryAudit(), acquire: allow, env,
+      loadProfile: async () => resolveUnitProfile({
+        displayName: null, emoji: null, role: 'my medical matters', description: null, tags: [],
+        agentDescriptions: { health: 'Lab results' }, identityInPublicDomains: true, updatedAt: null,
+      }, env),
+    });
+    const result = await service.listAgentsWithUnit('principal-1', 'user-1');
+    expect(result.agents).toEqual([{ id: 'health', name: 'Health', description: 'Lab results' }]);
+    expect(result.unit).toEqual({
+      name: 'barcelona', displayName: 'Barcelona', emoji: null, role: 'my medical matters', description: null, tags: [],
+    });
+  });
+});

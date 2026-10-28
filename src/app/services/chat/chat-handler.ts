@@ -24,6 +24,7 @@ import { buildInstructionTools } from '../../tools/instructions.tool';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '../../tools/instructions.tool.definitions';
 import { HealthTool } from '../../tools/health.tool';
 import { buildSoul } from '@/app/config/allerac-soul';
+import { loadSoulIdentity } from '@/federation/unit-profile.repository';
 import pool from '@/app/clients/db';
 import { normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
 import { instructionDistillerService } from '@/app/services/memory/instruction-distiller.service';
@@ -175,7 +176,7 @@ export async function handleChatMessage(
 
   // 4. Build system message with context
   const isCustomSoul = systemMessage && systemMessage !== 'You are a helpful AI assistant.';
-  let enrichedSystemMessage = buildSoul(domainSlug);
+  let enrichedSystemMessage = buildSoul(domainSlug, await loadSoulIdentity(domainSlug));
 
   // Inject current date and time
   const now = new Date();

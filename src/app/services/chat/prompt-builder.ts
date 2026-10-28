@@ -1,4 +1,4 @@
-import { buildSoul } from '@/app/config/allerac-soul';
+import { buildSoul, type SoulIdentity } from '@/app/config/allerac-soul';
 import type { User } from '@/app/services/auth/auth.service';
 import type { Skill } from '@/app/services/skills/skills.service';
 
@@ -24,6 +24,8 @@ export interface PromptBuilderInput {
   relevantContext?: string;
   now?: Date;
   timezone?: string;
+  /** Unit identity & role (federation P3.5), already filtered for the domain. */
+  unitIdentity?: SoulIdentity;
 }
 
 export function buildChatSystemPrompt(input: PromptBuilderInput): string {
@@ -41,7 +43,7 @@ export function buildChatSystemPrompt(input: PromptBuilderInput): string {
   contextLines.push(`- Current date & time: ${date} ${weekdays[now.getDay()]}, ${time} (${timezone})`);
   if (!isPublicDomain && input.userLocation) contextLines.push(`- Location: ${input.userLocation}`);
 
-  let prompt = `${buildSoul(input.domain)}\n\n## User context\n${contextLines.join('\n')}`;
+  let prompt = `${buildSoul(input.domain, input.unitIdentity)}\n\n## User context\n${contextLines.join('\n')}`;
   if (!isPublicDomain) prompt += `\n\n## Memory, notes, and reminders
 - Durable memory is for stable facts, preferences, corrections, relationships, and decisions that should shape future conversations. Use create_memory.
 - Notes are user-authored information to keep for later reference. Requests such as "anote isso" or "crie uma nota" use save_note.

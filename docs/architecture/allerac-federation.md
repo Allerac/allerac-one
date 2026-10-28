@@ -322,6 +322,16 @@ docs cell
   publishes: "Current platform direction is Control API then federation."
 ```
 
+## Unit Identity and Role
+
+A Unit's *name* (santos, barcelona, napols) is its stable identity, used in
+pairing. Its *role* (what it takes care of, a short description, per-agent
+descriptions) is an admin-editable property in `unit_profile`. The Soul opens
+with it, so the Unit's agents introduce themselves by name and role. Every
+paired peer sees the role through the authenticated agents list; the
+unauthenticated manifest does not. Public domains stay generic unless the admin
+opts in. See roadmap P3.5.
+
 ## Agent Specialization
 
 Federation makes agent specialization concrete.

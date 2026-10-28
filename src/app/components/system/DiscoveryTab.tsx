@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import UnitProfileCard, { PeerRole } from './UnitProfileCard';
 
 // Admin-only Settings > Discovery: pair this Unit with other Allerac Units
 // (federation P2). Keys are never shown: the API does not return them.
@@ -200,6 +201,8 @@ export default function DiscoveryTab({ isDarkMode }: DiscoveryTabProps) {
         </div>
       )}
 
+      <UnitProfileCard isDarkMode={isDarkMode} />
+
       <div className={`rounded-lg border p-4 space-y-3 ${panel}`}>
         <h3 className={text}>Add a Unit</h3>
         <div className="flex gap-2">
@@ -292,6 +295,7 @@ export default function DiscoveryTab({ isDarkMode }: DiscoveryTabProps) {
                   {peer.status === 'pending_outbound' && (
                     <p className="text-sm">Verification code: {code(peer.verificationCode)}</p>
                   )}
+                  {peer.status === 'active' && <PeerRole peerId={peer.id} muted={muted} />}
                   {peer.status === 'active' && (
                     <p className={`text-xs ${muted}`}>
                       They can: {peer.inboundCapabilities.map(labelFor).join(', ') || 'nothing'} · You can: {peer.outboundCapabilities.map(labelFor).join(', ') || 'nothing'}
