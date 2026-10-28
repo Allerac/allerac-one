@@ -1,6 +1,11 @@
 /** @jest-environment node */
 
-import { FEDERATION_CAPABILITIES, getAdvertisedCapabilities } from '@/federation/capabilities';
+import {
+  FEDERATION_CAPABILITIES,
+  UnknownCapabilityError,
+  capabilitiesToScopes,
+  getAdvertisedCapabilities,
+} from '@/federation/capabilities';
 import { SERVICE_ALLOWED_SCOPES, isKnownScope } from '@/app/services/api-keys/api-key-scopes';
 
 describe('federation capability registry', () => {
@@ -36,5 +41,18 @@ describe('federation capability registry', () => {
   it('never advertises capabilities that are not public-safe', () => {
     const internal = { ...FEDERATION_CAPABILITIES[0], publicSafe: false };
     expect(getAdvertisedCapabilities({}, [internal])).toEqual([]);
+  });
+});
+
+describe('capabilitiesToScopes', () => {
+  it('maps advertised capabilities to their service scopes', () => {
+    expect(capabilitiesToScopes(['federation.agents.list', 'federation.agents.ask', 'federation.agents.list'], {}))
+      .toEqual(['federation:agents:list', 'federation:agents:ask']);
+  });
+
+  it('rejects unknown or non-advertised capabilities', () => {
+    expect(() => capabilitiesToScopes(['made.up'], {})).toThrow(UnknownCapabilityError);
+    expect(() => capabilitiesToScopes(['federation.agents.ask'], { ALLERAC_FEDERATION_CAPABILITIES: 'federation.agents.list' }))
+      .toThrow(UnknownCapabilityError);
   });
 });

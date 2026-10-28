@@ -3,7 +3,8 @@ export type ExpensiveOperation =
   | 'public-chat'
   | 'benchmark'
   | 'image-edit'
-  | 'model-download';
+  | 'model-download'
+  | 'federation-pairing';
 
 interface OperationLimit {
   requests: number;
@@ -91,6 +92,14 @@ function getLimit(operation: ExpensiveOperation): OperationLimit {
         requests: positiveInteger('RATE_LIMIT_MODEL_DOWNLOAD_REQUESTS', 3),
         windowMs: positiveInteger('RATE_LIMIT_MODEL_DOWNLOAD_WINDOW_SECONDS', 3_600) * 1_000,
         concurrency: positiveInteger('CONCURRENCY_LIMIT_MODEL_DOWNLOAD', 1),
+        scope: 'global',
+      };
+    // Unauthenticated pairing requests from other Units (federation P2).
+    case 'federation-pairing':
+      return {
+        requests: positiveInteger('RATE_LIMIT_FEDERATION_PAIRING_REQUESTS', 10),
+        windowMs: positiveInteger('RATE_LIMIT_FEDERATION_PAIRING_WINDOW_SECONDS', 600) * 1_000,
+        concurrency: positiveInteger('CONCURRENCY_LIMIT_FEDERATION_PAIRING', 2),
         scope: 'global',
       };
   }

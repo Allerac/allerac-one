@@ -76,3 +76,21 @@ export function getAdvertisedCapabilities(
     && (!allowList || allowList.includes(capability.id))
   ));
 }
+
+export class UnknownCapabilityError extends Error {
+  constructor(public readonly capabilities: string[]) {
+    super(`Unknown or unavailable capabilit${capabilities.length === 1 ? 'y' : 'ies'}: ${capabilities.join(', ')}`);
+    this.name = 'UnknownCapabilityError';
+  }
+}
+
+/**
+ * Maps capability ids to service scopes. Only capabilities this Unit currently
+ * advertises are accepted; anything else throws UnknownCapabilityError.
+ */
+export function capabilitiesToScopes(ids: readonly string[], env: Env = process.env): ControlApiScope[] {
+  const advertised = new Map(getAdvertisedCapabilities(env).map(c => [c.id as string, c.scope]));
+  const unknown = ids.filter(id => !advertised.has(id));
+  if (unknown.length > 0) throw new UnknownCapabilityError(unknown);
+  return Array.from(new Set(ids.map(id => advertised.get(id) as ControlApiScope)));
+}
