@@ -1,0 +1,22 @@
+meta {
+  name: Accept Peer
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/peers/{{peerId}}/accept
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Cookie: session_token={{sessionToken}}
+}
+
+body:json {
+  {
+    "grants": ["federation.agents.list", "federation.agents.ask"]
+  }
+}

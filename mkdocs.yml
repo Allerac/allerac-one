@@ -77,11 +77,13 @@ nav:
   - API Reference:
       - Overview: api/README.md
       - Federation Manifest: api/federation-manifest.md
+      - Federation Pairing: api/federation-pairing.md
       - Control API v1:
           - Overview: api/control-api-v1/overview.md
           - System: api/control-api-v1/system.md
           - API Keys: api/control-api-v1/api-keys.md
           - Service Principals: api/control-api-v1/service-principals.md
+          - Peers: api/control-api-v1/peers.md
           - Conversations: api/control-api-v1/conversations.md
           - Memories: api/control-api-v1/memories.md
           - Tickets: api/control-api-v1/tickets.md

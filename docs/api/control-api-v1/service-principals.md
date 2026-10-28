@@ -36,6 +36,7 @@ service keys cannot call them.
 | `federation:agents:ask` | Ask a local agent a quick question (P3/P4) |
 | `federation:runs:create` | Create a cross-unit agent run (P5) |
 | `federation:runs:read` | Read cross-unit agent run status (P5) |
+| `federation:peer:revoke` | A paired Unit ends its own pairing ([Federation Pairing](../federation-pairing.md)) |
 
 Federation scopes are defined now so keys can be issued ahead of the routes that
 consume them.

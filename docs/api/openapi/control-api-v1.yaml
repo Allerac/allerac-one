@@ -241,6 +241,293 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/peers:
+    get:
+      tags: [Federation]
+      summary: List peers
+      description: Admin only (browser session).
+      operationId: listPeers
+      responses:
+        "200":
+          description: Peers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      peers:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Peer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Federation]
+      summary: Start pairing with another Unit
+      description: Admin only (browser session).
+      operationId: startPairing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, grants]
+              additionalProperties: false
+              properties:
+                url:
+                  type: string
+                grants:
+                  type: array
+                  items:
+                    type: string
+                requested:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "201":
+          description: Pending peer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Peer not accepting, already paired, or local URL missing
+        "502":
+          description: Peer unreachable or invalid response
+  /api/v1/peers/discover:
+    post:
+      tags: [Federation]
+      summary: Preview another Unit's manifest
+      description: Admin only (browser session). Creates nothing.
+      operationId: discoverPeer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+      responses:
+        "200":
+          description: Normalized origin and manifest
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      origin:
+                        type: string
+                      manifest:
+                        $ref: "#/components/schemas/FederationManifest"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          description: Peer unreachable or invalid manifest
+  /api/v1/peers/{id}:
+    delete:
+      tags: [Federation]
+      summary: Revoke or cancel a pairing
+      operationId: revokePeer
+      parameters:
+        - $ref: "#/components/parameters/PeerId"
+      responses:
+        "200":
+          description: Revoked peer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/peers/{id}/accept:
+    post:
+      tags: [Federation]
+      summary: Accept an inbound pairing request
+      operationId: acceptPeer
+      parameters:
+        - $ref: "#/components/parameters/PeerId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                grants:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Active peer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Not pending
+        "410":
+          description: Expired
+        "502":
+          description: Peer unreachable
+  /api/v1/peers/{id}/reject:
+    post:
+      tags: [Federation]
+      summary: Reject an inbound pairing request
+      operationId: rejectPeer
+      parameters:
+        - $ref: "#/components/parameters/PeerId"
+      responses:
+        "200":
+          description: Rejected peer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/federation/pairing:
+    post:
+      tags: [Federation]
+      summary: Receive a pairing request (Unit to Unit)
+      description: >-
+        Called by another Unit. Returns 404 unless this Unit accepts pairing.
+        Rate limited. Creates a pending request only; an admin must accept it.
+      operationId: receivePairingRequest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fromOrigin, fromRequestId, nonce, pairingSecret, requestedCapabilities]
+              additionalProperties: false
+              properties:
+                fromOrigin:
+                  type: string
+                fromRequestId:
+                  type: string
+                  format: uuid
+                nonce:
+                  type: string
+                pairingSecret:
+                  type: string
+                requestedCapabilities:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "202":
+          description: Pending request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                      nonce:
+                        type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          description: Pairing not accepted
+        "409":
+          description: Already paired or pending
+        "429":
+          description: Rate limited or too many pending requests
+  /api/v1/federation/pairing/{id}/complete:
+    post:
+      tags: [Federation]
+      summary: Complete a pairing (Unit to Unit)
+      description: Called by the responder after its admin accepted. Authenticated by the one-time pairing secret.
+      operationId: completePairing
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PeerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pairingSecret, nonce, key, capabilities]
+              additionalProperties: false
+              properties:
+                pairingSecret:
+                  type: string
+                nonce:
+                  type: string
+                key:
+                  type: string
+                capabilities:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Key and capabilities this Unit grants the responder
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                      capabilities:
+                        type: array
+                        items:
+                          type: string
+        "403":
+          description: Pairing could not be verified
+        "410":
+          description: Expired
+  /api/v1/federation/peer/revoke:
+    post:
+      tags: [Federation]
+      summary: Peer ends its pairing (Unit to Unit)
+      description: Requires a service key with `federation:peer:revoke`.
+      operationId: peerRevoke
+      responses:
+        "200":
+          description: Revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/service-principals:
     get:
       tags: [Service Principals]
@@ -2380,6 +2667,12 @@ components:
       scheme: bearer
       description: Control API key using the `alr_live_` token format.
   parameters:
+    PeerId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     ServicePrincipalId:
       name: id
       in: path
@@ -2549,6 +2842,54 @@ components:
         kind:
           type: string
           enum: [peer]
+    Peer:
+      type: object
+      properties:
+        id:
+          type: string
+        unitName:
+          type: string
+        displayName:
+          type: [string, "null"]
+        origin:
+          type: string
+        initiatedByUs:
+          type: boolean
+        status:
+          type: string
+          enum: [pending_outbound, pending_inbound, active, rejected, expired, revoked]
+        inboundCapabilities:
+          type: array
+          items:
+            type: string
+        outboundCapabilities:
+          type: array
+          items:
+            type: string
+        outboundKeyPrefix:
+          type: [string, "null"]
+        verificationCode:
+          type: [string, "null"]
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        decidedAt:
+          type: [string, "null"]
+          format: date-time
+        lastSeenAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    PeerResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            peer:
+              $ref: "#/components/schemas/Peer"
     FederationManifest:
       type: object
       required: [allerac, protocolVersion, unit, software, pairing, capabilities, publicKey, endpoints]

@@ -1,0 +1,30 @@
+meta {
+  name: Start Pairing
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/peers
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Cookie: session_token={{sessionToken}}
+}
+
+body:json {
+  {
+    "url": "{{peerUrl}}",
+    "grants": ["federation.agents.list", "federation.agents.ask"]
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.peer?.id) {
+    bru.setEnvVar("peerId", body.data.peer.id);
+  }
+}
