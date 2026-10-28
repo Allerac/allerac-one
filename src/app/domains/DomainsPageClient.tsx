@@ -35,6 +35,7 @@ const DOMAINS = [
   { slug: 'robot-assistant', label: 'Robot', icon: 'R' },
   { slug: 'sales',   label: 'Sales',   icon: '📣' },
   { slug: 'openworld', label: 'OpenWorld', icon: '🌐' },
+  { slug: 'medical',   label: 'Medical',   icon: '🏥' },
 ];
 
 type MobileTab = 'prompt' | 'tools' | 'assistant';
