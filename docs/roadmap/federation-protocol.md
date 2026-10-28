@@ -86,6 +86,11 @@ implemented (admin-only tab). LAN mDNS discovery (P2c) is a follow-up.
 - A call outside the granted scopes is denied and logged.
 - Public-domain bots cannot see or call federation tools.
 
+**Status:** implemented — see [Federation Agents](../api/federation-agents.md).
+Inbound calls are authenticated with the peer's scoped service key and every
+call is audit-logged. Request signing moves to P5 together with
+`delegate_to_peer`. Manual checks: [Federation Checklist](../operations/federation-pairing-checklist.md).
+
 ## P4: Unified Inbox and Telegram Routing
 
 **Goal:** chat with any agent, local or remote, from the home Unit.

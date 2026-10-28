@@ -33,7 +33,13 @@ import {
   SCHEDULE_TASK_TOOL_NAME,
   LEARN_INSTRUCTION_TOOL_NAME,
   isToolForbiddenInDomain,
+  isToolForbiddenByPolicy,
+  canUseFederationTools,
+  FEDERATION_TOOL_NAMES,
+  type ChatToolPolicy,
 } from './chat-tool-registry';
+import { buildFederationTools } from '@/app/tools/federation.tool';
+import { federationClient } from '@/federation/federation-client.instance';
 
 export interface ChatToolRunnerContext {
   user: User;
@@ -44,6 +50,7 @@ export interface ChatToolRunnerContext {
   conversationId?: string;
   domain?: string;
   emit: (event: object) => void;
+  toolPolicy?: ChatToolPolicy;
 }
 
 export async function executeChatTool(
@@ -63,6 +70,20 @@ export async function executeChatTool(
   // even when the calling account is an admin.
   if (isToolForbiddenInDomain(toolName, domain)) {
     return { error: `Tool ${toolName} is not available in this domain.` };
+  }
+  // Requests from a paired Unit run with the restricted federated policy.
+  if (isToolForbiddenByPolicy(toolName, context.toolPolicy)) {
+    return { error: `Tool ${toolName} is not available for federated requests.` };
+  }
+
+  if (FEDERATION_TOOL_NAMES.includes(toolName)) {
+    if (!canUseFederationTools({ isAdmin: user.is_admin === true, domain, policy: context.toolPolicy })) {
+      return { error: `Tool ${toolName} is not available.` };
+    }
+    const federation = buildFederationTools(federationClient, userId);
+    return toolName === 'list_peer_agents'
+      ? federation.listPeerAgents(toolArgs)
+      : federation.askPeerAgent(toolArgs);
   }
 
   if (toolName === 'update_social_form' || toolName === 'update_instagram_form') {

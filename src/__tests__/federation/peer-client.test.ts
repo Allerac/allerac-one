@@ -53,3 +53,24 @@ describe('PeerClient', () => {
     })).rejects.toMatchObject({ code: 'peer_not_accepting' });
   });
 });
+
+describe('PeerClient.callPeer', () => {
+  const call = (fetchImpl: jest.Mock) => new PeerClient(fetchImpl, 1_000)
+    .callPeer({ origin: 'https://unit2.example', path: '/api/v1/federation/agents/health/ask', key: 'alr_live_k', method: 'POST', body: { question: 'q' } });
+
+  it('sends the bearer key, refuses redirects and returns the data payload', async () => {
+    const fetchImpl = respond({ data: { answer: 'a', truncated: false } });
+    const result = await call(fetchImpl);
+    expect(result.data).toEqual({ answer: 'a', truncated: false });
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe('https://unit2.example/api/v1/federation/agents/health/ask');
+    expect(init).toMatchObject({ method: 'POST', redirect: 'error', headers: { Authorization: 'Bearer alr_live_k' } });
+  });
+
+  it('maps peer errors', async () => {
+    await expect(call(respond({ error: { code: 'unauthorized' } }, 401))).rejects.toMatchObject({ code: 'peer_access_denied' });
+    await expect(call(respond({ error: { code: 'rate_limited' } }, 429))).rejects.toMatchObject({ code: 'peer_rate_limited', status: 502 });
+    await expect(call(respond({ error: { code: 'not_found' } }, 404))).rejects.toMatchObject({ code: 'peer_error' });
+    await expect(call(jest.fn().mockRejectedValue(new TypeError('fetch failed')))).rejects.toMatchObject({ code: 'peer_unreachable' });
+  });
+});

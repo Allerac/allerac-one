@@ -64,3 +64,7 @@ Admin endpoints are documented in [Peers](control-api-v1/peers.md).
 | `POST /api/v1/federation/pairing` | none (closed unless pairing is accepted, rate limited) | Receive a pairing request; returns `202 {requestId, nonce}` |
 | `POST /api/v1/federation/pairing/:id/complete` | one-time pairing secret | Responder completes a pairing we started; returns our key for it |
 | `POST /api/v1/federation/peer/revoke` | peer service key | Peer ends the pairing |
+
+Once paired, Units can list and ask each other's agents: see
+[Federation Agents](federation-agents.md). Manual checks:
+[Federation Checklist](../operations/federation-pairing-checklist.md).
