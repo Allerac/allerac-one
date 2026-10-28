@@ -32,6 +32,7 @@ example napols and a second Unit on the same host
 - [ ] Pair with `federation.agents.list` and `federation.agents.ask` granted to the first Unit.
 - [ ] As admin on the first Unit, in the `chat` domain, ask "which agents do my paired Units have?": `list_peer_agents` lists the exposed domains only.
 - [ ] Ask a question through `ask_peer_agent`; the answer is attributed to the other Unit.
+- [ ] With no domain model set on the other Unit but a provider key configured (e.g. `ANTHROPIC_API_KEY`), the ask still succeeds using the Unit default model; with no provider key at all it returns `422`.
 - [ ] The other Unit shows a `Federation · <unit1>` conversation for the acting user.
 - [ ] Federation tools are not offered to non-admin users, in `sales`/`openworld`, or when there is no active peer.
 - [ ] Asking an agent that is not exposed returns "not found"; a public domain is never listed even if configured.

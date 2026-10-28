@@ -29,7 +29,18 @@ The peer also needs the matching capability, granted at pairing time:
 
 `POST /api/v1/federation/agents/:agent/ask` runs a normal chat turn in that
 domain as the acting user, in a conversation titled `Federation · <peer>`
-(reused across calls), with the domain's default model.
+(reused across calls). The receiving Unit picks the model server-side, because
+the chat selector's choice lives in the browser and is not available here:
+
+1. the acting user's model for that domain (Settings > Domains, saved with
+   "inherit global" off);
+2. the acting user's saved global model (`user_settings.selected_model`), if
+   its provider has a key;
+3. a Unit default from the configured provider keys (user, system settings, or
+   env), in order: Anthropic (`claude-sonnet-4-6`), OpenAI, Gemini, GitHub
+   Models, then Ollama when `OLLAMA_BASE_URL` is set.
+
+The acting user is the admin who accepted the pairing on the receiving Unit.
 
 Federated requests use a restricted tool policy:
 
@@ -55,7 +66,7 @@ Request body for ask: `{ "question": "..." }`.
 
 Errors: `400` invalid question, `401` missing or invalid key, `403` not a
 paired Unit or scope missing, `404` agent not exposed, `422` no model
-configured, `429` rate limited (with `Retry-After`), `504` timeout.
+provider configured on the receiving Unit, `429` rate limited (with `Retry-After`), `504` timeout.
 
 ## Chat tools (outbound)
 
