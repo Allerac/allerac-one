@@ -17,6 +17,7 @@ tags:
   - name: Capabilities
   - name: API Keys
   - name: Service Principals
+  - name: Federation
   - name: Conversations
   - name: Memories
   - name: Tickets
@@ -33,6 +34,25 @@ tags:
   - name: Benchmark
   - name: Crawler
 paths:
+  /.well-known/allerac:
+    get:
+      tags: [Federation]
+      summary: Public federation manifest
+      description: >-
+        Public, unauthenticated description of this Allerac Unit for other Units.
+        Returns 404 when ALLERAC_FEDERATION_MANIFEST=false. Not wrapped in the
+        `data` envelope.
+      operationId: getFederationManifest
+      security: []
+      responses:
+        "200":
+          description: Federation manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederationManifest"
+        "404":
+          description: Manifest disabled
   /api/v1/crawler/sources:
     put:
       tags: [Crawler]
@@ -2529,6 +2549,73 @@ components:
         kind:
           type: string
           enum: [peer]
+    FederationManifest:
+      type: object
+      required: [allerac, protocolVersion, unit, software, pairing, capabilities, publicKey, endpoints]
+      additionalProperties: false
+      properties:
+        allerac:
+          type: string
+          enum: [federation]
+        protocolVersion:
+          type: string
+          example: "1"
+        unit:
+          type: object
+          required: [name, displayName, url]
+          properties:
+            name:
+              type: string
+              pattern: "^[a-z0-9][a-z0-9_-]{0,62}$"
+            displayName:
+              type: string
+            url:
+              type: [string, "null"]
+              format: uri
+        software:
+          type: object
+          required: [name, release]
+          properties:
+            name:
+              type: string
+              enum: [allerac-one]
+            release:
+              type: string
+        pairing:
+          type: object
+          required: [accepting]
+          properties:
+            accepting:
+              type: boolean
+        capabilities:
+          type: array
+          items:
+            type: object
+            required: [id, version]
+            properties:
+              id:
+                type: string
+                example: federation.agents.list
+              version:
+                type: string
+        publicKey:
+          description: Placeholder (null) until signing keys exist.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [alg, key]
+              properties:
+                alg:
+                  type: string
+                key:
+                  type: string
+        endpoints:
+          type: object
+          required: [api]
+          properties:
+            api:
+              type: string
+              enum: [/api/v1]
     ServicePrincipal:
       type: object
       required: [id, kind, name, peerUrl, actingUserId, disabledAt, createdAt]

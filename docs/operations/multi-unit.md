@@ -267,6 +267,14 @@ Only `caddy` (the `local` profile) binds ports 80/443, so normally only the
 primary Unit uses it. A second Unit that also needs Caddy must set
 `CADDY_HTTP_PORT` / `CADDY_HTTPS_PORT`.
 
+## Federation manifest per Unit
+
+Each Unit serves a public [federation manifest](../api/federation-manifest.md)
+at `/.well-known/allerac`. Set `ALLERAC_UNIT_NAME` (or rely on `ALLERAC_UNIT`)
+and `ALLERAC_PUBLIC_URL` in each Unit's env file so the manifest names the Unit
+and its hostname correctly. Pairing is off by default; public Units (profile
+`openworld` or `sales`) keep it off unless `ALLERAC_PAIRING_ACCEPT_PUBLIC=true`.
+
 ## Sessions and cookies
 
 The login cookie (`session_token`) is set without a `Domain` attribute (see

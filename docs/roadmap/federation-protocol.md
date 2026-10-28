@@ -13,6 +13,8 @@ phase.
 
 **Goal:** a stable `/api/v1` that another Unit can call safely.
 
+**Status:** implemented — see [Service Principals](../api/control-api-v1/service-principals.md).
+
 **Deliverables**
 
 - Control API v1 contracts frozen for the resources federation needs
@@ -39,6 +41,9 @@ phase.
 
 - Manifest is reachable without authentication and validates against a schema.
 - Capabilities shown in the manifest match the registry.
+
+**Status:** implemented — see [Federation Manifest](../api/federation-manifest.md).
+The `publicKey` field is a `null` placeholder until signing keys exist.
 
 ## P2: Peers, Pairing, and Settings Discovery UI
 

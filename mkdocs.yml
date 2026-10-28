@@ -76,6 +76,7 @@ nav:
       - v0.1.0 Beta Release Plan: releases/v0.1.0-beta.md
   - API Reference:
       - Overview: api/README.md
+      - Federation Manifest: api/federation-manifest.md
       - Control API v1:
           - Overview: api/control-api-v1/overview.md
           - System: api/control-api-v1/system.md
