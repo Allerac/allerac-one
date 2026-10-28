@@ -63,8 +63,8 @@ The `publicKey` field is a `null` placeholder until signing keys exist.
 - LAN discovery lists Units but never auto-pairs.
 
 **Status:** backend implemented (P2a) — see [Federation Pairing](../api/federation-pairing.md)
-and [Peers](../api/control-api-v1/peers.md). Settings > Discovery UI (P2b) and
-LAN mDNS discovery (P2c) are follow-ups.
+and [Peers](../api/control-api-v1/peers.md). Settings > Discovery UI (P2b)
+implemented (admin-only tab). LAN mDNS discovery (P2c) is a follow-up.
 
 ## P3: Federation Client and Agent Tools
 
