@@ -1,0 +1,15 @@
+meta {
+  name: List Service Principals
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/service-principals
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: session_token={{sessionToken}}
+}

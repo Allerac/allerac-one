@@ -16,6 +16,7 @@ tags:
   - name: System
   - name: Capabilities
   - name: API Keys
+  - name: Service Principals
   - name: Conversations
   - name: Memories
   - name: Tickets
@@ -220,6 +221,129 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/service-principals:
+    get:
+      tags: [Service Principals]
+      summary: List service principals
+      description: Admin only. Requires a browser session; API and service keys are not accepted.
+      operationId: listServicePrincipals
+      responses:
+        "200":
+          description: Service principals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePrincipalListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Service Principals]
+      summary: Create service principal
+      description: Admin only. Creates a peer identity that acts as `actingUserId` (defaults to the calling admin).
+      operationId: createServicePrincipal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServicePrincipalRequest"
+      responses:
+        "201":
+          description: Created service principal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePrincipalResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Name already in use
+  /api/v1/service-principals/{id}:
+    get:
+      tags: [Service Principals]
+      summary: Get service principal
+      operationId: getServicePrincipal
+      parameters:
+        - $ref: "#/components/parameters/ServicePrincipalId"
+      responses:
+        "200":
+          description: Service principal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePrincipalResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Service Principals]
+      summary: Disable service principal
+      description: Disables the principal; all of its keys stop authenticating immediately.
+      operationId: disableServicePrincipal
+      parameters:
+        - $ref: "#/components/parameters/ServicePrincipalId"
+      responses:
+        "200":
+          description: Disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      disabled:
+                        type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/service-principals/{id}/keys:
+    post:
+      tags: [Service Principals]
+      summary: Create service key
+      description: >-
+        Admin only. Issues a key for the principal. Scopes must come from the service
+        allow-list (`profile:read`, `capabilities:read`, `federation:*`). The secret is
+        returned only once.
+      operationId: createServicePrincipalKey
+      parameters:
+        - $ref: "#/components/parameters/ServicePrincipalId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "201":
+          description: Created service key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateApiKeyResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Principal is disabled
   /api/v1/conversations:
     get:
       tags: [Conversations]
@@ -2236,6 +2360,12 @@ components:
       scheme: bearer
       description: Control API key using the `alr_live_` token format.
   parameters:
+    ServicePrincipalId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     ApiKeyId:
       name: id
       in: path
@@ -2375,10 +2505,82 @@ components:
       properties:
         data:
           type: object
-          required: [user]
+          required: [user, principal]
           properties:
             user:
-              $ref: "#/components/schemas/ApiUser"
+              description: Null when the caller is a service principal.
+              oneOf:
+                - $ref: "#/components/schemas/ApiUser"
+                - type: "null"
+            principal:
+              $ref: "#/components/schemas/ApiPrincipal"
+    ApiPrincipal:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [user, service]
+        id:
+          type: string
+          description: Service principal id (service callers only).
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [peer]
+    ServicePrincipal:
+      type: object
+      required: [id, kind, name, peerUrl, actingUserId, disabledAt, createdAt]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [peer]
+        name:
+          type: string
+        peerUrl:
+          type: [string, "null"]
+        actingUserId:
+          type: string
+        disabledAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ServicePrincipalResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            servicePrincipal:
+              $ref: "#/components/schemas/ServicePrincipal"
+    ServicePrincipalListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            servicePrincipals:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServicePrincipal"
+    CreateServicePrincipalRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        peerUrl:
+          type: [string, "null"]
+          format: uri
+        actingUserId:
+          type: string
+          format: uuid
     ApiUser:
       type: object
       required: [id, email, name, isAdmin, authMode]
@@ -2394,7 +2596,7 @@ components:
           type: boolean
         authMode:
           type: string
-          enum: [session, api_key]
+          enum: [session, api_key, service_key]
     CapabilitiesResponse:
       type: object
       required: [data]

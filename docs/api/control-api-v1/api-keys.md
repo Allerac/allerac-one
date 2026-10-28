@@ -28,6 +28,9 @@ Scopes are deny-by-default:
 Non-admin users can only create keys with the self-service scopes
 (`health:proxy:read`, `chat:write`).
 
+Keys for other Allerac Units are managed separately as
+[Service Principals](service-principals.md) and are not listed here.
+
 The default "Chat client" preset (`profile:read`, `chat:read`, `chat:write`,
 `capabilities:read`) covers the terminal client (`scripts/allerac-chat.mjs`);
 add `domains:read` to use its `/domains` command.
