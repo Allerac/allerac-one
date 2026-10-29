@@ -7,6 +7,7 @@ COPY tsconfig.json ./
 COPY src/agent-worker.ts ./src/
 COPY src/lib/ ./src/lib/
 COPY src/modules/ ./src/modules/
+COPY src/federation/ ./src/federation/
 COPY src/app/clients/ ./src/app/clients/
 COPY src/app/lib/ ./src/app/lib/
 COPY src/app/actions/ ./src/app/actions/
