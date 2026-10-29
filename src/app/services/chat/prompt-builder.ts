@@ -24,8 +24,12 @@ export interface PromptBuilderInput {
   relevantContext?: string;
   now?: Date;
   timezone?: string;
-  /** Unit identity & role (federation P3.5), already filtered for the domain. */
-  unitIdentity?: SoulIdentity;
+  /**
+   * Unit identity & role (federation P3.5), already filtered for the domain.
+   * Required key (value may be undefined) so no chat path can silently fall
+   * back to the generic "You are Allerac" opening by omitting it.
+   */
+  unitIdentity: SoulIdentity | undefined;
 }
 
 export function buildChatSystemPrompt(input: PromptBuilderInput): string {

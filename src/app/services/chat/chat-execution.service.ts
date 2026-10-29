@@ -1,11 +1,11 @@
 import type { User } from '@/app/services/auth/auth.service';
 import { ChatService } from '@/app/services/database/chat.service';
 import { loadChatKnowledgeContext } from '@/app/services/knowledge/chat-knowledge-context';
-import { loadSoulIdentity } from '@/federation/unit-profile.repository';
+import { loadChatSoulIdentity } from '@/federation/unit-profile.repository';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
 import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools, type ChatToolPolicy } from '@/app/services/chat/chat-tool-registry';
-import { hasActivePeers } from '@/federation/peer-presence';
+import { hasActivePeers, listActivePeerLabels } from '@/federation/peer-presence';
 import { isShellAllowedFor } from '@/app/lib/shell-policy';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
@@ -134,6 +134,12 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     }
   }
 
+  const federationOffered = canUseFederationTools({
+    isAdmin: input.user.is_admin === true,
+    domain: input.domain,
+    policy: input.toolPolicy,
+  }) && await hasActivePeers();
+
   const enrichedSystemMessage = buildChatSystemPrompt({
     user: isPublicDomain ? { ...input.user, name: '' } : input.user,
     locale: input.locale,
@@ -145,17 +151,13 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     activeSkill,
     skillContent,
     relevantContext,
-    unitIdentity: await loadSoulIdentity(input.domain),
+    unitIdentity: await loadChatSoulIdentity(input.domain, federationOffered, listActivePeerLabels),
   });
 
   const activeTools = await resolveChatTools(activeSkill?.id, input.domain, {
     allowShell: isShellAllowedFor(input.user),
     toolPolicy: input.toolPolicy,
-    allowFederation: canUseFederationTools({
-      isAdmin: input.user.is_admin === true,
-      domain: input.domain,
-      policy: input.toolPolicy,
-    }) && await hasActivePeers(),
+    allowFederation: federationOffered,
   });
   const conversationMessages: Array<{
     role: string;
