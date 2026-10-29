@@ -48,10 +48,22 @@ export interface SoulIdentity {
   description?: string | null;
   /** Short description of the current domain's agent, when set by the admin. */
   agentDescription?: string | null;
+  /**
+   * Display labels of active paired Units (e.g. "Santos (santos)"). Only set
+   * when federation tools are offered (admin, private domains); never rendered
+   * in public domains.
+   */
+  pairedUnits?: string[];
 }
 
 const ALLERAC_OPENING = 'You are Allerac, a private AI assistant.';
 const PUBLIC_OPENING = 'You are Allerac, an AI assistant speaking with a visitor on a public website.';
+
+function pairedUnitsLine(identity: SoulIdentity): string {
+  const units = (identity.pairedUnits ?? []).filter(Boolean).slice(0, 10);
+  if (units.length === 0) return '';
+  return ` Paired Allerac Units you can contact: ${units.join(', ')}. When the user mentions one of them by name, it means that Unit: use list_peer_agents to see its role and agents, and ask_peer_agent to consult it.`;
+}
 
 function identityLines(identity: SoulIdentity): string {
   const lines: string[] = [];
@@ -76,7 +88,7 @@ export function buildSoul(domain?: string | null, identity?: SoulIdentity | null
       : PUBLIC_AGENT_SOUL;
   }
   const base = identity
-    ? ALLERAC_SOUL.replace(ALLERAC_OPENING, `You are ${identity.displayName}, an Allerac unit: a private AI assistant. ${identityLines(identity)}`)
+    ? ALLERAC_SOUL.replace(ALLERAC_OPENING, `You are ${identity.displayName}, an Allerac unit: a private AI assistant. ${identityLines(identity)}${pairedUnitsLine(identity)}`)
     : ALLERAC_SOUL;
   if (domain === 'code') return `${base}\n\n${ALLERAC_CODE_ADDENDUM}`;
   return base;

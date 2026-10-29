@@ -15,6 +15,29 @@ export async function hasActivePeers(now = Date.now()): Promise<boolean> {
   return cache.value;
 }
 
+let namesCache: { value: string[]; at: number } | null = null;
+
+/** Labels of active paired Units for the soul identity, e.g. "Santos (santos)". Cached, never throws. */
+export async function listActivePeerLabels(now = Date.now()): Promise<string[]> {
+  if (namesCache && now - namesCache.at < CACHE_MS) return namesCache.value;
+  try {
+    const result = await pool.query(
+      `SELECT unit_name, display_name FROM federation_peers WHERE status = 'active' ORDER BY unit_name LIMIT 10`,
+    );
+    namesCache = {
+      value: result.rows.map((row: { unit_name: string; display_name: string | null }) => {
+        const display = row.display_name?.trim();
+        return display && display.toLowerCase() !== row.unit_name ? `${display} (${row.unit_name})` : row.unit_name;
+      }),
+      at: now,
+    };
+  } catch {
+    namesCache = { value: [], at: now };
+  }
+  return namesCache.value;
+}
+
 export function resetPeerPresenceCacheForTests(): void {
   cache = null;
+  namesCache = null;
 }

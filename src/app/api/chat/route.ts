@@ -34,7 +34,8 @@ import {
 } from '@/app/services/chat/sse-writer';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
 import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
-import { hasActivePeers } from '@/federation/peer-presence';
+import { hasActivePeers, listActivePeerLabels } from '@/federation/peer-presence';
+import { loadChatSoulIdentity } from '@/federation/unit-profile.repository';
 import { isShellAllowedFor } from '@/app/lib/shell-access';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
@@ -217,6 +218,11 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
+        const federationOffered = canUseFederationTools({
+          isAdmin: user.is_admin === true,
+          domain: effectiveDomain,
+        }) && await hasActivePeers();
+
         const enrichedSystemMessage = buildChatSystemPrompt({
           user,
           locale,
@@ -228,14 +234,12 @@ export async function POST(request: Request): Promise<Response> {
           activeSkill,
           skillContent,
           relevantContext,
+          unitIdentity: await loadChatSoulIdentity(effectiveDomain, federationOffered, listActivePeerLabels),
         });
 
         const activeTools = await resolveChatTools(activeSkill?.id, effectiveDomain, {
           allowShell: isShellAllowedFor(user),
-          allowFederation: canUseFederationTools({
-            isAdmin: user.is_admin === true,
-            domain: effectiveDomain,
-          }) && await hasActivePeers(),
+          allowFederation: federationOffered,
         });
 
         // Load conversation history and build messages array

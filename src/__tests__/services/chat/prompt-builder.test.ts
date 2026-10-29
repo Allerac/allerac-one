@@ -12,6 +12,7 @@ const user = {
 describe('buildChatSystemPrompt', () => {
   test('adds deterministic user context and instructions', () => {
     const prompt = buildChatSystemPrompt({
+      unitIdentity: undefined,
       user,
       locale: 'pt',
       domain: 'chat',
@@ -32,6 +33,7 @@ describe('buildChatSystemPrompt', () => {
 
   test('enriches skill, memory, RAG, and workspace paths', () => {
     const prompt = buildChatSystemPrompt({
+      unitIdentity: undefined,
       user,
       locale: 'en',
       domain: 'code',
@@ -58,6 +60,7 @@ describe('buildChatSystemPrompt', () => {
 
   test('excludes private account context and persistence guidance from public domains', () => {
     const prompt = buildChatSystemPrompt({
+      unitIdentity: undefined,
       user,
       locale: 'pt',
       domain: 'sales',

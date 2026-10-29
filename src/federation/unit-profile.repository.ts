@@ -80,3 +80,22 @@ export async function loadSoulIdentity(domain?: string | null): Promise<SoulIden
     return undefined;
   }
 }
+
+/**
+ * Soul identity for a chat turn. Paired Units are listed only when federation
+ * tools are offered for this turn (admin, private domain, active peers).
+ */
+export async function loadChatSoulIdentity(
+  domain: string | null | undefined,
+  federationOffered: boolean,
+  listPeers: () => Promise<string[]>,
+): Promise<SoulIdentity | undefined> {
+  const identity = await loadSoulIdentity(domain);
+  if (!identity || !federationOffered) return identity;
+  try {
+    const pairedUnits = await listPeers();
+    return pairedUnits.length ? { ...identity, pairedUnits } : identity;
+  } catch {
+    return identity;
+  }
+}
