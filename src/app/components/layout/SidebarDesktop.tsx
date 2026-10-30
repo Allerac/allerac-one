@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import { Conversation } from '../../types';
 import SidebarContent from './SidebarContent';
+import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
+import { canUseInbox } from '@/federation/inbox-policy';
 import { AlleracLogo } from '../ui/AlleracLogo';
 import { updateLanguage } from '@/app/actions/user';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
@@ -39,6 +41,8 @@ interface SidebarDesktopProps {
   showNotesConnectors?: boolean;
   onOpenNotesConnectors?: () => void;
   isAdmin?: boolean;
+  /** Domain used for the federated Agents inbox section (defaults to 'chat'). */
+  inboxDomainId?: string;
   onNewConversation?: () => void;
   userName?: string;
   userEmail?: string;
@@ -68,6 +72,7 @@ export default function SidebarDesktop({
   showNotesConnectors,
   onOpenNotesConnectors,
   isAdmin,
+  inboxDomainId = 'chat',
   onNewConversation,
   userName,
   userEmail,
@@ -196,6 +201,9 @@ export default function SidebarDesktop({
 
       {/* Conversation list */}
       <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+        {canUseInbox({ is_admin: isAdmin }, inboxDomainId) && !isSidebarCollapsed && (
+          <AgentsInboxSection isDark={d} domainId={inboxDomainId} />
+        )}
         <SidebarContent
           conversations={conversations}
           currentConversationId={currentConversationId}
