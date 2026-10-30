@@ -35,6 +35,8 @@ const askResponseSchema = z.object({ answer: z.string(), truncated: z.boolean() 
 export interface FederationCallContext {
   /** Local user who triggered the call (audit). */
   initiatedByUserId: string | null;
+  /** Unified inbox thread, written to the audit log (P4a). */
+  threadId?: string | null;
 }
 
 export interface FederationClientDeps {
@@ -125,6 +127,7 @@ export class FederationClient {
       userId: params.ctx.initiatedByUserId,
       capability: params.capability,
       target: params.target,
+      ...(params.ctx.threadId ? { threadId: params.ctx.threadId } : {}),
     };
 
     if (!peer || peer.status !== 'active' || !peer.outboundKeyEncrypted) {

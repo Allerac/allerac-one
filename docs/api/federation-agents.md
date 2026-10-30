@@ -29,7 +29,11 @@ The peer also needs the matching capability, granted at pairing time:
 
 `POST /api/v1/federation/agents/:agent/ask` runs a normal chat turn in that
 domain as the acting user, in a conversation titled `Federation · <peer>`
-(reused across calls). The receiving Unit picks the model server-side, because
+(reused across calls). Since migration 146 that conversation is tagged
+`chat_conversations.source = 'federation'`: it stays in the chat history but is
+excluded from long-term memory extraction (conversation summaries and the
+instructions distilled from them). The `federated` tool policy already blocks
+memory, instruction, and schedule tools. The receiving Unit picks the model server-side, because
 the chat selector's choice lives in the browser and is not available here:
 
 1. the acting user's model for that domain (Settings > Domains, saved with
@@ -113,3 +117,23 @@ Admins edit this Unit's role in Settings > Discovery > This Unit
 (`GET/PUT /api/v1/unit/profile`, session admin). Paired Units receive it in the
 `unit` field of the agents list; agent `description` comes from the per-agent
 text. `GET /api/v1/peers/:id/profile` (session admin) fetches a peer's role live.
+
+## Unified inbox (home side, P4a)
+
+Admins chat with remote agents from the sidebar "Agents" section; see
+[Unified Inbox](../roadmap/federation-unified-inbox.md). The browser only talks to
+the home Unit's session-authenticated, admin-only `/api/inbox/*` routes:
+
+| Route | Purpose |
+|---|---|
+| `GET /api/inbox/agents` | Local agents plus each active peer's exposed agents (grouped by Unit) and archived (unpaired) Units |
+| `POST /api/inbox/threads` `{peerId, agent}` | Open (or return) the 1:1 thread with a remote agent |
+| `GET /api/inbox/threads/:id` | Thread messages; marks the thread read |
+| `POST /api/inbox/threads/:id/messages` `{content}` | Send and wait for the reply (sync, up to 60s) |
+| `POST /api/inbox/threads/:id/messages/:messageId/retry` | Retry a `failed` or `timeout` message |
+| `DELETE /api/inbox/peers/:peerId/history` | Delete local history with a Unit that is no longer paired |
+
+All routes accept `?domain=<slug>` and refuse public domains (`sales`, `openworld`).
+The home Unit calls the peer's existing `ask` endpoint through `FederationClient`,
+packing the last 6 turns into the question. Pairing keys and peer origins never
+reach the browser.

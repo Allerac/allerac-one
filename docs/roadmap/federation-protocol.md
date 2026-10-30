@@ -147,6 +147,17 @@ documents", not a generic "Allerac".
 - Unpairing a peer removes its agents from the inbox.
 - Remote conversation data is stored on the owning Unit.
 
+**Slices** (detailed plan: [Unified Inbox](federation-unified-inbox.md))
+
+- **P4a (implemented):** unified sidebar list, 1:1 thread per remote agent over the
+  existing stateless `ask` (last 6 turns packed as context), home-side mirror tables
+  (mig 146), pending/failed/timeout with retry, read-only + delete history for
+  unpaired Units, admin only. Peer-side federated conversations are tagged
+  `source='federation'` and kept out of long-term memory.
+- **P4b:** remote continuity (`conversation_id`), idempotency keys (mig 147).
+- **P4c:** async ask + run polling, unread/online realtime (mig 148 if needed).
+- **P4d:** Control Tower, heartbeats (mig 149).
+
 ## Milestone 1: Two Connected Units
 
 **P0–P4 together:** connect two Units and chat with a remote agent end to end.

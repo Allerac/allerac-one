@@ -13,6 +13,8 @@ export interface FederationAuditEntry {
   durationMs?: number | null;
   requestBytes?: number | null;
   responseBytes?: number | null;
+  /** Unified inbox thread that triggered an outbound call (P4a). */
+  threadId?: string | null;
 }
 
 export interface FederationAuditRow extends FederationAuditEntry {
@@ -28,16 +30,24 @@ export interface FederationAuditSink {
 export class FederationAuditRepository implements FederationAuditSink {
   async record(entry: FederationAuditEntry): Promise<void> {
     try {
+      const columns = [
+        'direction', 'peer_id', 'principal_id', 'user_id', 'capability', 'target', 'outcome',
+        'http_status', 'error_code', 'duration_ms', 'request_bytes', 'response_bytes',
+      ];
+      const values: unknown[] = [
+        entry.direction, entry.peerId, entry.principalId ?? null, entry.userId ?? null,
+        entry.capability, entry.target ?? null, entry.outcome, entry.httpStatus ?? null,
+        entry.errorCode ?? null, entry.durationMs ?? null, entry.requestBytes ?? null, entry.responseBytes ?? null,
+      ];
+      // thread_id (mig 146) is only written when present, so older call sites are unchanged.
+      if (entry.threadId) {
+        columns.push('thread_id');
+        values.push(entry.threadId);
+      }
       await pool.query(
-        `INSERT INTO federation_audit_log
-           (direction, peer_id, principal_id, user_id, capability, target, outcome,
-            http_status, error_code, duration_ms, request_bytes, response_bytes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [
-          entry.direction, entry.peerId, entry.principalId ?? null, entry.userId ?? null,
-          entry.capability, entry.target ?? null, entry.outcome, entry.httpStatus ?? null,
-          entry.errorCode ?? null, entry.durationMs ?? null, entry.requestBytes ?? null, entry.responseBytes ?? null,
-        ],
+        `INSERT INTO federation_audit_log (${columns.join(', ')})
+         VALUES (${values.map((_, index) => `$${index + 1}`).join(', ')})`,
+        values,
       );
     } catch (error) {
       // Auditing must never break a federation call.

@@ -31,3 +31,16 @@ describe('FederationAuditRepository', () => {
     expect(mockQuery.mock.calls[0][1]).toEqual(['peer', 200]);
   });
 });
+
+describe('FederationAuditRepository thread id', () => {
+  it('writes thread_id only when present', async () => {
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    await new FederationAuditRepository().record({
+      direction: 'outbound', peerId: 'peer', capability: 'federation.agents.ask', outcome: 'ok', threadId: 'thread-1',
+    });
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toContain('thread_id');
+    expect(params[12]).toBe('thread-1');
+  });
+});

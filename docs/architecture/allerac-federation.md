@@ -470,6 +470,14 @@ local and remote, with one chat per agent. Messages to a remote agent are relaye
 through the peer's `/api/v1` using the pairing key. Each Unit keeps ownership of
 its agent's data and memory; the home Unit only shows the conversation.
 
+Implemented in P4a: the home Unit keeps a local mirror of remote threads in
+`federated_threads` / `federated_messages`, separate from `chat_conversations`, so
+remote text never reaches local memory, RAG, or search. The peer keeps federated
+conversations in its chat history tagged `source='federation'`, excluded from
+long-term memory extraction. Remote replies are untrusted text, rendered as plain
+text and never fed to local tools. See
+[Unified Inbox](../roadmap/federation-unified-inbox.md).
+
 Telegram, the core notification channel, can act as an optional mobile inbox: one
 bot routes to any agent by command, for example `/openworld` or `/health`.
 
