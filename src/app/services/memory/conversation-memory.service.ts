@@ -87,6 +87,7 @@ export class ConversationMemoryService {
          FROM chat_messages cm
          INNER JOIN chat_conversations cc ON cc.id = cm.conversation_id
          WHERE cm.conversation_id = $1 AND cc.user_id = $2
+           AND cc.source <> 'federation'
          ORDER BY cm.created_at ASC`,
         [conversationId, userId]
       );
@@ -349,7 +350,8 @@ ${memoryItems.join('\n\n')}
         `SELECT COUNT(*)
          FROM chat_messages cm
          INNER JOIN chat_conversations cc ON cc.id = cm.conversation_id
-         WHERE cm.conversation_id = $1 AND cc.user_id = $2`,
+         WHERE cm.conversation_id = $1 AND cc.user_id = $2
+           AND cc.source <> 'federation'`,
         [conversationId, userId]
       );
 

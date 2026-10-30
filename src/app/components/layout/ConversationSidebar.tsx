@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import type { ConvItem } from '@/app/hooks/useConversations';
 import DomainChip from './DomainChip';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
+import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
+import { canUseInbox } from '@/federation/inbox-policy';
 
 interface Props {
   isDark: boolean;
@@ -302,6 +304,7 @@ export default function ConversationSidebar({
 
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
+        {canUseInbox({ is_admin: isAdmin }, domainId) && <AgentsInboxSection isDark={d} domainId={domainId} />}
         {pinned.length > 0 && (
           <>
             <p className={`text-xs uppercase px-2 mb-2 ${d ? 'text-gray-500' : 'text-gray-400'}`}>Pinned</p>

@@ -4,7 +4,6 @@ import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 import { assertDomainAccess } from '@/app/lib/domain-access-check';
 import { executeChatMessage } from '@/app/services/chat/chat-execution.service';
 import type { ChatProvider } from '@/app/services/chat/chat-request-parser';
-import { ChatService } from '@/app/services/database/chat.service';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
@@ -14,7 +13,6 @@ import { federationAuditRepository } from './audit.repository';
 import { peerRepository } from './peer.repository';
 import { loadUnitProfile } from './unit-profile.repository';
 
-const chatService = new ChatService();
 const userSettingsService = new UserSettingsService();
 const systemSettingsService = new SystemSettingsService();
 
@@ -63,14 +61,21 @@ export const agentsService = new AgentsService({
       }
     },
     async findOrCreateConversation(userId, slug, title) {
+      // Federated conversations stay in chat history, tagged source='federation'
+      // so memory extraction skips them (P4 decision 1, mig 146).
       const existing = await pool.query(
         `SELECT id FROM chat_conversations
-         WHERE user_id = $1 AND domain_slug = $2 AND title = $3
+         WHERE user_id = $1 AND domain_slug = $2 AND title = $3 AND source = 'federation'
          ORDER BY created_at DESC LIMIT 1`,
         [userId, slug, title],
       );
       if (existing.rows[0]) return existing.rows[0].id;
-      const id = await chatService.createConversation(userId, title, slug);
+      const created = await pool.query(
+        `INSERT INTO chat_conversations (user_id, title, domain_slug, source)
+         VALUES ($1, $2, $3, 'federation') RETURNING id`,
+        [userId, title, slug],
+      );
+      const id = created.rows[0]?.id;
       if (!id) throw new Error('Failed to create federation conversation');
       return id;
     },
