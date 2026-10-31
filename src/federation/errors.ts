@@ -38,6 +38,9 @@ export const federationErrors = {
   peerAccessDenied: () => new FederationError(
     'peer_access_denied', 'The peer refused the request (the pairing may have been revoked)', 403,
   ),
+  conversationNotFound: () => new FederationError('conversation_not_found', 'Conversation not found', 404),
+  idempotencyKeyReused: () => new FederationError('idempotency_key_reused', 'Idempotency-Key was already used for a different request', 422),
+  askInProgress: () => new FederationError('ask_in_progress', 'A request with this Idempotency-Key is still running', 409),
   agentNotFound: () => new FederationError('not_found', 'Agent not found', 404),
   notPaired: () => new FederationError('forbidden', 'Caller is not a paired Unit', 403),
 };

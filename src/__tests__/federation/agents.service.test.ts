@@ -1,6 +1,7 @@
 /** @jest-environment node */
 
 import { AgentsService, FederationRateLimitedError, MAX_ANSWER_CHARS } from '@/federation/agents.service';
+import { InMemoryAskDedupeStore, STALE_IN_PROGRESS_MS, askRequestHash } from '@/federation/ask-dedupe';
 import { InMemoryPeerStore, MemoryAudit, fakeAgentsRuntime } from '../__mocks__/federation-fakes';
 
 const allow = () => ({ allowed: true as const, lease: { release: jest.fn() }, headers: {} });
@@ -109,5 +110,91 @@ describe('AgentsService unit identity (P3.5)', () => {
     expect(result.unit).toEqual({
       name: 'barcelona', displayName: 'Barcelona', emoji: null, role: 'my medical matters', description: null, tags: [],
     });
+  });
+});
+
+describe('AgentsService conversation continuity (P4b)', () => {
+  const CONV = '00000000-0000-4000-8000-000000000001';
+  const base = { principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' };
+
+  async function withDedupe(runtime?: Parameters<typeof fakeAgentsRuntime>[0]) {
+    let clock = 1_000_000;
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      origin: 'https://napols.example', unitName: 'napols', displayName: 'Napols', direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    const audit = new MemoryAudit();
+    const fake = fakeAgentsRuntime(runtime);
+    const dedupe = new InMemoryAskDedupeStore();
+    const service = new AgentsService({
+      runtime: fake, store, audit, acquire: allow, dedupe, now: () => clock,
+      env: { ALLERAC_FEDERATION_AGENTS: 'Health' },
+    });
+    return { service, runtime: fake, audit, dedupe, advance: (ms: number) => { clock += ms; } };
+  }
+
+  it('keeps the shared legacy conversation when conversation_id is omitted', async () => {
+    const { service, runtime } = await withDedupe();
+    const result = await service.ask(base);
+    expect(result.conversation_id).toBeNull();
+    expect(runtime.chats[0].conversationId).toBe('conv:health:Federation · Napols');
+  });
+
+  it('creates a titled conversation owned by the principal and continues it', async () => {
+    const { service, runtime } = await withDedupe();
+    const first = await service.ask({ ...base, conversationId: null, threadTitle: 'Trip plans' });
+    expect(first.conversation_id).toBe(CONV);
+    expect(runtime.conversations.get(CONV)).toMatchObject({ principalId: 'principal-1', title: 'Federation · Napols · Trip plans' });
+    const second = await service.ask({ ...base, conversationId: CONV, question: 'next' });
+    expect(second.conversation_id).toBe(CONV);
+    expect(runtime.chats[1]).toMatchObject({ conversationId: CONV, message: 'next' });
+  });
+
+  it('returns 404 for conversations of another principal, user or agent', async () => {
+    const { service, runtime, audit } = await withDedupe();
+    runtime.conversations.set(CONV, { userId: 'user-1', slug: 'health', principalId: 'principal-2', title: 'x' });
+    await expect(service.ask({ ...base, conversationId: CONV })).rejects.toMatchObject({ code: 'conversation_not_found', status: 404 });
+    runtime.conversations.set(CONV, { userId: 'user-2', slug: 'health', principalId: 'principal-1', title: 'x' });
+    await expect(service.ask({ ...base, conversationId: CONV })).rejects.toMatchObject({ status: 404 });
+    await expect(service.ask({ ...base, conversationId: 'not-a-uuid' })).rejects.toMatchObject({ status: 404 });
+    expect(runtime.chats).toHaveLength(0);
+    expect(audit.entries.at(-1)).toMatchObject({ outcome: 'denied', errorCode: 'conversation_not_found' });
+  });
+
+  it('replays a completed ask for the same Idempotency-Key without running the agent', async () => {
+    const { service, runtime } = await withDedupe();
+    const first = await service.ask({ ...base, conversationId: null, idempotencyKey: 'k1' });
+    const replay = await service.ask({ ...base, conversationId: null, idempotencyKey: 'k1' });
+    expect(replay).toEqual(first);
+    expect(runtime.chats).toHaveLength(1);
+    await expect(service.ask({ ...base, question: 'other', conversationId: null, idempotencyKey: 'k1' }))
+      .rejects.toMatchObject({ code: 'idempotency_key_reused', status: 422 });
+  });
+
+  it('rejects a concurrent duplicate, then lets a stale in_progress key be retried', async () => {
+    let release: (value: { content: string }) => void = () => undefined;
+    const { service, runtime, dedupe, advance } = await withDedupe({
+      runChat: () => new Promise(resolve => { release = resolve; }),
+    });
+    const running = service.ask({ ...base, idempotencyKey: 'k2' });
+    await new Promise(resolve => setImmediate(resolve));
+    await expect(service.ask({ ...base, idempotencyKey: 'k2' })).rejects.toMatchObject({ code: 'ask_in_progress', status: 409 });
+    release({ content: 'done' });
+    await running;
+
+    // Simulate a crash: the row stays in_progress, then expires.
+    await dedupe.begin('principal-1', 'k3', 'h', new Date(1_000_000));
+    advance(STALE_IN_PROGRESS_MS + 1);
+    runtime.runChat = async () => ({ content: 'recovered' });
+    const row = dedupe.rows.get('principal-1:k3')!;
+    row.requestHash = askRequestHash({ agent: 'health', conversationId: undefined, question: 'q' });
+    expect((await service.ask({ ...base, idempotencyKey: 'k3' })).answer).toBe('recovered');
+  });
+
+  it('frees the key after a failure so a retry can run', async () => {
+    const { service } = await withDedupe({ resolveModel: async () => null });
+    await expect(service.ask({ ...base, idempotencyKey: 'k4' })).rejects.toMatchObject({ code: 'provider_not_configured' });
+    await expect(service.ask({ ...base, idempotencyKey: 'k4' })).rejects.toMatchObject({ code: 'provider_not_configured' });
   });
 });

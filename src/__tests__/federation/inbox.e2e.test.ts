@@ -36,6 +36,31 @@ describe('unified inbox between two Units (mocked network)', () => {
     const askAudit = a.audit.entries.find(entry => entry.capability === 'federation.agents.ask');
     expect(askAudit).toMatchObject({ outcome: 'ok', threadId: thread.id });
 
+    // P4b continuity: the second turn continues the same peer conversation with only the new text.
+    await inbox.send(user, thread.id, 'and again');
+    const [firstChat, secondChat] = b.runtime.chats;
+    expect(secondChat.conversationId).toBe(firstChat.conversationId);
+    expect(secondChat.message).toBe('and again');
+    expect([...b.runtime.conversations.values()][0]).toMatchObject({ title: 'Federation · napols · Chat @ santos', slug: 'chat' });
+
+    // A second thread gets its own peer conversation.
+    const other = await inbox.openThread(user, peerOnA.id, 'chat', { newThread: true, title: 'Side topic' });
+    await inbox.send(user, other.id, 'side');
+    expect(b.runtime.chats[2].conversationId).not.toBe(firstChat.conversationId);
+    expect([...b.runtime.conversations.values()][1].title).toBe('Federation · napols · Side topic');
+
+    // A retry with the same Idempotency-Key replays the stored reply without running the agent again.
+    const input = { question: 'dup', conversationId: null, idempotencyKey: 'key-1' };
+    const once = await a.client.askAgentInConversation(peerOnA.id, 'chat', input, { initiatedByUserId: 'admin-a' });
+    const twice = await a.client.askAgentInConversation(peerOnA.id, 'chat', input, { initiatedByUserId: 'admin-a' });
+    expect(twice).toEqual(once);
+    expect(b.runtime.chats).toHaveLength(4);
+
+    // Another conversation id (not owned) is refused and the thread resets its context once.
+    await expect(a.client.askAgentInConversation(peerOnA.id, 'chat', {
+      question: 'x', conversationId: '00000000-0000-4000-8000-00000000dead',
+    }, { initiatedByUserId: 'admin-a' })).rejects.toMatchObject({ code: 'peer_conversation_not_found' });
+
     await a.store.update(peerOnA.id, { status: 'revoked' });
     const view = await inbox.getThread(user, thread.id);
     expect(view.readOnly).toBe(true);

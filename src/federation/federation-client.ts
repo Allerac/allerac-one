@@ -30,7 +30,21 @@ const listResponseSchema = z.object({
   // Older Units (before P3.5) do not send `unit`; a malformed one is ignored.
   unit: z.unknown().optional(),
 });
-const askResponseSchema = z.object({ answer: z.string(), truncated: z.boolean() });
+const askResponseSchema = z.object({
+  answer: z.string(),
+  truncated: z.boolean(),
+  // P4b; older peers omit them (no remote continuity).
+  conversation_id: z.string().min(1).max(100).nullable().optional(),
+  message_id: z.string().min(1).max(100).nullable().optional(),
+});
+
+export interface ConversationAskResult {
+  answer: string;
+  truncated: boolean;
+  /** Null when the peer does not support continuity (pre-P4b). */
+  conversationId: string | null;
+  messageId: string | null;
+}
 
 export interface FederationCallContext {
   /** Local user who triggered the call (audit). */
@@ -106,7 +120,39 @@ export class FederationClient {
     });
     const parsed = askResponseSchema.safeParse(data);
     if (!parsed.success) throw federationErrors.peerInvalidResponse();
-    return parsed.data;
+    return { answer: parsed.data.answer, truncated: parsed.data.truncated };
+  }
+
+  /**
+   * Ask within a remote conversation (P4b). `conversationId: null` starts a new
+   * one. The idempotency key lets the peer replay a reply on retry.
+   */
+  async askAgentInConversation(
+    peerId: string,
+    agent: string,
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null },
+    ctx: FederationCallContext,
+  ): Promise<ConversationAskResult> {
+    const data = await this.call({
+      peerId, ctx, capability: 'federation.agents.ask', target: agent,
+      path: `/api/v1/federation/agents/${encodeURIComponent(agent)}/ask`,
+      method: 'POST',
+      body: {
+        question: input.question,
+        conversation_id: input.conversationId,
+        ...(input.threadTitle ? { thread_title: input.threadTitle.slice(0, 200) } : {}),
+      },
+      headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
+      timeoutMs: ASK_TIMEOUT_MS,
+    });
+    const parsed = askResponseSchema.safeParse(data);
+    if (!parsed.success) throw federationErrors.peerInvalidResponse();
+    return {
+      answer: parsed.data.answer,
+      truncated: parsed.data.truncated,
+      conversationId: parsed.data.conversation_id ?? null,
+      messageId: parsed.data.message_id ?? null,
+    };
   }
 
   private async call(params: {
@@ -117,6 +163,7 @@ export class FederationClient {
     path: string;
     method: 'GET' | 'POST';
     body?: unknown;
+    headers?: Record<string, string>;
     timeoutMs: number;
   }): Promise<unknown> {
     const started = this.now();
@@ -146,6 +193,7 @@ export class FederationClient {
         key: this.deps.secrets.decrypt(peer.outboundKeyEncrypted),
         method: params.method,
         body: params.body,
+        ...(params.headers ? { headers: params.headers } : {}),
         timeoutMs: params.timeoutMs,
       });
       await this.deps.store.update(peer.id, { lastSeenAt: new Date(this.now()) });

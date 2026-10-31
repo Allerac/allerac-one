@@ -11,7 +11,7 @@ interface Props {
 }
 
 /**
- * Sidebar "Agents" section (federation P4a): local agents first, then each
+ * Sidebar "Agents" section (federation P4a/P4b): local agents first, then each
  * paired Unit's exposed agents, then archived (unpaired) Units. Admin only;
  * the parent decides visibility with canUseInbox().
  */
@@ -45,6 +45,28 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
       setOpenThreadId(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open thread');
+    }
+  };
+
+  const newThread = async (peerId: string, agent: string) => {
+    const title = window.prompt('Name for the new thread (optional)') ?? null;
+    if (title === null) return;
+    try {
+      const { thread } = await inboxApi.openThread(domainId, peerId, agent, { new: true, ...(title.trim() ? { title: title.trim() } : {}) });
+      setOpenThreadId(thread.id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create thread');
+    }
+  };
+
+  const deleteThread = async (threadId: string) => {
+    if (!window.confirm('Delete this thread from this unit? The other unit keeps its own copy.')) return;
+    try {
+      await inboxApi.deleteThread(domainId, threadId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
@@ -93,17 +115,34 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
               </p>
               {unit.agents.length === 0 && <p className={`px-2 text-xs ${muted}`}>No agents exposed</p>}
               {unit.agents.map(agent => (
-                <button key={agent.slug} type="button" className={`${rowClass} ${agent.available ? '' : 'opacity-50'}`}
-                  disabled={!agent.available && !agent.threadId}
-                  onClick={() => openRemote(unit.peerId, agent.slug, agent.threadId)}>
-                  <span className="flex items-center gap-2">
-                    <span className="flex-1 truncate">{agent.name}</span>
-                    {agent.unread > 0 && (
-                      <span data-testid="unread" className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{agent.unread}</span>
+                <div key={agent.slug}>
+                  <div className="flex items-start">
+                    <button type="button" className={`${rowClass} ${agent.available ? '' : 'opacity-50'}`}
+                      disabled={!agent.available && !agent.threadId}
+                      onClick={() => openRemote(unit.peerId, agent.slug, agent.threadId)}>
+                      <span className="flex items-center gap-2">
+                        <span className="flex-1 truncate">{agent.name}</span>
+                        {agent.unread > 0 && (
+                          <span data-testid="unread" className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{agent.unread}</span>
+                        )}
+                      </span>
+                      {agent.preview && <span className={`block truncate text-xs ${muted}`}>{agent.preview}</span>}
+                    </button>
+                    {agent.available && (
+                      <button type="button" aria-label={`New thread with ${agent.name}`} title="New thread"
+                        className={`px-2 py-1.5 text-sm ${muted}`} onClick={() => newThread(unit.peerId, agent.slug)}>+</button>
                     )}
-                  </span>
-                  {agent.preview && <span className={`block truncate text-xs ${muted}`}>{agent.preview}</span>}
-                </button>
+                  </div>
+                  {agent.threads.length > 1 && agent.threads.filter(thread => thread.threadId !== agent.threadId).map(thread => (
+                    <button key={thread.threadId} type="button" data-testid="extra-thread"
+                      className={`${rowClass} pl-5 text-xs`} onClick={() => setOpenThreadId(thread.threadId)}>
+                      <span className="flex items-center gap-2">
+                        <span className="flex-1 truncate">{thread.title ?? 'Thread'}</span>
+                        {thread.unread > 0 && <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{thread.unread}</span>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           ))}
@@ -119,10 +158,14 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
                     </button>
                   </p>
                   {group.threads.map(thread => (
-                    <button key={thread.threadId} type="button" className={`${rowClass} opacity-70`}
-                      onClick={() => setOpenThreadId(thread.threadId)}>
-                      {thread.agentSlug}
-                    </button>
+                    <div key={thread.threadId} className="flex items-center">
+                      <button type="button" className={`${rowClass} opacity-70`}
+                        onClick={() => setOpenThreadId(thread.threadId)}>
+                        {thread.title ?? thread.agentSlug}
+                      </button>
+                      <button type="button" aria-label="Delete thread" title="Delete thread"
+                        className={`px-2 text-xs ${muted}`} onClick={() => deleteThread(thread.threadId)}>🗑</button>
+                    </div>
                   ))}
                 </div>
               ))}

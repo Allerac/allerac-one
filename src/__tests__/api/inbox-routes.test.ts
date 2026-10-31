@@ -4,8 +4,8 @@ import { inboxService } from '@/federation/inbox.instance';
 import { InboxError } from '@/federation/inbox.service';
 import { GET as listAgents } from '@/app/api/inbox/agents/route';
 import { POST as openThread } from '@/app/api/inbox/threads/route';
-import { GET as getThread } from '@/app/api/inbox/threads/[id]/route';
-import { POST as sendMessage } from '@/app/api/inbox/threads/[id]/messages/route';
+import { DELETE as deleteThread, GET as getThread, PATCH as renameThread } from '@/app/api/inbox/threads/[id]/route';
+import { GET as listMessages, POST as sendMessage } from '@/app/api/inbox/threads/[id]/messages/route';
 import { POST as retryMessage } from '@/app/api/inbox/threads/[id]/messages/[messageId]/retry/route';
 import { DELETE as deleteHistory } from '@/app/api/inbox/peers/[peerId]/history/route';
 
@@ -26,6 +26,7 @@ jest.mock('@/app/lib/auth-session', () => {
 jest.mock('@/federation/inbox.instance', () => ({
   inboxService: {
     list: jest.fn(), openThread: jest.fn(), getThread: jest.fn(), send: jest.fn(), retry: jest.fn(), deleteArchivedHistory: jest.fn(),
+    listMessages: jest.fn(), renameThread: jest.fn(), deleteThread: jest.fn(),
   },
 }));
 
@@ -51,8 +52,13 @@ describe('/api/inbox routes', () => {
       sendMessage(json('http://x', 'POST', { content: 'hi' }), ctx),
       retryMessage(json('http://x', 'POST'), ctx),
       deleteHistory(json('http://x', 'DELETE'), ctx),
+      listMessages(new Request('http://x/api/inbox/threads/t1/messages'), ctx),
+      renameThread(json('http://x', 'PATCH', { title: 'x' }), ctx),
+      deleteThread(json('http://x', 'DELETE'), ctx),
     ]);
-    expect(responses.map(response => response.status)).toEqual([403, 403, 403, 403, 403, 403]);
+    expect(responses.map(response => response.status)).toEqual([403, 403, 403, 403, 403, 403, 403, 403, 403]);
+    expect(svc.renameThread).not.toHaveBeenCalled();
+    expect(svc.deleteThread).not.toHaveBeenCalled();
     expect(svc.list).not.toHaveBeenCalled();
     expect(svc.send).not.toHaveBeenCalled();
     auth.mockReset();
@@ -77,17 +83,43 @@ describe('/api/inbox routes', () => {
   it('validates and opens threads', async () => {
     auth.mockResolvedValue(admin as never);
     expect((await openThread(json('http://x', 'POST', { peerId: 'nope', agent: 'chat' }))).status).toBe(400);
-    svc.openThread.mockResolvedValueOnce({ id: 't1' } as never);
+    svc.openThread.mockResolvedValueOnce({ id: 't1', title: 'Chat @ Santos' } as never);
     const response = await openThread(json('http://x', 'POST', { peerId: PEER, agent: 'chat' }));
     expect(response.status).toBe(201);
-    expect((await response.json()).data).toEqual({ thread: { id: 't1' } });
-    expect(svc.openThread).toHaveBeenCalledWith(admin, PEER, 'chat');
+    expect((await response.json()).data).toEqual({ thread: { id: 't1', title: 'Chat @ Santos' } });
+    expect(svc.openThread).toHaveBeenCalledWith(admin, PEER, 'chat', { newThread: false, title: null });
+  });
+
+  it('creates an additional thread with new: true', async () => {
+    auth.mockResolvedValue(admin as never);
+    svc.openThread.mockResolvedValueOnce({ id: 't2', title: 'Trip' } as never);
+    const response = await openThread(json('http://x', 'POST', { peerId: PEER, agent: 'chat', new: true, title: 'Trip' }));
+    expect(response.status).toBe(201);
+    expect(svc.openThread).toHaveBeenCalledWith(admin, PEER, 'chat', { newThread: true, title: 'Trip' });
+  });
+
+  it('paginates, renames and deletes threads', async () => {
+    auth.mockResolvedValue(admin as never);
+    const ctx = { params: Promise.resolve({ id: 't1' }) };
+    svc.listMessages.mockResolvedValueOnce({ messages: [], nextCursor: null });
+    const page = await listMessages(new Request('http://x/api/inbox/threads/t1/messages?before=m9&limit=20'), ctx);
+    expect(page.status).toBe(200);
+    expect(svc.listMessages).toHaveBeenCalledWith(admin, 't1', 'm9', 20);
+
+    svc.renameThread.mockResolvedValueOnce({ id: 't1', title: 'Renamed' });
+    const renamed = await renameThread(json('http://x', 'PATCH', { title: 'Renamed' }), ctx);
+    expect((await renamed.json()).data).toEqual({ thread: { id: 't1', title: 'Renamed' } });
+
+    svc.deleteThread.mockRejectedValueOnce(new InboxError('invalid_state', 'paired', 409));
+    expect((await deleteThread(json('http://x', 'DELETE'), ctx)).status).toBe(409);
+    svc.deleteThread.mockResolvedValueOnce(undefined);
+    expect((await (await deleteThread(json('http://x', 'DELETE'), ctx)).json()).data).toEqual({ deleted: true });
   });
 
   it('sends, retries and maps inbox errors', async () => {
     auth.mockResolvedValue(admin as never);
     const ctx = { params: Promise.resolve({ id: 't1', messageId: 'm1' }) };
-    svc.send.mockResolvedValueOnce({ userMessage: { id: 'm1', status: 'done' }, agentMessage: null } as never);
+    svc.send.mockResolvedValueOnce({ userMessage: { id: 'm1', status: 'done' }, agentMessage: null, notices: [] } as never);
     expect((await sendMessage(json('http://x', 'POST', { content: 'hi' }), ctx)).status).toBe(200);
     expect(svc.send).toHaveBeenCalledWith(admin, 't1', 'hi');
 

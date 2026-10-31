@@ -19,6 +19,7 @@
  * requested by a caller are dropped.
  */
 
+import { notFederatedSummarySql } from '@/app/services/memory/federated-memory-filter';
 import pool from '@/app/clients/db';
 import { isDomainEnabled } from '@/modules/registry';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
@@ -237,6 +238,7 @@ export class KnowledgeSearchService {
        JOIN conversation_summaries cs ON cs.id = k.source_id AND cs.user_id = k.user_id
        WHERE k.user_id = $2
          AND k.source_type = 'memory'
+         AND ${notFederatedSummarySql('cs')}
          AND ($3::text IS NULL OR cs.domain_slug = $3)
          AND ($3::text IS NOT NULL OR ${domainAccessSql('cs.domain_slug', '$2', '$4')})
          AND ($7::text IS NULL OR k.embedding_version = $7)
@@ -256,6 +258,7 @@ export class KnowledgeSearchService {
       `SELECT cs.id, cs.summary, cs.key_topics, cs.importance_score, cs.domain_slug, cs.created_at
        FROM conversation_summaries cs
        WHERE cs.user_id = $1
+         AND ${notFederatedSummarySql('cs')}
          AND (cs.summary ILIKE $2 ESCAPE '\\' OR array_to_string(cs.key_topics, ' ') ILIKE $2 ESCAPE '\\')
          AND ($3::text IS NULL OR cs.domain_slug = $3)
          AND ($3::text IS NOT NULL OR ${domainAccessSql('cs.domain_slug', '$1', '$4')})

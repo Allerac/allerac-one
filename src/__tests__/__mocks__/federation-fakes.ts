@@ -1,4 +1,5 @@
 // In-memory fakes for federation tests (not a test file).
+import { InMemoryAskDedupeStore } from '@/federation/ask-dedupe';
 import { AgentsService, type AgentsRuntime } from '@/federation/agents.service';
 import type { FederationAuditEntry, FederationAuditSink } from '@/federation/audit.repository';
 import { FederationClient } from '@/federation/federation-client';
@@ -95,14 +96,28 @@ export class MemoryAudit implements FederationAuditSink {
 const allowAll = () => ({ allowed: true as const, lease: { release: () => undefined }, headers: {} });
 
 /** In-memory AgentsRuntime: every domain listed is active; chat echoes the question. */
-export function fakeAgentsRuntime(overrides: Partial<AgentsRuntime> = {}): AgentsRuntime & { chats: Array<Record<string, unknown>> } {
+export function fakeAgentsRuntime(overrides: Partial<AgentsRuntime> = {}): AgentsRuntime & {
+  chats: Array<Record<string, unknown>>;
+  conversations: Map<string, { userId: string; slug: string; principalId: string; title: string }>;
+} {
   const chats: Array<Record<string, unknown>> = [];
+  const conversations = new Map<string, { userId: string; slug: string; principalId: string; title: string }>();
   return {
     chats,
+    conversations,
     loadUser: async id => ({ id, email: `${id}@example.com`, name: id, is_admin: true, created_at: new Date() } as unknown as User),
     listActiveDomains: async slugs => slugs.map(slug => ({ slug, displayName: slug[0].toUpperCase() + slug.slice(1) })),
     canAccessDomain: async () => true,
     findOrCreateConversation: async (_userId, slug, title) => `conv:${slug}:${title}`,
+    createFederatedConversation: async ({ userId, slug, principalId, title }) => {
+      const id = `00000000-0000-4000-8000-${String(conversations.size + 1).padStart(12, '0')}`;
+      conversations.set(id, { userId, slug, principalId, title });
+      return id;
+    },
+    ownsFederatedConversation: async ({ id, userId, slug, principalId }) => {
+      const conversation = conversations.get(id);
+      return Boolean(conversation && conversation.userId === userId && conversation.slug === slug && conversation.principalId === principalId);
+    },
     resolveModel: async () => ({ modelId: 'test-model', provider: 'ollama' }),
     runChat: async input => { chats.push(input); return { content: `answer from ${input.domain}: ${input.message}` }; },
     ...overrides,
@@ -167,6 +182,8 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
         const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
         const result = await unit.agents.ask({
           principalId, actingUserId, agent: decodeURIComponent(ask[1]), question: body.question,
+          conversationId: body.conversation_id, threadTitle: body.thread_title ?? null,
+          idempotencyKey: new Headers(init?.headers).get('idempotency-key'),
         });
         return json({ data: result });
       }
@@ -191,7 +208,7 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
     const service = new PairingService(deps);
     const audit = new MemoryAudit();
     const runtime = fakeAgentsRuntime();
-    const agents = new AgentsService({ runtime, store, audit, acquire: allowAll, env });
+    const agents = new AgentsService({ runtime, store, audit, acquire: allowAll, env, dedupe: new InMemoryAskDedupeStore() });
     const client = new FederationClient({ store, transport: new PeerClient(fetchImpl, 1_000), secrets: fakeSecrets, audit });
     byOrigin.set(unit.origin, { origin: unit.origin, env, store, principals, service, deps, audit, runtime, agents, client });
   }

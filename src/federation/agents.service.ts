@@ -9,6 +9,7 @@ import { PUBLIC_DOMAINS } from '@/app/services/chat/public-domains';
 import type { OperationLimitResult } from '@/app/lib/operation-limiter';
 import type { User } from '@/app/services/auth/auth.service';
 import { isDomainEnabled } from '@/modules/registry';
+import { askRequestHash, type AskDedupeStore } from './ask-dedupe';
 import type { FederationAuditSink } from './audit.repository';
 import { exposedAgentSlugs, type Env } from './env';
 import { FederationError, federationErrors } from './errors';
@@ -24,7 +25,12 @@ export interface AgentsRuntime {
   loadUser(userId: string): Promise<User | null>;
   listActiveDomains(slugs: string[]): Promise<Array<{ slug: string; displayName: string }>>;
   canAccessDomain(user: User, slug: string): Promise<boolean>;
+  /** Legacy (pre-P4b callers that send no conversation_id): one shared conversation per title. */
   findOrCreateConversation(userId: string, slug: string, title: string): Promise<string>;
+  /** P4b: a new federated conversation owned by the calling principal. */
+  createFederatedConversation(params: { userId: string; slug: string; principalId: string; title: string }): Promise<string>;
+  /** P4b: true only if the conversation exists, is federated, and belongs to this principal, user and agent. */
+  ownsFederatedConversation(params: { id: string; userId: string; slug: string; principalId: string }): Promise<boolean>;
   resolveModel(userId: string, slug: string): Promise<{ modelId: string; provider: string } | null>;
   runChat(input: {
     user: User;
@@ -34,7 +40,7 @@ export interface AgentsRuntime {
     modelId: string;
     provider: string;
     locale: string;
-  }): Promise<{ content: string }>;
+  }): Promise<{ content: string; messageId?: string | null }>;
 }
 
 type Acquire = (operation: 'federation-ask' | 'chat', subject: string) => OperationLimitResult;
@@ -44,10 +50,35 @@ export interface AgentsServiceDeps {
   store: PeerStore;
   audit: FederationAuditSink;
   acquire: Acquire;
+  /** Idempotency-Key store (P4b). Optional so older wiring keeps working. */
+  dedupe?: AskDedupeStore;
   /** Unit identity & role (P3.5). Optional so older wiring keeps working. */
   loadProfile?: () => Promise<UnitProfile>;
   env?: Env;
   now?: () => number;
+}
+
+export const MAX_TITLE_CHARS = 200;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface AskParams {
+  principalId: string;
+  actingUserId: string;
+  agent: string;
+  question: string;
+  /** P4b: undefined = legacy caller, null = start a new conversation, string = continue it. */
+  conversationId?: string | null;
+  /** P4b: home thread title, used for the peer-side conversation title. */
+  threadTitle?: string | null;
+  idempotencyKey?: string | null;
+}
+
+export interface AskResult {
+  answer: string;
+  truncated: boolean;
+  /** Null for legacy callers (no continuity handle). */
+  conversation_id: string | null;
+  message_id: string | null;
 }
 
 export class FederationRateLimitedError extends FederationError {
@@ -113,7 +144,7 @@ export class AgentsService {
     return { agents, unit: profile ? toPeerProfile(profile) : null };
   }
 
-  async ask(params: { principalId: string; actingUserId: string; agent: string; question: string }) {
+  async ask(params: AskParams): Promise<AskResult> {
     const started = this.now();
     const { peer, user } = await this.resolveCaller(params.principalId, params.actingUserId);
     const audit = {
@@ -127,14 +158,47 @@ export class AgentsService {
       throw federationErrors.agentNotFound();
     }
 
+    const conversationId = params.conversationId;
+    if (typeof conversationId === 'string') {
+      const owned = UUID.test(conversationId) && await this.deps.runtime.ownsFederatedConversation({
+        id: conversationId, userId: user.id, slug: params.agent, principalId: params.principalId,
+      });
+      if (!owned) {
+        await this.deps.audit.record({ ...audit, outcome: 'denied', httpStatus: 404, errorCode: 'conversation_not_found' });
+        throw federationErrors.conversationNotFound();
+      }
+    }
+
+    const key = params.idempotencyKey && this.deps.dedupe ? params.idempotencyKey : null;
+    if (key) {
+      const begin = await this.deps.dedupe!.begin(
+        params.principalId, key, askRequestHash({ agent: params.agent, conversationId, question: params.question }), new Date(this.now()),
+      );
+      if (begin.kind === 'replay') {
+        await this.deps.audit.record({ ...audit, outcome: 'ok', httpStatus: 200, errorCode: 'replayed', durationMs: this.now() - started });
+        return {
+          answer: begin.response.answer, truncated: begin.response.truncated,
+          conversation_id: begin.response.conversation_id, message_id: begin.response.message_id,
+        };
+      }
+      if (begin.kind !== 'new') {
+        const error = begin.kind === 'mismatch' ? federationErrors.idempotencyKeyReused() : federationErrors.askInProgress();
+        await this.deps.audit.record({ ...audit, outcome: 'denied', httpStatus: error.status, errorCode: error.code });
+        throw error;
+      }
+    }
+    const fail = async () => { if (key) await this.deps.dedupe!.finish(params.principalId, key, { status: 'failed' }).catch(() => undefined); };
+
     const peerLimit = this.deps.acquire('federation-ask', `principal:${params.principalId}`);
     if (!peerLimit.allowed) {
+      await fail();
       await this.deps.audit.record({ ...audit, outcome: 'denied', httpStatus: 429, errorCode: 'rate_limited' });
       throw new FederationRateLimitedError(peerLimit.retryAfterSeconds, peerLimit.headers);
     }
     const chatLimit = this.deps.acquire('chat', user.id);
     if (!chatLimit.allowed) {
       peerLimit.lease.release();
+      await fail();
       await this.deps.audit.record({ ...audit, outcome: 'denied', httpStatus: 429, errorCode: 'rate_limited' });
       throw new FederationRateLimitedError(chatLimit.retryAfterSeconds, chatLimit.headers);
     }
@@ -143,12 +207,23 @@ export class AgentsService {
       const model = await this.deps.runtime.resolveModel(user.id, params.agent);
       if (!model) throw new FederationError('provider_not_configured', 'No model is configured for this agent', 422);
 
-      const conversationId = await this.deps.runtime.findOrCreateConversation(
-        user.id, params.agent, `Federation · ${peer.displayName ?? peer.unitName}`,
-      );
+      const unitLabel = `Federation · ${peer.displayName ?? peer.unitName}`;
+      let targetId: string;
+      if (typeof conversationId === 'string') {
+        targetId = conversationId;
+      } else if (conversationId === null) {
+        const threadTitle = params.threadTitle?.trim();
+        targetId = await this.deps.runtime.createFederatedConversation({
+          userId: user.id, slug: params.agent, principalId: params.principalId,
+          title: (threadTitle ? `${unitLabel} · ${threadTitle}` : unitLabel).slice(0, MAX_TITLE_CHARS),
+        });
+      } else {
+        // Older home Units send no conversation_id: keep the P4a shared conversation.
+        targetId = await this.deps.runtime.findOrCreateConversation(user.id, params.agent, unitLabel);
+      }
       const result = await withTimeout(this.deps.runtime.runChat({
         user,
-        conversationId,
+        conversationId: targetId,
         domain: params.agent,
         message: params.question,
         modelId: model.modelId,
@@ -158,12 +233,19 @@ export class AgentsService {
 
       const truncated = result.content.length > MAX_ANSWER_CHARS;
       const answer = truncated ? result.content.slice(0, MAX_ANSWER_CHARS) : result.content;
+      const response: AskResult = {
+        answer, truncated,
+        conversation_id: conversationId === undefined ? null : targetId,
+        message_id: result.messageId ?? null,
+      };
+      if (key) await this.deps.dedupe!.finish(params.principalId, key, { status: 'done', response });
       await this.deps.audit.record({
         ...audit, outcome: 'ok', httpStatus: 200, durationMs: this.now() - started,
         requestBytes: params.question.length, responseBytes: answer.length,
       });
-      return { answer, truncated };
+      return response;
     } catch (error) {
+      await fail();
       const code = error instanceof FederationError ? error.code : 'internal_error';
       await this.deps.audit.record({ ...audit, outcome: 'error', errorCode: code, durationMs: this.now() - started });
       throw error;

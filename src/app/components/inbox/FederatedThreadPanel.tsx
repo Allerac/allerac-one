@@ -19,17 +19,19 @@ const ERROR_LABELS: Record<string, string> = {
   peer_rate_limited: 'The unit is rate limiting requests.',
   capability_not_granted: 'This unit did not grant agent access.',
   peer_not_active: 'Unit no longer paired.',
+  peer_ask_in_progress: 'The unit is still working on this message; retry in a moment.',
 };
 
 function applyResult(messages: InboxMessageView[], result: SendResult): InboxMessageView[] {
   const next = messages.filter(message => message.id !== result.userMessage.id && !message.id.startsWith('local-'));
   next.push(result.userMessage);
+  next.push(...(result.notices ?? []));
   if (result.agentMessage) next.push(result.agentMessage);
   return next;
 }
 
 /**
- * Federated thread with a remote agent (P4a). Remote replies are untrusted:
+ * Federated thread with a remote agent (P4a/P4b). Remote replies are untrusted:
  * they are rendered as plain text (React escapes it; no HTML, no markdown links).
  */
 export default function FederatedThreadPanel({ isDark: d, domainId, threadId, onClose, onChanged }: Props) {
@@ -37,6 +39,8 @@ export default function FederatedThreadPanel({ isDark: d, domainId, threadId, on
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
@@ -49,7 +53,34 @@ export default function FederatedThreadPanel({ isDark: d, domainId, threadId, on
   }, [domainId, threadId]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { bottomRef.current?.scrollIntoView?.({ block: 'end' }); }, [view?.messages.length, sending]);
+  const lastId = view?.messages.at(-1)?.id;
+  useEffect(() => { bottomRef.current?.scrollIntoView?.({ block: 'end' }); }, [lastId, sending]);
+
+  const loadOlder = async () => {
+    if (!view?.nextCursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await inboxApi.olderMessages(domainId, threadId, view.nextCursor);
+      setView(current => current ? { ...current, messages: [...page.messages, ...current.messages], nextCursor: page.nextCursor } : current);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load older messages');
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  const saveTitle = async () => {
+    const title = renaming?.trim();
+    setRenaming(null);
+    if (!title || !view || title === view.thread.title) return;
+    try {
+      const { thread } = await inboxApi.renameThread(domainId, threadId, title);
+      setView(current => current ? { ...current, thread: { ...current.thread, title: thread.title } } : current);
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rename failed');
+    }
+  };
 
   const run = async (action: () => Promise<SendResult>, optimistic?: InboxMessageView) => {
     if (!view) return;
@@ -84,6 +115,13 @@ export default function FederatedThreadPanel({ isDark: d, domainId, threadId, on
   };
 
   const bubble = (message: InboxMessageView) => {
+    if (message.role === 'system') {
+      return (
+        <p key={message.id} data-testid="system-note" className={`text-center text-xs italic ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+          {message.content}
+        </p>
+      );
+    }
     const mine = message.role === 'user';
     const failed = message.status === 'failed' || message.status === 'timeout';
     return (
@@ -111,14 +149,43 @@ export default function FederatedThreadPanel({ isDark: d, domainId, threadId, on
       <div className={`flex h-full w-full max-w-xl flex-col ${d ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-900'}`}>
         <header className={`flex items-center gap-2 border-b px-4 py-3 ${d ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">
-              {view ? `${view.thread.agentSlug} @ ${view.unit.displayName}` : 'Loading…'}
-            </p>
+            {renaming !== null ? (
+              <input
+                aria-label="Thread title"
+                autoFocus
+                value={renaming}
+                maxLength={200}
+                onChange={event => setRenaming(event.target.value)}
+                onBlur={() => void saveTitle()}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') { event.preventDefault(); void saveTitle(); }
+                  if (event.key === 'Escape') setRenaming(null);
+                }}
+                className={`w-full rounded border px-1 text-sm ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-white'}`}
+              />
+            ) : (
+              <p className="truncate text-sm font-semibold">
+                {view ? (view.thread.title ?? `${view.thread.agentSlug} @ ${view.unit.displayName}`) : 'Loading…'}
+              </p>
+            )}
+            {view?.thread.title && <p className={`truncate text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>{view.thread.agentSlug} @ {view.unit.displayName}</p>}
           </div>
+          {view && !view.readOnly && renaming === null && (
+            <button type="button" onClick={() => setRenaming(view.thread.title ?? '')} aria-label="Rename thread" className="px-1 text-xs underline">
+              Rename
+            </button>
+          )}
           <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${d ? 'bg-gray-700' : 'bg-gray-200'}`}>remote</span>
           <button type="button" onClick={onClose} aria-label="Close" className="px-2 text-lg leading-none">×</button>
         </header>
         <div className="flex-1 space-y-2 overflow-y-auto p-4">
+          {view?.nextCursor && (
+            <div className="flex justify-center">
+              <button type="button" onClick={() => void loadOlder()} disabled={loadingOlder} className="text-xs underline">
+                {loadingOlder ? 'Loading…' : 'Load older messages'}
+              </button>
+            </div>
+          )}
           {view?.messages.map(bubble)}
           {sending && (
             <div className="flex justify-start" data-testid="thinking">

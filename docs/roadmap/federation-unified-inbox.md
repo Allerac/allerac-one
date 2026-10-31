@@ -159,7 +159,7 @@ Numbering fixed (P4c and P4d previously both claimed 148):
 
 1. **Remote memory:** approved as recommended. P4a tags the peer's federated conversations `source='federation'` and the memory
    summarizer skips them (no memory extraction, no instruction distillation; federated tool policy already blocks memory tools).
-   Full remote continuity remains P4b.
+   Full remote continuity landed in P4b.
 2. **On unpair:** approved: read-only "Archived units" with a manual "Delete history" button.
 3. **Live responses:** approved: synchronous in P4a (up to 60s), async + polling in P4c.
 
@@ -185,3 +185,30 @@ Original wording:
 - Remote replies render as plain text (no markdown) in P4a; sanitized markdown can come later.
 - Each send logs `[Inbox] send thread=… peer=… agent=… status=… ms=…` (no content) and the outbound audit row carries `thread_id`.
 - Not in P4a: multiple threads per agent ("new thread"), pagination beyond the latest 200 messages, idempotency keys.
+
+## P4b Implementation Notes
+
+Decisions: (1) a P4a thread's first P4b send starts a **new** remote conversation and sends the packed last 6 turns once;
+(2) the peer-side conversation title is `Federation · <unit> · <thread title>`; (3) deleting a thread deletes only the home
+copy (remote delete deferred to P5).
+
+- **Migration 147** (`147_federation_conversations.sql`): `chat_conversations.federation_principal_id`,
+  `federation_ask_dedupe(principal_id, idempotency_key, request_hash, status, response, created_at, updated_at)`,
+  `federated_threads.is_default` with a partial unique index (one default thread per user/peer/agent, any number of extra
+  threads), a keyset index on `federated_messages(thread_id, created_at DESC, id DESC)`, and removal of memory index rows
+  derived from federated conversations.
+- **Peer:** `AgentsService.ask` accepts `conversationId` (undefined = legacy, null = new, uuid = continue, ownership-checked),
+  `threadTitle` and `idempotencyKey`; dedupe lives in `src/federation/ask-dedupe{,.repository}.ts` (24h TTL, stale
+  `in_progress` takeover after 2 min with compare-and-swap on `updated_at`).
+- **Home:** `FederationClient.askAgentInConversation` (sends `Idempotency-Key`). `InboxService` sends only the new message
+  when the thread has a `remote_conversation_id`, otherwise packs the last turns (first P4b send, or a pre-P4b peer that returns
+  no id). A `conversation_not_found` from the peer clears the handle, adds a system note "Context reset on <unit>" and retries
+  once with a new conversation. The idempotency key is `<local message id>:<remote conversation id | new>`.
+- **Routes:** `POST /api/inbox/threads` accepts `new: true` and `title`; `GET /api/inbox/threads/:id/messages?before=&limit=`
+  (thread view returns the latest 50 plus `nextCursor`); `PATCH /api/inbox/threads/:id` (rename); `DELETE /api/inbox/threads/:id`
+  (only for unpaired units).
+- **UI:** "+" per remote agent creates a thread; extra threads are listed under the agent; archived threads have a delete
+  button; the thread panel has "Load older messages", rename, and renders system notes.
+- **Memory/RAG:** memory recall, memory indexing (including the stale sweep) and knowledge search exclude summaries whose
+  conversation is `source='federation'` (`src/app/services/memory/federated-memory-filter.ts`), on top of the creation-time
+  filter from P4a.

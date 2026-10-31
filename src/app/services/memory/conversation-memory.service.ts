@@ -11,6 +11,7 @@
  * - Efficient retrieval of recent/important memories
  */
 
+import { notFederatedSummarySql } from './federated-memory-filter';
 import pool from '@/app/clients/db';
 
 export interface ConversationSummary {
@@ -229,12 +230,14 @@ ${conversationText}`;
         ? await pool.query(
             `SELECT * FROM conversation_summaries
              WHERE user_id = $1 AND importance_score >= $2 AND domain_slug = $4
+               AND ${notFederatedSummarySql('conversation_summaries')}
              ORDER BY created_at DESC LIMIT $3`,
             [userId, minImportance, limit, this.domainSlug]
           )
         : await pool.query(
             `SELECT * FROM conversation_summaries
              WHERE user_id = $1 AND importance_score >= $2
+               AND ${notFederatedSummarySql('conversation_summaries')}
              ORDER BY created_at DESC LIMIT $3`,
             [userId, minImportance, limit]
           );
@@ -259,6 +262,7 @@ ${conversationText}`;
            WHERE user_id = $1
              AND importance_score >= $2
              AND domain_slug = $3
+             AND ${notFederatedSummarySql('conversation_summaries')}
              AND (summary ILIKE $4 OR array_to_string(key_topics, ' ') ILIKE $4)
            ORDER BY importance_score DESC, created_at DESC
            LIMIT $5`,
@@ -268,6 +272,7 @@ ${conversationText}`;
           `SELECT * FROM conversation_summaries
            WHERE user_id = $1
              AND importance_score >= $2
+             AND ${notFederatedSummarySql('conversation_summaries')}
              AND (summary ILIKE $3 OR array_to_string(key_topics, ' ') ILIKE $3)
            ORDER BY importance_score DESC, created_at DESC
            LIMIT $4`,

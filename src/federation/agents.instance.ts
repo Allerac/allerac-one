@@ -8,6 +8,7 @@ import { domainModelSettingsService } from '@/app/services/domains/domain-model-
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { AgentsService } from './agents.service';
+import { askDedupeRepository } from './ask-dedupe.repository';
 import { resolveFederationModel, type ResolvedProvider } from './model-resolution';
 import { federationAuditRepository } from './audit.repository';
 import { peerRepository } from './peer.repository';
@@ -37,6 +38,7 @@ export const agentsService = new AgentsService({
   audit: federationAuditRepository,
   acquire: (operation, subject) => acquireOperationLimit(operation, subject),
   loadProfile: loadUnitProfile,
+  dedupe: askDedupeRepository,
   runtime: {
     async loadUser(userId) {
       const result = await pool.query(
@@ -79,6 +81,25 @@ export const agentsService = new AgentsService({
       if (!id) throw new Error('Failed to create federation conversation');
       return id;
     },
+    async createFederatedConversation({ userId, slug, principalId, title }) {
+      const created = await pool.query(
+        `INSERT INTO chat_conversations (user_id, title, domain_slug, source, federation_principal_id)
+         VALUES ($1, $2, $3, 'federation', $4) RETURNING id`,
+        [userId, title, slug, principalId],
+      );
+      const id = created.rows[0]?.id;
+      if (!id) throw new Error('Failed to create federation conversation');
+      return id;
+    },
+    async ownsFederatedConversation({ id, userId, slug, principalId }) {
+      const result = await pool.query(
+        `SELECT 1 FROM chat_conversations
+         WHERE id = $1 AND user_id = $2 AND domain_slug = $3
+           AND source = 'federation' AND federation_principal_id = $4`,
+        [id, userId, slug, principalId],
+      );
+      return (result.rowCount ?? 0) > 0;
+    },
     resolveModel: (userId, slug) => resolveFederationModel({
       domainDefault: (id, domain) => domainModelSettingsService.resolveDomainDefault(id, domain),
       userSelectedModel: async id => (await userSettingsService.loadUserSettings(id))?.selected_model ?? null,
@@ -92,7 +113,12 @@ export const agentsService = new AgentsService({
         provider: input.provider as ChatProvider,
         toolPolicy: 'federated',
       });
-      return { content: result.content };
+      const latest = await pool.query(
+        `SELECT id FROM chat_messages WHERE conversation_id = $1 AND role = 'assistant'
+         ORDER BY created_at DESC LIMIT 1`,
+        [input.conversationId],
+      );
+      return { content: result.content, messageId: latest.rows[0]?.id ? String(latest.rows[0].id) : null };
     },
   },
 });
