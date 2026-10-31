@@ -6,10 +6,18 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), refre
 jest.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (k: string) => k }));
 jest.mock('@/app/actions/user', () => ({ updateLanguage: jest.fn() }));
 jest.mock('@/app/components/credits/UserCreditBalance', () => () => null);
-jest.mock('@/app/components/layout/SidebarContent', () => () => <div data-testid="conversation-list" />);
-jest.mock('@/app/components/inbox/AgentsInboxSection', () => ({ domainId }: { domainId: string }) => (
-  <div data-testid="agents-inbox">{domainId}</div>
-));
+jest.mock('@/app/components/layout/SidebarContent', () => {
+  const MockSidebarContent = () => <div data-testid="conversation-list" />;
+  MockSidebarContent.displayName = 'MockSidebarContent';
+  return MockSidebarContent;
+});
+jest.mock('@/app/components/inbox/AgentsInboxSection', () => {
+  const MockAgentsInboxSection = ({ domainId }: { domainId: string }) => (
+    <div data-testid="agents-inbox">{domainId}</div>
+  );
+  MockAgentsInboxSection.displayName = 'MockAgentsInboxSection';
+  return MockAgentsInboxSection;
+});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const baseProps: any = {
