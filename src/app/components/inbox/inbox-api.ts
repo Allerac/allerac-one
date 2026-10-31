@@ -1,7 +1,9 @@
-/** Browser client for /api/inbox (federation P4a). Never sees peer keys. */
-import type { InboxListing, InboxMessageView, InboxThreadView } from '@/federation/inbox.service';
+/** Browser client for /api/inbox (federation P4a/P4b). Never sees peer keys. */
+import type {
+  InboxListing, InboxMessagePage, InboxMessageView, InboxSendResult, InboxThreadView,
+} from '@/federation/inbox.service';
 
-export type { InboxListing, InboxMessageView, InboxThreadView };
+export type { InboxListing, InboxMessagePage, InboxMessageView, InboxThreadView };
 
 export class InboxApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly status: number) {
@@ -24,15 +26,22 @@ async function call<T>(path: string, domain: string, init?: RequestInit): Promis
   return body?.data as T;
 }
 
-export interface SendResult {
-  userMessage: InboxMessageView;
-  agentMessage: InboxMessageView | null;
-}
+export type SendResult = InboxSendResult;
 
 export const inboxApi = {
   list: (domain: string) => call<InboxListing>('/api/inbox/agents', domain),
-  openThread: (domain: string, peerId: string, agent: string) =>
-    call<{ thread: { id: string } }>('/api/inbox/threads', domain, { method: 'POST', body: JSON.stringify({ peerId, agent }) }),
+  openThread: (domain: string, peerId: string, agent: string, options: { new?: boolean; title?: string } = {}) =>
+    call<{ thread: { id: string; title: string | null } }>('/api/inbox/threads', domain, {
+      method: 'POST', body: JSON.stringify({ peerId, agent, ...options }),
+    }),
+  olderMessages: (domain: string, threadId: string, before: string) =>
+    call<InboxMessagePage>(`/api/inbox/threads/${encodeURIComponent(threadId)}/messages?before=${encodeURIComponent(before)}`, domain),
+  renameThread: (domain: string, threadId: string, title: string) =>
+    call<{ thread: { id: string; title: string } }>(`/api/inbox/threads/${encodeURIComponent(threadId)}`, domain, {
+      method: 'PATCH', body: JSON.stringify({ title }),
+    }),
+  deleteThread: (domain: string, threadId: string) =>
+    call<{ deleted: boolean }>(`/api/inbox/threads/${encodeURIComponent(threadId)}`, domain, { method: 'DELETE' }),
   getThread: (domain: string, threadId: string) =>
     call<InboxThreadView>(`/api/inbox/threads/${encodeURIComponent(threadId)}`, domain),
   send: (domain: string, threadId: string, content: string) =>

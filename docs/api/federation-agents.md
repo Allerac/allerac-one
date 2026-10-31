@@ -64,9 +64,20 @@ active pairing. Personal API keys and browser sessions get `403`.
 | Endpoint | Scope | Response |
 |---|---|---|
 | `GET /api/v1/federation/agents` | `federation:agents:list` | `{ "data": { "agents": [{ "id", "name", "description" }], "unit": { "name", "displayName", "emoji", "role", "description", "tags" } } }` (`unit` since P3.5; may be absent on older Units) |
-| `POST /api/v1/federation/agents/:agent/ask` | `federation:agents:ask` | `{ "data": { "answer", "truncated" } }` |
+| `POST /api/v1/federation/agents/:agent/ask` | `federation:agents:ask` | `{ "data": { "answer", "truncated", "conversation_id", "message_id" } }` |
 
-Request body for ask: `{ "question": "..." }`.
+Request body for ask: `{ "question": "...", "conversation_id"?: "<uuid>" | null, "thread_title"?: "..." }`.
+
+Conversation continuity (P4b, backward compatible):
+
+- `conversation_id` omitted: legacy behaviour, one shared `Federation · <unit>` conversation; the response has `conversation_id: null`.
+- `conversation_id: null`: a new conversation is created, titled `Federation · <unit> · <thread_title>`, owned by the calling
+  principal (`chat_conversations.federation_principal_id`) and tagged `source='federation'` (kept in history, never in memory or RAG).
+- `conversation_id: "<uuid>"`: the agent continues that conversation. It must belong to the same principal, acting user and
+  agent, otherwise `404 conversation_not_found`.
+- Optional `Idempotency-Key` header (`[A-Za-z0-9_:.-]{1,100}`): a repeat with the same body replays the stored reply for 24h
+  without running the agent. Same key with a different body → `422 idempotency_key_reused`; while the first request is still
+  running → `409 ask_in_progress`. A request stuck in progress expires after 2 minutes.
 
 Errors: `400` invalid question, `401` missing or invalid key, `403` not a
 paired Unit or scope missing, `404` agent not exposed, `422` no model

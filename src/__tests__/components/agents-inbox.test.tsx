@@ -9,15 +9,22 @@ const listing = {
   home: { name: 'napols', displayName: 'Napols', emoji: '🍕', role: 'Home', agents: [{ slug: 'chat', name: 'Chat' }, { slug: 'health', name: 'Health' }] },
   units: [{
     peerId: 'p1', name: 'santos', displayName: 'Santos', emoji: '🏖️', role: 'Beach lab', status: 'online',
-    agents: [{ slug: 'chat', name: 'Santos Chat', description: null, threadId: 't1', preview: 'last reply', lastMessageAt: null, unread: 2, available: true }],
+    agents: [{
+      slug: 'chat', name: 'Santos Chat', description: null, threadId: 't1', preview: 'last reply', lastMessageAt: null, unread: 2, available: true,
+      threads: [
+        { threadId: 't1', title: 'Santos Chat @ Santos', isDefault: true, preview: 'last reply', lastMessageAt: null, unread: 2 },
+        { threadId: 't2', title: 'Trip plans', isDefault: false, preview: null, lastMessageAt: null, unread: 0 },
+      ],
+    }],
   }],
-  archived: [{ peerId: 'p2', name: 'barcelona', displayName: 'Barcelona', threads: [{ threadId: 't9', agentSlug: 'chat', title: null, lastMessageAt: null }] }],
+  archived: [{ peerId: 'p2', name: 'barcelona', displayName: 'Barcelona', threads: [{ threadId: 't9', agentSlug: 'chat', title: 'Old chat', lastMessageAt: null, preview: null }] }],
 };
 
 const thread = (overrides: Record<string, unknown> = {}) => ({
   thread: { id: 't1', agentSlug: 'chat', title: null },
   unit: { peerId: 'p1', name: 'santos', displayName: 'Santos' },
   readOnly: false,
+  nextCursor: null,
   messages: [
     { id: 'm1', role: 'user', content: 'hi', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' },
     { id: 'm2', role: 'agent', content: '<img src=x onerror=alert(1)> **bold**', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:01Z' },
@@ -113,5 +120,55 @@ describe('unified inbox UI', () => {
     await waitFor(() => expect(screen.queryByText(/Barcelona/)).toBeNull());
     expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/peers/p2/history?domain=chat');
     expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
+  });
+
+  it('lists extra threads and creates a new one (P4b)', async () => {
+    fetchMock.mockReturnValueOnce(respond(listing))
+      .mockReturnValueOnce(respond({ thread: { id: 't3', title: 'Budget' } }))
+      .mockReturnValue(respond(thread({ thread: { id: 't3', agentSlug: 'chat', title: 'Budget' }, messages: [] })));
+    jest.spyOn(window, 'prompt').mockReturnValueOnce('Budget');
+    render(<AgentsInboxSection isDark={false} domainId="chat" />);
+    expect(await screen.findByTestId('extra-thread')).toHaveTextContent('Trip plans');
+    fireEvent.click(screen.getByLabelText('New thread with Santos Chat'));
+    await waitFor(() => expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads?domain=chat'));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ peerId: 'p1', agent: 'chat', new: true, title: 'Budget' });
+  });
+
+  it('deletes a single archived thread after confirmation', async () => {
+    fetchMock.mockReturnValueOnce(respond(listing)).mockReturnValueOnce(respond({ deleted: true }))
+      .mockReturnValueOnce(respond({ ...listing, archived: [] }));
+    jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
+    render(<AgentsInboxSection isDark={false} domainId="chat" />);
+    expect(await screen.findByText('Old chat')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Delete thread'));
+    await waitFor(() => expect(screen.queryByText('Old chat')).toBeNull());
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads/t9?domain=chat');
+    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
+  });
+
+  it('loads older messages, shows system notes and renames the thread', async () => {
+    fetchMock.mockReturnValueOnce(respond(thread({
+      nextCursor: 'm1',
+      messages: [{ id: 's1', role: 'system', content: 'Context reset on Santos', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' }],
+    })));
+    render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t1" onClose={() => undefined} />);
+    expect(await screen.findByTestId('system-note')).toHaveTextContent('Context reset on Santos');
+
+    fetchMock.mockReturnValueOnce(respond({
+      messages: [{ id: 'm0', role: 'user', content: 'very old', status: 'done', truncated: false, errorCode: null, createdAt: '2025-01-01T00:00:00Z' }],
+      nextCursor: null,
+    }));
+    fireEvent.click(screen.getByText('Load older messages'));
+    expect(await screen.findByText('very old')).toBeInTheDocument();
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads/t1/messages?before=m1&domain=chat');
+    expect(screen.queryByText('Load older messages')).toBeNull();
+
+    fetchMock.mockReturnValueOnce(respond({ thread: { id: 't1', title: 'Renamed' } }));
+    fireEvent.click(screen.getByLabelText('Rename thread'));
+    const input = screen.getByLabelText('Thread title');
+    fireEvent.change(input, { target: { value: 'Renamed' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByText('Renamed')).toBeInTheDocument();
+    expect(fetchMock.mock.calls[2][1].method).toBe('PATCH');
   });
 });

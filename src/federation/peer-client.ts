@@ -122,6 +122,8 @@ export class PeerClient {
     method?: 'GET' | 'POST';
     body?: unknown;
     timeoutMs?: number;
+    /** Extra request headers (e.g. Idempotency-Key). Authorization cannot be overridden. */
+    headers?: Record<string, string>;
   }): Promise<{ data: unknown; status: number; responseBytes: number; requestBytes: number }> {
     const payload = params.body === undefined ? undefined : JSON.stringify(params.body);
     const controller = new AbortController();
@@ -131,6 +133,7 @@ export class PeerClient {
       response = await this.fetchImpl(`${params.origin}${params.path}`, {
         method: params.method ?? 'GET',
         headers: {
+          ...(params.headers ?? {}),
           Authorization: `Bearer ${params.key}`,
           ...(payload ? { 'Content-Type': 'application/json' } : {}),
         },
@@ -157,7 +160,10 @@ export class PeerClient {
     if (!response.ok) {
       const code = (json as { error?: { code?: string } } | null)?.error?.code;
       throw new FederationError(
-        code === 'rate_limited' || response.status === 429 ? 'peer_rate_limited' : 'peer_error',
+        code === 'rate_limited' || response.status === 429 ? 'peer_rate_limited'
+          : code === 'conversation_not_found' ? 'peer_conversation_not_found'
+            : code === 'ask_in_progress' ? 'peer_ask_in_progress'
+              : 'peer_error',
         `Peer responded with HTTP ${response.status}${code ? ` (${code})` : ''}`,
         502,
       );

@@ -65,11 +65,37 @@ describe('federation agents routes', () => {
 
   it('asks an agent with a validated question', async () => {
     validate.mockResolvedValueOnce(serviceCaller as never);
-    svc.ask.mockResolvedValueOnce({ answer: 'ok', truncated: false });
+    svc.ask.mockResolvedValueOnce({ answer: 'ok', truncated: false, conversation_id: null, message_id: null });
     const response = await askAgent(post({ question: '  hi  ' }), askCtx);
     expect(response.status).toBe(200);
     expect(validate).toHaveBeenCalledWith('alr_live_service', 'federation:agents:ask');
-    expect(svc.ask).toHaveBeenCalledWith({ principalId: 'principal-1', actingUserId: 'user-b', agent: 'health', question: 'hi' });
+    expect(svc.ask).toHaveBeenCalledWith({
+      principalId: 'principal-1', actingUserId: 'user-b', agent: 'health', question: 'hi',
+      conversationId: undefined, threadTitle: null, idempotencyKey: null,
+    });
+  });
+
+  it('passes conversation_id, thread_title and Idempotency-Key through (P4b)', async () => {
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    svc.ask.mockResolvedValueOnce({ answer: 'ok', truncated: false, conversation_id: 'c', message_id: 'm' });
+    const conversation = '00000000-0000-4000-8000-000000000001';
+    const request = post({ question: 'hi', conversation_id: conversation, thread_title: 'Plans' });
+    request.headers.set('Idempotency-Key', 'msg-1');
+    const response = await askAgent(request, askCtx);
+    expect(response.status).toBe(200);
+    expect(svc.ask).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: conversation, threadTitle: 'Plans', idempotencyKey: 'msg-1',
+    }));
+    expect((await response.json()).data).toMatchObject({ conversation_id: 'c', message_id: 'm' });
+  });
+
+  it('rejects a non-UUID conversation_id and a malformed Idempotency-Key', async () => {
+    validate.mockResolvedValueOnce(serviceCaller as never).mockResolvedValueOnce(serviceCaller as never);
+    expect((await askAgent(post({ question: 'hi', conversation_id: 'nope' }), askCtx)).status).toBe(400);
+    const request = post({ question: 'hi' });
+    request.headers.set('Idempotency-Key', 'bad key!');
+    expect((await askAgent(request, askCtx)).status).toBe(400);
+    expect(svc.ask).not.toHaveBeenCalled();
   });
 
   it('rejects empty or oversized questions', async () => {

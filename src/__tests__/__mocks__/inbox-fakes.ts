@@ -26,14 +26,35 @@ export class InMemoryInboxStore implements InboxStore {
     return t && t.userId === userId ? { ...t } : null;
   }
   async findOrCreateThread(p: { userId: string; peerId: string; agentSlug: string; title: string }) {
-    const existing = [...this.threads.values()].find(t => t.userId === p.userId && t.peerId === p.peerId && t.agentSlug === p.agentSlug);
+    const existing = [...this.threads.values()].find(t => t.isDefault && t.userId === p.userId && t.peerId === p.peerId && t.agentSlug === p.agentSlug);
     if (existing) return existing;
+    return this.addThread(p, true);
+  }
+  async createThread(p: { userId: string; peerId: string; agentSlug: string; title: string }) {
+    return this.addThread(p, false);
+  }
+  private addThread(p: { userId: string; peerId: string; agentSlug: string; title: string }, isDefault: boolean) {
     const t: FederatedThread = {
       id: `thread-${++this.seq}`, userId: p.userId, peerId: p.peerId, agentSlug: p.agentSlug, title: p.title,
-      lastMessageAt: null, lastReadAt: null, archivedAt: null, createdAt: this.tick(),
+      remoteConversationId: null, isDefault, lastMessageAt: isDefault ? null : this.tick(), lastReadAt: null, archivedAt: null, createdAt: this.tick(),
     };
     this.threads.set(t.id, t);
     return t;
+  }
+  async setRemoteConversationId(id: string, remote: string | null) { const t = this.threads.get(id); if (t) t.remoteConversationId = remote; }
+  async renameThread(id: string, title: string) { const t = this.threads.get(id); if (t) t.title = title; }
+  async deleteThread(userId: string, id: string) {
+    const t = this.threads.get(id);
+    if (!t || t.userId !== userId) return false;
+    this.threads.delete(id);
+    this.messages = this.messages.filter(m => m.threadId !== id);
+    return true;
+  }
+  async listMessagesBefore(threadId: string, beforeId: string | null, limit: number) {
+    const own = this.messages.filter(m => m.threadId === threadId);
+    const end = beforeId ? own.findIndex(m => m.id === beforeId) : own.length;
+    const upto = own.slice(0, end < 0 ? 0 : end);
+    return upto.slice(-limit).map(m => ({ ...m }));
   }
   async listMessages(threadId: string, limit: number) {
     return this.messages.filter(m => m.threadId === threadId).slice(-limit).map(m => ({ ...m }));
@@ -45,7 +66,7 @@ export class InMemoryInboxStore implements InboxStore {
   async insertMessage(m: NewFederatedMessage) {
     const row: FederatedMessage = {
       id: `msg-${++this.seq}`, threadId: m.threadId, role: m.role, content: m.content, status: m.status,
-      truncated: m.truncated ?? false, errorCode: m.errorCode ?? null, createdAt: this.tick(),
+      truncated: m.truncated ?? false, errorCode: m.errorCode ?? null, remoteMessageId: m.remoteMessageId ?? null, createdAt: this.tick(),
     };
     this.messages.push(row);
     return { ...row };
