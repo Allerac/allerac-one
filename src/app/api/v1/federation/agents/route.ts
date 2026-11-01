@@ -1,5 +1,6 @@
 import { agentsService } from '@/federation/agents.instance';
 import { ASK_PROTOCOL_VERSION } from '@/federation/agents.service';
+import { grantsService } from '@/federation/grants.instance';
 import { requireApiPrincipal } from '../../_lib/auth';
 import { federationErrorResponse } from '../../_lib/federation';
 import { apiData, apiError } from '../../_lib/responses';
@@ -15,7 +16,9 @@ export async function GET(request: Request): Promise<Response> {
     // pairings with federation.agents.list get it without a new scope.
     const { agents, unit } = await agentsService.listAgentsWithUnit(caller.principal.id, caller.actingUser.id);
     // `protocol.ask` (P4c) tells the home Unit it may use async asks.
-    return apiData({ agents, unit, protocol: { ask: ASK_PROTOCOL_VERSION } });
+    // `granted_capabilities` (P4d) lets the home learn grants changed in place, without re-pairing.
+    const granted = await grantsService.grantedCapabilities(caller.principal.id);
+    return apiData({ agents, unit, protocol: { ask: ASK_PROTOCOL_VERSION }, granted_capabilities: granted });
   } catch (error: unknown) {
     return federationErrorResponse('GET /api/v1/federation/agents failed', error);
   }

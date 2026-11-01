@@ -1,4 +1,7 @@
 // In-memory fakes for federation tests (not a test file).
+import { flagOn } from '@/federation/capabilities';
+import { GrantsService } from '@/federation/grants';
+import { StatusService, type StatusSource } from '@/federation/status.service';
 import { InMemoryAskDedupeStore } from '@/federation/ask-dedupe';
 import { AgentsService, type AgentsRuntime } from '@/federation/agents.service';
 import type { FederationAuditEntry, FederationAuditSink } from '@/federation/audit.repository';
@@ -73,6 +76,15 @@ export class FakePrincipals implements PrincipalPort {
     principal.disabled = true;
     return true;
   }
+  /** FederationKeyStore (P4d): scopes of a principal's keys, changed in place. */
+  async scopesFor(principalId: string): Promise<string[]> {
+    return Array.from(new Set([...this.keys.values()].filter(key => key.principalId === principalId).flatMap(key => key.scopes)));
+  }
+  async setScopes(principalId: string, scopes: string[]): Promise<number> {
+    let changed = 0;
+    for (const key of this.keys.values()) if (key.principalId === principalId) { key.scopes = [...scopes]; changed += 1; }
+    return changed;
+  }
   /** Mirrors P0 auth: active principal + scope present. */
   resolve(key: string | undefined, scope: string): string | null {
     const entry = key ? this.keys.get(key) : undefined;
@@ -82,6 +94,12 @@ export class FakePrincipals implements PrincipalPort {
     return principal.id;
   }
 }
+
+/** A Unit with no local activity (P4d status). */
+export const emptyStatusSource: StatusSource = {
+  load: async () => ({ running: 0, queued: 0, asyncRunning: 0 }),
+  runs: async () => [], asks: async () => [], events: async () => [], agentStats: async () => [],
+};
 
 export const fakeSecrets: SecretBox = {
   encrypt: value => `enc(${Buffer.from(value).toString('base64')})`,
@@ -137,6 +155,9 @@ export interface FakeUnit {
   client: FederationClient;
   /** Background (async) asks started on this Unit; await them in tests. */
   background: Array<Promise<void>>;
+  /** P4d: per-pairing grants and the Control Tower status. */
+  grants: GrantsService;
+  status: StatusService;
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -175,7 +196,15 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
         if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
         const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
         const protocol = unit.env.FAKE_LEGACY_ASK === 'true' ? {} : { protocol: { ask: 2 } };
-        return json({ data: { agents: await unit.agents.listAgents(principalId, actingUserId), ...protocol } });
+        const granted = { granted_capabilities: await unit.grants.grantedCapabilities(principalId) };
+        return json({ data: { agents: await unit.agents.listAgents(principalId, actingUserId), ...protocol, ...granted } });
+      }
+      if (url.pathname === '/api/v1/federation/status') {
+        const key = new Headers(init?.headers).get('authorization')?.replace(/^Bearer /, '');
+        const principalId = unit.principals.resolve(key, 'federation:status:read');
+        if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
+        if (!flagOn(unit.env, 'ALLERAC_FEDERATION_STATUS')) return json({ error: { code: 'status_disabled' } }, 404);
+        return json({ data: await unit.status.build({ grantedCapabilities: await unit.grants.grantedCapabilities(principalId) }) });
       }
       const ask = url.pathname.match(/^\/api\/v1\/federation\/agents\/([^/]+)\/ask$/);
       if (ask) {
@@ -234,7 +263,13 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
       runInBackground: task => { background.push(task); },
     });
     const client = new FederationClient({ store, transport: new PeerClient(fetchImpl, 1_000), secrets: fakeSecrets, audit });
-    byOrigin.set(unit.origin, { origin: unit.origin, env, store, principals, service, deps, audit, runtime, agents, client, background });
+    const grants = new GrantsService({ peers: store, keys: principals, audit, env });
+    const status = new StatusService({
+      source: emptyStatusSource,
+      unit: async () => ({ name: unit.name, displayName: null, emoji: null, role: null, appVersion: '0.1.0', commit: null }),
+      env,
+    });
+    byOrigin.set(unit.origin, { origin: unit.origin, env, store, principals, service, deps, audit, runtime, agents, client, background, grants, status });
   }
 
   return { units: byOrigin, fetchImpl, calls };

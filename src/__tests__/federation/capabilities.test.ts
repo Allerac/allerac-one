@@ -5,6 +5,7 @@ import {
   UnknownCapabilityError,
   capabilitiesToScopes,
   getAdvertisedCapabilities,
+  scopesToCapabilityIds,
 } from '@/federation/capabilities';
 import { SERVICE_ALLOWED_SCOPES, isKnownScope } from '@/app/services/api-keys/api-key-scopes';
 
@@ -21,10 +22,18 @@ describe('federation capability registry', () => {
     }
   });
 
-  it('advertises all public-safe capabilities by default', () => {
+  it('advertises all public-safe capabilities by default, except opt-in ones', () => {
     expect(getAdvertisedCapabilities({}).map(c => c.id)).toEqual(
-      FEDERATION_CAPABILITIES.filter(c => c.publicSafe).map(c => c.id),
+      FEDERATION_CAPABILITIES.filter(c => c.publicSafe && !c.requiresFlag).map(c => c.id),
     );
+  });
+
+  it('advertises federation.status.read only with ALLERAC_FEDERATION_STATUS=on (P4d)', () => {
+    expect(getAdvertisedCapabilities({}).map(c => c.id)).not.toContain('federation.status.read');
+    expect(getAdvertisedCapabilities({ ALLERAC_FEDERATION_STATUS: 'on' }).map(c => c.id)).toContain('federation.status.read');
+    expect(capabilitiesToScopes(['federation.status.read'], { ALLERAC_FEDERATION_STATUS: 'on' })).toEqual(['federation:status:read']);
+    expect(() => capabilitiesToScopes(['federation.status.read'], {})).toThrow();
+    expect(scopesToCapabilityIds(['federation:status:read', 'federation:peer:revoke', 'chat:read'])).toEqual(['federation.status.read']);
   });
 
   it('narrows to ALLERAC_FEDERATION_CAPABILITIES', () => {

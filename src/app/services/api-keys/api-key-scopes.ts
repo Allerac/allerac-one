@@ -54,6 +54,7 @@ export const CONTROL_API_SCOPES = [
   'federation:agents:ask',
   'federation:runs:create',
   'federation:runs:read',
+  'federation:status:read',
   'federation:peer:revoke',
 ] as const;
 
@@ -90,6 +91,7 @@ export const SERVICE_ALLOWED_SCOPES = [
   'federation:agents:ask',
   'federation:runs:create',
   'federation:runs:read',
+  'federation:status:read',
   'federation:peer:revoke',
 ] as const satisfies readonly ControlApiScope[];
 

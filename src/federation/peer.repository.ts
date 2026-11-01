@@ -29,7 +29,7 @@ const COLUMN_MAP: Record<keyof Omit<PeerRecord, 'createdAt' | 'updatedAt'>, stri
 
 type PeerRow = Record<string, unknown>;
 
-function mapRow(row: PeerRow): PeerRecord {
+export function mapRow(row: PeerRow): PeerRecord {
   const record = {} as Record<string, unknown>;
   for (const [key, column] of Object.entries(COLUMN_MAP)) record[key] = row[column] ?? null;
   record.inboundCapabilities = (row.inbound_capabilities as string[] | null) ?? [];

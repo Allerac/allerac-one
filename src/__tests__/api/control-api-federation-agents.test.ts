@@ -28,6 +28,9 @@ jest.mock('@/app/services/api-keys/api-key.service', () => ({
 jest.mock('@/federation/agents.instance', () => ({
   agentsService: { listAgentsWithUnit: jest.fn(), ask: jest.fn(), askAsync: jest.fn(), getAskResult: jest.fn() },
 }));
+jest.mock('@/federation/grants.instance', () => ({
+  grantsService: { grantedCapabilities: jest.fn().mockResolvedValue(['federation.agents.list']) },
+}));
 jest.mock('@/federation/audit.repository', () => ({
   federationAuditRepository: { listForPeer: jest.fn().mockResolvedValue([]) },
 }));
@@ -52,7 +55,7 @@ describe('federation agents routes', () => {
     svc.listAgentsWithUnit.mockResolvedValueOnce({ agents: [{ id: 'health', name: 'Health', description: null }], unit: null });
     const response = await listAgents(new Request('http://x', { headers: auth }));
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: { agents: [{ id: 'health', name: 'Health', description: null }], unit: null, protocol: { ask: 2 } } });
+    expect(await response.json()).toEqual({ data: { agents: [{ id: 'health', name: 'Health', description: null }], unit: null, protocol: { ask: 2 }, granted_capabilities: ['federation.agents.list'] } });
     expect(validate).toHaveBeenCalledWith('alr_live_service', 'federation:agents:list');
     expect(svc.listAgentsWithUnit).toHaveBeenCalledWith('principal-1', 'user-b');
   });

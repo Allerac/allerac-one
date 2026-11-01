@@ -164,7 +164,8 @@ export class PeerClient {
           : code === 'conversation_not_found' ? 'peer_conversation_not_found'
             : code === 'ask_in_progress' ? 'peer_ask_in_progress'
               : code === 'ask_not_found' ? 'peer_ask_not_found'
-                : 'peer_error',
+                : code === 'status_disabled' ? 'peer_status_disabled'
+                  : 'peer_error',
         `Peer responded with HTTP ${response.status}${code ? ` (${code})` : ''}`,
         502,
       );

@@ -96,7 +96,11 @@ function CapabilityPicker({
   );
 }
 
+/** Opt-in, granted on an existing pairing from the peer row (P4d; needs ALLERAC_FEDERATION_STATUS=on). */
+export const STATUS_CAPABILITY = { id: 'federation.status.read', label: 'Read status (Control Tower)' };
+
 function labelFor(id: string): string {
+  if (id === STATUS_CAPABILITY.id) return STATUS_CAPABILITY.label;
   return GRANTABLE_CAPABILITIES.find(c => c.id === id)?.label ?? id;
 }
 
@@ -159,6 +163,19 @@ export default function DiscoveryTab({ isDarkMode }: DiscoveryTabProps) {
     await api(`/api/v1/peers/${peer.id}/reject`, post());
     await load();
   });
+
+  const handleStatusGrant = (peer: PeerDto) => {
+    const granted = peer.inboundCapabilities.includes(STATUS_CAPABILITY.id);
+    const name = peer.displayName ?? peer.unitName;
+    const prompt = granted
+      ? `Stop sharing activity status with “${name}”?`
+      : `Let “${name}” read this Unit's activity status (metadata only: units, runs, asks, failures; never content)?`;
+    if (!window.confirm(prompt)) return;
+    void run(async () => {
+      await api(`/api/v1/peers/${peer.id}/grants`, post(granted ? { remove: [STATUS_CAPABILITY.id] } : { add: [STATUS_CAPABILITY.id] }));
+      await load();
+    });
+  };
 
   const handleRevoke = (peer: PeerDto) => {
     const action = peer.status === 'active' ? 'Disconnect from' : 'Cancel pairing with';
@@ -302,11 +319,18 @@ export default function DiscoveryTab({ isDarkMode }: DiscoveryTabProps) {
                     </p>
                   )}
                 </div>
-                {(peer.status === 'active' || peer.status === 'pending_outbound') && (
-                  <button type="button" className={secondary} disabled={busy} onClick={() => handleRevoke(peer)}>
-                    {peer.status === 'active' ? 'Disconnect' : 'Cancel'}
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {peer.status === 'active' && (
+                    <button type="button" className={secondary} disabled={busy} onClick={() => handleStatusGrant(peer)}>
+                      {peer.inboundCapabilities.includes(STATUS_CAPABILITY.id) ? 'Revoke status read' : 'Grant status read'}
+                    </button>
+                  )}
+                  {(peer.status === 'active' || peer.status === 'pending_outbound') && (
+                    <button type="button" className={secondary} disabled={busy} onClick={() => handleRevoke(peer)}>
+                      {peer.status === 'active' ? 'Disconnect' : 'Cancel'}
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

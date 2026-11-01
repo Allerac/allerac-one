@@ -176,6 +176,15 @@ describe('unified inbox UI', () => {
     expect(fetchMock.mock.calls[2][1].method).toBe('PATCH');
   });
 
+  it('opens a thread from a Control Tower deep link (P4d)', async () => {
+    window.history.pushState({}, '', '/chat?inboxThread=11111111-1111-4111-8111-111111111111');
+    fetchMock.mockReturnValueOnce(respond(listing)).mockReturnValueOnce(respond(thread()));
+    render(<AgentsInboxSection isDark={false} domainId="chat" />);
+    expect(await screen.findByRole('dialog', { name: 'Remote agent thread' })).toBeInTheDocument();
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads/11111111-1111-4111-8111-111111111111?domain=chat');
+    window.history.pushState({}, '', '/');
+  });
+
   describe('P4c async replies', () => {
     afterEach(() => jest.useRealTimers());
 
