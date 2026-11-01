@@ -118,8 +118,8 @@ src/app/components/chat/ChatInput.tsx	@next/next/no-img-element	warning	1
 src/app/components/chat/ChatInput.tsx	@typescript-eslint/no-explicit-any	error	5
 src/app/components/chat/ChatInput.tsx	@typescript-eslint/no-unused-vars	warning	8
 src/app/components/chat/ChatMessages.tsx	@next/next/no-img-element	warning	1
-src/app/components/chat/ChatMessages.tsx	@typescript-eslint/no-explicit-any	error	4
-src/app/components/chat/ChatMessages.tsx	@typescript-eslint/no-unused-vars	warning	4
+src/app/components/chat/ChatMessages.tsx	@typescript-eslint/no-explicit-any	error	3
+src/app/components/chat/ChatMessages.tsx	@typescript-eslint/no-unused-vars	warning	2
 src/app/components/chat/ChatMessages.tsx	react-hooks/set-state-in-effect	error	1
 src/app/components/chat/ModelSelector.tsx	@typescript-eslint/no-explicit-any	error	2
 src/app/components/chat/ModelSelector.tsx	@typescript-eslint/no-unused-vars	warning	2
@@ -209,7 +209,7 @@ src/app/hub/HubClient.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/hub/HubClient.tsx	react-hooks/exhaustive-deps	warning	1
 src/app/jobs/ClippyAssistant.tsx	@typescript-eslint/no-explicit-any	error	2
 src/app/jobs/ClippyAssistant.tsx	@typescript-eslint/no-unused-vars	warning	2
-src/app/jobs/ClippyAssistant.tsx	react-hooks/exhaustive-deps	warning	2
+src/app/jobs/ClippyAssistant.tsx	react-hooks/exhaustive-deps	warning	1
 src/app/jobs/JobsPanel.tsx	@typescript-eslint/no-explicit-any	error	1
 src/app/jobs/JobsPanel.tsx	@typescript-eslint/no-unused-vars	warning	1
 src/app/jobs/JobsPanel.tsx	react-hooks/exhaustive-deps	warning	3

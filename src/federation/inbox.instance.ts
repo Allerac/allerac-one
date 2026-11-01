@@ -1,6 +1,5 @@
 /** Default, DB-backed InboxService (federation P4a). */
-import { PUBLIC_DOMAINS } from '@/app/services/chat/public-domains';
-import { domainService } from '@/app/services/domains/domain.service';
+import pool from '@/app/clients/db';
 import { federationClient } from './federation-client.instance';
 import { inboxRepository } from './inbox.repository';
 import { InboxService } from './inbox.service';
@@ -12,11 +11,9 @@ export const inboxService = new InboxService({
   store: inboxRepository,
   peers: peerRepository,
   federation: federationClient,
-  async localAgents(user) {
-    const domains = await domainService.listAccessible({ userId: user.id, isAdmin: Boolean(user.is_admin) });
-    return domains
-      .filter(domain => !PUBLIC_DOMAINS.includes(domain.slug))
-      .map(domain => ({ slug: domain.slug, name: domain.displayName }));
+  async beatStates() {
+    const result = await pool.query(`SELECT id, beat_state, last_beat_at FROM federation_peers WHERE status = 'active'`);
+    return new Map(result.rows.map(row => [row.id as string, { state: row.beat_state, at: row.last_beat_at ?? null }]));
   },
   loadHomeUnit: async () => toPeerProfile(await loadUnitProfile()),
 });

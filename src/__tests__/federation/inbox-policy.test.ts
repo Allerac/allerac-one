@@ -23,7 +23,7 @@ describe('unified inbox guards', () => {
   const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8');
 
   it('browser code never calls peers or handles keys', () => {
-    for (const file of ['app/components/inbox/inbox-api.ts', 'app/components/inbox/AgentsInboxSection.tsx', 'app/components/inbox/FederatedThreadPanel.tsx']) {
+    for (const file of ['app/components/inbox/inbox-api.ts', 'app/components/inbox/AgentsInboxSection.tsx', 'app/agents/[unit]/[agent]/AgentChatClient.tsx', 'app/components/inbox/FederatedMessageList.tsx']) {
       const source = read(file);
       expect(source).not.toMatch(/outboundKey|federation-client|peer-client|Authorization/);
       expect(source).not.toMatch(/fetch\(\s*['"`]https?:/);

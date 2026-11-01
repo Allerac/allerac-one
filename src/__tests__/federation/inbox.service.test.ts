@@ -66,11 +66,11 @@ describe('packQuestion', () => {
 });
 
 describe('InboxService', () => {
-  it('lists home agents, peer agents grouped with identity, never secrets', async () => {
+  it('lists no local agents, peer agents grouped with identity, never secrets', async () => {
     const { service, peers } = setup();
     await peers.insert(peerFixture());
     const listing = await service.list(user);
-    expect(listing.home).toMatchObject({ name: 'napols', emoji: '🍕', agents: [{ slug: 'chat', name: 'Chat' }] });
+    expect(listing.home).toMatchObject({ name: 'napols', emoji: '🍕', agents: [] });
     expect(listing.units).toEqual([expect.objectContaining({
       name: 'santos', emoji: '🏖️', role: 'Beach lab', status: 'online',
       agents: [expect.objectContaining({ slug: 'chat', available: true, threadId: null })],
@@ -434,5 +434,22 @@ describe('InboxService async asks and polling (P4c)', () => {
     setup.advance(3_000);
     await setup.service.pollDue(null);
     expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'unit_not_paired' });
+  });
+});
+
+describe('unitStatus', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { unitStatus, BEAT_FRESH_MS } = require('@/federation/inbox.service');
+  const now = 1_000_000_000;
+  it('uses a fresh heartbeat', () => {
+    expect(unitStatus(true, { state: 'degraded', at: new Date(now - 1000) }, now)).toBe('degraded');
+    expect(unitStatus(false, { state: 'online', at: new Date(now - 1000) }, now)).toBe('online');
+  });
+  it('treats an offline beat with a fresh answer as degraded', () => {
+    expect(unitStatus(true, { state: 'offline', at: new Date(now - 1000) }, now)).toBe('degraded');
+  });
+  it('falls back to the listing when the beat is stale or missing', () => {
+    expect(unitStatus(true, { state: 'offline', at: new Date(now - BEAT_FRESH_MS - 1) }, now)).toBe('online');
+    expect(unitStatus(false, null, now)).toBe('offline');
   });
 });

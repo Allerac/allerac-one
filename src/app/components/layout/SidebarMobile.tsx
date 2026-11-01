@@ -148,7 +148,7 @@ export default function SidebarMobile({
 
       <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
         {canUseInbox({ is_admin: isAdmin }, inboxDomainId) && (
-          <AgentsInboxSection isDark={d} domainId={inboxDomainId} />
+          <AgentsInboxSection isDark={d} domainId={inboxDomainId} onNavigate={onClose} />
         )}
         <SidebarContent
           conversations={conversations}
