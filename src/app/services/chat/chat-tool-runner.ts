@@ -80,7 +80,10 @@ export async function executeChatTool(
     if (!canUseFederationTools({ isAdmin: user.is_admin === true, domain, policy: context.toolPolicy })) {
       return { error: `Tool ${toolName} is not available.` };
     }
-    const federation = buildFederationTools(federationClient, userId);
+    const { toolConversationRepository } = await import('@/federation/tool-conversations.repository');
+    const federation = buildFederationTools(federationClient, userId, {
+      conversationId: conversationId ?? null, conversations: toolConversationRepository,
+    });
     return toolName === 'list_peer_agents'
       ? federation.listPeerAgents(toolArgs)
       : federation.askPeerAgent(toolArgs);

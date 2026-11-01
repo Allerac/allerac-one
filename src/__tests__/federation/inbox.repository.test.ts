@@ -83,4 +83,27 @@ describe('InboxRepository', () => {
     expect(await repo.deleteThreadsForPeer('u1', 'p1')).toBe(3);
     expect(mockQuery.mock.calls[0][1]).toEqual(['u1', 'p1']);
   });
+
+  it('schedules, claims and lists due async polls (P4c)', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const next = new Date(5_000);
+    await repo.schedulePoll('m1', { remoteRunId: 'k', nextPollAt: next, pollAttempts: 2, pendingDeadlineAt: null });
+    expect(mockQuery.mock.calls[0][0]).toContain("status = 'pending'");
+    expect(mockQuery.mock.calls[0][1]).toEqual(['m1', 'k', next, 2, null]);
+
+    mockQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+    expect(await repo.claimPoll('m1', next, new Date(9_000))).toBe(false);
+    expect(mockQuery.mock.calls[1][0]).toContain('IS NOT DISTINCT FROM $2');
+
+    mockQuery.mockResolvedValueOnce({ rows: [{
+      id: 'm1', thread_id: 't1', role: 'user', content: 'q', status: 'pending', truncated: false, error_code: null,
+      remote_run_id: 'k', next_poll_at: next, poll_attempts: 2, pending_deadline_at: null, created_at: new Date(0),
+      thread: { ...threadRow, created_at: '1970-01-01T00:00:00.000Z' },
+    }] });
+    const due = await repo.listDuePending({ userId: 'u1', threadId: null, now: new Date(6_000), limit: 999 });
+    expect(mockQuery.mock.calls[2][1]).toEqual([new Date(6_000), 'u1', null, 200]);
+    expect(due[0].message).toMatchObject({ remoteRunId: 'k', pollAttempts: 2 });
+    expect(due[0].thread).toMatchObject({ id: 't1', userId: 'u1' });
+    expect(due[0].thread.createdAt).toBeInstanceOf(Date);
+  });
 });

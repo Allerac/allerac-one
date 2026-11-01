@@ -7,6 +7,8 @@ import { POST as openThread } from '@/app/api/inbox/threads/route';
 import { DELETE as deleteThread, GET as getThread, PATCH as renameThread } from '@/app/api/inbox/threads/[id]/route';
 import { GET as listMessages, POST as sendMessage } from '@/app/api/inbox/threads/[id]/messages/route';
 import { POST as retryMessage } from '@/app/api/inbox/threads/[id]/messages/[messageId]/retry/route';
+import { GET as inboxUpdates } from '@/app/api/inbox/updates/route';
+import { POST as markRead } from '@/app/api/inbox/threads/[id]/read/route';
 import { DELETE as deleteHistory } from '@/app/api/inbox/peers/[peerId]/history/route';
 
 jest.mock('@/app/lib/auth-session', () => {
@@ -26,7 +28,7 @@ jest.mock('@/app/lib/auth-session', () => {
 jest.mock('@/federation/inbox.instance', () => ({
   inboxService: {
     list: jest.fn(), openThread: jest.fn(), getThread: jest.fn(), send: jest.fn(), retry: jest.fn(), deleteArchivedHistory: jest.fn(),
-    listMessages: jest.fn(), renameThread: jest.fn(), deleteThread: jest.fn(),
+    listMessages: jest.fn(), renameThread: jest.fn(), deleteThread: jest.fn(), updates: jest.fn(), markThreadRead: jest.fn(),
   },
 }));
 
@@ -55,8 +57,11 @@ describe('/api/inbox routes', () => {
       listMessages(new Request('http://x/api/inbox/threads/t1/messages'), ctx),
       renameThread(json('http://x', 'PATCH', { title: 'x' }), ctx),
       deleteThread(json('http://x', 'DELETE'), ctx),
+      inboxUpdates(new Request('http://x/api/inbox/updates')),
+      markRead(json('http://x', 'POST'), ctx),
     ]);
-    expect(responses.map(response => response.status)).toEqual([403, 403, 403, 403, 403, 403, 403, 403, 403]);
+    expect(responses.map(response => response.status)).toEqual([403, 403, 403, 403, 403, 403, 403, 403, 403, 403, 403]);
+    expect(svc.updates).not.toHaveBeenCalled();
     expect(svc.renameThread).not.toHaveBeenCalled();
     expect(svc.deleteThread).not.toHaveBeenCalled();
     expect(svc.list).not.toHaveBeenCalled();
@@ -147,5 +152,19 @@ describe('/api/inbox routes', () => {
     expect(response.status).toBe(500);
     expect(await response.text()).not.toContain('secret');
     spy.mockRestore();
+  });
+
+  it('returns unread updates and marks threads read (P4c)', async () => {
+    auth.mockResolvedValue(admin as never);
+    svc.updates.mockResolvedValueOnce({ totalUnread: 3, threads: [], serverTime: 'now' });
+    const response = await inboxUpdates(new Request('http://x/api/inbox/updates?domain=chat'));
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect((await response.json()).data.totalUnread).toBe(3);
+    expect(svc.updates).toHaveBeenCalledWith(admin);
+
+    svc.markThreadRead.mockResolvedValueOnce(undefined);
+    const read = await markRead(json('http://x', 'POST'), { params: Promise.resolve({ id: 't1' }) });
+    expect((await read.json()).data).toEqual({ read: true });
+    expect(svc.markThreadRead).toHaveBeenCalledWith(admin, 't1');
   });
 });

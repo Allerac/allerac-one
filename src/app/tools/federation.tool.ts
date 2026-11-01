@@ -1,10 +1,20 @@
+import { randomUUID } from 'node:crypto';
 import type { FederationClient } from '@/federation/federation-client';
 import { FederationError } from '@/federation/errors';
+import type { ToolConversationStore } from '@/federation/tool-conversations';
 
 const MAX_QUESTION_CHARS = 4_000;
 
+export interface FederationToolOptions {
+  /** Local chat conversation the tool runs in; it gets its own remote conversation per peer and agent (P4c). */
+  conversationId?: string | null;
+  conversations?: ToolConversationStore;
+}
+
+type ToolClient = Pick<FederationClient, 'listActivePeers' | 'listAgentsWithUnit' | 'findActivePeer' | 'askAgentInConversation'>;
+
 /** Chat tools backed by the shared FederationClient. */
-export function buildFederationTools(client: FederationClient, userId: string) {
+export function buildFederationTools(client: ToolClient, userId: string, options: FederationToolOptions = {}) {
   const ctx = { initiatedByUserId: userId };
 
   async function listPeerAgents(args: { peer?: string }) {
@@ -51,8 +61,27 @@ export function buildFederationTools(client: FederationClient, userId: string) {
       const peers = await client.listActivePeers();
       return { error: `No paired Unit named "${args.peer}".`, pairedUnits: peers.map(item => item.unitName) };
     }
+    const agent = args.agent.trim().toLowerCase();
+    const question = args.question.trim();
+    const local = options.conversationId && options.conversations ? options.conversationId : null;
+    // Synchronous (the model needs the answer inline). Each call gets its own key, so a
+    // transport retry at the peer replays instead of running the agent twice.
+    const ask = (conversationId: string | null) => client.askAgentInConversation(
+      peer.id, agent, { question, conversationId, idempotencyKey: `tool:${randomUUID()}` }, ctx,
+    );
     try {
-      const result = await client.askAgent(peer.id, args.agent, args.question.trim(), ctx);
+      const remote = local ? await options.conversations!.get(local, peer.id, agent) : null;
+      let result;
+      try {
+        result = await ask(remote);
+      } catch (error) {
+        if (!(remote && error instanceof FederationError && error.code === 'peer_conversation_not_found')) throw error;
+        await options.conversations!.clear(local!, peer.id, agent);
+        result = await ask(null);
+      }
+      if (local && result.conversationId && result.conversationId !== remote) {
+        await options.conversations!.set(local, peer.id, agent, result.conversationId);
+      }
       return { unit: peer.unitName, agent: args.agent, answer: result.answer, truncated: result.truncated };
     } catch (error) {
       return { unit: peer.unitName, agent: args.agent, error: describe(error) };

@@ -23,6 +23,8 @@ export interface FederatedThreadSummary extends FederatedThread {
   /** Last message content (clipped), for the sidebar preview. */
   preview: string | null;
   unread: number;
+  /** P4c: an async reply is still pending in this thread. */
+  pending?: boolean;
 }
 
 export interface FederatedMessage {
@@ -34,6 +36,11 @@ export interface FederatedMessage {
   truncated: boolean;
   errorCode: string | null;
   remoteMessageId: string | null;
+  /** P4c async asks: the peer Idempotency-Key used to fetch the result. */
+  remoteRunId: string | null;
+  nextPollAt: Date | null;
+  pollAttempts: number;
+  pendingDeadlineAt: Date | null;
   createdAt: Date;
 }
 
@@ -68,4 +75,13 @@ export interface InboxStore {
   touchThread(threadId: string, at: Date): Promise<void>;
   markRead(threadId: string, at: Date): Promise<void>;
   deleteThreadsForPeer(userId: string, peerId: string): Promise<number>;
+  /** P4c: thread by id, without an owner check (internal use after the owner was verified). */
+  getThreadById(threadId: string): Promise<FederatedThread | null>;
+  /** P4c: (re)schedule polling for a pending async message. */
+  schedulePoll(messageId: string, poll: { remoteRunId: string; nextPollAt: Date; pollAttempts: number; pendingDeadlineAt: Date | null }): Promise<void>;
+  /** P4c: moves next_poll_at to `leaseUntil` only if it is still `expected`; false when someone else claimed it. */
+  claimPoll(messageId: string, expected: Date | null, leaseUntil: Date): Promise<boolean>;
+  /** P4c: due pending async messages, oldest due first. */
+  listDuePending(params: { userId: string | null; threadId: string | null; now: Date; limit: number }): Promise<Array<{ message: FederatedMessage; thread: FederatedThread }>>;
+  hasPendingAsync(threadId: string): Promise<boolean>;
 }

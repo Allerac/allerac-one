@@ -163,7 +163,8 @@ export class PeerClient {
         code === 'rate_limited' || response.status === 429 ? 'peer_rate_limited'
           : code === 'conversation_not_found' ? 'peer_conversation_not_found'
             : code === 'ask_in_progress' ? 'peer_ask_in_progress'
-              : 'peer_error',
+              : code === 'ask_not_found' ? 'peer_ask_not_found'
+                : 'peer_error',
         `Peer responded with HTTP ${response.status}${code ? ` (${code})` : ''}`,
         502,
       );

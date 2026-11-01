@@ -7,6 +7,8 @@ import { FederationRateLimitedError } from '@/federation/agents.service';
 import { federationAuditRepository } from '@/federation/audit.repository';
 import { GET as listAgents } from '@/app/api/v1/federation/agents/route';
 import { POST as askAgent } from '@/app/api/v1/federation/agents/[agent]/ask/route';
+import { GET as askResult } from '@/app/api/v1/federation/asks/[key]/route';
+import { FederationError } from '@/federation/errors';
 import { GET as peerAudit } from '@/app/api/v1/peers/[id]/audit/route';
 
 jest.mock('@/app/lib/auth-session', () => {
@@ -24,7 +26,7 @@ jest.mock('@/app/services/api-keys/api-key.service', () => ({
   apiKeyService: { validateBearerToken: jest.fn() },
 }));
 jest.mock('@/federation/agents.instance', () => ({
-  agentsService: { listAgentsWithUnit: jest.fn(), ask: jest.fn() },
+  agentsService: { listAgentsWithUnit: jest.fn(), ask: jest.fn(), askAsync: jest.fn(), getAskResult: jest.fn() },
 }));
 jest.mock('@/federation/audit.repository', () => ({
   federationAuditRepository: { listForPeer: jest.fn().mockResolvedValue([]) },
@@ -50,7 +52,7 @@ describe('federation agents routes', () => {
     svc.listAgentsWithUnit.mockResolvedValueOnce({ agents: [{ id: 'health', name: 'Health', description: null }], unit: null });
     const response = await listAgents(new Request('http://x', { headers: auth }));
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: { agents: [{ id: 'health', name: 'Health', description: null }], unit: null } });
+    expect(await response.json()).toEqual({ data: { agents: [{ id: 'health', name: 'Health', description: null }], unit: null, protocol: { ask: 2 } } });
     expect(validate).toHaveBeenCalledWith('alr_live_service', 'federation:agents:list');
     expect(svc.listAgentsWithUnit).toHaveBeenCalledWith('principal-1', 'user-b');
   });
@@ -96,6 +98,58 @@ describe('federation agents routes', () => {
     request.headers.set('Idempotency-Key', 'bad key!');
     expect((await askAgent(request, askCtx)).status).toBe(400);
     expect(svc.ask).not.toHaveBeenCalled();
+  });
+
+  it('runs async asks in the background and returns 202 (P4c)', async () => {
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    const noKey = await askAgent(new Request('http://x/api/v1/federation/agents/Health/ask?async=1', {
+      method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'hi' }),
+    }), askCtx);
+    expect(noKey.status).toBe(400);
+
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    svc.askAsync.mockResolvedValueOnce({ status: 'pending' });
+    const request = new Request('http://x/api/v1/federation/agents/Health/ask?async=1', {
+      method: 'POST', headers: { ...auth, 'Content-Type': 'application/json', 'Idempotency-Key': 'k1' }, body: JSON.stringify({ question: 'hi' }),
+    });
+    const response = await askAgent(request, askCtx);
+    expect(response.status).toBe(202);
+    expect((await response.json()).data).toEqual({ status: 'pending', key: 'k1', poll_after_ms: 3000 });
+    expect(svc.ask).not.toHaveBeenCalled();
+
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    svc.askAsync.mockResolvedValueOnce({ status: 'done', result: { answer: 'a', truncated: false, conversation_id: null, message_id: null } });
+    const done = await askAgent(new Request(request.url, {
+      method: 'POST', headers: { ...auth, 'Content-Type': 'application/json', 'Idempotency-Key': 'k1' }, body: JSON.stringify({ question: 'hi' }),
+    }), askCtx);
+    expect(done.status).toBe(200);
+    expect((await done.json()).data).toMatchObject({ status: 'done', answer: 'a' });
+  });
+
+  it('reads ask results by key for the same principal (P4c)', async () => {
+    const ctx = (key: string) => ({ params: Promise.resolve({ key }) });
+    const get = () => new Request('http://x/api/v1/federation/asks/k1', { headers: auth });
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    svc.getAskResult.mockResolvedValueOnce({ status: 'pending' });
+    const pending = await askResult(get(), ctx('k1'));
+    expect(pending.status).toBe(202);
+    expect(validate).toHaveBeenCalledWith('alr_live_service', 'federation:agents:ask');
+    expect(svc.getAskResult).toHaveBeenCalledWith('principal-1', 'user-b', 'k1');
+
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    svc.getAskResult.mockResolvedValueOnce({ status: 'done', response: { answer: 'a', truncated: false, conversation_id: 'c', message_id: null } });
+    expect((await (await askResult(get(), ctx('k1'))).json()).data).toMatchObject({ status: 'done', answer: 'a', conversation_id: 'c' });
+
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    svc.getAskResult.mockResolvedValueOnce({ status: 'failed', errorCode: 'timeout' });
+    expect((await (await askResult(get(), ctx('k1'))).json()).data).toEqual({ status: 'failed', error_code: 'timeout' });
+
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    svc.getAskResult.mockRejectedValueOnce(new FederationError('ask_not_found', 'Ask not found', 404));
+    expect((await askResult(get(), ctx('k1'))).status).toBe(404);
+
+    validate.mockResolvedValueOnce(serviceCaller as never);
+    expect((await askResult(get(), ctx('bad key!'))).status).toBe(400);
   });
 
   it('rejects empty or oversized questions', async () => {

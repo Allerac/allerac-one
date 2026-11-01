@@ -1,6 +1,6 @@
 /** @jest-environment node */
 
-import { AgentsService, FederationRateLimitedError, MAX_ANSWER_CHARS } from '@/federation/agents.service';
+import { ASYNC_ASK_DEADLINE_MS, AgentsService, FederationRateLimitedError, MAX_ANSWER_CHARS } from '@/federation/agents.service';
 import { InMemoryAskDedupeStore, STALE_IN_PROGRESS_MS, askRequestHash } from '@/federation/ask-dedupe';
 import { InMemoryPeerStore, MemoryAudit, fakeAgentsRuntime } from '../__mocks__/federation-fakes';
 
@@ -196,5 +196,96 @@ describe('AgentsService conversation continuity (P4b)', () => {
     const { service } = await withDedupe({ resolveModel: async () => null });
     await expect(service.ask({ ...base, idempotencyKey: 'k4' })).rejects.toMatchObject({ code: 'provider_not_configured' });
     await expect(service.ask({ ...base, idempotencyKey: 'k4' })).rejects.toMatchObject({ code: 'provider_not_configured' });
+  });
+});
+
+describe('AgentsService async asks (P4c)', () => {
+  const base = { principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' };
+
+  async function asyncSetup(options: { env?: Record<string, string>; runtime?: Parameters<typeof fakeAgentsRuntime>[0] } = {}) {
+    let clock = 1_000_000;
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      id: 'peer-1', origin: 'https://napols.example', unitName: 'napols', displayName: 'Napols', direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    await store.insert({
+      id: 'peer-2', origin: 'https://other.example', unitName: 'other', displayName: null, direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-2', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    const background: Array<Promise<void>> = [];
+    const lease = { release: jest.fn() };
+    const runtime = fakeAgentsRuntime(options.runtime);
+    const service = new AgentsService({
+      runtime, store, audit: new MemoryAudit(), dedupe: new InMemoryAskDedupeStore(), now: () => clock,
+      acquire: () => ({ allowed: true as const, lease, headers: {} }),
+      env: { ALLERAC_FEDERATION_AGENTS: 'Health', ...options.env },
+      runInBackground: task => { background.push(task); },
+    });
+    return { service, runtime, background, lease, advance: (ms: number) => { clock += ms; } };
+  }
+
+  it('requires an Idempotency-Key', async () => {
+    const { service } = await asyncSetup();
+    await expect(service.askAsync(base)).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('returns pending, runs in the background, then serves the result by key', async () => {
+    const { service, background, lease } = await asyncSetup();
+    expect(await service.askAsync({ ...base, idempotencyKey: 'k1' })).toEqual({ status: 'pending' });
+    expect(service.runningAsyncAsks).toBe(1);
+    await Promise.all(background);
+    expect(service.runningAsyncAsks).toBe(0);
+    expect(lease.release).toHaveBeenCalledTimes(2);
+    expect(await service.getAskResult('principal-1', 'user-1', 'k1')).toMatchObject({ status: 'done', response: { answer: 'answer from health: q' } });
+    // A repeat returns the stored answer without running again.
+    expect(await service.askAsync({ ...base, idempotencyKey: 'k1' })).toMatchObject({ status: 'done', result: { answer: 'answer from health: q' } });
+  });
+
+  it('hides results from other principals', async () => {
+    const { service, background } = await asyncSetup();
+    await service.askAsync({ ...base, idempotencyKey: 'k1' });
+    await Promise.all(background);
+    await expect(service.getAskResult('principal-2', 'user-1', 'k1')).rejects.toMatchObject({ code: 'ask_not_found', status: 404 });
+    await expect(service.getAskResult('principal-1', 'user-1', 'nope')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('reports pending while running and a repeated POST does not start a second run', async () => {
+    let release: (value: { content: string }) => void = () => undefined;
+    const { service, runtime, background } = await asyncSetup({
+      runtime: { runChat: input => new Promise(resolve => { runtimeCalls.push(input); release = resolve; }) },
+    });
+    const runtimeCalls: unknown[] = [];
+    await service.askAsync({ ...base, idempotencyKey: 'k2' });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(await service.askAsync({ ...base, idempotencyKey: 'k2' })).toEqual({ status: 'pending' });
+    expect(await service.getAskResult('principal-1', 'user-1', 'k2')).toEqual({ status: 'pending' });
+    release({ content: 'x' });
+    await Promise.all(background);
+    expect(runtimeCalls).toHaveLength(1);
+    expect(runtime.chats).toHaveLength(0);
+  });
+
+  it('reads as timed out after the deadline (e.g. the process restarted)', async () => {
+    const { service, advance } = await asyncSetup({ runtime: { runChat: () => new Promise(() => undefined) } });
+    await service.askAsync({ ...base, idempotencyKey: 'k3' });
+    advance(ASYNC_ASK_DEADLINE_MS + 1);
+    expect(await service.getAskResult('principal-1', 'user-1', 'k3')).toEqual({ status: 'failed', errorCode: 'timeout' });
+  });
+
+  it('stores failures with their error code', async () => {
+    const { service, background } = await asyncSetup({ runtime: { resolveModel: async () => null } });
+    await service.askAsync({ ...base, idempotencyKey: 'k4' });
+    await Promise.all(background);
+    expect(await service.getAskResult('principal-1', 'user-1', 'k4')).toEqual({ status: 'failed', errorCode: 'provider_not_configured' });
+  });
+
+  it('caps concurrent background runs', async () => {
+    const { service } = await asyncSetup({
+      env: { FEDERATION_ASYNC_MAX_RUNNING: '1' }, runtime: { runChat: () => new Promise(() => undefined) },
+    });
+    await service.askAsync({ ...base, idempotencyKey: 'a' });
+    await expect(service.askAsync({ ...base, question: 'other', idempotencyKey: 'b' })).rejects.toBeInstanceOf(FederationRateLimitedError);
+    expect(await service.getAskResult('principal-1', 'user-1', 'b')).toEqual({ status: 'failed', errorCode: 'rate_limited' });
   });
 });

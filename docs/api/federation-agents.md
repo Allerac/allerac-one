@@ -148,3 +148,23 @@ All routes accept `?domain=<slug>` and refuse public domains (`sales`, `openworl
 The home Unit calls the peer's existing `ask` endpoint through `FederationClient`,
 packing the last 6 turns into the question. Pairing keys and peer origins never
 reach the browser.
+
+## Async asks and late replies (P4c)
+
+Peers on this version advertise `protocol: { ask: 2 }` in `GET /api/v1/federation/agents`.
+Homes only use async asks with such peers; with older peers the inbox stays synchronous (60s).
+
+- `POST /api/v1/federation/agents/:agent/ask?async=1` (requires `Idempotency-Key`) returns
+  `202 { status: "pending", key, poll_after_ms }` and runs the agent in the background for up to
+  10 minutes, or `200 { status: "done", ... }` when the result is already known (replay).
+  Background runs are capped per Unit (`FEDERATION_ASYNC_MAX_RUNNING`, default 4).
+- `GET /api/v1/federation/asks/:key` (scope `federation:agents:ask`, no re-pairing) returns
+  `200` done with the answer, `202` while pending, `{ status: "failed", error_code }` when it failed,
+  and `404 ask_not_found` when the peer no longer has it. The dedupe table is the result store.
+- The home polls pending replies with backoff (3s, 3s, 5s, 10s, 15s, then 30s, ±20% jitter): from the
+  browser through `GET /api/inbox/updates` and the open thread, and from a background sweep every
+  15s (`INBOX_POLL_SWEEP_EVERY_MS`, disable with `INBOX_POLL_SWEEP_ENABLED=false`; it needs background
+  workers enabled). After 11 minutes a pending message reads as `timeout`.
+- Late replies stay unread until the thread is opened (`POST /api/inbox/threads/:id/read`).
+- `ask_peer_agent` now keeps one remote conversation per local chat, peer and agent
+  (`federated_tool_conversations`), with idempotency key `tool:<uuid>`. It stays synchronous.

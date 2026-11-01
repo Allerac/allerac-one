@@ -13,7 +13,9 @@ interface Props {
 }
 
 const ERROR_LABELS: Record<string, string> = {
-  timeout: 'The unit did not answer within 60s.',
+  timeout: 'No answer within 10 minutes.',
+  result_lost: 'The unit lost the answer; retry.',
+  unit_not_paired: 'Unit no longer paired.',
   peer_unreachable: 'The unit could not be reached.',
   peer_access_denied: 'The unit refused the request.',
   peer_rate_limited: 'The unit is rate limiting requests.',
@@ -21,6 +23,9 @@ const ERROR_LABELS: Record<string, string> = {
   peer_not_active: 'Unit no longer paired.',
   peer_ask_in_progress: 'The unit is still working on this message; retry in a moment.',
 };
+
+/** P4c: open-panel poll while a reply is pending (the server polls the peer on each read). */
+export const POLL_PANEL_MS = 3000;
 
 function applyResult(messages: InboxMessageView[], result: SendResult): InboxMessageView[] {
   const next = messages.filter(message => message.id !== result.userMessage.id && !message.id.startsWith('local-'));
@@ -114,6 +119,33 @@ export default function FederatedThreadPanel({ isDark: d, domainId, threadId, on
     void run(() => inboxApi.retry(domainId, threadId, messageId));
   };
 
+    // P4c: an async reply is on its way while the newest user message is still pending.
+  const lastUser = view ? [...view.messages].reverse().find(message => message.role === 'user') : undefined;
+  const waiting = !sending && lastUser?.status === 'pending' && !lastUser.id.startsWith('local-');
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => {
+      inboxApi.getThread(domainId, threadId)
+        .then(next => {
+          setView(current => {
+            if (!current) return next;
+            // Keep older pages already loaded; the fresh page replaces the rest.
+            const fresh = new Set(next.messages.map(message => message.id));
+            const firstFresh = next.messages[0]?.createdAt;
+            const older = firstFresh ? current.messages.filter(message => !fresh.has(message.id) && message.createdAt < firstFresh) : [];
+            return { ...next, messages: [...older, ...next.messages], nextCursor: older.length ? current.nextCursor : next.nextCursor };
+          });
+          const stillPending = [...next.messages].reverse().find(message => message.role === 'user')?.status === 'pending';
+          if (!stillPending) {
+            void inboxApi.markRead(domainId, threadId).catch(() => undefined);
+            onChanged?.();
+          }
+        })
+        .catch(() => undefined);
+    }, POLL_PANEL_MS);
+    return () => clearInterval(timer);
+  }, [waiting, domainId, threadId, onChanged]);
+
   const bubble = (message: InboxMessageView) => {
     if (message.role === 'system') {
       return (
@@ -192,8 +224,15 @@ export default function FederatedThreadPanel({ isDark: d, domainId, threadId, on
               <div className={`rounded-lg px-3 py-2 text-sm italic ${d ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>thinking…</div>
             </div>
           )}
+          {waiting && view && (
+            <div className="flex justify-start" data-testid="waiting">
+              <div className={`rounded-lg px-3 py-2 text-sm italic ${d ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                waiting for {view.unit.displayName}…
+              </div>
+            </div>
+          )}
           {view && view.messages.length === 0 && !sending && (
-            <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>No messages yet. Replies come from another unit and may take up to a minute.</p>
+            <p className={`text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>No messages yet. Replies come from another unit and may take a few minutes.</p>
           )}
           <div ref={bottomRef} />
         </div>

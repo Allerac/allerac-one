@@ -2,7 +2,8 @@
 import { FederationError, federationErrors } from '@/federation/errors';
 import { ASK_TIMEOUT_MS } from '@/federation/federation-client';
 import {
-  CONTEXT_TURNS, InboxError, InboxService, PEER_SENDS_PER_MINUTE, packQuestion, type InboxFederationPort,
+  CONTEXT_TURNS, InboxError, InboxService, PEER_SENDS_PER_MINUTE, PENDING_DEADLINE_MS, POLL_BACKOFF_MS, packQuestion, pollDelay,
+  type InboxFederationPort,
 } from '@/federation/inbox.service';
 import type { FederatedMessage } from '@/federation/inbox.types';
 import { InMemoryPeerStore } from '../__mocks__/federation-fakes';
@@ -37,7 +38,8 @@ function setup(options: { now?: () => number; legacyPeer?: boolean } = {}) {
 
 describe('packQuestion', () => {
   const msg = (role: 'user' | 'agent', content: string, status: FederatedMessage['status'] = 'done'): FederatedMessage => ({
-    id: content, threadId: 't', role, content, status, truncated: false, errorCode: null, remoteMessageId: null, createdAt: new Date(),
+    id: content, threadId: 't', role, content, status, truncated: false, errorCode: null, remoteMessageId: null,
+    remoteRunId: null, nextPollAt: null, pollAttempts: 0, pendingDeadlineAt: null, createdAt: new Date(),
   });
 
   it('sends the plain message when there is no history', () => {
@@ -290,5 +292,147 @@ describe('InboxService', () => {
     await peers.insert(peerFixture());
     const thread = await service.openThread(user, peerFixture().id, 'chat');
     await expect(service.getThread({ id: 'other', is_admin: true }, thread.id)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('pollDelay', () => {
+  it('follows the backoff table with ±20% jitter and repeats the last step', () => {
+    expect(pollDelay(0, () => 0.5)).toBe(3_000);
+    expect(pollDelay(0, () => 0)).toBe(2_400);
+    expect(pollDelay(0, () => 1)).toBe(3_600);
+    expect(pollDelay(3, () => 0.5)).toBe(10_000);
+    expect(pollDelay(99, () => 0.5)).toBe(POLL_BACKOFF_MS.at(-1));
+  });
+});
+
+describe('InboxService async asks and polling (P4c)', () => {
+  function asyncSetup() {
+    let clock = 1_000_000;
+    const store = new InMemoryInboxStore();
+    const peers = new InMemoryPeerStore();
+    const federation = {
+      listAgentsWithUnit: jest.fn().mockResolvedValue({ agents: [{ id: 'chat', name: 'Chat' }], unit: null, askVersion: 2 }),
+      askAgentInConversation: jest.fn(),
+      askAgentAsync: jest.fn().mockResolvedValue({ status: 'pending', pollAfterMs: 3_000 }),
+      getAskResult: jest.fn().mockResolvedValue({ status: 'pending', pollAfterMs: 3_000 }),
+    } satisfies InboxFederationPort;
+    const service = new InboxService({
+      store, peers, federation, log: jest.fn(), now: () => clock, random: () => 0.5,
+      localAgents: async () => [],
+      loadHomeUnit: async () => ({ name: 'napols', displayName: 'Napols', emoji: null, role: null, description: null, tags: [] }),
+    });
+    return { store, peers, federation, service, advance: (ms: number) => { clock += ms; }, now: () => clock };
+  }
+  const done = { status: 'done' as const, result: { answer: 'late', truncated: false, conversationId: '00000000-0000-4000-8000-0000000000cc', messageId: 'rm' } };
+
+  async function pendingThread(setup: ReturnType<typeof asyncSetup>) {
+    await setup.peers.insert(peerFixture());
+    const thread = await setup.service.openThread(user, peerFixture().id, 'chat');
+    const sent = await setup.service.send(user, thread.id, 'slow');
+    return { thread, sent };
+  }
+
+  it('keeps the message pending with a poll schedule and blocks a second send', async () => {
+    const setup = asyncSetup();
+    const { thread, sent } = await pendingThread(setup);
+    expect(sent.userMessage.status).toBe('pending');
+    expect(setup.federation.askAgentInConversation).not.toHaveBeenCalled();
+    const message = setup.store.messages[0];
+    expect(message).toMatchObject({ remoteRunId: `${message.id}:new`, pollAttempts: 0 });
+    expect(message.nextPollAt?.getTime()).toBe(setup.now() + 3_000);
+    expect(message.pendingDeadlineAt?.getTime()).toBe(setup.now() + PENDING_DEADLINE_MS);
+    await expect(setup.service.send(user, thread.id, 'more')).rejects.toMatchObject({ code: 'send_in_progress' });
+  });
+
+  it('backs off while pending, then delivers the late reply as unread', async () => {
+    const setup = asyncSetup();
+    const { thread } = await pendingThread(setup);
+    expect(await setup.service.pollDue(null)).toBe(0); // not due yet
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(0);
+    expect(setup.store.messages[0]).toMatchObject({ pollAttempts: 1 });
+    expect(setup.store.messages[0].nextPollAt?.getTime()).toBe(setup.now() + POLL_BACKOFF_MS[1]);
+
+    setup.federation.getAskResult.mockResolvedValueOnce(done);
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages.map(m => [m.role, m.status])).toEqual([['user', 'done'], ['agent', 'done']]);
+    expect(setup.store.messages[1].remoteMessageId).toBe('rm');
+    expect(setup.store.threads.get(thread.id)?.remoteConversationId).toBe(done.result.conversationId);
+    const updates = await setup.service.updates(user);
+    expect(updates.totalUnread).toBe(1);
+    expect(updates.threads[0]).toMatchObject({ unread: 1, pending: false, preview: 'late' });
+    await setup.service.markThreadRead(user, thread.id);
+    expect((await setup.service.updates(user)).totalUnread).toBe(0);
+  });
+
+  it('keeps polling while the peer is unreachable and times out after the deadline', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.federation.getAskResult.mockRejectedValue(federationErrors.peerUnreachable());
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(0);
+    expect(setup.store.messages[0].status).toBe('pending');
+    setup.advance(PENDING_DEADLINE_MS);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'timeout', errorCode: 'timeout' });
+  });
+
+  it('maps peer failures and lost results', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.federation.getAskResult.mockResolvedValueOnce({ status: 'failed', errorCode: 'provider_not_configured' });
+    setup.advance(3_000);
+    await setup.service.pollDue(null);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'provider_not_configured' });
+
+    const other = asyncSetup();
+    await pendingThread(other);
+    other.federation.getAskResult.mockRejectedValueOnce(new FederationError('peer_ask_not_found', 'gone', 502));
+    other.advance(3_000);
+    await other.service.pollDue(null);
+    expect(other.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'result_lost' });
+  });
+
+  it('retries a timed-out message with the same key so a late result is replayed', async () => {
+    const setup = asyncSetup();
+    const { thread, sent } = await pendingThread(setup);
+    await setup.store.updateMessage(sent.userMessage.id, { status: 'timeout', errorCode: 'timeout' });
+    setup.federation.askAgentAsync.mockResolvedValueOnce(done);
+    const retried = await setup.service.retry(user, thread.id, sent.userMessage.id);
+    expect(retried.agentMessage?.content).toBe('late');
+    expect(setup.federation.askAgentAsync.mock.calls.map(call => call[2].idempotencyKey))
+      .toEqual([`${sent.userMessage.id}:new`, `${sent.userMessage.id}:new`]);
+  });
+
+  it('only polls the requesting user and does not double-poll a claimed message', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.advance(3_000);
+    expect(await setup.service.pollDue({ id: 'someone-else' })).toBe(0);
+    expect(setup.federation.getAskResult).not.toHaveBeenCalled();
+    const message = setup.store.messages[0];
+    expect(await setup.store.claimPoll(message.id, message.nextPollAt, new Date(setup.now() + 30_000))).toBe(true);
+    expect(await setup.service.pollDue(null)).toBe(0);
+    expect(setup.federation.getAskResult).not.toHaveBeenCalled();
+  });
+
+  it('stays synchronous with a pre-P4c peer (mixed versions)', async () => {
+    const setup = asyncSetup();
+    setup.federation.listAgentsWithUnit.mockResolvedValue({ agents: [{ id: 'chat', name: 'Chat' }], unit: null, askVersion: 1 });
+    setup.federation.askAgentInConversation.mockResolvedValue(done.result);
+    const { sent } = await pendingThread(setup);
+    expect(sent.userMessage.status).toBe('done');
+    expect(sent.agentMessage?.content).toBe('late');
+    expect(setup.federation.askAgentAsync).not.toHaveBeenCalled();
+  });
+
+  it('fails polling for a unit that was unpaired', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    await setup.peers.update(peerFixture().id, { status: 'revoked' });
+    setup.advance(3_000);
+    await setup.service.pollDue(null);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'unit_not_paired' });
   });
 });

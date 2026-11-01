@@ -135,6 +135,8 @@ export interface FakeUnit {
   runtime: ReturnType<typeof fakeAgentsRuntime>;
   agents: AgentsService;
   client: FederationClient;
+  /** Background (async) asks started on this Unit; await them in tests. */
+  background: Array<Promise<void>>;
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -172,7 +174,8 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
         const principalId = unit.principals.resolve(key, 'federation:agents:list');
         if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
         const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
-        return json({ data: { agents: await unit.agents.listAgents(principalId, actingUserId) } });
+        const protocol = unit.env.FAKE_LEGACY_ASK === 'true' ? {} : { protocol: { ask: 2 } };
+        return json({ data: { agents: await unit.agents.listAgents(principalId, actingUserId), ...protocol } });
       }
       const ask = url.pathname.match(/^\/api\/v1\/federation\/agents\/([^/]+)\/ask$/);
       if (ask) {
@@ -180,12 +183,29 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
         const principalId = unit.principals.resolve(key, 'federation:agents:ask');
         if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
         const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
-        const result = await unit.agents.ask({
+        const input = {
           principalId, actingUserId, agent: decodeURIComponent(ask[1]), question: body.question,
           conversationId: body.conversation_id, threadTitle: body.thread_title ?? null,
           idempotencyKey: new Headers(init?.headers).get('idempotency-key'),
-        });
-        return json({ data: result });
+        };
+        if (url.searchParams.get('async') === '1' && unit.env.FAKE_LEGACY_ASK !== 'true') {
+          const outcome = await unit.agents.askAsync(input);
+          return outcome.status === 'done'
+            ? json({ data: { status: 'done', ...outcome.result } })
+            : json({ data: { status: 'pending', key: input.idempotencyKey, poll_after_ms: 3000 } }, 202);
+        }
+        return json({ data: await unit.agents.ask(input) });
+      }
+      const askResult = url.pathname.match(/^\/api\/v1\/federation\/asks\/([^/]+)$/);
+      if (askResult) {
+        const key = new Headers(init?.headers).get('authorization')?.replace(/^Bearer /, '');
+        const principalId = unit.principals.resolve(key, 'federation:agents:ask');
+        if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
+        const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
+        const state = await unit.agents.getAskResult(principalId, actingUserId, decodeURIComponent(askResult[1]));
+        if (state.status === 'done') return json({ data: { status: 'done', ...state.response } });
+        if (state.status === 'pending') return json({ data: { status: 'pending', poll_after_ms: 3000 } }, 202);
+        return json({ data: { status: 'failed', error_code: state.errorCode } });
       }
       return json({ error: { code: 'not_found' } }, 404);
     } catch (error) {
@@ -208,9 +228,13 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
     const service = new PairingService(deps);
     const audit = new MemoryAudit();
     const runtime = fakeAgentsRuntime();
-    const agents = new AgentsService({ runtime, store, audit, acquire: allowAll, env, dedupe: new InMemoryAskDedupeStore() });
+    const background: Array<Promise<void>> = [];
+    const agents = new AgentsService({
+      runtime, store, audit, acquire: allowAll, env, dedupe: new InMemoryAskDedupeStore(),
+      runInBackground: task => { background.push(task); },
+    });
     const client = new FederationClient({ store, transport: new PeerClient(fetchImpl, 1_000), secrets: fakeSecrets, audit });
-    byOrigin.set(unit.origin, { origin: unit.origin, env, store, principals, service, deps, audit, runtime, agents, client });
+    byOrigin.set(unit.origin, { origin: unit.origin, env, store, principals, service, deps, audit, runtime, agents, client, background });
   }
 
   return { units: byOrigin, fetchImpl, calls };

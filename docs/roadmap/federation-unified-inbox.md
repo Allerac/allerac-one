@@ -212,3 +212,13 @@ copy (remote delete deferred to P5).
 - **Memory/RAG:** memory recall, memory indexing (including the stale sweep) and knowledge search exclude summaries whose
   conversation is `source='federation'` (`src/app/services/memory/federated-memory-filter.ts`), on top of the creation-time
   filter from P4a.
+
+## P4c Implementation Notes
+
+- Migration 148: dedupe `mode`, `deadline_at`, `error_code`; message `next_poll_at`, `poll_attempts`,
+  `pending_deadline_at`; table `federated_tool_conversations`.
+- Async is negotiated through `protocol.ask` in the agents list, so mixed versions fall back to sync.
+- Polling: browser (updates every 20s visible / 60s hidden, open thread every 3s while pending) plus a
+  home-side sweep every 15s under an advisory lock. `claimPoll` leases a message for 30s so polls never overlap.
+- Minimal UI only: total unread on the Agents header, live badges, a `…` pending marker and
+  "waiting for <unit>…" in the thread. The redesign comes later.

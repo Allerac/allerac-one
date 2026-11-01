@@ -9,7 +9,7 @@ import { PUBLIC_DOMAINS } from '@/app/services/chat/public-domains';
 import type { OperationLimitResult } from '@/app/lib/operation-limiter';
 import type { User } from '@/app/services/auth/auth.service';
 import { isDomainEnabled } from '@/modules/registry';
-import { askRequestHash, type AskDedupeStore } from './ask-dedupe';
+import { askRequestHash, type AskDedupeStore, type AskResultState, type DedupeMode } from './ask-dedupe';
 import type { FederationAuditSink } from './audit.repository';
 import { exposedAgentSlugs, type Env } from './env';
 import { FederationError, federationErrors } from './errors';
@@ -20,6 +20,11 @@ import { toPeerProfile, type PeerUnitProfile, type UnitProfile } from './unit-pr
 export const MAX_QUESTION_CHARS = 4_000;
 export const MAX_ANSWER_CHARS = 8_000;
 export const ASK_SERVER_TIMEOUT_MS = 55_000;
+/** P4c: background (async) asks may run this long before they read as timed out. */
+export const ASYNC_ASK_DEADLINE_MS = 10 * 60 * 1000;
+export const DEFAULT_ASYNC_MAX_RUNNING = 4;
+/** P4c: ask protocol version advertised in the agents list (2 = async + GET /asks/:key). */
+export const ASK_PROTOCOL_VERSION = 2;
 
 export interface AgentsRuntime {
   loadUser(userId: string): Promise<User | null>;
@@ -56,6 +61,8 @@ export interface AgentsServiceDeps {
   loadProfile?: () => Promise<UnitProfile>;
   env?: Env;
   now?: () => number;
+  /** P4c: keeps a background ask alive (tests can await it). Default: fire and forget. */
+  runInBackground?: (task: Promise<void>) => void;
 }
 
 export const MAX_TITLE_CHARS = 200;
@@ -90,6 +97,7 @@ export class FederationRateLimitedError extends FederationError {
 export class AgentsService {
   private readonly env: Env;
   private readonly now: () => number;
+  private asyncRunning = 0;
 
   constructor(private readonly deps: AgentsServiceDeps) {
     this.env = deps.env ?? process.env;
@@ -144,7 +152,53 @@ export class AgentsService {
     return { agents, unit: profile ? toPeerProfile(profile) : null };
   }
 
+  /** Synchronous ask: waits up to ASK_SERVER_TIMEOUT_MS for the answer. */
   async ask(params: AskParams): Promise<AskResult> {
+    const prepared = await this.prepare(params, 'sync');
+    if (prepared.kind === 'replay') return prepared.response;
+    if (prepared.kind === 'pending') throw federationErrors.askInProgress();
+    const run = await this.claimSlots(prepared, false);
+    return this.execute(prepared, run, ASK_SERVER_TIMEOUT_MS);
+  }
+
+  /**
+   * Async ask (P4c): claims the Idempotency-Key, starts the turn in the
+   * background (deadline ASYNC_ASK_DEADLINE_MS) and returns at once. The home
+   * fetches the result with getAskResult(). A repeat returns the stored state.
+   */
+  async askAsync(params: AskParams): Promise<{ status: 'done'; result: AskResult } | { status: 'pending' }> {
+    if (!params.idempotencyKey || !this.deps.dedupe) {
+      throw new FederationError('validation_error', 'Idempotency-Key is required for async asks', 400);
+    }
+    const prepared = await this.prepare(params, 'async');
+    if (prepared.kind === 'replay') return { status: 'done', result: prepared.response };
+    if (prepared.kind === 'pending') return { status: 'pending' };
+    const run = await this.claimSlots(prepared, true);
+    const background = this.execute(prepared, run, ASYNC_ASK_DEADLINE_MS)
+      .then(() => undefined, () => undefined)
+      .finally(() => { this.asyncRunning -= 1; });
+    (this.deps.runInBackground ?? (task => { void task; }))(background);
+    return { status: 'pending' };
+  }
+
+  /** Result of an async (or sync) ask by key, for the same principal only. */
+  async getAskResult(principalId: string, actingUserId: string, key: string): Promise<AskResultState> {
+    await this.resolveCaller(principalId, actingUserId);
+    const state = this.deps.dedupe ? await this.deps.dedupe.get(principalId, key, new Date(this.now())) : null;
+    if (!state) throw new FederationError('ask_not_found', 'Ask not found', 404);
+    return state;
+  }
+
+  /** Number of async asks currently running in this process. */
+  get runningAsyncAsks(): number {
+    return this.asyncRunning;
+  }
+
+  private async prepare(params: AskParams, mode: DedupeMode): Promise<
+    | { kind: 'replay'; response: AskResult }
+    | { kind: 'pending' }
+    | PreparedAsk
+  > {
     const started = this.now();
     const { peer, user } = await this.resolveCaller(params.principalId, params.actingUserId);
     const audit = {
@@ -171,38 +225,69 @@ export class AgentsService {
 
     const key = params.idempotencyKey && this.deps.dedupe ? params.idempotencyKey : null;
     if (key) {
+      const now = new Date(this.now());
       const begin = await this.deps.dedupe!.begin(
-        params.principalId, key, askRequestHash({ agent: params.agent, conversationId, question: params.question }), new Date(this.now()),
+        params.principalId, key, askRequestHash({ agent: params.agent, conversationId, question: params.question }), now,
+        mode === 'async' ? { mode, deadlineAt: new Date(now.getTime() + ASYNC_ASK_DEADLINE_MS) } : { mode },
       );
       if (begin.kind === 'replay') {
         await this.deps.audit.record({ ...audit, outcome: 'ok', httpStatus: 200, errorCode: 'replayed', durationMs: this.now() - started });
         return {
-          answer: begin.response.answer, truncated: begin.response.truncated,
-          conversation_id: begin.response.conversation_id, message_id: begin.response.message_id,
+          kind: 'replay',
+          response: {
+            answer: begin.response.answer, truncated: begin.response.truncated,
+            conversation_id: begin.response.conversation_id, message_id: begin.response.message_id,
+          },
         };
       }
-      if (begin.kind !== 'new') {
-        const error = begin.kind === 'mismatch' ? federationErrors.idempotencyKeyReused() : federationErrors.askInProgress();
+      if (begin.kind === 'in_progress') return { kind: 'pending' };
+      if (begin.kind === 'mismatch') {
+        const error = federationErrors.idempotencyKeyReused();
         await this.deps.audit.record({ ...audit, outcome: 'denied', httpStatus: error.status, errorCode: error.code });
         throw error;
       }
     }
-    const fail = async () => { if (key) await this.deps.dedupe!.finish(params.principalId, key, { status: 'failed' }).catch(() => undefined); };
+    return { kind: 'run', params, peer, user, audit, key, started };
+  }
 
+  private async fail(prepared: PreparedAsk, errorCode: string) {
+    if (prepared.key) {
+      await this.deps.dedupe!.finish(prepared.params.principalId, prepared.key, { status: 'failed', errorCode }).catch(() => undefined);
+    }
+  }
+
+  private async claimSlots(prepared: PreparedAsk, async: boolean): Promise<{ release: () => void }> {
+    const { params, user, audit } = prepared;
+    if (async && this.asyncRunning >= this.asyncCap()) {
+      await this.fail(prepared, 'rate_limited');
+      await this.deps.audit.record({ ...audit, outcome: 'denied', httpStatus: 429, errorCode: 'rate_limited' });
+      throw new FederationRateLimitedError(30, { 'Retry-After': '30' });
+    }
     const peerLimit = this.deps.acquire('federation-ask', `principal:${params.principalId}`);
     if (!peerLimit.allowed) {
-      await fail();
+      await this.fail(prepared, 'rate_limited');
       await this.deps.audit.record({ ...audit, outcome: 'denied', httpStatus: 429, errorCode: 'rate_limited' });
       throw new FederationRateLimitedError(peerLimit.retryAfterSeconds, peerLimit.headers);
     }
     const chatLimit = this.deps.acquire('chat', user.id);
     if (!chatLimit.allowed) {
       peerLimit.lease.release();
-      await fail();
+      await this.fail(prepared, 'rate_limited');
       await this.deps.audit.record({ ...audit, outcome: 'denied', httpStatus: 429, errorCode: 'rate_limited' });
       throw new FederationRateLimitedError(chatLimit.retryAfterSeconds, chatLimit.headers);
     }
+    if (async) this.asyncRunning += 1;
+    return { release: () => { peerLimit.lease.release(); chatLimit.lease.release(); } };
+  }
 
+  private asyncCap(): number {
+    const value = Number.parseInt(this.env.FEDERATION_ASYNC_MAX_RUNNING ?? '', 10);
+    return Number.isFinite(value) && value > 0 ? value : DEFAULT_ASYNC_MAX_RUNNING;
+  }
+
+  private async execute(prepared: PreparedAsk, run: { release: () => void }, timeoutMs: number): Promise<AskResult> {
+    const { params, peer, user, audit, key, started } = prepared;
+    const conversationId = params.conversationId;
     try {
       const model = await this.deps.runtime.resolveModel(user.id, params.agent);
       if (!model) throw new FederationError('provider_not_configured', 'No model is configured for this agent', 422);
@@ -229,7 +314,7 @@ export class AgentsService {
         modelId: model.modelId,
         provider: model.provider,
         locale: 'en',
-      }), ASK_SERVER_TIMEOUT_MS);
+      }), timeoutMs);
 
       const truncated = result.content.length > MAX_ANSWER_CHARS;
       const answer = truncated ? result.content.slice(0, MAX_ANSWER_CHARS) : result.content;
@@ -245,21 +330,34 @@ export class AgentsService {
       });
       return response;
     } catch (error) {
-      await fail();
       const code = error instanceof FederationError ? error.code : 'internal_error';
+      await this.fail(prepared, code);
       await this.deps.audit.record({ ...audit, outcome: 'error', errorCode: code, durationMs: this.now() - started });
       throw error;
     } finally {
-      peerLimit.lease.release();
-      chatLimit.lease.release();
+      run.release();
     }
   }
+}
+
+interface PreparedAsk {
+  kind: 'run';
+  params: AskParams;
+  peer: PeerRecord;
+  user: User;
+  audit: {
+    direction: 'inbound'; peerId: string; principalId: string; userId: string; capability: string; target: string;
+  };
+  key: string | null;
+  started: number;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new FederationError('timeout', 'The agent did not answer in time', 504)), ms);
+    // Never keep the process alive just for this timer (async asks wait up to 10 min).
+    (timer as { unref?: () => void }).unref?.();
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
