@@ -12,6 +12,7 @@
     "baseline:update": "node scripts/ci/check-baseline.mjs all --update",
     "test:integration": "bash scripts/ci/security-integration.sh",
     "test": "jest",
+    "test:db": "jest src/__tests__/db",
     "test:schema": "bash scripts/schema-equivalence-smoke.sh",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

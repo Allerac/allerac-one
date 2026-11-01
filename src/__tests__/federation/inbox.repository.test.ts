@@ -75,7 +75,7 @@ describe('InboxRepository', () => {
     expect(mockQuery.mock.calls[0][1]).toEqual(['t1', 'user', 'hi', 'pending', false, null, null]);
     mockQuery.mockResolvedValueOnce({ rows: [] });
     await repo.updateMessage('m1', { status: 'failed', errorCode: 'peer_error' });
-    expect(mockQuery.mock.calls[1][1]).toEqual(['m1', 'failed', 'peer_error']);
+    expect(mockQuery.mock.calls[1][1]).toEqual(['m1', 'failed', 'peer_error', false]);
   });
 
   it('deletes history only for the given user and peer', async () => {

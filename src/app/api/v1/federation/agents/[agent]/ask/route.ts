@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { agentsService } from '@/federation/agents.instance';
 import { FederationRateLimitedError, MAX_QUESTION_CHARS } from '@/federation/agents.service';
-import { ASYNC_POLL_AFTER_MS, IDEMPOTENCY_KEY } from '@/federation/ask-dedupe';
+import { IDEMPOTENCY_KEY } from '@/federation/ask-dedupe';
+import { asyncAskReply } from '@/federation/ask-http';
 import { requireApiPrincipal } from '../../../../_lib/auth';
 import { federationErrorResponse, readJson } from '../../../../_lib/federation';
 import { apiData, apiError } from '../../../../_lib/responses';
@@ -51,8 +52,8 @@ export async function POST(
     if (new URL(request.url).searchParams.get('async') === '1') {
       if (!idempotencyKey) return apiError('validation_error', 'Idempotency-Key is required for async asks', 400);
       const outcome = await agentsService.askAsync(input);
-      if (outcome.status === 'done') return apiData({ status: 'done', ...outcome.result });
-      return apiData({ status: 'pending', key: idempotencyKey, poll_after_ms: ASYNC_POLL_AFTER_MS }, { status: 202 });
+      const reply = asyncAskReply(outcome, idempotencyKey);
+      return apiData(reply.data, { status: reply.status });
     }
     return apiData(await agentsService.ask(input));
   } catch (error: unknown) {

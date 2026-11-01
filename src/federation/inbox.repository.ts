@@ -157,10 +157,11 @@ export class InboxRepository implements InboxStore {
   async updateMessage(messageId: string, patch: { status: FederatedMessage['status']; errorCode?: string | null }): Promise<void> {
     // Leaving `pending` stops polling.
     await pool.query(
+      // $2 must appear once: reusing it in the CASE made Postgres deduce two types and reject every update.
       `UPDATE federated_messages SET status = $2, error_code = $3,
-              next_poll_at = CASE WHEN $2 = 'pending' THEN next_poll_at ELSE NULL END
+              next_poll_at = CASE WHEN $4::boolean THEN next_poll_at ELSE NULL END
         WHERE id = $1`,
-      [messageId, patch.status, patch.errorCode ?? null],
+      [messageId, patch.status, patch.errorCode ?? null, patch.status === 'pending'],
     );
   }
 

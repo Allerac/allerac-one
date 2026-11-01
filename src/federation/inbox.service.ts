@@ -36,6 +36,10 @@ export const POLLS_PER_REQUEST = 5;
 export const POLLS_PER_SWEEP = 50;
 /** Lease while one poll is in flight, so the sweep and a request do not poll the same message. */
 const POLL_LEASE_MS = 30_000;
+/** Consecutive local (non-peer) poll failures before a pending message is failed (P4c). */
+export const LOCAL_POLL_FAILURE_LIMIT = 3;
+/** Peer transport errors: the peer may answer later, so polling continues with backoff. */
+const RETRYABLE_PEER_ERRORS = new Set(['peer_unreachable', 'peer_rate_limited', 'peer_error', 'peer_invalid_response', 'timeout']);
 
 /** Delay before poll number `attempt` (0-based), with jitter in [-POLL_JITTER, +POLL_JITTER]. */
 export function pollDelay(attempt: number, random: () => number = Math.random): number {
@@ -241,6 +245,7 @@ export class InboxService {
   private readonly log: (line: string) => void;
   private readonly random: () => number;
   private readonly polling = new Set<string>();
+  private readonly localPollFailures = new Map<string, number>();
   private readonly agentCache = new Map<string, { at: number; value: { agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number } }>();
   private readonly inFlight = new Set<string>();
   private readonly peerSends = new Map<string, number[]>();
@@ -541,7 +546,12 @@ export class InboxService {
         const code = error instanceof FederationError ? error.code : 'internal_error';
         const status = code === 'peer_unreachable' && elapsed >= ASK_TIMEOUT_MS - 1_000 ? 'timeout' : 'failed';
         const errorCode = status === 'timeout' ? 'timeout' : code;
-        await this.deps.store.updateMessage(pending.id, { status, errorCode });
+        if (!(error instanceof FederationError)) {
+          this.log(`[Inbox] send thread=${thread.id} agent=${thread.agentSlug} status=error error=${error instanceof Error ? error.message : 'internal_error'}`);
+        }
+        await this.deps.store.updateMessage(pending.id, { status, errorCode }).catch(updateError => {
+          this.log(`[Inbox] send thread=${thread.id} agent=${thread.agentSlug} status=error error=${updateError instanceof Error ? updateError.message : 'internal_error'} (could not mark ${status})`);
+        });
         this.logSend(thread, peer, status, started, errorCode);
         return { userMessage: toMessageView({ ...pending, status, errorCode }), agentMessage: null, notices: notices.map(toMessageView) };
       }
@@ -614,22 +624,44 @@ export class InboxService {
       return true;
     };
     if (!peer || peer.status !== 'active') return finish('failed', 'unit_not_paired');
+    const tag = `[Inbox] poll thread=${thread.id} agent=${thread.agentSlug}`;
     try {
-      const outcome = await this.deps.federation.getAskResult!(peer.id, message.remoteRunId!, {
-        initiatedByUserId: thread.userId, threadId: thread.id,
-      });
-      if (outcome.status === 'done') {
+      let outcome: AsyncAskOutcome | null = null;
+      try {
+        outcome = await this.deps.federation.getAskResult!(peer.id, message.remoteRunId!, {
+          initiatedByUserId: thread.userId, threadId: thread.id,
+        });
+      } catch (error) {
+        if (!(error instanceof FederationError)) throw error;
+        if (error.code === 'peer_ask_not_found') return await finish('failed', 'result_lost');
+        // Denied or not paired any more: polling again will not help.
+        if (!RETRYABLE_PEER_ERRORS.has(error.code)) return await finish('failed', error.code);
+        // Unreachable or slow peer: not a failure, keep polling with backoff.
+      }
+      if (outcome?.status === 'done') {
         await this.deliver(thread, message, outcome.result, false);
-        this.log(`[Inbox] poll thread=${thread.id} agent=${thread.agentSlug} status=done attempts=${message.pollAttempts + 1}`);
+        this.localPollFailures.delete(message.id);
+        this.log(`${tag} status=done attempts=${message.pollAttempts + 1}`);
         return true;
       }
-      if (outcome.status === 'failed') return finish(outcome.errorCode === 'timeout' ? 'timeout' : 'failed', outcome.errorCode);
+      if (outcome?.status === 'failed') {
+        this.localPollFailures.delete(message.id);
+        return await finish(outcome.errorCode === 'timeout' ? 'timeout' : 'failed', outcome.errorCode);
+      }
+      if (expired) return await finish('timeout', 'timeout');
     } catch (error) {
-      const code = error instanceof FederationError ? error.code : 'internal_error';
-      if (code === 'peer_ask_not_found') return finish('failed', 'result_lost');
-      // Unreachable or slow peer: not a failure, keep polling with backoff.
+      // A local fault (store, mapping): never retry silently forever.
+      const failures = (this.localPollFailures.get(message.id) ?? 0) + 1;
+      this.log(`${tag} status=error error=${error instanceof Error ? error.message : 'internal_error'} failures=${failures}`);
+      if (failures >= LOCAL_POLL_FAILURE_LIMIT) {
+        this.localPollFailures.delete(message.id);
+        return finish('failed', 'internal_error').catch(finishError => {
+          this.log(`${tag} status=error error=${finishError instanceof Error ? finishError.message : 'internal_error'} (could not mark failed)`);
+          return false;
+        });
+      }
+      this.localPollFailures.set(message.id, failures);
     }
-    if (expired) return finish('timeout', 'timeout');
     const attempts = message.pollAttempts + 1;
     await this.deps.store.schedulePoll(message.id, {
       remoteRunId: message.remoteRunId!, nextPollAt: new Date(now + pollDelay(attempts, this.random)),

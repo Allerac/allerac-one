@@ -1,5 +1,6 @@
 import { agentsService } from '@/federation/agents.instance';
-import { ASYNC_POLL_AFTER_MS, IDEMPOTENCY_KEY } from '@/federation/ask-dedupe';
+import { IDEMPOTENCY_KEY } from '@/federation/ask-dedupe';
+import { askResultReply } from '@/federation/ask-http';
 import { requireApiPrincipal } from '../../../_lib/auth';
 import { federationErrorResponse } from '../../../_lib/federation';
 import { apiData, apiError } from '../../../_lib/responses';
@@ -18,11 +19,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
     const decoded = decodeURIComponent(key);
     if (!IDEMPOTENCY_KEY.test(decoded)) return apiError('validation_error', 'Invalid key', 400);
     const state = await agentsService.getAskResult(caller.principal.id, caller.actingUser.id, decoded);
-    if (state.status === 'done') return apiData({ status: 'done', ...state.response });
-    if (state.status === 'pending') {
-      return apiData({ status: 'pending', key: decoded, poll_after_ms: ASYNC_POLL_AFTER_MS }, { status: 202 });
-    }
-    return apiData({ status: 'failed', error_code: state.errorCode });
+    const reply = askResultReply(state, decoded);
+    return apiData(reply.data, { status: reply.status });
   } catch (error: unknown) {
     return federationErrorResponse('GET /api/v1/federation/asks/:key failed', error);
   }
