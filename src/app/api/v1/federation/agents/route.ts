@@ -1,4 +1,5 @@
 import { agentsService } from '@/federation/agents.instance';
+import { ASK_PROTOCOL_VERSION } from '@/federation/agents.service';
 import { requireApiPrincipal } from '../../_lib/auth';
 import { federationErrorResponse } from '../../_lib/federation';
 import { apiData, apiError } from '../../_lib/responses';
@@ -13,7 +14,8 @@ export async function GET(request: Request): Promise<Response> {
     // `unit` (identity & role, P3.5) rides on the agents list so existing
     // pairings with federation.agents.list get it without a new scope.
     const { agents, unit } = await agentsService.listAgentsWithUnit(caller.principal.id, caller.actingUser.id);
-    return apiData({ agents, unit });
+    // `protocol.ask` (P4c) tells the home Unit it may use async asks.
+    return apiData({ agents, unit, protocol: { ask: ASK_PROTOCOL_VERSION } });
   } catch (error: unknown) {
     return federationErrorResponse('GET /api/v1/federation/agents failed', error);
   }

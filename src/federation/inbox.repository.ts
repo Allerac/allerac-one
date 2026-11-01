@@ -6,6 +6,7 @@ import type {
 type Row = Record<string, unknown>;
 
 const PREVIEW_CHARS = 140;
+const toDate = (value: unknown) => (value ? new Date(value as string) : null);
 
 function mapThread(row: Row): FederatedThread {
   return {
@@ -33,6 +34,10 @@ function mapMessage(row: Row): FederatedMessage {
     truncated: Boolean(row.truncated),
     errorCode: (row.error_code as string | null) ?? null,
     remoteMessageId: (row.remote_message_id as string | null) ?? null,
+    remoteRunId: (row.remote_run_id as string | null) ?? null,
+    nextPollAt: (row.next_poll_at as Date | null) ?? null,
+    pollAttempts: Number(row.poll_attempts ?? 0),
+    pendingDeadlineAt: (row.pending_deadline_at as Date | null) ?? null,
     createdAt: row.created_at as Date,
   };
 }
@@ -45,7 +50,9 @@ export class InboxRepository implements InboxStore {
               LEFT(last_msg.content, ${PREVIEW_CHARS}) AS preview,
               (SELECT COUNT(*)::int FROM federated_messages m
                 WHERE m.thread_id = t.id AND m.role = 'agent'
-                  AND m.created_at > COALESCE(t.last_read_at, '-infinity'::timestamptz)) AS unread
+                  AND m.created_at > COALESCE(t.last_read_at, '-infinity'::timestamptz)) AS unread,
+              EXISTS (SELECT 1 FROM federated_messages p
+                WHERE p.thread_id = t.id AND p.status = 'pending' AND p.remote_run_id IS NOT NULL) AS pending
        FROM federated_threads t
        LEFT JOIN LATERAL (
          SELECT content FROM federated_messages m WHERE m.thread_id = t.id
@@ -59,6 +66,7 @@ export class InboxRepository implements InboxStore {
       ...mapThread(row),
       preview: (row.preview as string | null) ?? null,
       unread: Number(row.unread ?? 0),
+      pending: Boolean(row.pending),
     }));
   }
 
@@ -147,8 +155,11 @@ export class InboxRepository implements InboxStore {
   }
 
   async updateMessage(messageId: string, patch: { status: FederatedMessage['status']; errorCode?: string | null }): Promise<void> {
+    // Leaving `pending` stops polling.
     await pool.query(
-      'UPDATE federated_messages SET status = $2, error_code = $3 WHERE id = $1',
+      `UPDATE federated_messages SET status = $2, error_code = $3,
+              next_poll_at = CASE WHEN $2 = 'pending' THEN next_poll_at ELSE NULL END
+        WHERE id = $1`,
       [messageId, patch.status, patch.errorCode ?? null],
     );
   }
@@ -159,6 +170,59 @@ export class InboxRepository implements InboxStore {
 
   async markRead(threadId: string, at: Date): Promise<void> {
     await pool.query('UPDATE federated_threads SET last_read_at = $2 WHERE id = $1', [threadId, at]);
+  }
+
+  async getThreadById(threadId: string): Promise<FederatedThread | null> {
+    const result = await pool.query('SELECT * FROM federated_threads WHERE id = $1', [threadId]);
+    return result.rows[0] ? mapThread(result.rows[0]) : null;
+  }
+
+  async schedulePoll(messageId: string, poll: { remoteRunId: string; nextPollAt: Date; pollAttempts: number; pendingDeadlineAt: Date | null }): Promise<void> {
+    await pool.query(
+      `UPDATE federated_messages
+          SET remote_run_id = $2, next_poll_at = $3, poll_attempts = $4, pending_deadline_at = $5
+        WHERE id = $1 AND status = 'pending'`,
+      [messageId, poll.remoteRunId, poll.nextPollAt, poll.pollAttempts, poll.pendingDeadlineAt],
+    );
+  }
+
+  async claimPoll(messageId: string, expected: Date | null, leaseUntil: Date): Promise<boolean> {
+    const result = await pool.query(
+      `UPDATE federated_messages SET next_poll_at = $3
+        WHERE id = $1 AND status = 'pending' AND next_poll_at IS NOT DISTINCT FROM $2`,
+      [messageId, expected, leaseUntil],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async listDuePending(params: { userId: string | null; threadId: string | null; now: Date; limit: number }) {
+    const result = await pool.query(
+      `SELECT m.*, row_to_json(t.*) AS thread
+         FROM federated_messages m
+         JOIN federated_threads t ON t.id = m.thread_id
+        WHERE m.status = 'pending' AND m.remote_run_id IS NOT NULL AND m.next_poll_at <= $1
+          AND ($2::uuid IS NULL OR t.user_id = $2::uuid)
+          AND ($3::uuid IS NULL OR t.id = $3::uuid)
+        ORDER BY m.next_poll_at ASC
+        LIMIT $4`,
+      [params.now, params.userId, params.threadId, Math.min(Math.max(params.limit, 1), 200)],
+    );
+    return result.rows.map(row => {
+      const thread = row.thread as Row;
+      return {
+        message: mapMessage(row),
+        thread: mapThread({ ...thread, last_message_at: toDate(thread.last_message_at), last_read_at: toDate(thread.last_read_at),
+          archived_at: toDate(thread.archived_at), created_at: toDate(thread.created_at) }),
+      };
+    });
+  }
+
+  async hasPendingAsync(threadId: string): Promise<boolean> {
+    const result = await pool.query(
+      `SELECT 1 FROM federated_messages WHERE thread_id = $1 AND status = 'pending' AND remote_run_id IS NOT NULL LIMIT 1`,
+      [threadId],
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async deleteThreadsForPeer(userId: string, peerId: string): Promise<number> {

@@ -17,6 +17,9 @@ import { peerUnitProfileSchema, type PeerUnitProfile } from './unit-profile';
 
 export const LIST_TIMEOUT_MS = 8_000;
 export const ASK_TIMEOUT_MS = 60_000;
+/** P4c: an async ask only waits for the peer to accept (or answer from its store). */
+export const ASYNC_ASK_TIMEOUT_MS = 15_000;
+export const ASK_RESULT_TIMEOUT_MS = 8_000;
 
 export const peerAgentSchema = z.object({
   id: z.string().min(1).max(100),
@@ -29,6 +32,8 @@ const listResponseSchema = z.object({
   agents: z.array(peerAgentSchema).max(100),
   // Older Units (before P3.5) do not send `unit`; a malformed one is ignored.
   unit: z.unknown().optional(),
+  // P4c: ask protocol version; absent on older Units (sync only).
+  protocol: z.object({ ask: z.number().int().optional() }).passthrough().optional().catch(undefined),
 });
 const askResponseSchema = z.object({
   answer: z.string(),
@@ -37,6 +42,17 @@ const askResponseSchema = z.object({
   conversation_id: z.string().min(1).max(100).nullable().optional(),
   message_id: z.string().min(1).max(100).nullable().optional(),
 });
+
+const asyncAskResponseSchema = z.union([
+  askResponseSchema.extend({ status: z.literal('done') }),
+  z.object({ status: z.literal('pending'), poll_after_ms: z.number().int().min(0).max(600_000).optional() }),
+  z.object({ status: z.literal('failed'), error_code: z.string().max(64).nullable().optional() }),
+]);
+
+export type AsyncAskOutcome =
+  | { status: 'done'; result: ConversationAskResult }
+  | { status: 'pending'; pollAfterMs: number | null }
+  | { status: 'failed'; errorCode: string };
 
 export interface ConversationAskResult {
   answer: string;
@@ -101,7 +117,7 @@ export class FederationClient {
   }
 
   /** Agents plus the peer's identity & role (null for older Units). */
-  async listAgentsWithUnit(peerId: string, ctx: FederationCallContext): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null }> {
+  async listAgentsWithUnit(peerId: string, ctx: FederationCallContext): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number }> {
     const data = await this.call({
       peerId, ctx, capability: 'federation.agents.list', target: null,
       path: '/api/v1/federation/agents', method: 'GET', timeoutMs: LIST_TIMEOUT_MS,
@@ -109,7 +125,43 @@ export class FederationClient {
     const parsed = listResponseSchema.safeParse(data);
     if (!parsed.success) throw federationErrors.peerInvalidResponse();
     const unit = peerUnitProfileSchema.safeParse(parsed.data.unit);
-    return { agents: parsed.data.agents, unit: unit.success ? unit.data : null };
+    return { agents: parsed.data.agents, unit: unit.success ? unit.data : null, askVersion: parsed.data.protocol?.ask ?? 1 };
+  }
+
+  /**
+   * Async ask (P4c, peers with ask protocol >= 2). Returns at once with the
+   * answer (fast path or stored replay) or `pending`; poll getAskResult().
+   */
+  async askAgentAsync(
+    peerId: string,
+    agent: string,
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string },
+    ctx: FederationCallContext,
+  ): Promise<AsyncAskOutcome> {
+    const data = await this.call({
+      peerId, ctx, capability: 'federation.agents.ask', target: agent,
+      path: `/api/v1/federation/agents/${encodeURIComponent(agent)}/ask?async=1`,
+      method: 'POST',
+      body: {
+        question: input.question,
+        conversation_id: input.conversationId,
+        ...(input.threadTitle ? { thread_title: input.threadTitle.slice(0, 200) } : {}),
+      },
+      headers: { 'Idempotency-Key': input.idempotencyKey },
+      timeoutMs: ASYNC_ASK_TIMEOUT_MS,
+    });
+    return parseAsyncOutcome(data);
+  }
+
+  /** Reads an async ask's state by its Idempotency-Key (P4c). */
+  async getAskResult(peerId: string, key: string, ctx: FederationCallContext): Promise<AsyncAskOutcome> {
+    const data = await this.call({
+      peerId, ctx, capability: 'federation.agents.ask', target: 'ask-result',
+      path: `/api/v1/federation/asks/${encodeURIComponent(key)}`,
+      method: 'GET',
+      timeoutMs: ASK_RESULT_TIMEOUT_MS,
+    });
+    return parseAsyncOutcome(data);
   }
 
   async askAgent(peerId: string, agent: string, question: string, ctx: FederationCallContext) {
@@ -213,4 +265,19 @@ export class FederationClient {
       throw error;
     }
   }
+}
+
+function parseAsyncOutcome(data: unknown): AsyncAskOutcome {
+  const parsed = asyncAskResponseSchema.safeParse(data);
+  if (!parsed.success) throw federationErrors.peerInvalidResponse();
+  const value = parsed.data;
+  if (value.status === 'pending') return { status: 'pending', pollAfterMs: value.poll_after_ms ?? null };
+  if (value.status === 'failed') return { status: 'failed', errorCode: value.error_code ?? 'failed' };
+  return {
+    status: 'done',
+    result: {
+      answer: value.answer, truncated: value.truncated,
+      conversationId: value.conversation_id ?? null, messageId: value.message_id ?? null,
+    },
+  };
 }

@@ -18,6 +18,7 @@ export class InMemoryInboxStore implements InboxStore {
         ...t,
         preview: own.at(-1)?.content ?? null,
         unread: own.filter(m => m.role === 'agent' && (!t.lastReadAt || m.createdAt > t.lastReadAt)).length,
+        pending: own.some(m => m.status === 'pending' && m.remoteRunId !== null),
       };
     });
   }
@@ -66,17 +67,44 @@ export class InMemoryInboxStore implements InboxStore {
   async insertMessage(m: NewFederatedMessage) {
     const row: FederatedMessage = {
       id: `msg-${++this.seq}`, threadId: m.threadId, role: m.role, content: m.content, status: m.status,
-      truncated: m.truncated ?? false, errorCode: m.errorCode ?? null, remoteMessageId: m.remoteMessageId ?? null, createdAt: this.tick(),
+      truncated: m.truncated ?? false, errorCode: m.errorCode ?? null, remoteMessageId: m.remoteMessageId ?? null,
+      remoteRunId: null, nextPollAt: null, pollAttempts: 0, pendingDeadlineAt: null, createdAt: this.tick(),
     };
     this.messages.push(row);
     return { ...row };
   }
   async updateMessage(id: string, patch: { status: FederatedMessage['status']; errorCode?: string | null }) {
     const m = this.messages.find(x => x.id === id);
-    if (m) { m.status = patch.status; m.errorCode = patch.errorCode ?? null; }
+    if (m) {
+      m.status = patch.status; m.errorCode = patch.errorCode ?? null;
+      if (patch.status !== 'pending') m.nextPollAt = null;
+    }
   }
   async touchThread(id: string, at: Date) { const t = this.threads.get(id); if (t) t.lastMessageAt = at; }
   async markRead(id: string) { const t = this.threads.get(id); if (t) t.lastReadAt = this.tick(); }
+  async getThreadById(id: string) { const t = this.threads.get(id); return t ? { ...t } : null; }
+  async schedulePoll(id: string, p: { remoteRunId: string; nextPollAt: Date; pollAttempts: number; pendingDeadlineAt: Date | null }) {
+    const m = this.messages.find(x => x.id === id && x.status === 'pending');
+    if (m) Object.assign(m, p);
+  }
+  async claimPoll(id: string, expected: Date | null, leaseUntil: Date) {
+    const m = this.messages.find(x => x.id === id && x.status === 'pending');
+    if (!m || (m.nextPollAt?.getTime() ?? null) !== (expected?.getTime() ?? null)) return false;
+    m.nextPollAt = leaseUntil;
+    return true;
+  }
+  async listDuePending(p: { userId: string | null; threadId: string | null; now: Date; limit: number }) {
+    return this.messages
+      .filter(m => m.status === 'pending' && m.remoteRunId && m.nextPollAt && m.nextPollAt <= p.now)
+      .map(m => ({ message: { ...m }, thread: this.threads.get(m.threadId)! }))
+      .filter(({ thread }) => thread && (!p.userId || thread.userId === p.userId) && (!p.threadId || thread.id === p.threadId))
+      .sort((a, b) => a.message.nextPollAt!.getTime() - b.message.nextPollAt!.getTime())
+      .slice(0, p.limit)
+      .map(({ message, thread }) => ({ message, thread: { ...thread } }));
+  }
+  async hasPendingAsync(threadId: string) {
+    return this.messages.some(m => m.threadId === threadId && m.status === 'pending' && m.remoteRunId !== null);
+  }
   async deleteThreadsForPeer(userId: string, peerId: string) {
     const ids = [...this.threads.values()].filter(t => t.userId === userId && t.peerId === peerId).map(t => t.id);
     ids.forEach(id => this.threads.delete(id));

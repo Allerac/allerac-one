@@ -13,9 +13,13 @@ jest.mock('@/federation/federation-client.instance', () => ({
     ]),
     findActivePeer: jest.fn().mockResolvedValue({ id: 'p1', unitName: 'unit2' }),
     listAgentsWithUnit: (...args: unknown[]) => mockListAgents(...args),
-    askAgent: (...args: unknown[]) => mockAskAgent(...args),
+    askAgentInConversation: (...args: unknown[]) => mockAskAgent(...args),
   },
 }));
+jest.mock('@/federation/tool-conversations.repository', () => {
+  const { InMemoryToolConversationStore } = jest.requireActual('@/federation/tool-conversations');
+  return { toolConversationRepository: new InMemoryToolConversationStore() };
+});
 
 import {
   FEDERATED_FORBIDDEN_TOOL_NAMES,
@@ -86,7 +90,9 @@ describe('federation tool policy', () => {
     });
     await expect(executeChatTool('ask_peer_agent', { peer: 'unit2', agent: 'health', question: 'Sleep?' }, ctx))
       .resolves.toEqual({ unit: 'unit2', agent: 'health', answer: 'Slept well', truncated: false });
-    expect(mockAskAgent).toHaveBeenCalledWith('p1', 'health', 'Sleep?', { initiatedByUserId: 'admin-1' });
+    expect(mockAskAgent).toHaveBeenCalledWith('p1', 'health',
+      expect.objectContaining({ question: 'Sleep?', idempotencyKey: expect.stringMatching(/^tool:/) }),
+      { initiatedByUserId: 'admin-1' });
   });
 
   it('validates ask_peer_agent arguments before calling the peer', async () => {

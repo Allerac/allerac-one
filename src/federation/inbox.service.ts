@@ -15,7 +15,7 @@
  */
 import { MAX_QUESTION_CHARS } from './agents.service';
 import { FederationError } from './errors';
-import { ASK_TIMEOUT_MS, type PeerAgent } from './federation-client';
+import { ASK_TIMEOUT_MS, type AsyncAskOutcome, type ConversationAskResult, type PeerAgent } from './federation-client';
 import type { FederatedMessage, FederatedThread, InboxStore } from './inbox.types';
 import type { PeerRecord, PeerStore } from './peer.types';
 import type { PeerUnitProfile } from './unit-profile';
@@ -26,6 +26,22 @@ export const AGENT_LIST_CACHE_MS = 30_000;
 export const PEER_SENDS_PER_MINUTE = 10;
 export const THREAD_PAGE_SIZE = 50;
 export const MAX_THREAD_TITLE_CHARS = 200;
+/** P4c: how long a pending async message is polled before it reads as timed out (peer deadline + slack). */
+export const PENDING_DEADLINE_MS = 11 * 60 * 1000;
+/** P4c: poll backoff (ms) by attempt; the last value repeats. ±20% jitter is applied. */
+export const POLL_BACKOFF_MS = [3_000, 3_000, 5_000, 10_000, 15_000, 30_000];
+export const POLL_JITTER = 0.2;
+/** P4c: peer result reads per client request (the background sweep has its own bound). */
+export const POLLS_PER_REQUEST = 5;
+export const POLLS_PER_SWEEP = 50;
+/** Lease while one poll is in flight, so the sweep and a request do not poll the same message. */
+const POLL_LEASE_MS = 30_000;
+
+/** Delay before poll number `attempt` (0-based), with jitter in [-POLL_JITTER, +POLL_JITTER]. */
+export function pollDelay(attempt: number, random: () => number = Math.random): number {
+  const base = POLL_BACKOFF_MS[Math.min(Math.max(attempt, 0), POLL_BACKOFF_MS.length - 1)];
+  return Math.round(base * (1 + (random() * 2 - 1) * POLL_JITTER));
+}
 const PREVIEW_CHARS = 140;
 const AGENT_SLUG = /^[a-z0-9][a-z0-9_-]{0,99}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -39,13 +55,21 @@ export class InboxError extends Error {
 
 /** The subset of FederationClient the inbox needs. */
 export interface InboxFederationPort {
-  listAgentsWithUnit(peerId: string, ctx: { initiatedByUserId: string | null }): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null }>;
+  listAgentsWithUnit(peerId: string, ctx: { initiatedByUserId: string | null }): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number }>;
   askAgentInConversation(
     peerId: string,
     agent: string,
     input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null },
     ctx: { initiatedByUserId: string | null; threadId?: string | null },
   ): Promise<{ answer: string; truncated: boolean; conversationId: string | null; messageId: string | null }>;
+  /** P4c (peers with ask protocol >= 2). Optional so older wiring keeps working. */
+  askAgentAsync?(
+    peerId: string,
+    agent: string,
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string },
+    ctx: { initiatedByUserId: string | null; threadId?: string | null },
+  ): Promise<AsyncAskOutcome>;
+  getAskResult?(peerId: string, key: string, ctx: { initiatedByUserId: string | null; threadId?: string | null }): Promise<AsyncAskOutcome>;
 }
 
 export interface InboxUser {
@@ -61,6 +85,8 @@ export interface InboxServiceDeps {
   loadHomeUnit(): Promise<PeerUnitProfile>;
   now?: () => number;
   log?: (line: string) => void;
+  /** Jitter source for poll backoff (tests pass a fixed value). */
+  random?: () => number;
 }
 
 export interface InboxThreadRow {
@@ -134,6 +160,12 @@ export interface InboxMessagePage {
   nextCursor: string | null;
 }
 
+export interface InboxUpdates {
+  totalUnread: number;
+  threads: Array<{ threadId: string; unread: number; pending: boolean; lastMessageAt: string | null; preview: string | null }>;
+  serverTime: string;
+}
+
 export interface InboxSendResult {
   userMessage: InboxMessageView;
   agentMessage: InboxMessageView | null;
@@ -188,13 +220,16 @@ export function packQuestion(history: FederatedMessage[], content: string, maxCh
 export class InboxService {
   private readonly now: () => number;
   private readonly log: (line: string) => void;
-  private readonly agentCache = new Map<string, { at: number; value: { agents: PeerAgent[]; unit: PeerUnitProfile | null } }>();
+  private readonly random: () => number;
+  private readonly polling = new Set<string>();
+  private readonly agentCache = new Map<string, { at: number; value: { agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number } }>();
   private readonly inFlight = new Set<string>();
   private readonly peerSends = new Map<string, number[]>();
 
   constructor(private readonly deps: InboxServiceDeps) {
     this.now = deps.now ?? Date.now;
     this.log = deps.log ?? (line => console.info(line));
+    this.random = deps.random ?? Math.random;
   }
 
   private async peerAgents(peer: PeerRecord, user: InboxUser) {
@@ -301,6 +336,8 @@ export class InboxService {
 
   async getThread(user: InboxUser, threadId: string): Promise<InboxThreadView> {
     const { thread, peer } = await this.loadThread(user, threadId);
+    await this.pollDue(user, POLLS_PER_REQUEST, thread.id)
+      .catch(error => this.log(`[Inbox] poll failed: ${error instanceof Error ? error.message : 'error'}`));
     const page = await this.page(thread.id, null, THREAD_PAGE_SIZE);
     await this.deps.store.markRead(thread.id, new Date(this.now()));
     return {
@@ -415,10 +452,14 @@ export class InboxService {
     createPending: () => Promise<FederatedMessage>,
   ): Promise<InboxSendResult> {
     if (this.inFlight.has(thread.id)) throw new InboxError('send_in_progress', 'A message is already being sent in this thread', 409);
-    if (!this.acquirePeerSlot(peer.id)) throw new InboxError('rate_limited', 'Too many messages to this unit, try again in a minute', 429);
     this.inFlight.add(thread.id);
     const started = this.now();
     try {
+      // P4c: an async reply still pending also counts as in flight (one per thread).
+      if (await this.deps.store.hasPendingAsync(thread.id)) {
+        throw new InboxError('send_in_progress', 'A message is already being sent in this thread', 409);
+      }
+      if (!this.acquirePeerSlot(peer.id)) throw new InboxError('rate_limited', 'Too many messages to this unit, try again in a minute', 429);
       const pending = await createPending();
       const history = (await this.deps.store.listMessages(thread.id, 50))
         .filter(message => message.id !== pending.id && new Date(message.createdAt) <= new Date(pending.createdAt));
@@ -427,19 +468,22 @@ export class InboxService {
       const notices: FederatedMessage[] = [];
       // The key is stable per (message, remote conversation) so a retry replays, while a
       // context reset (new conversation, different body) gets its own key.
-      const ask = (conversationId: string | null) => this.deps.federation.askAgentInConversation(
-        peer.id, thread.agentSlug,
-        {
+      const useAsync = await this.supportsAsync(peer, user);
+      const ask = async (conversationId: string | null): Promise<{ outcome: AsyncAskOutcome; key: string }> => {
+        const input = {
           // With a handle the peer already has the context; send only the new message.
           question: conversationId ? pending.content : packQuestion(history, pending.content),
           conversationId, threadTitle: thread.title, idempotencyKey: `${pending.id}:${conversationId ?? 'new'}`,
-        },
-        { initiatedByUserId: user.id, threadId: thread.id },
-      );
+        };
+        const ctx = { initiatedByUserId: user.id, threadId: thread.id };
+        if (useAsync) return { outcome: await this.deps.federation.askAgentAsync!(peer.id, thread.agentSlug, input, ctx), key: input.idempotencyKey };
+        const result = await this.deps.federation.askAgentInConversation(peer.id, thread.agentSlug, input, ctx);
+        return { outcome: { status: 'done', result }, key: input.idempotencyKey };
+      };
       try {
-        let result;
+        let asked;
         try {
-          result = await ask(thread.remoteConversationId);
+          asked = await ask(thread.remoteConversationId);
         } catch (error) {
           if (!(thread.remoteConversationId && error instanceof FederationError && error.code === 'peer_conversation_not_found')) throw error;
           // The peer lost (or no longer accepts) the conversation: start over once, with packed context.
@@ -447,19 +491,25 @@ export class InboxService {
           notices.push(await this.deps.store.insertMessage({
             threadId: thread.id, role: 'system', content: `Context reset on ${peer.displayName ?? peer.unitName}`, status: 'done',
           }));
-          result = await ask(null);
+          asked = await ask(null);
         }
-        if (result.conversationId && result.conversationId !== thread.remoteConversationId) {
-          await this.deps.store.setRemoteConversationId(thread.id, result.conversationId);
+        const { outcome, key } = asked;
+        if (outcome.status === 'pending') {
+          // P4c: the peer runs it in the background; the poller picks the reply up.
+          const at = this.now();
+          await this.deps.store.schedulePoll(pending.id, {
+            remoteRunId: key, nextPollAt: new Date(at + (outcome.pollAfterMs ?? pollDelay(0, this.random))),
+            pollAttempts: 0, pendingDeadlineAt: new Date(at + PENDING_DEADLINE_MS),
+          });
+          this.logSend(thread, peer, 'pending', started);
+          return { userMessage: toMessageView({ ...pending, status: 'pending', errorCode: null }), agentMessage: null, notices: notices.map(toMessageView) };
         }
-        await this.deps.store.updateMessage(pending.id, { status: 'done', errorCode: null });
-        const agentMessage = await this.deps.store.insertMessage({
-          threadId: thread.id, role: 'agent', content: result.answer, status: 'done', truncated: result.truncated,
-          remoteMessageId: result.messageId,
-        });
-        const at = new Date(this.now());
-        await this.deps.store.touchThread(thread.id, at);
-        await this.deps.store.markRead(thread.id, at);
+        if (outcome.status === 'failed') {
+          await this.deps.store.updateMessage(pending.id, { status: 'failed', errorCode: outcome.errorCode });
+          this.logSend(thread, peer, 'failed', started, outcome.errorCode);
+          return { userMessage: toMessageView({ ...pending, status: 'failed', errorCode: outcome.errorCode }), agentMessage: null, notices: notices.map(toMessageView) };
+        }
+        const agentMessage = await this.deliver(thread, pending, outcome.result, true);
         this.logSend(thread, peer, 'done', started);
         return {
           userMessage: toMessageView({ ...pending, status: 'done', errorCode: null }),
@@ -478,6 +528,111 @@ export class InboxService {
     } finally {
       this.inFlight.delete(thread.id);
     }
+  }
+
+  /** Async asks need peer ask protocol >= 2 and a client that supports them (mixed-version fallback). */
+  private async supportsAsync(peer: PeerRecord, user: InboxUser): Promise<boolean> {
+    if (!this.deps.federation.askAgentAsync || !this.deps.federation.getAskResult) return false;
+    try {
+      return ((await this.peerAgents(peer, user)).askVersion ?? 1) >= 2;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Stores a reply: user message done, agent message inserted, continuity handle saved. */
+  private async deliver(thread: FederatedThread, pending: FederatedMessage, result: ConversationAskResult, markRead: boolean) {
+    if (result.conversationId) {
+      const current = await this.deps.store.getThreadById(thread.id);
+      if (current && result.conversationId !== current.remoteConversationId) {
+        await this.deps.store.setRemoteConversationId(thread.id, result.conversationId);
+      }
+    }
+    await this.deps.store.updateMessage(pending.id, { status: 'done', errorCode: null });
+    const agentMessage = await this.deps.store.insertMessage({
+      threadId: thread.id, role: 'agent', content: result.answer, status: 'done', truncated: result.truncated,
+      remoteMessageId: result.messageId,
+    });
+    const at = new Date(this.now());
+    await this.deps.store.touchThread(thread.id, at);
+    // Late replies (poller) stay unread until the thread is opened.
+    if (markRead) await this.deps.store.markRead(thread.id, at);
+    return agentMessage;
+  }
+
+  /**
+   * Polls due pending async messages (P4c). `user` limits it to that user's
+   * threads (client-driven); null polls everyone (background sweep).
+   * Returns the number of messages resolved (done, failed or timed out).
+   */
+  async pollDue(user: InboxUser | null, limit = POLLS_PER_REQUEST, threadId?: string): Promise<number> {
+    if (!this.deps.federation.getAskResult) return 0;
+    const now = this.now();
+    const due = await this.deps.store.listDuePending({ userId: user?.id ?? null, threadId: threadId ?? null, now: new Date(now), limit });
+    let resolved = 0;
+    for (const { message, thread } of due) {
+      if (this.polling.has(message.id)) continue;
+      // Cross-request guard: only the caller that moves next_poll_at forward polls.
+      if (!await this.deps.store.claimPoll(message.id, message.nextPollAt, new Date(now + POLL_LEASE_MS))) continue;
+      this.polling.add(message.id);
+      try {
+        if (await this.pollOne(message, thread)) resolved += 1;
+      } finally {
+        this.polling.delete(message.id);
+      }
+    }
+    return resolved;
+  }
+
+  private async pollOne(message: FederatedMessage, thread: FederatedThread): Promise<boolean> {
+    const now = this.now();
+    const peer = await this.deps.peers.get(thread.peerId);
+    const expired = !!message.pendingDeadlineAt && now >= new Date(message.pendingDeadlineAt).getTime();
+    const finish = async (status: 'failed' | 'timeout', errorCode: string) => {
+      await this.deps.store.updateMessage(message.id, { status, errorCode });
+      this.log(`[Inbox] poll thread=${thread.id} agent=${thread.agentSlug} status=${status} error=${errorCode}`);
+      return true;
+    };
+    if (!peer || peer.status !== 'active') return finish('failed', 'unit_not_paired');
+    try {
+      const outcome = await this.deps.federation.getAskResult!(peer.id, message.remoteRunId!, {
+        initiatedByUserId: thread.userId, threadId: thread.id,
+      });
+      if (outcome.status === 'done') {
+        await this.deliver(thread, message, outcome.result, false);
+        this.log(`[Inbox] poll thread=${thread.id} agent=${thread.agentSlug} status=done attempts=${message.pollAttempts + 1}`);
+        return true;
+      }
+      if (outcome.status === 'failed') return finish(outcome.errorCode === 'timeout' ? 'timeout' : 'failed', outcome.errorCode);
+    } catch (error) {
+      const code = error instanceof FederationError ? error.code : 'internal_error';
+      if (code === 'peer_ask_not_found') return finish('failed', 'result_lost');
+      // Unreachable or slow peer: not a failure, keep polling with backoff.
+    }
+    if (expired) return finish('timeout', 'timeout');
+    const attempts = message.pollAttempts + 1;
+    await this.deps.store.schedulePoll(message.id, {
+      remoteRunId: message.remoteRunId!, nextPollAt: new Date(now + pollDelay(attempts, this.random)),
+      pollAttempts: attempts, pendingDeadlineAt: message.pendingDeadlineAt,
+    });
+    return false;
+  }
+
+  /** Unread and pending state for the sidebar (P4c); also polls this user's due messages. */
+  async updates(user: InboxUser): Promise<InboxUpdates> {
+    await this.pollDue(user, POLLS_PER_REQUEST).catch(error => this.log(`[Inbox] poll failed: ${error instanceof Error ? error.message : 'error'}`));
+    const threads = await this.deps.store.listThreads(user.id);
+    const views = threads.map(thread => ({
+      threadId: thread.id, unread: thread.unread, pending: thread.pending ?? false,
+      lastMessageAt: iso(thread.lastMessageAt), preview: thread.preview?.slice(0, PREVIEW_CHARS) ?? null,
+    }));
+    return { totalUnread: views.reduce((sum, view) => sum + view.unread, 0), threads: views, serverTime: new Date(this.now()).toISOString() };
+  }
+
+  /** Marks a thread read (e.g. when a late reply is shown in the open panel). */
+  async markThreadRead(user: InboxUser, threadId: string): Promise<void> {
+    const { thread } = await this.loadThread(user, threadId);
+    await this.deps.store.markRead(thread.id, new Date(this.now()));
   }
 
   /** Metadata only; never message content. */

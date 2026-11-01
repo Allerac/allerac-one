@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import FederatedThreadPanel from './FederatedThreadPanel';
-import { inboxApi, type InboxListing } from './inbox-api';
+import { inboxApi, type InboxListing, type InboxUpdates } from './inbox-api';
+
+/** P4c: sidebar unread/pending refresh (visible tab / hidden tab). */
+export const UPDATES_VISIBLE_MS = 20_000;
+export const UPDATES_HIDDEN_MS = 60_000;
 
 interface Props {
   isDark: boolean;
@@ -21,6 +25,7 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [updates, setUpdates] = useState<InboxUpdates | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -38,6 +43,33 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load agents'); });
     return () => { cancelled = true; };
   }, [domainId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      try {
+        const next = await inboxApi.updates(domainId);
+        if (!cancelled) setUpdates(next);
+      } catch {
+        // Badges are best effort; the listing still shows the last known counts.
+      }
+      if (cancelled) return;
+      const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      timer = setTimeout(() => void tick(), hidden ? UPDATES_HIDDEN_MS : UPDATES_VISIBLE_MS);
+    };
+    void tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [domainId]);
+
+  const live = new Map((updates?.threads ?? []).map(thread => [thread.threadId, thread]));
+  const unreadOf = (threadId: string | null, fallback: number): number => (threadId ? live.get(threadId)?.unread : undefined) ?? fallback;
+  const pendingOf = (threadId: string | null) => !!threadId && !!live.get(threadId)?.pending;
+  const agentUnread = (agent: InboxListing['units'][number]['agents'][number]) =>
+    agent.threads.length ? agent.threads.reduce((sum, thread) => sum + unreadOf(thread.threadId, thread.unread), 0) : unreadOf(agent.threadId, agent.unread);
+  const agentPending = (agent: InboxListing['units'][number]['agents'][number]) =>
+    agent.threads.some(thread => pendingOf(thread.threadId)) || pendingOf(agent.threadId);
+  const totalUnread = updates?.totalUnread ?? 0;
 
   const openRemote = async (peerId: string, agent: string, threadId: string | null) => {
     try {
@@ -88,6 +120,9 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
     <div className="mb-3" data-testid="agents-inbox">
       <button type="button" onClick={() => setExpanded(v => !v)} className={`text-xs uppercase px-2 mb-1 ${muted}`}>
         Agents {expanded ? '▾' : '▸'}
+        {totalUnread > 0 && (
+          <span data-testid="total-unread" className="ml-1 rounded-full bg-indigo-600 px-1.5 text-[10px] normal-case text-white">{totalUnread}</span>
+        )}
       </button>
       {expanded && listing && (
         <div className="space-y-2">
@@ -122,8 +157,9 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
                       onClick={() => openRemote(unit.peerId, agent.slug, agent.threadId)}>
                       <span className="flex items-center gap-2">
                         <span className="flex-1 truncate">{agent.name}</span>
-                        {agent.unread > 0 && (
-                          <span data-testid="unread" className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{agent.unread}</span>
+                        {agentPending(agent) && <span data-testid="pending" title="Waiting for a reply" className={muted}>…</span>}
+                        {agentUnread(agent) > 0 && (
+                          <span data-testid="unread" className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{agentUnread(agent)}</span>
                         )}
                       </span>
                       {agent.preview && <span className={`block truncate text-xs ${muted}`}>{agent.preview}</span>}
@@ -138,7 +174,10 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
                       className={`${rowClass} pl-5 text-xs`} onClick={() => setOpenThreadId(thread.threadId)}>
                       <span className="flex items-center gap-2">
                         <span className="flex-1 truncate">{thread.title ?? 'Thread'}</span>
-                        {thread.unread > 0 && <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{thread.unread}</span>}
+                        {pendingOf(thread.threadId) && <span className={muted}>…</span>}
+                        {unreadOf(thread.threadId, thread.unread) > 0 && (
+                          <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{unreadOf(thread.threadId, thread.unread)}</span>
+                        )}
                       </span>
                     </button>
                   ))}

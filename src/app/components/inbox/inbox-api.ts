@@ -1,9 +1,9 @@
 /** Browser client for /api/inbox (federation P4a/P4b). Never sees peer keys. */
 import type {
-  InboxListing, InboxMessagePage, InboxMessageView, InboxSendResult, InboxThreadView,
+  InboxListing, InboxMessagePage, InboxMessageView, InboxSendResult, InboxThreadView, InboxUpdates,
 } from '@/federation/inbox.service';
 
-export type { InboxListing, InboxMessagePage, InboxMessageView, InboxThreadView };
+export type { InboxListing, InboxMessagePage, InboxMessageView, InboxThreadView, InboxUpdates };
 
 export class InboxApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly status: number) {
@@ -52,6 +52,9 @@ export const inboxApi = {
     call<SendResult>(`/api/inbox/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/retry`, domain, {
       method: 'POST',
     }),
+  updates: (domain: string) => call<InboxUpdates>('/api/inbox/updates', domain),
+  markRead: (domain: string, threadId: string) =>
+    call<{ read: boolean }>(`/api/inbox/threads/${encodeURIComponent(threadId)}/read`, domain, { method: 'POST' }),
   deleteHistory: (domain: string, peerId: string) =>
     call<{ deleted: number }>(`/api/inbox/peers/${encodeURIComponent(peerId)}/history`, domain, { method: 'DELETE' }),
 };

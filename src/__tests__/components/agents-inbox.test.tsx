@@ -39,9 +39,13 @@ const respond = (data: unknown, status = 200) => Promise.resolve(fakeResponse(st
 
 describe('unified inbox UI', () => {
   let fetchMock: jest.Mock;
+  let updatesMock: jest.Mock;
   beforeEach(() => {
     fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    // P4c: the sidebar polls /api/inbox/updates on its own; keep it off the ordered mock.
+    updatesMock = jest.fn(() => respond({ totalUnread: 0, threads: [], serverTime: '2026-01-01T00:00:00Z' }));
+    global.fetch = ((url: string, init?: RequestInit) =>
+      (url.startsWith('/api/inbox/updates') ? updatesMock(url) : fetchMock(url, init))) as unknown as typeof fetch;
     push.mockReset();
   });
 
@@ -74,7 +78,7 @@ describe('unified inbox UI', () => {
     expect(await screen.findByText('<img src=x onerror=alert(1)> **bold**')).toBeInTheDocument();
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('strong')).toBeNull();
-    expect(screen.getByText(/did not answer within 60s/)).toBeInTheDocument();
+    expect(screen.getByText(/No answer within 10 minutes/)).toBeInTheDocument();
 
     fetchMock.mockReturnValueOnce(respond({
       userMessage: { ...thread().messages[2], status: 'done', errorCode: null },
@@ -170,5 +174,55 @@ describe('unified inbox UI', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(await screen.findByText('Renamed')).toBeInTheDocument();
     expect(fetchMock.mock.calls[2][1].method).toBe('PATCH');
+  });
+
+  describe('P4c async replies', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('shows the total unread on the Agents header and live badges with a pending marker', async () => {
+      updatesMock.mockImplementation(() => respond({
+        totalUnread: 5, serverTime: 'x',
+        threads: [
+          { threadId: 't1', unread: 4, pending: false, lastMessageAt: null, preview: null },
+          { threadId: 't2', unread: 1, pending: true, lastMessageAt: null, preview: null },
+        ],
+      }));
+      fetchMock.mockReturnValueOnce(respond(listing));
+      render(<AgentsInboxSection isDark={false} domainId="chat" />);
+      expect(await screen.findByTestId('total-unread')).toHaveTextContent('5');
+      expect(screen.getByTestId('unread')).toHaveTextContent('5');
+      expect(screen.getByTestId('pending')).toBeInTheDocument();
+      expect(updatesMock.mock.calls[0][0]).toBe('/api/inbox/updates?domain=chat');
+    });
+
+    it('shows "waiting for <unit>…" and polls until the late reply lands, then marks it read', async () => {
+      jest.useFakeTimers();
+      const pendingView = thread({ messages: [
+        { id: 'm1', role: 'user', content: 'slow question', status: 'pending', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' },
+      ] });
+      const doneView = thread({ messages: [
+        { id: 'm1', role: 'user', content: 'slow question', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' },
+        { id: 'm2', role: 'agent', content: 'late answer', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:05:00Z' },
+      ] });
+      fetchMock
+        .mockReturnValueOnce(respond(pendingView))
+        .mockReturnValueOnce(respond(doneView))
+        .mockReturnValueOnce(respond({ read: true }));
+      const onChanged = jest.fn();
+      render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t1" onClose={() => undefined} onChanged={onChanged} />);
+      expect(await screen.findByTestId('waiting')).toHaveTextContent('waiting for Santos…');
+      jest.advanceTimersByTime(3000);
+      expect(await screen.findByText('late answer')).toBeInTheDocument();
+      expect(screen.queryByTestId('waiting')).not.toBeInTheDocument();
+      await waitFor(() => expect(fetchMock.mock.calls[2][0]).toBe('/api/inbox/threads/t1/read?domain=chat'));
+      expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'POST' });
+      expect(onChanged).toHaveBeenCalled();
+    });
+
+    it('labels an expired async reply as no answer within 10 minutes', async () => {
+      fetchMock.mockReturnValueOnce(respond(thread()));
+      render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t1" onClose={() => undefined} />);
+      expect(await screen.findByText('No answer within 10 minutes.')).toBeInTheDocument();
+    });
   });
 });

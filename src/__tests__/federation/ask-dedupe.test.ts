@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import {
-  DEDUPE_TTL_MS, InMemoryAskDedupeStore, STALE_IN_PROGRESS_MS, askRequestHash, decideExisting,
+  DEDUPE_TTL_MS, InMemoryAskDedupeStore, STALE_IN_PROGRESS_MS, askRequestHash, decideExisting, resultState,
 } from '@/federation/ask-dedupe';
 
 const at = (ms: number) => new Date(ms);
@@ -31,5 +31,22 @@ describe('ask dedupe', () => {
     await store.finish('p', 'k', { status: 'done', response: { answer: 'a', truncated: false, conversation_id: 'c', message_id: null } });
     expect(await store.begin('p', 'k', 'h', at(2))).toMatchObject({ kind: 'replay', response: { conversation_id: 'c' } });
     expect(await store.begin('other', 'k', 'h', at(2))).toEqual({ kind: 'new' });
+  });
+
+  it('async rows use their deadline and expose a read model (P4c)', async () => {
+    const running = { requestHash: 'h', status: 'in_progress' as const, response: null, createdAt: at(0), updatedAt: at(0), mode: 'async' as const, deadlineAt: at(600_000) };
+    expect(decideExisting(running, 'h', at(STALE_IN_PROGRESS_MS + 1))).toEqual({ kind: 'in_progress' });
+    expect(resultState(running, at(10))).toEqual({ status: 'pending' });
+    expect(resultState(running, at(600_001))).toEqual({ status: 'failed', errorCode: 'timeout' });
+    expect(resultState({ ...running, status: 'failed', errorCode: 'provider_not_configured' }, at(10)))
+      .toEqual({ status: 'failed', errorCode: 'provider_not_configured' });
+    expect(resultState(null, at(0))).toBeNull();
+    expect(resultState(running, at(DEDUPE_TTL_MS + 1))).toBeNull();
+
+    const store = new InMemoryAskDedupeStore();
+    await store.begin('p', 'k', 'h', at(0), { mode: 'async', deadlineAt: at(600_000) });
+    expect(await store.get('p', 'k', at(1))).toEqual({ status: 'pending' });
+    await store.finish('p', 'k', { status: 'failed', errorCode: 'timeout' });
+    expect(await store.get('p', 'k', at(2))).toEqual({ status: 'failed', errorCode: 'timeout' });
   });
 });

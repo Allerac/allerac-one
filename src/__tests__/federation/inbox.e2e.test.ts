@@ -7,10 +7,10 @@ const NAPOLS = 'https://napols.example';
 const SANTOS = 'https://santos.example';
 
 describe('unified inbox between two Units (mocked network)', () => {
-  it('pair → list → chat → unpair → read-only', async () => {
+  it('pair → list → chat → unpair → read-only (sync peer, pre-P4c)', async () => {
     const network = createNetwork([
       { origin: NAPOLS, name: 'napols' },
-      { origin: SANTOS, name: 'santos', env: { ALLERAC_FEDERATION_AGENTS: 'chat,sales' } },
+      { origin: SANTOS, name: 'santos', env: { ALLERAC_FEDERATION_AGENTS: 'chat,sales', FAKE_LEGACY_ASK: 'true' } },
     ]);
     const a = network.units.get(NAPOLS)!;
     const b = network.units.get(SANTOS)!;
@@ -65,5 +65,54 @@ describe('unified inbox between two Units (mocked network)', () => {
     const view = await inbox.getThread(user, thread.id);
     expect(view.readOnly).toBe(true);
     await expect(inbox.send(user, thread.id, 'still there?')).rejects.toMatchObject({ code: 'unit_not_paired' });
+  });
+
+  it('async peer: pending → background reply → polled → unread → read (P4c)', async () => {
+    const network = createNetwork([
+      { origin: NAPOLS, name: 'napols' },
+      { origin: SANTOS, name: 'santos', env: { ALLERAC_FEDERATION_AGENTS: 'chat' } },
+    ]);
+    const a = network.units.get(NAPOLS)!;
+    const b = network.units.get(SANTOS)!;
+    await a.service.initiate({ url: SANTOS, grants: [], adminId: 'admin-a' });
+    const [inbound] = await b.service.list();
+    await b.service.accept({ peerId: inbound.id, grants: ['federation.agents.list', 'federation.agents.ask'], adminId: 'admin-b' });
+    const [peerOnA] = await a.service.list();
+
+    let release: () => void = () => undefined;
+    b.runtime.runChat = async input => {
+      await new Promise<void>(resolve => { release = resolve; });
+      return { content: `late answer: ${input.message}` };
+    };
+    let clock = 1_000_000;
+    const store = new InMemoryInboxStore();
+    const inbox = new InboxService({
+      store, peers: a.store, federation: a.client, log: () => undefined, now: () => clock, random: () => 0.5,
+      localAgents: async () => [],
+      loadHomeUnit: async () => ({ name: 'napols', displayName: 'Napols', emoji: null, role: null, description: null, tags: [] }),
+    });
+    const user = { id: 'admin-a', is_admin: true };
+    const thread = await inbox.openThread(user, peerOnA.id, 'chat');
+
+    const sent = await inbox.send(user, thread.id, 'slow question');
+    expect(sent.userMessage.status).toBe('pending');
+    expect(sent.agentMessage).toBeNull();
+    expect((await inbox.updates(user)).threads[0]).toMatchObject({ pending: true, unread: 0 });
+    await expect(inbox.send(user, thread.id, 'another')).rejects.toMatchObject({ code: 'send_in_progress' });
+
+    clock += 3_000;
+    expect(await inbox.pollDue(null, 50)).toBe(0); // still running on the peer
+
+    release();
+    await Promise.all(b.background);
+    clock += 10_000;
+    expect(await inbox.pollDue(null, 50)).toBe(1);
+    const updates = await inbox.updates(user);
+    expect(updates).toMatchObject({ totalUnread: 1, threads: [expect.objectContaining({ pending: false, unread: 1 })] });
+
+    const view = await inbox.getThread(user, thread.id);
+    expect(view.messages.map(m => m.content)).toEqual(['slow question', 'late answer: slow question']);
+    expect((await inbox.updates(user)).totalUnread).toBe(0);
+    expect(store.threads.get(thread.id)?.remoteConversationId).toBeTruthy();
   });
 });

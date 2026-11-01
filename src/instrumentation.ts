@@ -37,6 +37,10 @@ export async function register() {
       // Embed new or changed memories for semantic recall, slowly and in the background.
       const { startMemoryIndexSweep } = await import('./app/services/knowledge/memory-index-sweep');
       startMemoryIndexSweep();
+
+      // Pick up late replies from paired Units (unified inbox, federation P4c).
+      const { startInboxPollSweep } = await import('./federation/inbox-poller');
+      void startInboxPollSweep();
     }
   }
 }
