@@ -2,7 +2,7 @@
 
 import SidebarRow from '@/app/components/layout/SidebarRow';
 import AgentAvatar from './AgentAvatar';
-import { timeAgo, type AgentItem } from './agents-format';
+import { agentSubtitle, timeAgo, type AgentItem } from './agents-format';
 
 interface Props {
   agent: AgentItem;
@@ -23,7 +23,6 @@ export function UnreadBadge({ count, testId = 'unread' }: { count: number; testI
 
 /** One remote agent: avatar + status, name, unit · short role, time, unread, pending. */
 export default function AgentRow({ agent, isDark, active, collapsed = false, onOpen }: Props) {
-  const unit = `${agent.unitEmoji ? `${agent.unitEmoji} ` : ''}${agent.unitDisplayName}`;
   const tooltip = [`${agent.name} · ${agent.unitDisplayName}`, agent.unitRole].filter(Boolean).join('\n');
   const avatar = <AgentAvatar name={agent.name} colorKey={agent.key} status={agent.status} isDark={isDark} />;
 
@@ -55,7 +54,7 @@ export default function AgentRow({ agent, isDark, active, collapsed = false, onO
           <UnreadBadge count={agent.unread} />
         </>
       )}
-      subtitle={agent.roleShort ? `${unit} · ${agent.roleShort}` : unit}
+      subtitle={agentSubtitle(agent)}
     />
   );
 }

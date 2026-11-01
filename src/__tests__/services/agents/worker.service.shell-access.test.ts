@@ -2,11 +2,13 @@
 
 const mockChatCompletion = jest.fn();
 const mockShellExecute = jest.fn();
+const mockLoadSoulIdentity = jest.fn();
 
 jest.mock('@/app/clients/db', () => ({ __esModule: true, default: { query: jest.fn() } }));
 jest.mock('@/app/services/llm/llm.service', () => ({
   LLMService: jest.fn().mockImplementation(() => ({ chatCompletion: mockChatCompletion })),
 }));
+jest.mock('@/federation/unit-profile.repository', () => ({ loadSoulIdentity: (domain: string | null) => mockLoadSoulIdentity(domain) }));
 jest.mock('@/app/tools/shell.tool', () => ({
   ShellTool: jest.fn().mockImplementation(() => ({ execute: mockShellExecute })),
 }));
@@ -94,5 +96,32 @@ describe('WorkerService shell access (agent runs)', () => {
       if (original === undefined) delete process.env.EXECUTOR_ENABLED;
       else process.env.EXECUTOR_ENABLED = original;
     }
+  });
+});
+
+describe('WorkerService soul (unit identity)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockLoadSoulIdentity.mockReset();
+  });
+
+  const systemPrompt = () => (mockChatCompletion.mock.calls[0][0].messages as ChatMessage[])[0].content;
+
+  it('speaks as the Unit with its instructions and keeps the task', async () => {
+    mockLoadSoulIdentity.mockResolvedValueOnce({ displayName: 'Santos', role: 'research', instructions: 'Be brief.' });
+    mockChatCompletion.mockResolvedValueOnce({ choices: [{ message: { role: 'assistant', content: 'ok' } }] });
+    await new WorkerService().executeWorker(spec, config({ domainSlug: 'chat' }));
+    expect(mockLoadSoulIdentity).toHaveBeenCalledWith('chat');
+    expect(systemPrompt().startsWith('You are Santos, an Allerac unit')).toBe(true);
+    expect(systemPrompt()).toContain('## Agent instructions (set by the Unit owner)\nBe brief.');
+    expect(systemPrompt()).toContain('## Your Task\nlist files');
+  });
+
+  it('falls back to the plain soul when the identity cannot be loaded', async () => {
+    mockLoadSoulIdentity.mockRejectedValueOnce(new Error('db down'));
+    mockChatCompletion.mockResolvedValueOnce({ choices: [{ message: { role: 'assistant', content: 'ok' } }] });
+    await new WorkerService().executeWorker(spec, config({}));
+    expect(mockLoadSoulIdentity).toHaveBeenCalledWith(null);
+    expect(systemPrompt().startsWith('You are Allerac, a private AI assistant')).toBe(true);
   });
 });

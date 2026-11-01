@@ -40,3 +40,12 @@ example napols and a second Unit on the same host
 - [ ] `GET /api/v1/peers/:id/audit` on both Units shows inbound/outbound rows without question or answer text.
 - [ ] More than 20 asks in 10 minutes from one peer return `429`.
 - [ ] After revoking the pairing, the tools no longer list that Unit and calls fail.
+
+## Single agent (one Unit = one agent)
+
+- [ ] Migration 150 applied (`unit_profile.instructions`).
+- [ ] Settings > Discovery > Agent: set name, emoji, role and instructions; ask "who are you?" in chat: the answer uses the name and role and follows the instructions.
+- [ ] A sub-agent run (agent worker) answers as the Unit, not as "Allerac".
+- [ ] With `ALLERAC_SINGLE_AGENT=true` and a restart, the home Unit's Agents list shows one row for this Unit with only the role as subtitle; chatting works; old threads with other agents of this Unit show as unavailable.
+- [ ] The home Unit's own agent is the first row ("This Unit") and opens `/chat`.
+- [ ] `GET /api/v1/federation/agents` from a peer and `/.well-known/allerac` never contain the instructions text.

@@ -13,6 +13,7 @@
  * - Remote text is stored only in federated_* tables, never in chat_conversations,
  *   so local memory/RAG never sees it. It is untrusted and rendered as plain text.
  */
+import { UNIT_AGENT_SLUG } from './unit-profile';
 import { MAX_QUESTION_CHARS } from './agents.service';
 import { FederationError } from './errors';
 import { ASK_TIMEOUT_MS, type AsyncAskOutcome, type ConversationAskResult, type PeerAgent } from './federation-client';
@@ -154,7 +155,13 @@ export interface InboxArchivedGroup {
 }
 
 export interface InboxListing {
-  home: { name: string; displayName: string; emoji: string | null; role: string | null; agents: Array<{ slug: string; name: string }> };
+  home: {
+    name: string; displayName: string; emoji: string | null; role: string | null;
+    /** Always empty: local domains are not agents (kept for older clients). */
+    agents: Array<{ slug: string; name: string }>;
+    /** This Unit's own agent (one Unit = one agent), listed first and opening the local chat. */
+    agent?: { slug: string; name: string; emoji: string | null; role: string | null; href: string };
+  };
   units: InboxUnitGroup[];
   archived: InboxArchivedGroup[];
 }
@@ -332,7 +339,10 @@ export class InboxService {
 
     return {
       // Local domains are not agents: the Agents section lists remote agents only.
-      home: { name: home.name, displayName: home.displayName, emoji: home.emoji, role: home.role, agents: [] },
+      home: {
+        name: home.name, displayName: home.displayName, emoji: home.emoji, role: home.role, agents: [],
+        agent: { slug: UNIT_AGENT_SLUG, name: home.displayName, emoji: home.emoji, role: home.role, href: '/chat' },
+      },
       units,
       archived,
     };

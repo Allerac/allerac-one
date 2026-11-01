@@ -36,6 +36,16 @@ export interface AgentItem {
   threads: AgentThreadItem[];
 }
 
+/** This Unit's own agent, always the first row (one Unit = one agent). */
+export interface SelfAgentItem {
+  key: 'self';
+  name: string;
+  emoji: string | null;
+  role: string | null;
+  roleShort: string | null;
+  href: string;
+}
+
 export const ROLE_SHORT_CHARS = 24;
 
 /** First segment of a role, cut to ~24 chars: "Medical · cuida da saúde…" → "Medical". */
@@ -119,6 +129,19 @@ export function flattenAgents(listing: InboxListing | null, updates?: InboxUpdat
     }
   }
   return items.sort(compareAgents);
+}
+
+export function selfAgent(listing: InboxListing | null): SelfAgentItem | null {
+  const agent = listing?.home.agent;
+  if (!agent) return null;
+  return { key: 'self', name: agent.name, emoji: agent.emoji, role: agent.role, roleShort: roleShort(agent.role), href: agent.href };
+}
+
+/** Row subtitle: a single-agent peer is named after its Unit, so only the role is shown. */
+export function agentSubtitle(agent: Pick<AgentItem, 'name' | 'unitDisplayName' | 'unitEmoji' | 'roleShort'>): string {
+  const unit = `${agent.unitEmoji ? `${agent.unitEmoji} ` : ''}${agent.unitDisplayName}`;
+  if (agent.name === agent.unitDisplayName) return agent.roleShort ?? unit;
+  return agent.roleShort ? `${unit} · ${agent.roleShort}` : unit;
 }
 
 export function timeAgo(iso: string | null, now = Date.now()): string {

@@ -11,6 +11,9 @@ import { PUBLIC_DOMAINS } from '@/app/services/chat/public-domains';
 import { envFlag, type Env } from './env';
 import { unitName } from './manifest';
 
+/** Owner-written agent instructions (migration 150). */
+export const MAX_INSTRUCTIONS_CHARS = 4_000;
+
 export const unitProfileInputSchema = z.object({
   displayName: z.string().trim().max(100).nullable().optional(),
   emoji: z.string().trim().max(16).nullable().optional(),
@@ -22,6 +25,7 @@ export const unitProfileInputSchema = z.object({
     z.string().trim().max(300),
   ).optional(),
   identityInPublicDomains: z.boolean().nullable().optional(),
+  instructions: z.string().trim().max(MAX_INSTRUCTIONS_CHARS).nullable().optional(),
 }).strict();
 export type UnitProfileInput = z.infer<typeof unitProfileInputSchema>;
 
@@ -34,6 +38,8 @@ export interface UnitProfileRow {
   tags: string[];
   agentDescriptions: Record<string, string>;
   identityInPublicDomains: boolean | null;
+  /** Local only; never sent to peers. */
+  instructions?: string | null;
   updatedAt: string | null;
 }
 
@@ -47,6 +53,8 @@ export interface UnitProfile {
   tags: string[];
   agentDescriptions: Record<string, string>;
   identityInPublicDomains: boolean;
+  /** Local only; never sent to peers. */
+  instructions: string | null;
 }
 
 /** What paired peers receive (everything except local-only switches). */
@@ -76,6 +84,8 @@ export function resolveUnitProfile(row: UnitProfileRow | null, env: Env = proces
     tags: row?.tags ?? [],
     agentDescriptions: row?.agentDescriptions ?? {},
     identityInPublicDomains: row?.identityInPublicDomains ?? envFlag(env, 'ALLERAC_UNIT_IDENTITY_PUBLIC', false),
+    instructions: clean(row?.instructions)?.slice(0, MAX_INSTRUCTIONS_CHARS)
+      ?? clean(env.ALLERAC_UNIT_INSTRUCTIONS)?.slice(0, MAX_INSTRUCTIONS_CHARS) ?? null,
   };
 }
 
@@ -106,7 +116,22 @@ export function soulIdentityFor(profile: UnitProfile, domain?: string | null): S
     role: profile.role,
     description: profile.description,
     agentDescription: domain ? profile.agentDescriptions[domain] ?? null : null,
+    instructions: profile.instructions,
   };
+}
+
+/** The Unit's single agent (phase 1: the `chat` domain under the Unit's name and role). */
+export const UNIT_AGENT_SLUG = 'chat';
+
+export interface UnitAgentIdentity {
+  slug: string;
+  name: string;
+  emoji: string | null;
+  role: string | null;
+}
+
+export function agentIdentity(profile: UnitProfile): UnitAgentIdentity {
+  return { slug: UNIT_AGENT_SLUG, name: profile.displayName, emoji: profile.emoji, role: profile.role };
 }
 
 function capitalize(value: string): string {

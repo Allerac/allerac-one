@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { sidebarHeaderClass } from '@/app/components/layout/SidebarRow';
 import AgentList from './AgentList';
 import { UnreadBadge } from './AgentRow';
-import { flattenAgents } from './agents-format';
+import { flattenAgents, selfAgent } from './agents-format';
 import { inboxApi, type InboxListing, type InboxUpdates } from './inbox-api';
 
 /** Unread/pending refresh (visible tab / hidden tab). */
@@ -67,6 +67,7 @@ export default function AgentsInboxSection({ isDark: d, domainId, collapsed = fa
 
   const agents = useMemo(() => flattenAgents(listing, updates), [listing, updates]);
   const archived = listing?.archived ?? [];
+  const self = useMemo(() => selfAgent(listing), [listing]);
   const totalUnread = updates?.totalUnread ?? agents.reduce((sum, agent) => sum + agent.unread, 0);
 
   if (!listing || (agents.length === 0 && archived.length === 0)) {
@@ -81,7 +82,7 @@ export default function AgentsInboxSection({ isDark: d, domainId, collapsed = fa
   if (collapsed) {
     return (
       <div className="mb-2 px-2" data-testid="agents-inbox">
-        <AgentList agents={agents} archived={[]} isDark={d} activeKey={activeKey} collapsed onNavigate={navigate} />
+        <AgentList agents={agents} self={self} archived={[]} isDark={d} activeKey={activeKey} collapsed onNavigate={navigate} />
       </div>
     );
   }
@@ -99,7 +100,7 @@ export default function AgentsInboxSection({ isDark: d, domainId, collapsed = fa
       </button>
       {expanded && (
         <div className="max-h-[45vh] overflow-y-auto">
-          <AgentList agents={agents} archived={archived} isDark={d} activeKey={activeKey} onNavigate={navigate} />
+          <AgentList agents={agents} self={self} archived={archived} isDark={d} activeKey={activeKey} onNavigate={navigate} />
         </div>
       )}
       {error && <p className="px-2 text-xs text-red-500">{error}</p>}

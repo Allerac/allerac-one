@@ -1,4 +1,4 @@
-import { exposedAgentSlugs } from '@/federation/env';
+import { exposedAgentSlugs, singleAgent } from '@/federation/env';
 import { resolveUnitProfile, unitProfileInputSchema } from '@/federation/unit-profile';
 import { loadUnitProfileRow, saveUnitProfile } from '@/federation/unit-profile.repository';
 import { requireSessionAdmin } from '../../_lib/auth';
@@ -12,7 +12,7 @@ export async function GET(): Promise<Response> {
   try {
     await requireSessionAdmin();
     const stored = await loadUnitProfileRow();
-    return apiData({ stored, effective: resolveUnitProfile(stored), exposedAgents: exposedAgentSlugs() });
+    return apiData({ stored, effective: resolveUnitProfile(stored), exposedAgents: exposedAgentSlugs(), singleAgent: singleAgent() });
   } catch (error: unknown) {
     return federationErrorResponse('GET /api/v1/unit/profile failed', error);
   }
@@ -24,7 +24,7 @@ export async function PUT(request: Request): Promise<Response> {
     const parsed = unitProfileInputSchema.safeParse(await readJson(request));
     if (!parsed.success) return apiError('validation_error', 'Invalid unit profile', 400, parsed.error.flatten());
     const stored = await saveUnitProfile(parsed.data, admin.id);
-    return apiData({ stored, effective: resolveUnitProfile(stored), exposedAgents: exposedAgentSlugs() });
+    return apiData({ stored, effective: resolveUnitProfile(stored), exposedAgents: exposedAgentSlugs(), singleAgent: singleAgent() });
   } catch (error: unknown) {
     return federationErrorResponse('PUT /api/v1/unit/profile failed', error);
   }

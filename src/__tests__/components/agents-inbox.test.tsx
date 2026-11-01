@@ -30,7 +30,7 @@ const T2 = '22222222-2222-4222-8222-222222222222';
 const T3 = '33333333-3333-4333-8333-333333333333';
 
 const listing = () => ({
-  home: { name: 'napols', displayName: 'Napols', emoji: '🍕', role: 'Home', agents: [] },
+  home: { name: 'napols', displayName: 'Napols', emoji: '🍕', role: 'Home base, family', agents: [], agent: { slug: 'chat', name: 'Napols', emoji: '🍕', role: 'Home base, family', href: '/chat' } },
   units: [
     {
       peerId: 'p1', name: 'santos', displayName: 'Santos', emoji: '🏖️', role: 'Beach lab, research and long-form notes for the team', status: 'online',
@@ -105,6 +105,19 @@ describe('agents-format', () => {
 });
 
 describe('AgentsInboxSection', () => {
+  it('shows only the role for a single-agent peer named after its Unit', async () => {
+    route(url => {
+      if (!url.startsWith('/api/inbox/agents')) return undefined;
+      const value = listing();
+      value.units[1].agents[0].name = 'Barcelona';
+      return value;
+    });
+    render(<AgentsInboxSection isDark={false} domainId="chat" />);
+    const row = await screen.findByTestId('agent-barcelona/coach');
+    expect(within(row).getByText('Sports')).toBeInTheDocument();
+    expect(within(row).queryByText(/⚽ Barcelona ·/)).toBeNull();
+  });
+
   it('shows a flat list without local domains, with unit, short role, status and badges', async () => {
     render(<AgentsInboxSection isDark={false} domainId="chat" />);
     const row = await screen.findByTestId('agent-santos/chat');
@@ -113,8 +126,17 @@ describe('AgentsInboxSection', () => {
     expect(within(row).getByTestId('status-dot')).toHaveAttribute('data-status', 'online');
     expect(within(screen.getByTestId('agent-barcelona/coach')).getByTestId('status-dot')).toHaveAttribute('data-status', 'degraded');
     expect(screen.getByTestId('total-unread')).toHaveTextContent('3');
-    expect(screen.queryByText('Napols')).toBeNull();
-    expect(screen.queryByText(/Home/)).toBeNull();
+    // Local domains are not listed; this Unit's own agent comes first.
+    expect(screen.queryByText('Health')).toBeNull();
+    const all = screen.getAllByTestId(/^agent-(self|.+\/.+)$/).map(el => el.getAttribute('data-testid'));
+    expect(all[0]).toBe('agent-self');
+    const self = screen.getByTestId('agent-self');
+    expect(within(self).getByText('Napols')).toBeInTheDocument();
+    expect(within(self).getByText('This Unit · Home base')).toBeInTheDocument();
+    expect(within(self).queryByTestId('unread')).toBeNull();
+    fireEvent.click(self);
+    expect(push).toHaveBeenCalledWith('/chat');
+    push.mockReset();
     const ids = screen.getAllByTestId(/^agent-.+\//).map(el => el.getAttribute('data-testid'));
     expect(ids).toEqual(['agent-santos/chat', 'agent-barcelona/coach']);
 

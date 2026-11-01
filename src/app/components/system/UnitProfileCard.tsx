@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 
-// Admin-only "This Unit" card (federation P3.5): the Unit name is its fixed
-// identity; the role below is what it takes care of, shared with paired Units.
+// Admin-only "Agent" card (federation P3.5, one Unit = one agent): the Unit
+// name is its fixed id; name, emoji and role are shared with paired Units, the
+// instructions stay local and shape this Unit's soul.
 
 interface EffectiveProfile {
   name: string;
@@ -14,7 +15,10 @@ interface EffectiveProfile {
   tags: string[];
   agentDescriptions: Record<string, string>;
   identityInPublicDomains: boolean;
+  instructions?: string | null;
 }
+
+const MAX_INSTRUCTIONS = 4000;
 
 interface ProfileResponse {
   stored: {
@@ -25,9 +29,11 @@ interface ProfileResponse {
     tags: string[];
     agentDescriptions: Record<string, string>;
     identityInPublicDomains: boolean | null;
+    instructions?: string | null;
   } | null;
   effective: EffectiveProfile;
   exposedAgents: string[];
+  singleAgent?: boolean;
 }
 
 interface Props {
@@ -38,7 +44,7 @@ export default function UnitProfileCard({ isDarkMode }: Props) {
   const [data, setData] = useState<ProfileResponse | null>(null);
   const [form, setForm] = useState({
     displayName: '', emoji: '', role: '', description: '', tags: '',
-    agentDescriptions: {} as Record<string, string>, identityInPublicDomains: false,
+    agentDescriptions: {} as Record<string, string>, identityInPublicDomains: false, instructions: '',
   });
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -53,6 +59,7 @@ export default function UnitProfileCard({ isDarkMode }: Props) {
       tags: (next.stored?.tags ?? []).join(', '),
       agentDescriptions: next.stored?.agentDescriptions ?? {},
       identityInPublicDomains: next.effective.identityInPublicDomains,
+      instructions: next.stored?.instructions ?? '',
     });
   };
 
@@ -82,6 +89,7 @@ export default function UnitProfileCard({ isDarkMode }: Props) {
           tags: form.tags.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 10),
           agentDescriptions: form.agentDescriptions,
           identityInPublicDomains: form.identityInPublicDomains,
+          instructions: form.instructions.trim() || null,
         }),
       });
       const body = await response.json().catch(() => null);
@@ -104,7 +112,7 @@ export default function UnitProfileCard({ isDarkMode }: Props) {
   if (!data) {
     return (
       <div className={`rounded-lg border p-4 ${panel}`} data-testid="unit-profile-card">
-        <h3>This Unit</h3>
+        <h3>Agent</h3>
         <p className={`text-sm ${muted}`}>{status ?? 'Loading…'}</p>
       </div>
     );
@@ -116,10 +124,10 @@ export default function UnitProfileCard({ isDarkMode }: Props) {
   return (
     <div className={`rounded-lg border p-4 space-y-3 ${panel}`} data-testid="unit-profile-card">
       <div>
-        <h3>This Unit</h3>
+        <h3>Agent</h3>
         <p className={`text-xs ${muted}`}>
-          Unit id <code>{data.effective.name}</code> is fixed. The role is shared with every paired Unit and tells this
-          Unit&apos;s agents who they are.
+          This Unit is one agent. Unit id <code>{data.effective.name}</code> is fixed. Name, emoji and role are shared
+          with every paired Unit; the instructions stay on this Unit.
         </p>
       </div>
       <div className="grid grid-cols-[5rem_1fr] gap-2">
@@ -137,8 +145,24 @@ export default function UnitProfileCard({ isDarkMode }: Props) {
         onChange={event => setForm({ ...form, description: event.target.value })} />
       <input aria-label="Tags" className={field} value={form.tags} placeholder="Tags, comma separated"
         onChange={event => setForm({ ...form, tags: event.target.value })} />
+      <div>
+        <textarea aria-label="Instructions" className={field} value={form.instructions} maxLength={MAX_INSTRUCTIONS} rows={6}
+          placeholder="How this agent should behave (tone, priorities, rules). Your own learned instructions still win."
+          onChange={event => setForm({ ...form, instructions: event.target.value })} />
+        <p className={`text-right text-xs ${muted}`} data-testid="instructions-count">
+          {form.instructions.length}/{MAX_INSTRUCTIONS}
+        </p>
+      </div>
 
-      {data.exposedAgents.length > 0 && (
+      <p className={`text-xs ${muted}`} data-testid="exposed-agents">
+        {data.singleAgent
+          ? `Paired Units see one agent: ${name} (chat).`
+          : data.exposedAgents.length > 0
+            ? `Paired Units see: ${data.exposedAgents.join(', ')}. Set ALLERAC_SINGLE_AGENT=true to expose this Unit as one agent.`
+            : 'No agents are shared with paired Units.'}
+      </p>
+
+      {!data.singleAgent && data.exposedAgents.length > 0 && (
         <div className="space-y-2">
           <p className={`text-xs font-semibold ${muted}`}>Agents shared with paired Units</p>
           {data.exposedAgents.map(slug => (
