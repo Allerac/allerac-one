@@ -39,7 +39,14 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
   useEffect(() => {
     let cancelled = false;
     inboxApi.list(domainId)
-      .then(data => { if (!cancelled) { setListing(data); setError(null); } })
+      .then(data => {
+        if (cancelled) return;
+        setListing(data);
+        setError(null);
+        // Deep link from the Control Tower (P4d): /chat?inboxThread=<id> opens that thread.
+        const linked = new URLSearchParams(window.location.search).get('inboxThread');
+        if (linked && /^[0-9a-f-]{36}$/i.test(linked)) setOpenThreadId(linked);
+      })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load agents'); });
     return () => { cancelled = true; };
   }, [domainId]);

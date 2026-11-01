@@ -9,10 +9,12 @@
  */
 import { z } from 'zod';
 import type { FederationAuditSink } from './audit.repository';
+import { FEDERATION_CAPABILITIES } from './capabilities';
 import { FederationError, federationErrors } from './errors';
 import type { SecretBox } from './pairing.service';
 import type { PeerClient } from './peer-client';
 import type { PeerRecord, PeerStore } from './peer.types';
+import { federationStatusSchema, type FederationStatus } from './status.schema';
 import { peerUnitProfileSchema, type PeerUnitProfile } from './unit-profile';
 
 export const LIST_TIMEOUT_MS = 8_000;
@@ -20,6 +22,8 @@ export const ASK_TIMEOUT_MS = 60_000;
 /** P4c: an async ask only waits for the peer to accept (or answer from its store). */
 export const ASYNC_ASK_TIMEOUT_MS = 15_000;
 export const ASK_RESULT_TIMEOUT_MS = 8_000;
+/** P4d: Control Tower heartbeat timeout. */
+export const STATUS_TIMEOUT_MS = 3_000;
 
 export const peerAgentSchema = z.object({
   id: z.string().min(1).max(100),
@@ -34,6 +38,8 @@ const listResponseSchema = z.object({
   unit: z.unknown().optional(),
   // P4c: ask protocol version; absent on older Units (sync only).
   protocol: z.object({ ask: z.number().int().optional() }).passthrough().optional().catch(undefined),
+  // P4d: capabilities our key holds on the peer; absent on older Units.
+  granted_capabilities: z.array(z.string().max(64)).max(20).optional().catch(undefined),
 });
 const askResponseSchema = z.object({
   answer: z.string(),
@@ -117,15 +123,51 @@ export class FederationClient {
   }
 
   /** Agents plus the peer's identity & role (null for older Units). */
-  async listAgentsWithUnit(peerId: string, ctx: FederationCallContext): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number }> {
+  async listAgentsWithUnit(
+    peerId: string, ctx: FederationCallContext, options: { timeoutMs?: number; auditOk?: boolean } = {},
+  ): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number; grantedCapabilities?: string[] }> {
     const data = await this.call({
       peerId, ctx, capability: 'federation.agents.list', target: null,
-      path: '/api/v1/federation/agents', method: 'GET', timeoutMs: LIST_TIMEOUT_MS,
+      path: '/api/v1/federation/agents', method: 'GET', timeoutMs: options.timeoutMs ?? LIST_TIMEOUT_MS,
+      auditOk: options.auditOk,
     });
     const parsed = listResponseSchema.safeParse(data);
     if (!parsed.success) throw federationErrors.peerInvalidResponse();
     const unit = peerUnitProfileSchema.safeParse(parsed.data.unit);
-    return { agents: parsed.data.agents, unit: unit.success ? unit.data : null, askVersion: parsed.data.protocol?.ask ?? 1 };
+    return {
+      agents: parsed.data.agents, unit: unit.success ? unit.data : null, askVersion: parsed.data.protocol?.ask ?? 1,
+      ...(parsed.data.granted_capabilities ? { grantedCapabilities: parsed.data.granted_capabilities } : {}),
+    };
+  }
+
+  /**
+   * Control Tower status (P4d). Successful reads are not audited (the
+   * heartbeat runs every minute); failures and denials are.
+   */
+  async getStatus(peerId: string, ctx: FederationCallContext, timeoutMs = STATUS_TIMEOUT_MS): Promise<FederationStatus> {
+    const data = await this.call({
+      peerId, ctx, capability: 'federation.status.read', target: null,
+      path: '/api/v1/federation/status', method: 'GET', timeoutMs, auditOk: false,
+    });
+    const parsed = federationStatusSchema.safeParse(data);
+    if (!parsed.success) throw federationErrors.peerInvalidResponse();
+    return parsed.data;
+  }
+
+  /**
+   * Updates what we may call on a peer from its `granted_capabilities` (P4d),
+   * so grants changed in place on the peer apply without re-pairing. Unknown
+   * ids are dropped. Returns the new list when it changed.
+   */
+  async syncGrantedCapabilities(peerId: string, granted: readonly string[]): Promise<string[] | null> {
+    const peer = await this.deps.store.get(peerId);
+    if (!peer || peer.status !== 'active') return null;
+    const known = new Set(FEDERATION_CAPABILITIES.map(capability => capability.id as string));
+    const next = Array.from(new Set(granted.filter(id => known.has(id)))).sort();
+    const current = [...peer.outboundCapabilities].sort();
+    if (next.length === current.length && next.every((id, index) => id === current[index])) return null;
+    await this.deps.store.update(peer.id, { outboundCapabilities: next });
+    return next;
   }
 
   /**
@@ -217,6 +259,8 @@ export class FederationClient {
     body?: unknown;
     headers?: Record<string, string>;
     timeoutMs: number;
+    /** False skips the audit row on success (high-frequency probes); failures are always audited. */
+    auditOk?: boolean;
   }): Promise<unknown> {
     const started = this.now();
     const peer = await this.deps.store.get(params.peerId);
@@ -249,7 +293,7 @@ export class FederationClient {
         timeoutMs: params.timeoutMs,
       });
       await this.deps.store.update(peer.id, { lastSeenAt: new Date(this.now()) });
-      await this.deps.audit.record({
+      if (params.auditOk !== false) await this.deps.audit.record({
         ...base, outcome: 'ok', httpStatus: result.status, durationMs: this.now() - started,
         requestBytes: result.requestBytes, responseBytes: result.responseBytes,
       });

@@ -222,3 +222,16 @@ copy (remote delete deferred to P5).
   home-side sweep every 15s under an advisory lock. `claimPoll` leases a message for 30s so polls never overlap.
 - Minimal UI only: total unread on the Agents header, live badges, a `…` pending marker and
   "waiting for <unit>…" in the thread. The redesign comes later.
+
+## P4d Implementation Notes
+
+- **Decisions.**
+  - The scope is granted in place on the existing pairing key ("Grant status read"; audited; federation keys only). The home auto-discovers it through `granted_capabilities`, so there is no re-pairing.
+  - Only the latest validated snapshot per peer is kept, plus 7 days of heartbeats.
+  - Offline alerts are an in-page banner only.
+- **Migration 149.** Adds `federation_peer_heartbeats`, beat state and snapshot columns on `federation_peers`, and an index on `federation_audit_log(capability, at)`.
+- **Privacy.** Each payload field is picked by name and validated by a strict schema on both sides. A test plants a marker string in every content column and asserts it never reaches the JSON.
+- **Not in P4d.**
+  - Telegram/email alerts.
+  - Inbox status dots reading the heartbeat state.
+  - Model and cost fields: `agent_runs` has no reliable model or cost column yet.

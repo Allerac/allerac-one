@@ -41,6 +41,10 @@ export async function register() {
       // Pick up late replies from paired Units (unified inbox, federation P4c).
       const { startInboxPollSweep } = await import('./federation/inbox-poller');
       void startInboxPollSweep();
+
+      // Control Tower heartbeat: liveness and status of paired Units (federation P4d).
+      const { startControlTowerHeartbeat } = await import('./federation/control-tower.heartbeat');
+      void startControlTowerHeartbeat();
     }
   }
 }

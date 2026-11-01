@@ -168,3 +168,55 @@ Homes only use async asks with such peers; with older peers the inbox stays sync
 - Late replies stay unread until the thread is opened (`POST /api/inbox/threads/:id/read`).
 - `ask_peer_agent` now keeps one remote conversation per local chat, peer and agent
   (`federated_tool_conversations`), with idempotency key `tool:<uuid>`. It stays synchronous.
+
+## Control Tower (P4d)
+
+An admin-only page, `/admin/control-tower` (linked from Admin), shows every paired unit and what its agents are doing.
+It shows **metadata only**: never prompts, answers, plans, titles or users.
+
+### Peer side: `GET /api/v1/federation/status`
+
+- **Access.** The caller needs the scope `federation:status:read` (capability `federation.status.read`), and the endpoint is opt-in.
+  With `ALLERAC_FEDERATION_STATUS=on` unset, the capability is not advertised, cannot be granted, and the endpoint returns 404 `status_disabled`.
+- **Payload.** A strict, versioned allow-list (`src/federation/status.schema.ts`):
+  - unit identity and version;
+  - load (runs running/queued, async asks);
+  - per-agent ask counts;
+  - recent runs (opaque id, status, timing, tokens);
+  - federated asks and failure events.
+- **Limits and redaction.**
+  - Last 24h only (`?since=` is clamped) and at most 100 rows per list.
+  - Inbound ask targets are named only if the agent is exposed.
+  - `ALLERAC_FEDERATION_STATUS_HIDE=tokens` hides token counts.
+- **Grants feedback.** The response, like the agents list, carries `granted_capabilities` (what the calling key holds).
+
+### Granting on an existing pairing
+
+In Settings → Discovery, each paired unit has a "Grant status read" button (and "Revoke status read" once granted).
+
+- It adds the scope to the pairing's existing federation key in place, so there is no new key and no re-pairing.
+- It is admin-only and audited as `federation.grants.update`.
+- It only touches service-principal keys of an active peer and always keeps the revoke scope.
+- The home picks up the change from `granted_capabilities` on its next heartbeat.
+- The API behind the button is `POST /api/v1/peers/:id/grants` with `{ add?: [...], remove?: [...] }`.
+
+### Home side: heartbeat
+
+- **Schedule.** The heartbeat runs every 60s (`CONTROL_TOWER_HEARTBEAT_MS`, minimum 15s; disable with `CONTROL_TOWER_HEARTBEAT_ENABLED=false`).
+  It needs background workers enabled and holds an advisory lock while it runs.
+- **Probe.** Each active peer gets a 3s probe, using the richest call the peer granted:
+  1. status;
+  2. otherwise the agents list;
+  3. otherwise the public manifest.
+- **States.**
+  - Only "unreachable" counts as a miss: one or two misses are `degraded`, three are `offline`, which raises an in-page banner.
+  - A beat slower than 1.5s is `degraded`.
+  - A peer without the status grant shows as `limited`.
+- **Storage (migration 149).**
+  - Beats go to `federation_peer_heartbeats` and are pruned after 7 days.
+  - The latest validated snapshot is stored on `federation_peers` and overwritten on each beat; there is no history of remote activity.
+  - Successful status/probe reads are not audited, to keep the log readable. Failures are.
+- **Page.**
+  - Reads only from the database and refreshes every 15s while visible.
+  - "Refresh now" (`POST /api/admin/control-tower/refresh`) is throttled to once per 10s per peer.
+  - `GET /api/admin/control-tower?window=1h|24h&status=all|running|failed&unit=` serves the page data. It is session-admin only and returns 404 to non-admins and on public domains.

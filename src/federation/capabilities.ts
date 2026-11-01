@@ -20,6 +20,8 @@ export interface FederationCapability {
   requiresModule?: string;
   /** May appear in the public manifest. */
   publicSafe: boolean;
+  /** Opt-in env flag (must be on) before the capability is advertised or granted (P4d). */
+  requiresFlag?: string;
   description: string;
 }
 
@@ -59,7 +61,25 @@ export const FEDERATION_CAPABILITIES: readonly FederationCapability[] = [
     publicSafe: true,
     description: 'Read the status and result of a cross-unit agent run.',
   },
+  {
+    id: 'federation.status.read',
+    version: '1',
+    scope: 'federation:status:read',
+    publicSafe: true,
+    requiresFlag: 'ALLERAC_FEDERATION_STATUS',
+    description: 'Read this Unit\'s activity metadata for the Control Tower (no content).',
+  },
 ];
+
+/** True when an opt-in flag like ALLERAC_FEDERATION_STATUS is on. */
+export function flagOn(env: Env, name: string): boolean {
+  return ['on', 'true', '1', 'yes'].includes(env[name]?.trim().toLowerCase() ?? '');
+}
+
+/** Capability ids for the given scopes (unknown scopes are ignored). */
+export function scopesToCapabilityIds(scopes: readonly string[], registry: readonly FederationCapability[] = FEDERATION_CAPABILITIES): string[] {
+  return registry.filter(capability => scopes.includes(capability.scope)).map(capability => capability.id);
+}
 
 /**
  * Capabilities this Unit advertises publicly: public-safe, module enabled, and
@@ -73,6 +93,7 @@ export function getAdvertisedCapabilities(
   return registry.filter(capability => (
     capability.publicSafe
     && (!capability.requiresModule || isModuleEnabled(capability.requiresModule, env))
+    && (!capability.requiresFlag || flagOn(env, capability.requiresFlag))
     && (!allowList || allowList.includes(capability.id))
   ));
 }

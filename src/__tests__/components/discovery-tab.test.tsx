@@ -148,6 +148,27 @@ describe('DiscoveryTab', () => {
     confirm.mockRestore();
   });
 
+  it('grants and revokes status read on an existing pairing (P4d)', async () => {
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const granted = peer({ inboundCapabilities: ['federation.agents.list', 'federation.status.read'] });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ data: { peers: [peer({})] } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { peer: granted } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { peers: [granted] } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { peer: peer({}) } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { peers: [peer({})] } }));
+    render(<DiscoveryTab isDarkMode={false} />);
+    fireEvent.click(await screen.findByText('Grant status read'));
+    expect(await screen.findByText('Revoke status read')).toBeInTheDocument();
+    expect(mockFetch.mock.calls[1][0]).toBe('/api/v1/peers/peer-1/grants');
+    expect(JSON.parse(mockFetch.mock.calls[1][1].body)).toEqual({ add: ['federation.status.read'] });
+    expect(screen.getByText(/Read status \(Control Tower\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Revoke status read'));
+    expect(await screen.findByText('Grant status read')).toBeInTheDocument();
+    expect(JSON.parse(mockFetch.mock.calls[3][1].body)).toEqual({ remove: ['federation.status.read'] });
+    confirm.mockRestore();
+  });
+
   it('shows API errors', async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ data: { peers: [] } }))
