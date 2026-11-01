@@ -1,4 +1,5 @@
 // In-memory fakes for federation tests (not a test file).
+import { askResultReply, asyncAskReply } from '@/federation/ask-http';
 import { flagOn } from '@/federation/capabilities';
 import { GrantsService } from '@/federation/grants';
 import { StatusService, type StatusSource } from '@/federation/status.service';
@@ -219,9 +220,8 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
         };
         if (url.searchParams.get('async') === '1' && unit.env.FAKE_LEGACY_ASK !== 'true') {
           const outcome = await unit.agents.askAsync(input);
-          return outcome.status === 'done'
-            ? json({ data: { status: 'done', ...outcome.result } })
-            : json({ data: { status: 'pending', key: input.idempotencyKey, poll_after_ms: 3000 } }, 202);
+          const reply = asyncAskReply(outcome, input.idempotencyKey!);
+          return json({ data: reply.data }, reply.status);
         }
         return json({ data: await unit.agents.ask(input) });
       }
@@ -232,9 +232,8 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
         if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
         const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
         const state = await unit.agents.getAskResult(principalId, actingUserId, decodeURIComponent(askResult[1]));
-        if (state.status === 'done') return json({ data: { status: 'done', ...state.response } });
-        if (state.status === 'pending') return json({ data: { status: 'pending', poll_after_ms: 3000 } }, 202);
-        return json({ data: { status: 'failed', error_code: state.errorCode } });
+        const reply = askResultReply(state, decodeURIComponent(askResult[1]));
+        return json({ data: reply.data }, reply.status);
       }
       return json({ error: { code: 'not_found' } }, 404);
     } catch (error) {

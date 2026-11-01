@@ -2,7 +2,7 @@
 import { FederationError, federationErrors } from '@/federation/errors';
 import { ASK_TIMEOUT_MS } from '@/federation/federation-client';
 import {
-  CONTEXT_TURNS, InboxError, InboxService, PEER_SENDS_PER_MINUTE, PENDING_DEADLINE_MS, POLL_BACKOFF_MS, packQuestion, pollDelay,
+  CONTEXT_TURNS, InboxError, LOCAL_POLL_FAILURE_LIMIT, InboxService, PEER_SENDS_PER_MINUTE, PENDING_DEADLINE_MS, POLL_BACKOFF_MS, packQuestion, pollDelay,
   type InboxFederationPort,
 } from '@/federation/inbox.service';
 import type { FederatedMessage } from '@/federation/inbox.types';
@@ -392,6 +392,51 @@ describe('InboxService async asks and polling (P4c)', () => {
     other.advance(3_000);
     await other.service.pollDue(null);
     expect(other.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'result_lost' });
+  });
+
+  it('logs a local failure after a done result and fails the message after repeated failures', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    const original = setup.store.updateMessage.bind(setup.store);
+    jest.spyOn(setup.store, 'updateMessage').mockImplementation(async (id, patch) => {
+      if (patch.status === 'done') throw new Error('inconsistent types deduced for parameter $2');
+      return original(id, patch);
+    });
+    setup.federation.getAskResult.mockResolvedValue(done);
+    const log = (setup.service as unknown as { log: jest.Mock }).log;
+    for (let attempt = 1; attempt < LOCAL_POLL_FAILURE_LIMIT; attempt += 1) {
+      setup.advance(PENDING_DEADLINE_MS / 20);
+      expect(await setup.service.pollDue(null)).toBe(0);
+      expect(setup.store.messages[0]).toMatchObject({ status: 'pending', pollAttempts: attempt });
+    }
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/\[Inbox\] poll thread=.* status=error error=inconsistent types.* failures=1/));
+    setup.advance(PENDING_DEADLINE_MS / 20);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'internal_error' });
+    expect(setup.store.messages.filter(m => m.role === 'agent')).toHaveLength(0);
+  });
+
+  it('fails at once on non-retryable peer errors', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.federation.getAskResult.mockRejectedValueOnce(federationErrors.peerAccessDenied());
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'peer_access_denied' });
+  });
+
+  it('marks a send failed and logs when storing the reply throws', async () => {
+    const setup = asyncSetup();
+    await setup.peers.insert(peerFixture());
+    const thread = await setup.service.openThread(user, peerFixture().id, 'chat');
+    setup.federation.askAgentAsync.mockResolvedValueOnce(done);
+    jest.spyOn(setup.store, 'insertMessage').mockImplementation(async function (this: unknown, message) {
+      if (message.role === 'agent') throw new Error('insert failed');
+      return InMemoryInboxStore.prototype.insertMessage.call(setup.store, message);
+    });
+    const sent = await setup.service.send(user, thread.id, 'q');
+    expect(sent.userMessage).toMatchObject({ status: 'failed', errorCode: 'internal_error' });
+    expect((setup.service as unknown as { log: jest.Mock }).log).toHaveBeenCalledWith(expect.stringMatching(/\[Inbox\] send .* status=error error=insert failed/));
   });
 
   it('retries a timed-out message with the same key so a late result is replayed', async () => {
