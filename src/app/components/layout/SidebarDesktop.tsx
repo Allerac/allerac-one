@@ -201,8 +201,8 @@ export default function SidebarDesktop({
 
       {/* Conversation list */}
       <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
-        {canUseInbox({ is_admin: isAdmin }, inboxDomainId) && !isSidebarCollapsed && (
-          <AgentsInboxSection isDark={d} domainId={inboxDomainId} />
+        {canUseInbox({ is_admin: isAdmin }, inboxDomainId) && (
+          <AgentsInboxSection isDark={d} domainId={inboxDomainId} collapsed={isSidebarCollapsed} />
         )}
         <SidebarContent
           conversations={conversations}

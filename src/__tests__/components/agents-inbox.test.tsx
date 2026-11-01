@@ -1,237 +1,276 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type React from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
-import FederatedThreadPanel from '@/app/components/inbox/FederatedThreadPanel';
+import AgentChatClient from '@/app/agents/[unit]/[agent]/AgentChatClient';
+import MarkdownContent from '@/app/components/chat/MarkdownContent';
+import { agentHref, compareAgents, flattenAgents, roleShort } from '@/app/components/inbox/agents-format';
 
 const push = jest.fn();
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+const replace = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push, replace, refresh: jest.fn() }) }));
+jest.mock('next/link', () => {
+  const MockLink = ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a>;
+  MockLink.displayName = 'MockLink';
+  return MockLink;
+});
+// react-markdown is ESM-only under Jest; capture its props to check the untrusted-content settings.
+const markdownProps: Array<Record<string, unknown>> = [];
+jest.mock('react-markdown', () => {
+  const MockMarkdown = (props: { children: string }) => { markdownProps.push(props); return <div data-testid="markdown">{props.children}</div>; };
+  MockMarkdown.displayName = 'MockMarkdown';
+  return { __esModule: true, default: MockMarkdown, defaultUrlTransform: (url: string) => url };
+});
+jest.mock('remark-gfm', () => ({ __esModule: true, default: () => undefined }));
+jest.mock('react-syntax-highlighter', () => ({ Prism: () => null }));
+jest.mock('react-syntax-highlighter/dist/esm/styles/prism', () => ({ oneDark: {}, oneLight: {} }));
+jest.mock('@/app/context/ThemeContext', () => ({ useTheme: () => ({ isDarkMode: false, toggleDarkMode: jest.fn() }) }));
 
-const listing = {
-  home: { name: 'napols', displayName: 'Napols', emoji: '🍕', role: 'Home', agents: [{ slug: 'chat', name: 'Chat' }, { slug: 'health', name: 'Health' }] },
-  units: [{
-    peerId: 'p1', name: 'santos', displayName: 'Santos', emoji: '🏖️', role: 'Beach lab', status: 'online',
-    agents: [{
-      slug: 'chat', name: 'Santos Chat', description: null, threadId: 't1', preview: 'last reply', lastMessageAt: null, unread: 2, available: true,
-      threads: [
-        { threadId: 't1', title: 'Santos Chat @ Santos', isDefault: true, preview: 'last reply', lastMessageAt: null, unread: 2 },
-        { threadId: 't2', title: 'Trip plans', isDefault: false, preview: null, lastMessageAt: null, unread: 0 },
-      ],
-    }],
-  }],
-  archived: [{ peerId: 'p2', name: 'barcelona', displayName: 'Barcelona', threads: [{ threadId: 't9', agentSlug: 'chat', title: 'Old chat', lastMessageAt: null, preview: null }] }],
-};
+const T1 = '11111111-1111-4111-8111-111111111111';
+const T2 = '22222222-2222-4222-8222-222222222222';
+const T3 = '33333333-3333-4333-8333-333333333333';
 
-const thread = (overrides: Record<string, unknown> = {}) => ({
-  thread: { id: 't1', agentSlug: 'chat', title: null },
-  unit: { peerId: 'p1', name: 'santos', displayName: 'Santos' },
-  readOnly: false,
-  nextCursor: null,
-  messages: [
-    { id: 'm1', role: 'user', content: 'hi', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' },
-    { id: 'm2', role: 'agent', content: '<img src=x onerror=alert(1)> **bold**', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:01Z' },
-    { id: 'm3', role: 'user', content: 'again', status: 'timeout', truncated: false, errorCode: 'timeout', createdAt: '2026-01-01T00:00:02Z' },
+const listing = () => ({
+  home: { name: 'napols', displayName: 'Napols', emoji: '🍕', role: 'Home', agents: [] },
+  units: [
+    {
+      peerId: 'p1', name: 'santos', displayName: 'Santos', emoji: '🏖️', role: 'Beach lab, research and long-form notes for the team', status: 'online',
+      agents: [{
+        slug: 'chat', name: 'Santos Chat', description: null, threadId: T1, preview: 'last reply', lastMessageAt: '2026-01-01T00:00:00Z', unread: 2, available: true,
+        threads: [
+          { threadId: T1, title: null, isDefault: true, preview: 'last reply', lastMessageAt: '2026-01-01T00:00:00Z', unread: 2 },
+          { threadId: T2, title: 'Trip plans', isDefault: false, preview: null, lastMessageAt: null, unread: 1 },
+        ],
+      }],
+    },
+    {
+      peerId: 'p3', name: 'barcelona', displayName: 'Barcelona', emoji: '⚽', role: 'Sports', status: 'degraded',
+      agents: [{ slug: 'coach', name: 'Coach', description: null, threadId: null, preview: null, lastMessageAt: '2026-02-01T00:00:00Z', unread: 0, available: true, threads: [] }],
+    },
   ],
+  archived: [{ peerId: 'p2', name: 'lisbon', displayName: 'Lisbon', threads: [{ threadId: T3, agentSlug: 'chat', title: 'Old chat', lastMessageAt: null, preview: null }] }],
+});
+
+const msg = (id: string, role: string, content: string, status = 'done', extra: Record<string, unknown> = {}) =>
+  ({ id, role, content, status, truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z', ...extra });
+
+const threadView = (id = T1, overrides: Record<string, unknown> = {}) => ({
+  thread: { id, agentSlug: 'chat', title: id === T2 ? 'Trip plans' : null },
+  unit: { peerId: 'p1', name: 'santos', displayName: 'Santos' },
+  readOnly: false, nextCursor: null,
+  messages: [msg('m1', 'user', 'hi'), msg('m2', 'agent', '**bold** reply')],
   ...overrides,
 });
 
-// jsdom has no Response; the client only reads ok, status and json().
 const fakeResponse = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body });
-const respond = (data: unknown, status = 200) => Promise.resolve(fakeResponse(status < 400 ? { data } : { error: data }, status));
+const ok = (data: unknown) => Promise.resolve(fakeResponse({ data }));
 
-describe('unified inbox UI', () => {
-  let fetchMock: jest.Mock;
-  let updatesMock: jest.Mock;
-  beforeEach(() => {
-    fetchMock = jest.fn();
-    // P4c: the sidebar polls /api/inbox/updates on its own; keep it off the ordered mock.
-    updatesMock = jest.fn(() => respond({ totalUnread: 0, threads: [], serverTime: '2026-01-01T00:00:00Z' }));
-    global.fetch = ((url: string, init?: RequestInit) =>
-      (url.startsWith('/api/inbox/updates') ? updatesMock(url) : fetchMock(url, init))) as unknown as typeof fetch;
-    push.mockReset();
+type Route = (url: string, init?: RequestInit) => unknown | undefined;
+let routes: Route[];
+let calls: Array<[string, RequestInit | undefined]>;
+const route = (fn: Route) => { routes.unshift(fn); };
+
+beforeEach(() => {
+  push.mockReset(); replace.mockReset();
+  calls = [];
+  routes = [
+    url => (url.startsWith('/api/inbox/updates') ? { totalUnread: 3, threads: [], serverTime: '2026-01-01T00:00:00Z' } : undefined),
+    url => (url.startsWith('/api/inbox/agents') ? listing() : undefined),
+    (url, init) => (url.startsWith(`/api/inbox/threads/${T1}?`) && !init?.method ? threadView(T1) : undefined),
+    (url, init) => (url.startsWith(`/api/inbox/threads/${T2}?`) && !init?.method ? threadView(T2) : undefined),
+  ];
+  global.fetch = ((url: string, init?: RequestInit) => {
+    calls.push([url, init]);
+    for (const fn of routes) {
+      const data = fn(url, init);
+      if (data !== undefined) return ok(data);
+    }
+    return Promise.resolve(fakeResponse({ error: 'not found' }, 404));
+  }) as unknown as typeof fetch;
+});
+
+describe('agents-format', () => {
+  it('shortens roles and builds links', () => {
+    expect(roleShort('Beach lab, research and notes')).toBe('Beach lab');
+    expect(roleShort('A very long role without any separators at all')).toHaveLength(24);
+    expect(agentHref('santos', 'chat')).toBe('/agents/santos/chat');
+    expect(agentHref('santos', 'chat', T1)).toBe(`/agents/santos/chat?thread=${T1}`);
   });
+  it('flattens units, unread first then most recent', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = flattenAgents(listing() as any, null);
+    expect(items.map(item => item.key)).toEqual(['santos/chat', 'barcelona/coach']);
+    expect(items[0].unread).toBe(3);
+    expect([...items].reverse().sort(compareAgents)[0].key).toBe('santos/chat');
+  });
+});
 
-  it('renders grouped units with emoji, role, unread badge and archived units', async () => {
-    fetchMock.mockReturnValueOnce(respond(listing));
+describe('AgentsInboxSection', () => {
+  it('shows a flat list without local domains, with unit, short role, status and badges', async () => {
     render(<AgentsInboxSection isDark={false} domainId="chat" />);
-    expect(await screen.findByText(/Santos · Beach lab/)).toBeInTheDocument();
-    expect(screen.getByText(/Napols · Home/)).toBeInTheDocument();
-    expect(screen.getByTestId('unread')).toHaveTextContent('2');
-    expect(screen.getByText('last reply')).toBeInTheDocument();
-    expect(screen.getByLabelText('online')).toBeInTheDocument();
-    expect(screen.getByText(/Barcelona \(unpaired\)/)).toBeInTheDocument();
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/inbox/agents?domain=chat');
+    const row = await screen.findByTestId('agent-santos/chat');
+    expect(within(row).getByText(/🏖️ Santos · Beach lab/)).toBeInTheDocument();
+    expect(within(row).getByTestId('unread')).toHaveTextContent('3');
+    expect(within(row).getByTestId('status-dot')).toHaveAttribute('data-status', 'online');
+    expect(within(screen.getByTestId('agent-barcelona/coach')).getByTestId('status-dot')).toHaveAttribute('data-status', 'degraded');
+    expect(screen.getByTestId('total-unread')).toHaveTextContent('3');
+    expect(screen.queryByText('Napols')).toBeNull();
+    expect(screen.queryByText(/Home/)).toBeNull();
+    const ids = screen.getAllByTestId(/^agent-.+\//).map(el => el.getAttribute('data-testid'));
+    expect(ids).toEqual(['agent-santos/chat', 'agent-barcelona/coach']);
 
-    fireEvent.click(screen.getByText('Health'));
-    expect(push).toHaveBeenCalledWith('/health');
+    fireEvent.click(row);
+    expect(push).toHaveBeenCalledWith('/agents/santos/chat');
   });
 
-  it('opens a remote thread', async () => {
-    fetchMock.mockReturnValueOnce(respond(listing)).mockReturnValueOnce(respond(thread()));
-    render(<AgentsInboxSection isDark={false} domainId="chat" />);
-    fireEvent.click(await screen.findByText('Santos Chat'));
-    expect(await screen.findByText('chat @ Santos')).toBeInTheDocument();
-    expect(screen.getByText('remote')).toBeInTheDocument();
+  it('marks pending replies from updates and folds archived threads', async () => {
+    route(url => (url.startsWith('/api/inbox/updates')
+      ? { totalUnread: 0, threads: [{ threadId: T2, unread: 1, pending: true, lastMessageAt: '2026-03-01T00:00:00Z', preview: null }], serverTime: '2026-03-01T00:00:00Z' }
+      : undefined));
+    const onNavigate = jest.fn();
+    render(<AgentsInboxSection isDark={false} domainId="chat" onNavigate={onNavigate} />);
+    expect(await screen.findByTestId('pending')).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Archived \(1\)/));
+    fireEvent.click(screen.getByTestId('archived-thread'));
+    expect(push).toHaveBeenCalledWith(`/agents/lisbon/chat?thread=${T3}`);
+    expect(onNavigate).toHaveBeenCalled();
   });
 
-  it('renders remote replies as plain text and offers retry on timeout', async () => {
-    fetchMock.mockReturnValueOnce(respond(thread()));
-    const { container } = render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t1" onClose={() => undefined} />);
-    expect(await screen.findByText('<img src=x onerror=alert(1)> **bold**')).toBeInTheDocument();
+  it('shows only avatars and badges when collapsed', async () => {
+    render(<AgentsInboxSection isDark={false} domainId="chat" collapsed />);
+    const row = await screen.findByTestId('agent-santos/chat');
+    expect(within(row).queryByText(/Santos ·/)).toBeNull();
+    expect(within(row).getByTestId('unread')).toHaveTextContent('3');
+  });
+});
+
+describe('MarkdownContent (untrusted)', () => {
+  beforeEach(() => { markdownProps.length = 0; });
+  it('drops raw HTML, blocks unsafe links and renders images as links', () => {
+    render(<MarkdownContent isDarkMode={false} untrusted content="<img src=x onerror=alert(1)>" />);
+    const props = markdownProps[0] as { skipHtml: boolean; urlTransform: (url: string) => string; components: Record<string, (p: object) => React.ReactElement> };
+    expect(props.skipHtml).toBe(true);
+    expect(props.urlTransform('javascript:alert(1)')).toBe('');
+    expect(props.urlTransform('data:text/html,x')).toBe('');
+    expect(props.urlTransform('https://example.com')).toBe('https://example.com');
+    expect(props.urlTransform('mailto:a@b.c')).toBe('mailto:a@b.c');
+    const { container } = render(props.components.img({ src: 'https://example.com/a.png', alt: 'pic' }));
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('strong')).toBeNull();
-    expect(screen.getByText(/No answer within 10 minutes/)).toBeInTheDocument();
+    expect(container.querySelector('a')).toHaveAttribute('href', 'https://example.com/a.png');
+    const link = render(props.components.a({ href: '', children: 'bad' }));
+    expect(link.container.querySelector('a')).toBeNull();
+  });
+  it('keeps the trusted defaults for local chat', () => {
+    render(<MarkdownContent isDarkMode={false} content="hi" />);
+    const props = markdownProps[0] as { skipHtml: boolean; components: Record<string, unknown> };
+    expect(props.skipHtml).toBe(false);
+    expect(props.components.img).toBeUndefined();
+  });
+});
 
-    fetchMock.mockReturnValueOnce(respond({
-      userMessage: { ...thread().messages[2], status: 'done', errorCode: null },
-      agentMessage: { id: 'm4', role: 'agent', content: 'sorry, here', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:03Z' },
-    }));
-    fireEvent.click(screen.getByText('Retry'));
-    expect(await screen.findByText('sorry, here')).toBeInTheDocument();
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads/t1/messages/m3/retry?domain=chat');
+describe('AgentChatClient', () => {
+  it('opens the default thread with header, markdown reply and thread switcher', async () => {
+    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
+    expect(await screen.findByText('**bold** reply')).toBeInTheDocument();
+    expect(screen.getByRole('heading')).toHaveTextContent('Santos Chat · Santos');
+    expect(screen.getByTestId('other-unread')).toHaveTextContent('1');
+    fireEvent.click(screen.getByRole('button', { name: /Main thread/ }));
+    fireEvent.click(within(screen.getByTestId('thread-switcher')).getByText('Trip plans'));
+    expect(replace).toHaveBeenCalledWith(`/agents/santos/chat?thread=${T2}`);
   });
 
-  it('shows a thinking bubble while sending', async () => {
-    fetchMock.mockReturnValueOnce(respond(thread({ messages: [] })));
-    render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t1" onClose={() => undefined} />);
-    const input = await screen.findByLabelText('Message');
-    let resolveSend: (value: unknown) => void = () => undefined;
-    fetchMock.mockReturnValueOnce(new Promise(resolve => { resolveSend = resolve; }));
-    fireEvent.change(input, { target: { value: 'hello' } });
-    fireEvent.click(screen.getByText('Send'));
-    expect(await screen.findByTestId('thinking')).toBeInTheDocument();
-    expect(screen.getByTestId('msg-pending')).toHaveTextContent('hello');
-    resolveSend(fakeResponse({ data: {
-      userMessage: { id: 'u1', role: 'user', content: 'hello', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' },
-      agentMessage: { id: 'a1', role: 'agent', content: 'hey', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:01Z' },
-    } }));
-    expect(await screen.findByText('hey')).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByTestId('thinking')).toBeNull());
+  it('honours ?thread and creates a new thread', async () => {
+    route((url, init) => (url.startsWith('/api/inbox/threads?') && init?.method === 'POST'
+      ? { thread: { id: T3, agentSlug: 'chat', title: 'Ideas' } } : undefined));
+    route((url, init) => (url.startsWith(`/api/inbox/threads/${T3}?`) && !init?.method ? threadView(T3, { messages: [] }) : undefined));
+    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={T2} />);
+    expect(await screen.findByRole('button', { name: /Trip plans/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Trip plans/ }));
+    fireEvent.click(screen.getByText('＋ New thread'));
+    fireEvent.change(screen.getByLabelText('New thread title'), { target: { value: 'Ideas' } });
+    fireEvent.click(screen.getByText('Create'));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/agents/santos/chat?thread=${T3}`));
+    const create = calls.find(([url, init]) => url.startsWith('/api/inbox/threads?') && init?.method === 'POST');
+    expect(JSON.parse(String(create?.[1]?.body))).toMatchObject({ new: true, title: 'Ideas' });
   });
 
-  it('is read-only for unpaired units', async () => {
-    fetchMock.mockReturnValueOnce(respond(thread({ readOnly: true })));
-    render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t9" onClose={() => undefined} />);
-    expect(await screen.findByText(/Unit no longer paired/)).toBeInTheDocument();
-    expect(screen.queryByLabelText('Message')).toBeNull();
-    expect(screen.queryByText('Retry')).toBeNull();
+  it('renames and deletes the thread', async () => {
+    route((url, init) => (init?.method === 'PATCH' ? { thread: { id: T1, title: 'Renamed' } } : undefined));
+    route((url, init) => (init?.method === 'DELETE' ? { deleted: true } : undefined));
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
+    await screen.findByText('**bold** reply');
+    fireEvent.click(screen.getByLabelText('Thread actions'));
+    fireEvent.click(screen.getByText('Rename thread'));
+    fireEvent.change(screen.getByLabelText('Thread title'), { target: { value: 'Renamed' } });
+    fireEvent.keyDown(screen.getByLabelText('Thread title'), { key: 'Enter' });
+    await waitFor(() => expect(calls.some(([, init]) => init?.method === 'PATCH')).toBe(true));
+    fireEvent.click(screen.getByLabelText('Thread actions'));
+    fireEvent.click(screen.getByText('Delete thread'));
+    await waitFor(() => expect(calls.some(([url, init]) => init?.method === 'DELETE' && url.includes(T1))).toBe(true));
   });
 
-  it('deletes archived history after confirmation', async () => {
-    fetchMock.mockReturnValueOnce(respond(listing)).mockReturnValueOnce(respond({ deleted: 1 }))
-      .mockReturnValueOnce(respond({ ...listing, archived: [] }));
-    jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
-    render(<AgentsInboxSection isDark={false} domainId="chat" />);
-    fireEvent.click(await screen.findByText('Delete history'));
-    await waitFor(() => expect(screen.queryByText(/Barcelona/)).toBeNull());
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/peers/p2/history?domain=chat');
-    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
-  });
-
-  it('lists extra threads and creates a new one (P4b)', async () => {
-    fetchMock.mockReturnValueOnce(respond(listing))
-      .mockReturnValueOnce(respond({ thread: { id: 't3', title: 'Budget' } }))
-      .mockReturnValue(respond(thread({ thread: { id: 't3', agentSlug: 'chat', title: 'Budget' }, messages: [] })));
-    jest.spyOn(window, 'prompt').mockReturnValueOnce('Budget');
-    render(<AgentsInboxSection isDark={false} domainId="chat" />);
-    expect(await screen.findByTestId('extra-thread')).toHaveTextContent('Trip plans');
-    fireEvent.click(screen.getByLabelText('New thread with Santos Chat'));
-    await waitFor(() => expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads?domain=chat'));
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ peerId: 'p1', agent: 'chat', new: true, title: 'Budget' });
-  });
-
-  it('deletes a single archived thread after confirmation', async () => {
-    fetchMock.mockReturnValueOnce(respond(listing)).mockReturnValueOnce(respond({ deleted: true }))
-      .mockReturnValueOnce(respond({ ...listing, archived: [] }));
-    jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
-    render(<AgentsInboxSection isDark={false} domainId="chat" />);
-    expect(await screen.findByText('Old chat')).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText('Delete thread'));
-    await waitFor(() => expect(screen.queryByText('Old chat')).toBeNull());
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads/t9?domain=chat');
-    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
-  });
-
-  it('loads older messages, shows system notes and renames the thread', async () => {
-    fetchMock.mockReturnValueOnce(respond(thread({
-      nextCursor: 'm1',
-      messages: [{ id: 's1', role: 'system', content: 'Context reset on Santos', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' }],
-    })));
-    render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t1" onClose={() => undefined} />);
-    expect(await screen.findByTestId('system-note')).toHaveTextContent('Context reset on Santos');
-
-    fetchMock.mockReturnValueOnce(respond({
-      messages: [{ id: 'm0', role: 'user', content: 'very old', status: 'done', truncated: false, errorCode: null, createdAt: '2025-01-01T00:00:00Z' }],
-      nextCursor: null,
-    }));
-    fireEvent.click(screen.getByText('Load older messages'));
-    expect(await screen.findByText('very old')).toBeInTheDocument();
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads/t1/messages?before=m1&domain=chat');
-    expect(screen.queryByText('Load older messages')).toBeNull();
-
-    fetchMock.mockReturnValueOnce(respond({ thread: { id: 't1', title: 'Renamed' } }));
-    fireEvent.click(screen.getByLabelText('Rename thread'));
-    const input = screen.getByLabelText('Thread title');
-    fireEvent.change(input, { target: { value: 'Renamed' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(await screen.findByText('Renamed')).toBeInTheDocument();
-    expect(fetchMock.mock.calls[2][1].method).toBe('PATCH');
-  });
-
-  it('opens a thread from a Control Tower deep link (P4d)', async () => {
-    window.history.pushState({}, '', '/chat?inboxThread=11111111-1111-4111-8111-111111111111');
-    fetchMock.mockReturnValueOnce(respond(listing)).mockReturnValueOnce(respond(thread()));
-    render(<AgentsInboxSection isDark={false} domainId="chat" />);
-    expect(await screen.findByRole('dialog', { name: 'Remote agent thread' })).toBeInTheDocument();
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/inbox/threads/11111111-1111-4111-8111-111111111111?domain=chat');
-    window.history.pushState({}, '', '/');
-  });
-
-  describe('P4c async replies', () => {
-    afterEach(() => jest.useRealTimers());
-
-    it('shows the total unread on the Agents header and live badges with a pending marker', async () => {
-      updatesMock.mockImplementation(() => respond({
-        totalUnread: 5, serverTime: 'x',
-        threads: [
-          { threadId: 't1', unread: 4, pending: false, lastMessageAt: null, preview: null },
-          { threadId: 't2', unread: 1, pending: true, lastMessageAt: null, preview: null },
-        ],
-      }));
-      fetchMock.mockReturnValueOnce(respond(listing));
-      render(<AgentsInboxSection isDark={false} domainId="chat" />);
-      expect(await screen.findByTestId('total-unread')).toHaveTextContent('5');
-      expect(screen.getByTestId('unread')).toHaveTextContent('5');
-      expect(screen.getByTestId('pending')).toBeInTheDocument();
-      expect(updatesMock.mock.calls[0][0]).toBe('/api/inbox/updates?domain=chat');
-    });
-
-    it('shows "waiting for <unit>…" and polls until the late reply lands, then marks it read', async () => {
-      jest.useFakeTimers();
-      const pendingView = thread({ messages: [
-        { id: 'm1', role: 'user', content: 'slow question', status: 'pending', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' },
-      ] });
-      const doneView = thread({ messages: [
-        { id: 'm1', role: 'user', content: 'slow question', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:00:00Z' },
-        { id: 'm2', role: 'agent', content: 'late answer', status: 'done', truncated: false, errorCode: null, createdAt: '2026-01-01T00:05:00Z' },
-      ] });
-      fetchMock
-        .mockReturnValueOnce(respond(pendingView))
-        .mockReturnValueOnce(respond(doneView))
-        .mockReturnValueOnce(respond({ read: true }));
-      const onChanged = jest.fn();
-      render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t1" onClose={() => undefined} onChanged={onChanged} />);
-      expect(await screen.findByTestId('waiting')).toHaveTextContent('waiting for Santos…');
-      jest.advanceTimersByTime(3000);
+  it('polls while a reply is pending, then marks it read', async () => {
+    jest.useFakeTimers();
+    try {
+      let polls = 0;
+      route((url, init) => (url.includes('/messages?') && init?.method === 'POST'
+        ? { userMessage: msg('m3', 'user', 'question', 'pending'), agentMessage: null } : undefined));
+      route((url, init) => {
+        if (!url.startsWith(`/api/inbox/threads/${T1}?`) || init?.method) return undefined;
+        polls += 1;
+        return polls < 3
+          ? threadView(T1, { messages: [msg('m1', 'user', 'hi'), msg('m3', 'user', 'question', 'pending')] })
+          : threadView(T1, { messages: [msg('m3', 'user', 'question'), msg('m4', 'agent', 'late answer')] });
+      });
+      render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
+      expect(await screen.findByTestId('waiting')).toHaveTextContent('waiting for Santos');
+      await act(async () => { await jest.advanceTimersByTimeAsync(3100); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(3100); });
       expect(await screen.findByText('late answer')).toBeInTheDocument();
-      expect(screen.queryByTestId('waiting')).not.toBeInTheDocument();
-      await waitFor(() => expect(fetchMock.mock.calls[2][0]).toBe('/api/inbox/threads/t1/read?domain=chat'));
-      expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'POST' });
-      expect(onChanged).toHaveBeenCalled();
-    });
+      await waitFor(() => expect(calls.some(([url, init]) => url.includes(`${T1}/read`) && init?.method === 'POST')).toBe(true));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-    it('labels an expired async reply as no answer within 10 minutes', async () => {
-      fetchMock.mockReturnValueOnce(respond(thread()));
-      render(<FederatedThreadPanel isDark={false} domainId="chat" threadId="t1" onClose={() => undefined} />);
-      expect(await screen.findByText('No answer within 10 minutes.')).toBeInTheDocument();
-    });
+  it('sends a message and retries a timed-out one', async () => {
+    route(url => (url.includes('/retry') ? { userMessage: msg('m3', 'user', 'again'), agentMessage: msg('m5', 'agent', 'retried') } : undefined));
+    route((url, init) => (url.includes('/messages?') && init?.method === 'POST'
+      ? { userMessage: msg('m6', 'user', 'new q'), agentMessage: msg('m7', 'agent', 'fresh answer') } : undefined));
+    route((url, init) => (url.startsWith(`/api/inbox/threads/${T1}?`) && !init?.method
+      ? threadView(T1, { messages: [msg('m3', 'user', 'again', 'timeout', { errorCode: 'timeout' })] }) : undefined));
+    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
+    fireEvent.click(await screen.findByText(/Retry/));
+    await waitFor(() => expect(calls.some(([url]) => url.includes('/retry'))).toBe(true));
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'new q' } });
+    fireEvent.click(screen.getByLabelText('Send'));
+    await waitFor(() => expect(calls.some(([url, init]) => url.includes('/messages?') && init?.method === 'POST')).toBe(true));
+  });
+
+  it('loads older messages', async () => {
+    route((url, init) => (url.startsWith(`/api/inbox/threads/${T1}?`) && !init?.method ? threadView(T1, { nextCursor: 'c1' }) : undefined));
+    route(url => (url.includes('/messages?before=') ? { messages: [msg('m0', 'agent', 'ancient')], nextCursor: null } : undefined));
+    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
+    fireEvent.click(await screen.findByText('Load older messages'));
+    expect(await screen.findByText('ancient')).toBeInTheDocument();
+  });
+
+  it('opens a thread when the agent has none, and reports missing agents', async () => {
+    route((url, init) => (url.startsWith('/api/inbox/threads?') && init?.method === 'POST' ? { thread: { id: T3, agentSlug: 'coach', title: null } } : undefined));
+    route((url, init) => (url.startsWith(`/api/inbox/threads/${T3}?`) && !init?.method ? threadView(T3, { messages: [] }) : undefined));
+    const { unmount } = render(<AgentChatClient unitName="barcelona" agentSlug="coach" threadId={null} />);
+    expect(await screen.findByText(/Start a conversation with Coach/)).toBeInTheDocument();
+    unmount();
+    render(<AgentChatClient unitName="santos" agentSlug="ghost" threadId={null} />);
+    expect(await screen.findByTestId('agent-missing')).toBeInTheDocument();
+  });
+
+  it('opens and closes the mobile agents drawer', async () => {
+    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
+    await screen.findByText('**bold** reply');
+    fireEvent.click(screen.getByLabelText('Open agents'));
+    expect(screen.getByTestId('agents-drawer')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Close agents'));
+    expect(screen.queryByTestId('agents-drawer')).toBeNull();
   });
 });

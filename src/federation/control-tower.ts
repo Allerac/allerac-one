@@ -6,6 +6,7 @@
  * snapshot, and the admin's own outbound inbox asks (for thread links).
  * Opening the page never calls a peer. Metadata only.
  */
+import { agentHref } from '@/app/components/inbox/agents-format';
 import type { BeatState } from './control-tower.heartbeat';
 import type { PeerRecord } from './peer.types';
 import type { FederationStatus } from './status.schema';
@@ -72,6 +73,8 @@ export interface ActivityRow {
   errorCode: string | null;
   /** Local inbox thread for the admin's own asks. */
   threadId: string | null;
+  /** Agent chat link for the admin's own asks (`/agents/<unit>/<agent>?thread=`). */
+  link?: string | null;
   failed: boolean;
   running: boolean;
 }
@@ -159,7 +162,8 @@ export class ControlTowerService {
     activity.push(...inbox.map(row => ({
       kind: 'inbox' as const, unit: home.unit.name, at: row.createdAt.toISOString(), status: row.status,
       target: `→ ${row.peerName}/${row.agentSlug}`, durationMs: null, tokens: null, errorCode: row.errorCode,
-      threadId: row.threadId, failed: row.status === 'failed' || row.status === 'timeout', running: row.status === 'pending',
+      threadId: row.threadId, link: agentHref(row.peerName, row.agentSlug, row.threadId),
+      failed: row.status === 'failed' || row.status === 'timeout', running: row.status === 'pending',
     })));
 
     for (const row of peers) {

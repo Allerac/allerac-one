@@ -1,54 +1,50 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import FederatedThreadPanel from './FederatedThreadPanel';
+import { sidebarHeaderClass } from '@/app/components/layout/SidebarRow';
+import AgentList from './AgentList';
+import { UnreadBadge } from './AgentRow';
+import { flattenAgents } from './agents-format';
 import { inboxApi, type InboxListing, type InboxUpdates } from './inbox-api';
 
-/** P4c: sidebar unread/pending refresh (visible tab / hidden tab). */
+/** Unread/pending refresh (visible tab / hidden tab). */
 export const UPDATES_VISIBLE_MS = 20_000;
 export const UPDATES_HIDDEN_MS = 60_000;
+/** Agent list (names, status) refresh. */
+export const LISTING_REFRESH_MS = 60_000;
 
 interface Props {
   isDark: boolean;
   domainId: string;
+  /** Desktop icon rail: avatars only. */
+  collapsed?: boolean;
+  /** `<unit>/<agent>` of the open agent chat, highlighted. */
+  activeKey?: string | null;
+  /** Called after navigating (mobile closes its drawer). */
+  onNavigate?: () => void;
 }
 
 /**
- * Sidebar "Agents" section (federation P4a/P4b): local agents first, then each
- * paired Unit's exposed agents, then archived (unpaired) Units. Admin only;
- * the parent decides visibility with canUseInbox().
+ * Sidebar "Agents" section: every agent exposed by paired units, one row each,
+ * unread first. Local domains are not listed (the domain switcher has them).
+ * Admin only; the parent decides visibility with canUseInbox().
  */
-export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
+export default function AgentsInboxSection({ isDark: d, domainId, collapsed = false, activeKey = null, onNavigate }: Props) {
   const router = useRouter();
   const [listing, setListing] = useState<InboxListing | null>(null);
-  const [expanded, setExpanded] = useState(true);
-  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [updates, setUpdates] = useState<InboxUpdates | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setListing(await inboxApi.list(domainId));
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load agents');
-    }
-  }, [domainId]);
+  const [expanded, setExpanded] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    inboxApi.list(domainId)
-      .then(data => {
-        if (cancelled) return;
-        setListing(data);
-        setError(null);
-        // Deep link from the Control Tower (P4d): /chat?inboxThread=<id> opens that thread.
-        const linked = new URLSearchParams(window.location.search).get('inboxThread');
-        if (linked && /^[0-9a-f-]{36}$/i.test(linked)) setOpenThreadId(linked);
-      })
+    const load = () => inboxApi.list(domainId)
+      .then(data => { if (!cancelled) { setListing(data); setError(null); } })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load agents'); });
-    return () => { cancelled = true; };
+    void load();
+    const timer = setInterval(() => { void load(); }, LISTING_REFRESH_MS);
+    return () => { cancelled = true; clearInterval(timer); };
   }, [domainId]);
 
   useEffect(() => {
@@ -59,7 +55,7 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
         const next = await inboxApi.updates(domainId);
         if (!cancelled) setUpdates(next);
       } catch {
-        // Badges are best effort; the listing still shows the last known counts.
+        // Badges are best effort; the listing keeps the last known counts.
       }
       if (cancelled) return;
       const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
@@ -69,166 +65,44 @@ export default function AgentsInboxSection({ isDark: d, domainId }: Props) {
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [domainId]);
 
-  const live = new Map((updates?.threads ?? []).map(thread => [thread.threadId, thread]));
-  const unreadOf = (threadId: string | null, fallback: number): number => (threadId ? live.get(threadId)?.unread : undefined) ?? fallback;
-  const pendingOf = (threadId: string | null) => !!threadId && !!live.get(threadId)?.pending;
-  const agentUnread = (agent: InboxListing['units'][number]['agents'][number]) =>
-    agent.threads.length ? agent.threads.reduce((sum, thread) => sum + unreadOf(thread.threadId, thread.unread), 0) : unreadOf(agent.threadId, agent.unread);
-  const agentPending = (agent: InboxListing['units'][number]['agents'][number]) =>
-    agent.threads.some(thread => pendingOf(thread.threadId)) || pendingOf(agent.threadId);
-  const totalUnread = updates?.totalUnread ?? 0;
+  const agents = useMemo(() => flattenAgents(listing, updates), [listing, updates]);
+  const archived = listing?.archived ?? [];
+  const totalUnread = updates?.totalUnread ?? agents.reduce((sum, agent) => sum + agent.unread, 0);
 
-  const openRemote = async (peerId: string, agent: string, threadId: string | null) => {
-    try {
-      const id = threadId ?? (await inboxApi.openThread(domainId, peerId, agent)).thread.id;
-      setOpenThreadId(id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open thread');
-    }
+  if (!listing || (agents.length === 0 && archived.length === 0)) {
+    return error && !collapsed ? <p className="px-4 text-xs text-red-500">{error}</p> : null;
+  }
+
+  const navigate = (href: string) => {
+    router.push(href);
+    onNavigate?.();
   };
 
-  const newThread = async (peerId: string, agent: string) => {
-    const title = window.prompt('Name for the new thread (optional)') ?? null;
-    if (title === null) return;
-    try {
-      const { thread } = await inboxApi.openThread(domainId, peerId, agent, { new: true, ...(title.trim() ? { title: title.trim() } : {}) });
-      setOpenThreadId(thread.id);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create thread');
-    }
-  };
-
-  const deleteThread = async (threadId: string) => {
-    if (!window.confirm('Delete this thread from this unit? The other unit keeps its own copy.')) return;
-    try {
-      await inboxApi.deleteThread(domainId, threadId);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed');
-    }
-  };
-
-  const deleteHistory = async (peerId: string, name: string) => {
-    if (!window.confirm(`Delete all local history with ${name}? This cannot be undone.`)) return;
-    try {
-      await inboxApi.deleteHistory(domainId, peerId);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed');
-    }
-  };
-
-  const muted = d ? 'text-gray-500' : 'text-gray-400';
-  const rowClass = `w-full text-left rounded px-2 py-1.5 text-sm ${d ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`;
-  const hasRemote = (listing?.units.length ?? 0) > 0 || (listing?.archived.length ?? 0) > 0;
+  if (collapsed) {
+    return (
+      <div className="mb-2 px-2" data-testid="agents-inbox">
+        <AgentList agents={agents} archived={[]} isDark={d} activeKey={activeKey} collapsed onNavigate={navigate} />
+      </div>
+    );
+  }
 
   return (
-    <div className="mb-3" data-testid="agents-inbox">
-      <button type="button" onClick={() => setExpanded(v => !v)} className={`text-xs uppercase px-2 mb-1 ${muted}`}>
-        Agents {expanded ? '▾' : '▸'}
-        {totalUnread > 0 && (
-          <span data-testid="total-unread" className="ml-1 rounded-full bg-indigo-600 px-1.5 text-[10px] normal-case text-white">{totalUnread}</span>
-        )}
+    <div className="px-4 pt-4" data-testid="agents-inbox">
+      <button type="button" onClick={() => setExpanded(value => !value)} className="group mb-2 flex w-full items-center justify-between px-2" aria-expanded={expanded}>
+        <span className="flex items-center gap-2">
+          <span className={sidebarHeaderClass(d)}>Agents</span>
+          <UnreadBadge count={totalUnread} testId="total-unread" />
+        </span>
+        <svg className={`h-3.5 w-3.5 transition-all duration-200 ${expanded ? '' : '-rotate-90'} ${d ? 'text-gray-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
-      {expanded && listing && (
-        <div className="space-y-2">
-          {hasRemote && (
-            <div>
-              <p className={`px-2 text-xs ${muted}`}>
-                {listing.home.emoji ?? '🏠'} {listing.home.displayName}{listing.home.role ? ` · ${listing.home.role}` : ''}
-              </p>
-              {listing.home.agents.map(agent => (
-                <button key={agent.slug} type="button" className={rowClass}
-                  onClick={() => { if (agent.slug !== domainId) router.push(`/${agent.slug}`); }}>
-                  {agent.name}
-                </button>
-              ))}
-            </div>
-          )}
-          {listing.units.map(unit => (
-            <div key={unit.peerId} data-testid={`unit-${unit.name}`}>
-              <p className={`flex items-center gap-1 px-2 text-xs ${muted}`}>
-                <span
-                  aria-label={unit.status}
-                  className={`inline-block h-2 w-2 rounded-full ${unit.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`}
-                />
-                <span>{unit.emoji ?? '🛰️'} {unit.displayName}{unit.role ? ` · ${unit.role}` : ''}</span>
-              </p>
-              {unit.agents.length === 0 && <p className={`px-2 text-xs ${muted}`}>No agents exposed</p>}
-              {unit.agents.map(agent => (
-                <div key={agent.slug}>
-                  <div className="flex items-start">
-                    <button type="button" className={`${rowClass} ${agent.available ? '' : 'opacity-50'}`}
-                      disabled={!agent.available && !agent.threadId}
-                      onClick={() => openRemote(unit.peerId, agent.slug, agent.threadId)}>
-                      <span className="flex items-center gap-2">
-                        <span className="flex-1 truncate">{agent.name}</span>
-                        {agentPending(agent) && <span data-testid="pending" title="Waiting for a reply" className={muted}>…</span>}
-                        {agentUnread(agent) > 0 && (
-                          <span data-testid="unread" className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{agentUnread(agent)}</span>
-                        )}
-                      </span>
-                      {agent.preview && <span className={`block truncate text-xs ${muted}`}>{agent.preview}</span>}
-                    </button>
-                    {agent.available && (
-                      <button type="button" aria-label={`New thread with ${agent.name}`} title="New thread"
-                        className={`px-2 py-1.5 text-sm ${muted}`} onClick={() => newThread(unit.peerId, agent.slug)}>+</button>
-                    )}
-                  </div>
-                  {agent.threads.length > 1 && agent.threads.filter(thread => thread.threadId !== agent.threadId).map(thread => (
-                    <button key={thread.threadId} type="button" data-testid="extra-thread"
-                      className={`${rowClass} pl-5 text-xs`} onClick={() => setOpenThreadId(thread.threadId)}>
-                      <span className="flex items-center gap-2">
-                        <span className="flex-1 truncate">{thread.title ?? 'Thread'}</span>
-                        {pendingOf(thread.threadId) && <span className={muted}>…</span>}
-                        {unreadOf(thread.threadId, thread.unread) > 0 && (
-                          <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] text-white">{unreadOf(thread.threadId, thread.unread)}</span>
-                        )}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ))}
-          {listing.archived.length > 0 && (
-            <div>
-              <p className={`px-2 text-xs ${muted}`}>Archived units</p>
-              {listing.archived.map(group => (
-                <div key={group.peerId} data-testid={`archived-${group.name}`}>
-                  <p className={`flex items-center px-2 text-xs ${muted}`}>
-                    <span className="flex-1">{group.displayName} (unpaired)</span>
-                    <button type="button" className="underline" onClick={() => deleteHistory(group.peerId, group.displayName)}>
-                      Delete history
-                    </button>
-                  </p>
-                  {group.threads.map(thread => (
-                    <div key={thread.threadId} className="flex items-center">
-                      <button type="button" className={`${rowClass} opacity-70`}
-                        onClick={() => setOpenThreadId(thread.threadId)}>
-                        {thread.title ?? thread.agentSlug}
-                      </button>
-                      <button type="button" aria-label="Delete thread" title="Delete thread"
-                        className={`px-2 text-xs ${muted}`} onClick={() => deleteThread(thread.threadId)}>🗑</button>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
+      {expanded && (
+        <div className="max-h-[45vh] overflow-y-auto">
+          <AgentList agents={agents} archived={archived} isDark={d} activeKey={activeKey} onNavigate={navigate} />
         </div>
       )}
-      {error && <p className={`px-2 text-xs text-red-500`}>{error}</p>}
-      {openThreadId && (
-        <FederatedThreadPanel
-          isDark={d}
-          domainId={domainId}
-          threadId={openThreadId}
-          onClose={() => { setOpenThreadId(null); void load(); }}
-          onChanged={() => void load()}
-        />
-      )}
+      {error && <p className="px-2 text-xs text-red-500">{error}</p>}
     </div>
   );
 }

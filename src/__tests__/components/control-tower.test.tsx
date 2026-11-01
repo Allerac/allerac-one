@@ -13,7 +13,7 @@ const overview = {
     { id: 'p2', isHome: false, name: 'barcelona', displayName: 'Barcelona', emoji: null, role: null, state: 'online', limited: true, lastBeatAt: NOW, latencyMs: 80, errorCode: null, appVersion: null, commit: null, load: null, snapshotAt: null, uptime24h: { ok: 10, total: 10 } },
   ],
   activity: [
-    { kind: 'inbox', unit: 'napols', at: NOW, status: 'pending', target: '→ santos/chat', durationMs: null, tokens: null, errorCode: null, threadId: '22222222-2222-4222-8222-222222222222', failed: false, running: true },
+    { kind: 'inbox', unit: 'napols', at: NOW, status: 'pending', target: '→ santos/chat', durationMs: null, tokens: null, errorCode: null, threadId: '22222222-2222-4222-8222-222222222222', link: '/agents/santos/chat?thread=22222222-2222-4222-8222-222222222222', failed: false, running: true },
     { kind: 'run', unit: 'santos', at: NOW, status: 'failed', target: null, durationMs: 1500, tokens: 12, errorCode: null, threadId: null, failed: true, running: false },
   ],
   events: [{ unit: 'santos', at: NOW, direction: 'inbound', peer: 'napols', capability: 'federation.agents.ask', outcome: 'denied', httpStatus: 429, errorCode: 'rate_limited' }],
@@ -36,7 +36,7 @@ describe('Control Tower page (P4d)', () => {
     expect(screen.getByTestId('unit-card-napols')).toHaveTextContent('1 running · 0 queued');
     expect(screen.getByTestId('unit-card-santos')).toHaveTextContent('Uptime 24h90%');
     expect(screen.getAllByTestId('activity-row')).toHaveLength(2);
-    expect(screen.getByText('thread').getAttribute('href')).toBe('/chat?inboxThread=22222222-2222-4222-8222-222222222222');
+    expect(screen.getByText('thread').getAttribute('href')).toBe('/agents/santos/chat?thread=22222222-2222-4222-8222-222222222222');
     expect(screen.getByTestId('event-row')).toHaveTextContent('rate_limited');
     expect(fetchMock.mock.calls[0][0]).toBe('/api/admin/control-tower?window=24h&status=all');
   });

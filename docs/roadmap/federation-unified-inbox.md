@@ -235,3 +235,10 @@ copy (remote delete deferred to P5).
   - Telegram/email alerts.
   - Inbox status dots reading the heartbeat state.
   - Model and cost fields: `agent_runs` has no reliable model or cost column yet.
+
+## Agents UI redesign
+
+- The sidebar **Agents** section is a flat list of remote agents sorted by activity (unread first, then most recent). Each row shows the agent avatar with a status dot from the unit heartbeat (online / degraded / offline), the unit emoji and name, a short role, the last activity and an unread badge. Local domains are no longer listed; `home.agents` is always empty.
+- Remote chats open full page at `/agents/<unit>/<agent>?thread=<id>` (admins only, 404 otherwise), with a thread switcher (a bottom sheet on phones), rename/delete, load older, retry and the async "waiting for <unit>…" state. On phones the agent list is a drawer.
+- Remote replies render as markdown with raw HTML dropped, only `http`, `https` and `mailto` links, and images shown as links.
+- Old `/chat?inboxThread=<id>` links redirect to the new view.

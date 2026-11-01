@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ConvItem } from '@/app/hooks/useConversations';
 import DomainChip from './DomainChip';
+import { sidebarRowClass } from './SidebarRow';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
 import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
 import { canUseInbox } from '@/federation/inbox-policy';
@@ -179,11 +180,7 @@ export default function ConversationSidebar({
           <>
             <button
               onClick={() => onSelect(c.id)}
-              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left min-w-0 ${
-                isActive
-                  ? d ? 'bg-gray-800 text-white' : 'bg-indigo-50 text-indigo-900'
-                  : d ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100'
-              }`}
+              className={sidebarRowClass(d, isActive)}
             >
               {c.pinned ? (
                 <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 flex-shrink-0 ${d ? 'text-gray-400' : 'text-gray-500'}`} viewBox="0 0 24 24" fill="currentColor">

@@ -81,12 +81,30 @@ export interface InboxServiceDeps {
   store: InboxStore;
   peers: PeerStore;
   federation: InboxFederationPort;
-  localAgents(user: InboxUser): Promise<Array<{ slug: string; name: string }>>;
+  /** Unused since the Agents redesign: local domains are not agents (kept optional for callers). */
+  localAgents?(user: InboxUser): Promise<Array<{ slug: string; name: string }>>;
   loadHomeUnit(): Promise<PeerUnitProfile>;
+  /** Heartbeat state per peer id from the Control Tower (P4d); fresher than the list probe. */
+  beatStates?(): Promise<Map<string, { state: 'unknown' | 'online' | 'degraded' | 'offline'; at: Date | null }>>;
   now?: () => number;
   log?: (line: string) => void;
   /** Jitter source for poll backoff (tests pass a fixed value). */
   random?: () => number;
+}
+
+/** A heartbeat older than this is ignored in favour of the live list probe. */
+export const BEAT_FRESH_MS = 3 * 60 * 1000;
+
+export function unitStatus(
+  answered: boolean, beat: { state: string; at: Date | null } | null, now: number,
+): 'online' | 'degraded' | 'offline' {
+  const fresh = beat?.at && now - new Date(beat.at).getTime() < BEAT_FRESH_MS;
+  if (fresh && (beat.state === 'online' || beat.state === 'degraded' || beat.state === 'offline')) {
+    // The list call just answered, so the unit is at least reachable.
+    if (beat.state === 'offline' && answered) return 'degraded';
+    return beat.state;
+  }
+  return answered ? 'online' : 'offline';
 }
 
 export interface InboxThreadRow {
@@ -119,7 +137,8 @@ export interface InboxUnitGroup {
   displayName: string;
   emoji: string | null;
   role: string | null;
-  status: 'online' | 'offline';
+  /** Heartbeat state when fresh (P4d), else whether the agents list answered. */
+  status: 'online' | 'degraded' | 'offline';
   agents: InboxAgentRow[];
 }
 
@@ -242,11 +261,11 @@ export class InboxService {
   }
 
   async list(user: InboxUser): Promise<InboxListing> {
-    const [home, localAgents, peers, threads] = await Promise.all([
+    const [home, peers, threads, beats] = await Promise.all([
       this.deps.loadHomeUnit(),
-      this.deps.localAgents(user),
       this.deps.peers.list(),
       this.deps.store.listThreads(user.id),
+      this.deps.beatStates ? this.deps.beatStates().catch(() => null) : Promise.resolve(null),
     ]);
 
     const active = peers.filter(peer => peer.status === 'active');
@@ -288,7 +307,7 @@ export class InboxService {
         displayName: result?.unit?.displayName ?? peer.displayName ?? peer.unitName,
         emoji: result?.unit?.emoji ?? null,
         role: result?.unit?.role ?? null,
-        status: result ? 'online' : 'offline',
+        status: unitStatus(result !== null, beats?.get(peer.id) ?? null, this.now()),
         agents: [...rows.values()],
       };
     });
@@ -307,7 +326,8 @@ export class InboxService {
       .filter(group => group.threads.length > 0);
 
     return {
-      home: { name: home.name, displayName: home.displayName, emoji: home.emoji, role: home.role, agents: localAgents },
+      // Local domains are not agents: the Agents section lists remote agents only.
+      home: { name: home.name, displayName: home.displayName, emoji: home.emoji, role: home.role, agents: [] },
       units,
       archived,
     };

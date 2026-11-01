@@ -1,5 +1,6 @@
 'use client';
 
+import { sidebarHeaderClass, sidebarRowClass } from './SidebarRow';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { Conversation } from '../../types';
@@ -113,7 +114,7 @@ export default function SidebarContent({
               onClick={() => setConversationsOpen(o => !o)}
               className="w-full flex items-center justify-between px-2 mb-2 group"
             >
-              <p className={`text-xs uppercase transition-colors ${d ? 'text-gray-400 group-hover:text-gray-300' : 'text-gray-500 group-hover:text-gray-700'}`}>{t('conversations')}</p>
+              <p className={sidebarHeaderClass(d)}>{t('conversations')}</p>
               <svg
                 className={`w-3.5 h-3.5 transition-all duration-200 ${conversationsOpen ? '' : '-rotate-90'} ${d ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -148,11 +149,7 @@ export default function SidebarContent({
                       {/* Conversation button */}
                       <button
                         onClick={() => loadConversation(conv.id)}
-                        className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left min-w-0 ${
-                          currentConversationId === conv.id
-                            ? d ? 'bg-gray-800 text-white' : 'bg-indigo-50 text-indigo-900'
-                            : d ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100'
-                        }`}
+                        className={sidebarRowClass(d, currentConversationId === conv.id)}
                       >
                         {conv.pinned ? (
                           <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 flex-shrink-0 ${d ? 'text-gray-400' : 'text-gray-500'}`} viewBox="0 0 24 24" fill="currentColor">

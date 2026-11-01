@@ -161,7 +161,7 @@ export default function ControlTowerClient() {
                     <td>{row.status}{row.errorCode ? ` (${row.errorCode})` : ''}</td>
                     <td>{row.durationMs !== null ? `${Math.round(row.durationMs / 100) / 10}s` : '—'}</td>
                     <td>{row.tokens ?? '—'}</td>
-                    <td>{row.threadId && <Link href={`/chat?inboxThread=${row.threadId}`} className="underline">thread</Link>}</td>
+                    <td>{row.threadId && <Link href={row.link ?? `/chat?inboxThread=${row.threadId}`} className="underline">thread</Link>}</td>
                   </tr>
                 ))}
               </tbody>
