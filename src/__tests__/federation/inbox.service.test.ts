@@ -71,12 +71,14 @@ describe('InboxService', () => {
     await peers.insert(peerFixture());
     const listing = await service.list(user);
     expect(listing.home).toMatchObject({ name: 'napols', emoji: '🍕', agents: [] });
-    expect(listing.home.agent).toEqual({ slug: 'chat', name: listing.home.displayName, emoji: '🍕', role: listing.home.role, href: '/chat' });
+    expect(listing.home.agent).toEqual({ slug: 'chat', name: listing.home.displayName, emoji: '🍕', role: listing.home.role, href: '/agents/self/agent', configureUrl: '/hub/settings' });
     expect(listing.units).toEqual([expect.objectContaining({
       name: 'santos', emoji: '🏖️', role: 'Beach lab', status: 'online',
       agents: [expect.objectContaining({ slug: 'chat', available: true, threadId: null })],
     })]);
-    const json = JSON.stringify(listing);
+    // The peer origin only leaves the server as its settings link (Configure item).
+    expect(listing.units[0].configureUrl).toMatch(/^https?:\/\/[^/]*santos\.example[^/]*\/hub\/settings$/);
+    const json = JSON.stringify({ ...listing, units: listing.units.map(unit => ({ ...unit, configureUrl: undefined })) });
     expect(json).not.toContain('secret-key');
     expect(json).not.toContain('alr_live');
     expect(json).not.toContain('santos.example');

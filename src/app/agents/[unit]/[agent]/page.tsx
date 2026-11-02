@@ -1,5 +1,9 @@
 import { notFound } from 'next/navigation';
 import { requireCurrentAdmin } from '@/app/lib/auth-session';
+import { requireDomainAccess } from '@/app/lib/domain-access';
+import { SELF_UNIT } from '@/app/components/inbox/agents-format';
+import { resolveUnitProfile } from '@/federation/unit-profile';
+import LocalAgentClient from '@/app/agents/_shell/LocalAgentClient';
 import AgentChatClient from './AgentChatClient';
 
 export const dynamic = 'force-dynamic';
@@ -12,14 +16,23 @@ type Props = {
   searchParams: Promise<{ thread?: string | string[] }>;
 };
 
-/** Chat with a remote agent (Agents redesign): admins only; everyone else gets a 404. */
+/**
+ * `/agents/self/agent` is this Unit's own agent (the local chat, embedded),
+ * for anyone with chat access. Any other unit is a remote agent: admins only;
+ * everyone else gets a 404.
+ */
 export default async function AgentChatPage({ params, searchParams }: Props) {
+  const { unit, agent } = await params;
+  if (decodeURIComponent(unit).toLowerCase() === SELF_UNIT) {
+    if (decodeURIComponent(agent).toLowerCase() !== 'agent') notFound();
+    const user = await requireDomainAccess('chat');
+    return <LocalAgentClient isAdmin={user.is_admin} localName={resolveUnitProfile(null).displayName} />;
+  }
   try {
     await requireCurrentAdmin();
   } catch {
     notFound();
   }
-  const { unit, agent } = await params;
   const unitName = decodeURIComponent(unit).toLowerCase();
   const agentSlug = decodeURIComponent(agent).toLowerCase();
   if (!SLUG.test(unitName) || !SLUG.test(agentSlug)) notFound();

@@ -1,33 +1,8 @@
-import HubClient from './hub/HubClient';
-import { requireAdmin } from '@/app/lib/domain-access';
-import { getUserAccessibleDomains } from '@/app/actions/domains';
-import pool from '@/app/clients/db';
-import { isGrampeadorEnabled } from '@/app/actions/clippy';
+import { redirect } from 'next/navigation';
+import { requireAuthenticatedUser } from '@/app/lib/domain-access';
 
+/** Home: every signed-in user lands on the agents screen. The old hub lives at /hub. */
 export default async function RootPage() {
-  const user = await requireAdmin();
-
-  let completedHubTour = false;
-  let allowedDomains: string[] = [];
-  try {
-    const [tourRes, domains] = await Promise.all([
-      pool.query('SELECT completed_onboarding_tour FROM users WHERE id = $1', [user.id]),
-      getUserAccessibleDomains(),
-    ]);
-    completedHubTour = tourRes.rows[0]?.completed_onboarding_tour ?? false;
-    allowedDomains = domains;
-  } catch (error) {
-    console.error('[RootPage] Error fetching data:', error);
-  }
-
-  return (
-    <HubClient
-      userName={user.email.split('@')[0]}
-      userEmail={user.email}
-      userId={String(user.id)}
-      completedHubTour={completedHubTour}
-      allowedDomains={allowedDomains}
-      grampeadorBubblesEnabled={await isGrampeadorEnabled()}
-    />
-  );
+  await requireAuthenticatedUser();
+  redirect('/agents');
 }

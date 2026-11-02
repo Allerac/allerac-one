@@ -28,6 +28,8 @@ interface ChatHeaderProps {
   hideHomeButton?: boolean;
   titleOnly?: boolean;
   hideSidebarButton?: boolean;
+  /** Show the conversations button on desktop too (embedded chat has no fixed sidebar). */
+  alwaysShowSidebarButton?: boolean;
   userName?: string;
   userEmail?: string;
   onLogout?: () => void;
@@ -48,6 +50,7 @@ export default function ChatHeader({
   hideHomeButton,
   titleOnly,
   hideSidebarButton,
+  alwaysShowSidebarButton = false,
   userName,
   userEmail,
   onLogout,
@@ -93,7 +96,7 @@ export default function ChatHeader({
         {!hideSidebarButton && (
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className={`lg:hidden p-2 rounded-lg transition-colors ${isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            className={`${alwaysShowSidebarButton ? '' : 'lg:hidden'} p-2 rounded-lg transition-colors ${isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

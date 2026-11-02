@@ -3,6 +3,9 @@
  * No React, no IO: easy to test and shared by desktop and mobile.
  */
 import type { InboxListing, InboxUpdates } from '@/federation/inbox.service';
+import { LOCAL_CONFIGURE_URL, SELF_AGENT_HREF } from '@/federation/configure-url';
+
+export { LOCAL_CONFIGURE_URL, SELF_AGENT_HREF, peerConfigureUrl } from '@/federation/configure-url';
 
 export type AgentStatus = 'online' | 'degraded' | 'offline';
 
@@ -34,6 +37,8 @@ export interface AgentItem {
   preview: string | null;
   defaultThreadId: string | null;
   threads: AgentThreadItem[];
+  /** Settings page of the agent's Unit (`https://<peer origin>/hub/settings`); null when unknown. */
+  configureUrl: string | null;
 }
 
 /** This Unit's own agent, always the first row (one Unit = one agent). */
@@ -44,7 +49,13 @@ export interface SelfAgentItem {
   role: string | null;
   roleShort: string | null;
   href: string;
+  /** Local settings page. */
+  configureUrl: string;
 }
+
+/** Unit id used in `/agents/<unit>/<agent>` for this Unit's own agent. */
+export const SELF_UNIT = 'self';
+
 
 export const ROLE_SHORT_CHARS = 24;
 
@@ -125,6 +136,7 @@ export function flattenAgents(listing: InboxListing | null, updates?: InboxUpdat
         preview: agent.preview,
         defaultThreadId: agent.threadId,
         threads,
+        configureUrl: unit.configureUrl ?? null,
       });
     }
   }
@@ -134,13 +146,47 @@ export function flattenAgents(listing: InboxListing | null, updates?: InboxUpdat
 export function selfAgent(listing: InboxListing | null): SelfAgentItem | null {
   const agent = listing?.home.agent;
   if (!agent) return null;
-  return { key: 'self', name: agent.name, emoji: agent.emoji, role: agent.role, roleShort: roleShort(agent.role), href: agent.href };
+  return {
+    key: 'self', name: agent.name, emoji: agent.emoji, role: agent.role, roleShort: roleShort(agent.role),
+    href: agent.href, configureUrl: agent.configureUrl ?? LOCAL_CONFIGURE_URL,
+  };
+}
+
+/** Self row shown before (or without) the inbox listing, e.g. for non-admins. */
+export function fallbackSelfAgent(name: string): SelfAgentItem {
+  return { key: 'self', name, emoji: null, role: null, roleShort: null, href: SELF_AGENT_HREF, configureUrl: LOCAL_CONFIGURE_URL };
+}
+
+const norm = (value: string | null | undefined) => (value ?? '').trim().toLowerCase();
+
+/** True when a (single-agent) peer's agent is named after its Unit, case/trim-insensitive. */
+export function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
+  return norm(a) !== '' && norm(a) === norm(b);
+}
+
+/** "Agent · Unit", or just one of them when they are the same name. */
+export function agentTitle(agentName: string, unitDisplayName: string): string {
+  return sameName(agentName, unitDisplayName) ? agentName.trim() : `${agentName} · ${unitDisplayName}`;
+}
+
+/**
+ * Which agent `/agents` opens on desktop: the remote agent or local chat with
+ * the most recent activity. Ties and no activity at all open the local agent.
+ */
+export function pickIndexHref(agents: AgentItem[], localLastActivity: string | null): string {
+  let best: AgentItem | null = null;
+  for (const agent of agents) {
+    if (!agent.lastMessageAt) continue;
+    if (!best || time(agent.lastMessageAt) > time(best.lastMessageAt)) best = agent;
+  }
+  if (best && time(best.lastMessageAt) > time(localLastActivity)) return agentHref(best.unitName, best.slug);
+  return SELF_AGENT_HREF;
 }
 
 /** Row subtitle: a single-agent peer is named after its Unit, so only the role is shown. */
 export function agentSubtitle(agent: Pick<AgentItem, 'name' | 'unitDisplayName' | 'unitEmoji' | 'roleShort'>): string {
   const unit = `${agent.unitEmoji ? `${agent.unitEmoji} ` : ''}${agent.unitDisplayName}`;
-  if (agent.name === agent.unitDisplayName) return agent.roleShort ?? unit;
+  if (sameName(agent.name, agent.unitDisplayName)) return agent.roleShort ?? unit;
   return agent.roleShort ? `${unit} · ${agent.roleShort}` : unit;
 }
 

@@ -16,6 +16,7 @@
 import { UNIT_AGENT_SLUG } from './unit-profile';
 import { MAX_QUESTION_CHARS } from './agents.service';
 import { FederationError } from './errors';
+import { LOCAL_CONFIGURE_URL, SELF_AGENT_HREF, peerConfigureUrl } from './configure-url';
 import { ASK_TIMEOUT_MS, type AsyncAskOutcome, type ConversationAskResult, type PeerAgent } from './federation-client';
 import type { FederatedMessage, FederatedThread, InboxStore } from './inbox.types';
 import type { PeerRecord, PeerStore } from './peer.types';
@@ -144,6 +145,8 @@ export interface InboxUnitGroup {
   role: string | null;
   /** Heartbeat state when fresh (P4d), else whether the agents list answered. */
   status: 'online' | 'degraded' | 'offline';
+  /** `https://<peer origin>/hub/settings`: the origin only, never credentials. */
+  configureUrl?: string | null;
   agents: InboxAgentRow[];
 }
 
@@ -160,7 +163,7 @@ export interface InboxListing {
     /** Always empty: local domains are not agents (kept for older clients). */
     agents: Array<{ slug: string; name: string }>;
     /** This Unit's own agent (one Unit = one agent), listed first and opening the local chat. */
-    agent?: { slug: string; name: string; emoji: string | null; role: string | null; href: string };
+    agent?: { slug: string; name: string; emoji: string | null; role: string | null; href: string; configureUrl?: string };
   };
   units: InboxUnitGroup[];
   archived: InboxArchivedGroup[];
@@ -320,6 +323,7 @@ export class InboxService {
         emoji: result?.unit?.emoji ?? null,
         role: result?.unit?.role ?? null,
         status: unitStatus(result !== null, beats?.get(peer.id) ?? null, this.now()),
+        configureUrl: peerConfigureUrl(peer.origin),
         agents: [...rows.values()],
       };
     });
@@ -341,7 +345,7 @@ export class InboxService {
       // Local domains are not agents: the Agents section lists remote agents only.
       home: {
         name: home.name, displayName: home.displayName, emoji: home.emoji, role: home.role, agents: [],
-        agent: { slug: UNIT_AGENT_SLUG, name: home.displayName, emoji: home.emoji, role: home.role, href: '/chat' },
+        agent: { slug: UNIT_AGENT_SLUG, name: home.displayName, emoji: home.emoji, role: home.role, href: SELF_AGENT_HREF, configureUrl: LOCAL_CONFIGURE_URL },
       },
       units,
       archived,
