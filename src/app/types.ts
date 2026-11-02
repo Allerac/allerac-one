@@ -27,6 +27,8 @@ export type MessageAction =
     };
 
 export interface Message {
+  /** DB id when loaded from history (used for paging, search jumps and dedupe). */
+  id?: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string | MessageContentPart[];
   timestamp: Date;

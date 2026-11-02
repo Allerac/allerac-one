@@ -20,6 +20,8 @@ interface ChatMessagesProps {
   githubToken: string;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   domainSlug?: string | null;
+  /** Phase 4b: message briefly highlighted after a search jump. */
+  highlightMessageId?: string | null;
 }
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -113,6 +115,7 @@ export default function ChatMessages({
   githubToken,
   messagesEndRef,
   domainSlug,
+  highlightMessageId = null,
 }: ChatMessagesProps) {
   // Controla qual mensagem tem o menu aberto (índice)
   const [openMenuIdx, setOpenMenuIdx] = useState<number | null>(null);
@@ -208,13 +211,17 @@ export default function ChatMessages({
     <div data-name="chat-messages-wrapper" className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       <div className="space-y-6">
         {messages.map((message, index) => message.topicMarker ? (
-          <div key={index} data-name="topic-marker" className={`flex items-center gap-3 text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+          <div key={message.id ?? index} data-name="topic-marker" className={`flex items-center gap-3 text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
             <div className={`flex-1 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`} />
             <span>New topic</span>
             <div className={`flex-1 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`} />
           </div>
         ) : (
-          <div key={index} className={`${message.role === 'user' ? 'flex justify-end' : ''}`}>
+          <div
+            key={message.id ?? index}
+            data-message-id={message.id}
+            className={`${message.role === 'user' ? 'flex justify-end' : ''} ${message.id && message.id === highlightMessageId ? 'rounded-lg ring-2 ring-brand-500/60 ring-offset-2 transition-shadow' : ''}`}
+          >
             {/* User message - simple bubble on right */}
             {message.role === 'user' ? (
               <div className="max-w-[80%]">

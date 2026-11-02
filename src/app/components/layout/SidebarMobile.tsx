@@ -42,6 +42,8 @@ interface SidebarMobileProps {
   userEmail?: string;
   onLogout?: () => void;
   onToggleTheme?: () => void;
+  /** Agent chat (phase 4b): no conversation list; old chats live in the Archive drawer. */
+  hideConversations?: boolean;
 }
 
 export default function SidebarMobile({
@@ -66,6 +68,7 @@ export default function SidebarMobile({
   userEmail,
   onLogout,
   onToggleTheme,
+  hideConversations = false,
 }: SidebarMobileProps) {
   const d = isDarkMode;
   const router = useRouter();
@@ -151,7 +154,8 @@ export default function SidebarMobile({
           <AgentsInboxSection isDark={d} domainId={inboxDomainId} onNavigate={onClose} />
         )}
         <SidebarContent
-          conversations={conversations}
+          conversations={hideConversations ? [] : conversations}
+          hideConversations={hideConversations}
           currentConversationId={currentConversationId}
           loadConversation={loadConversation}
           deleteConversation={deleteConversation}

@@ -37,3 +37,12 @@ describe('parseChatRequestBody', () => {
     expect(() => parseChatRequestBody(input)).toThrow(InvalidChatRequestError);
   });
 });
+
+describe('parseChatRequestBody surface (phase 4b)', () => {
+  const base = { message: 'hi', model: 'gpt-4o', provider: 'github' };
+  it('keeps surface=agent and drops anything else', () => {
+    expect(parseChatRequestBody({ ...base, surface: 'agent' }).surface).toBe('agent');
+    expect(parseChatRequestBody({ ...base, surface: 'other' })).not.toHaveProperty('surface');
+    expect(parseChatRequestBody(base)).not.toHaveProperty('surface');
+  });
+});
