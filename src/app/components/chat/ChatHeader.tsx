@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useTransition } from 'react';
+import { useState, useRef, useEffect, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations, useLocale } from 'next-intl';
 import { updateLanguage } from '@/app/actions/user';
@@ -33,6 +33,10 @@ interface ChatHeaderProps {
   userName?: string;
   userEmail?: string;
   onLogout?: () => void;
+  /** Extra controls at the right corner of the title-only header (e.g. agent chat search). */
+  rightSlot?: ReactNode;
+  /** Agents shell on small screens: opens the agents drawer (agent list and Pages). */
+  onOpenAgents?: () => void;
 }
 
 export default function ChatHeader({
@@ -54,6 +58,8 @@ export default function ChatHeader({
   userName,
   userEmail,
   onLogout,
+  rightSlot,
+  onOpenAgents,
 }: ChatHeaderProps) {
   const t = useTranslations('system');
   const locale = useLocale();
@@ -103,11 +109,24 @@ export default function ChatHeader({
             </svg>
           </button>
         )}
-        {(currentConversationTitle || domainName) && (
-          <span className={`flex-1 text-sm font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-            {currentConversationTitle || domainName}
-          </span>
+        {onOpenAgents && (
+          <button
+            type="button"
+            onClick={onOpenAgents}
+            aria-label="Open agents and pages"
+            title="Agents and pages"
+            data-name="open-agents-button"
+            className={`lg:hidden p-2 rounded-lg transition-colors ${isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4zM14 15h6v4h-6z" />
+            </svg>
+          </button>
         )}
+        <span className={`flex-1 min-w-0 text-sm font-semibold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          {currentConversationTitle || domainName || ''}
+        </span>
+        {rightSlot}
       </div>
     );
   }

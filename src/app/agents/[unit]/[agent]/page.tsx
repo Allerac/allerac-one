@@ -5,7 +5,9 @@ import { SELF_UNIT } from '@/app/components/inbox/agents-format';
 import { resolveUnitProfile } from '@/federation/unit-profile';
 import LocalAgentClient from '@/app/agents/_shell/LocalAgentClient';
 import AgentChatClient from './AgentChatClient';
-import { getEnabledDataPages } from '@/lib/legacy-domains';
+import { loadAgentToolSettings } from '@/app/services/agent/agent-tool-settings.repository';
+import { agentDataPages } from '@/app/services/agent/agent-pages';
+import { EMPTY_AGENT_TOOL_SETTINGS } from '@/app/services/agent/agent-tool-settings';
 import { AuthService } from '@/app/services/auth/auth.service';
 
 export const dynamic = 'force-dynamic';
@@ -18,11 +20,12 @@ type Props = {
   searchParams: Promise<{ thread?: string | string[] }>;
 };
 
-/** Data pages of enabled modules the user can open, for the 'Pages' menu. */
+/** Data pages of the local agent (enabled modules and tools) the user can open, for the 'Pages' menu. */
 async function localDataPages(userId: string, isAdmin: boolean) {
   const auth = new AuthService();
+  const settings = await loadAgentToolSettings().catch(() => EMPTY_AGENT_TOOL_SETTINGS);
   const pages = [];
-  for (const p of getEnabledDataPages()) {
+  for (const p of agentDataPages(settings)) {
     const ok = await auth.canAccessDomain(userId, isAdmin, p.id).catch(() => false);
     if (ok) pages.push({ path: p.path, label: p.label, icon: p.icon });
   }

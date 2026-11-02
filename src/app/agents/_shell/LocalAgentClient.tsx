@@ -14,9 +14,9 @@ interface Props {
 export default function LocalAgentClient({ isAdmin, localName, pages = [] }: Props) {
   return (
     <AgentShell activeKey="self" isAdmin={isAdmin} localName={localName} pages={pages}>
-      {() => (
+      {openDrawer => (
         <div className="min-h-0 flex-1" data-testid="local-agent-chat">
-          <ChatClient domainSlug="chat" defaultSidebarCollapsed isAdmin={isAdmin} embedded />
+          <ChatClient domainSlug="chat" defaultSidebarCollapsed isAdmin={isAdmin} embedded onOpenAgents={openDrawer} />
         </div>
       )}
     </AgentShell>

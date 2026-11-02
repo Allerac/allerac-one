@@ -160,6 +160,7 @@ export default function AdminChat({
   terminalTheme,
   systemDashboardInitialTab: initialDashboardTab,
   embedded = false,
+  onOpenAgents,
 }: {
   defaultSkillName?: string;
   domainSlug: string;
@@ -185,6 +186,8 @@ export default function AdminChat({
    * list is reached through the drawer on every screen size.
    */
   embedded?: boolean;
+  /** Agents shell: opens its drawer (agent list and Pages) on small screens. */
+  onOpenAgents?: () => void;
 }) {
   const t = useTranslations('home');
   const tChat = useTranslations('chat');
@@ -1256,15 +1259,16 @@ const savedModel = localStorage.getItem('selected_model');
             onLogout={handleLogout}
             titleOnly
             alwaysShowSidebarButton={embedded}
+            onOpenAgents={embedded ? onOpenAgents : undefined}
+            rightSlot={embedded ? (
+              <AgentChatTools
+                isDarkMode={isDarkMode}
+                onJump={(hit) => { void jumpToSearchHit(hit); }}
+                onOpenArchived={(conv) => { void loadConversation(conv.id); }}
+              />
+            ) : undefined}
           />
 
-          {embedded && (
-            <AgentChatTools
-              isDarkMode={isDarkMode}
-              onJump={(hit) => { void jumpToSearchHit(hit); }}
-              onOpenArchived={(conv) => { void loadConversation(conv.id); }}
-            />
-          )}
           {isArchiveView && (
             <div data-name="archive-banner" className={`flex-shrink-0 text-xs px-4 py-2 flex items-center justify-center gap-3 ${isDarkMode ? 'bg-gray-800 text-gray-300' : 'bg-amber-50 text-amber-800'}`}>
               <span>Archived conversation (read-only)</span>

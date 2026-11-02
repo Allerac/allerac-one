@@ -1,4 +1,6 @@
 import { agentsService } from '@/federation/agents.instance';
+import { loadAgentToolSettings } from '@/app/services/agent/agent-tool-settings.repository';
+import { agentDataPageIds } from '@/app/services/agent/agent-pages';
 import { ASK_PROTOCOL_VERSION } from '@/federation/agents.service';
 import { grantsService } from '@/federation/grants.instance';
 import { requireApiPrincipal } from '../../_lib/auth';
@@ -18,7 +20,13 @@ export async function GET(request: Request): Promise<Response> {
     // `protocol.ask` (P4c) tells the home Unit it may use async asks.
     // `granted_capabilities` (P4d) lets the home learn grants changed in place, without re-pairing.
     const granted = await grantsService.grantedCapabilities(caller.principal.id);
-    return apiData({ agents, unit, protocol: { ask: ASK_PROTOCOL_VERSION }, granted_capabilities: granted });
+    // `pages`: ids of the data pages this Unit's agent has (enabled modules and
+    // tools), so the home can link to them on this Unit. Ids only, no settings.
+    const pages = await loadAgentToolSettings().then(settings => agentDataPageIds(settings)).catch(() => undefined);
+    return apiData({
+      agents, unit, protocol: { ask: ASK_PROTOCOL_VERSION }, granted_capabilities: granted,
+      ...(pages ? { pages } : {}),
+    });
   } catch (error: unknown) {
     return federationErrorResponse('GET /api/v1/federation/agents failed', error);
   }

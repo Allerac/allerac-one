@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sidebarHeaderClass } from '@/app/components/layout/SidebarRow';
 import AgentList from './AgentList';
@@ -23,6 +23,8 @@ interface Props {
   activeKey?: string | null;
   /** Called after navigating (mobile closes its drawer). */
   onNavigate?: () => void;
+  /** Receives each fresh listing (the agents shell derives the Pages menu from it). */
+  onListing?: (listing: InboxListing) => void;
 }
 
 /**
@@ -30,17 +32,19 @@ interface Props {
  * unread first. Local domains are not listed (the domain switcher has them).
  * Admin only; the parent decides visibility with canUseInbox().
  */
-export default function AgentsInboxSection({ isDark: d, domainId, collapsed = false, activeKey = null, onNavigate }: Props) {
+export default function AgentsInboxSection({ isDark: d, domainId, collapsed = false, activeKey = null, onNavigate, onListing }: Props) {
   const router = useRouter();
   const [listing, setListing] = useState<InboxListing | null>(null);
   const [updates, setUpdates] = useState<InboxUpdates | null>(null);
   const [expanded, setExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const onListingRef = useRef(onListing);
+  useEffect(() => { onListingRef.current = onListing; }, [onListing]);
 
   useEffect(() => {
     let cancelled = false;
     const load = () => inboxApi.list(domainId)
-      .then(data => { if (!cancelled) { setListing(data); setError(null); } })
+      .then(data => { if (!cancelled) { setListing(data); setError(null); onListingRef.current?.(data); } })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load agents'); });
     void load();
     const timer = setInterval(() => { void load(); }, LISTING_REFRESH_MS);

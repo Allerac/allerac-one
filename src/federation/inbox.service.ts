@@ -13,6 +13,7 @@
  * - Remote text is stored only in federated_* tables, never in chat_conversations,
  *   so local memory/RAG never sees it. It is untrusted and rendered as plain text.
  */
+import { peerPageLinks, type AgentPageLink } from '@/app/services/agent/agent-pages';
 import { UNIT_AGENT_SLUG } from './unit-profile';
 import { MAX_QUESTION_CHARS } from './agents.service';
 import { FederationError } from './errors';
@@ -72,7 +73,7 @@ export function rejectEmptyAnswer(outcome: AsyncAskOutcome): AsyncAskOutcome {
 
 /** The subset of FederationClient the inbox needs. */
 export interface InboxFederationPort {
-  listAgentsWithUnit(peerId: string, ctx: { initiatedByUserId: string | null }): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number }>;
+  listAgentsWithUnit(peerId: string, ctx: { initiatedByUserId: string | null }): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number; pages?: string[] }>;
   askAgentInConversation(
     peerId: string,
     agent: string,
@@ -160,6 +161,8 @@ export interface InboxUnitGroup {
   status: 'online' | 'degraded' | 'offline';
   /** `https://<peer origin>/hub/settings`: the origin only, never credentials. */
   configureUrl?: string | null;
+  /** Data pages of the peer's agent, linking to the peer; empty when offline or unknown. */
+  pages?: AgentPageLink[];
   agents: InboxAgentRow[];
 }
 
@@ -269,7 +272,7 @@ export class InboxService {
   private readonly random: () => number;
   private readonly polling = new Set<string>();
   private readonly localPollFailures = new Map<string, number>();
-  private readonly agentCache = new Map<string, { at: number; value: { agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number } }>();
+  private readonly agentCache = new Map<string, { at: number; value: { agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number; pages?: string[] } }>();
   private readonly inFlight = new Set<string>();
   private readonly peerSends = new Map<string, number[]>();
 
@@ -337,6 +340,7 @@ export class InboxService {
         role: result?.unit?.role ?? null,
         status: unitStatus(result !== null, beats?.get(peer.id) ?? null, this.now()),
         configureUrl: peerConfigureUrl(peer.origin),
+        pages: result ? peerPageLinks(result.pages, peer.origin) : [],
         agents: [...rows.values()],
       };
     });

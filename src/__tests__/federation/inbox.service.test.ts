@@ -78,10 +78,29 @@ describe('InboxService', () => {
     })]);
     // The peer origin only leaves the server as its settings link (Configure item).
     expect(listing.units[0].configureUrl).toMatch(/^https?:\/\/[^/]*santos\.example[^/]*\/hub\/settings$/);
-    const json = JSON.stringify({ ...listing, units: listing.units.map(unit => ({ ...unit, configureUrl: undefined })) });
+    const json = JSON.stringify({ ...listing, units: listing.units.map(unit => ({ ...unit, configureUrl: undefined, pages: undefined })) });
     expect(json).not.toContain('secret-key');
     expect(json).not.toContain('alr_live');
     expect(json).not.toContain('santos.example');
+  });
+
+  it('lists the peer agent pages linked to the peer, and none when the peer is offline or older', async () => {
+    const { service, peers, federation } = setup();
+    await peers.insert(peerFixture());
+    federation.listAgentsWithUnit.mockResolvedValueOnce({
+      agents: [{ id: 'chat', name: 'Chat', description: null }], unit: null, pages: ['health', 'unknown'],
+    } as never);
+    const listing = await service.list(user);
+    expect(listing.units[0].pages).toEqual([{ id: 'health', label: 'Health', icon: '❤️', url: 'https://santos.example/health' }]);
+
+    const older = setup();
+    await older.peers.insert(peerFixture());
+    expect((await older.service.list(user)).units[0].pages).toEqual([]);
+
+    const offline = setup();
+    await offline.peers.insert(peerFixture());
+    offline.federation.listAgentsWithUnit.mockRejectedValueOnce(federationErrors.peerUnreachable());
+    expect((await offline.service.list(user)).units[0].pages).toEqual([]);
   });
 
   it('marks a peer offline when listing fails and caches successful listings', async () => {
