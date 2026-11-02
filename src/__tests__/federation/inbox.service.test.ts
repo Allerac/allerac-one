@@ -71,6 +71,7 @@ describe('InboxService', () => {
     await peers.insert(peerFixture());
     const listing = await service.list(user);
     expect(listing.home).toMatchObject({ name: 'napols', emoji: '🍕', agents: [] });
+    expect(listing.home.agent).toEqual({ slug: 'chat', name: listing.home.displayName, emoji: '🍕', role: listing.home.role, href: '/chat' });
     expect(listing.units).toEqual([expect.objectContaining({
       name: 'santos', emoji: '🏖️', role: 'Beach lab', status: 'online',
       agents: [expect.objectContaining({ slug: 'chat', available: true, threadId: null })],

@@ -129,3 +129,21 @@ ALLERAC_ENV_FILE=.env.openworld ./update.sh
 4. Put its Docker services under `profiles: [<id>]`, set `dockerProfile` in the
    manifest and add it to `ALLERAC_MODULE_COMPOSE_PROFILES` in
    `scripts/lib/compose-profiles.sh` (the sync test enforces it).
+
+## One Unit = one agent
+
+Each Unit presents itself as **one agent**. The agent's name, emoji and role are
+the Unit profile's (Settings > Discovery > **Agent**), and the owner can add
+**instructions** (up to 4,000 characters) that shape this Unit's soul in chat,
+scheduled jobs, sub-agent workers and federated asks. Instructions stay on the
+Unit: they are never sent to paired Units, and public domains (sales,
+openworld) only get them when "Also use this identity in public domains" is on.
+The user's own learned instructions are added after them and win on conflicts.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `ALLERAC_SINGLE_AGENT` | `false` | Paired Units see one agent, `chat`, named after this Unit and described by its role. `ALLERAC_FEDERATION_AGENTS` is ignored. Threads that home Units have with other agents of this Unit become read-only. |
+| `ALLERAC_UNIT_INSTRUCTIONS` | (unset) | Fallback instructions when none are saved in the Agent card. |
+
+The Agents list of the Unit's own sidebar shows this Unit's agent first ("This
+Unit"), opening the local chat.

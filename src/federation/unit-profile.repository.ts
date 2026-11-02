@@ -15,8 +15,14 @@ function fromDb(row: Record<string, unknown>): UnitProfileRow {
     tags: (row.tags as string[] | null) ?? [],
     agentDescriptions: (row.agent_descriptions as Record<string, string> | null) ?? {},
     identityInPublicDomains: (row.identity_in_public_domains as boolean | null) ?? null,
+    instructions: (row.instructions as string | null | undefined) ?? null,
     updatedAt: row.updated_at ? new Date(row.updated_at as string).toISOString() : null,
   };
+}
+
+/** Test hook: drops the 30s cache. */
+export function clearUnitProfileCache(): void {
+  cache = null;
 }
 
 export async function loadUnitProfileRow(): Promise<UnitProfileRow | null> {
@@ -52,20 +58,22 @@ export async function saveUnitProfile(input: UnitProfileInput, userId: string): 
     identityInPublicDomains: input.identityInPublicDomains !== undefined
       ? input.identityInPublicDomains
       : current?.identityInPublicDomains ?? null,
+    instructions: input.instructions !== undefined ? input.instructions || null : current?.instructions ?? null,
   };
   const result = await pool.query(
     `INSERT INTO unit_profile (id, display_name, emoji, role, description, tags, agent_descriptions,
-       identity_in_public_domains, updated_at, updated_by)
-     VALUES (1, $1, $2, $3, $4, $5, $6, $7, NOW(), $8)
+       identity_in_public_domains, instructions, updated_at, updated_by)
+     VALUES (1, $1, $2, $3, $4, $5, $6, $7, $9, NOW(), $8)
      ON CONFLICT (id) DO UPDATE SET
        display_name = EXCLUDED.display_name, emoji = EXCLUDED.emoji, role = EXCLUDED.role,
        description = EXCLUDED.description, tags = EXCLUDED.tags,
        agent_descriptions = EXCLUDED.agent_descriptions,
        identity_in_public_domains = EXCLUDED.identity_in_public_domains,
+       instructions = EXCLUDED.instructions,
        updated_at = NOW(), updated_by = EXCLUDED.updated_by
      RETURNING *`,
     [merged.displayName, merged.emoji, merged.role, merged.description, merged.tags,
-      JSON.stringify(merged.agentDescriptions), merged.identityInPublicDomains, userId],
+      JSON.stringify(merged.agentDescriptions), merged.identityInPublicDomains, userId, merged.instructions],
   );
   const row = fromDb(result.rows[0]);
   cache = { at: Date.now(), row };

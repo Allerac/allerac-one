@@ -35,4 +35,27 @@ describe('UnitProfileCard', () => {
       role: 'my medical matters', agentDescriptions: { health: 'Lab results' }, identityInPublicDomains: false,
     });
   });
+
+  it('edits instructions with a counter and shows the single agent', async () => {
+    const single = { ...data, exposedAgents: ['chat'], singleAgent: true, stored: { ...data.effective, displayName: 'Barça', instructions: 'Be brief.' } };
+    mockFetch.mockResolvedValueOnce(json({ data: single }));
+    render(<UnitProfileCard isDarkMode={false} />);
+    const box = await screen.findByLabelText('Instructions');
+    expect(box).toHaveValue('Be brief.');
+    expect(screen.getByTestId('instructions-count')).toHaveTextContent('9/4000');
+    expect(screen.getByTestId('exposed-agents')).toHaveTextContent('Paired Units see one agent: Barça (chat).');
+    expect(screen.queryByLabelText('Description for chat')).toBeNull();
+    fireEvent.change(box, { target: { value: 'Answer in Portuguese.' } });
+
+    mockFetch.mockResolvedValueOnce(json({ data: single }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(mockFetch.mock.calls[1][1].body)).toMatchObject({ instructions: 'Answer in Portuguese.' });
+  });
+
+  it('hints at ALLERAC_SINGLE_AGENT when several agents are exposed', async () => {
+    mockFetch.mockResolvedValueOnce(json({ data }));
+    render(<UnitProfileCard isDarkMode={false} />);
+    expect(await screen.findByTestId('exposed-agents')).toHaveTextContent('Set ALLERAC_SINGLE_AGENT=true');
+  });
 });

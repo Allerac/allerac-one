@@ -14,7 +14,16 @@ export function envList(env: Env, name: string): string[] | null {
   return raw.split(',').map(item => item.trim()).filter(Boolean);
 }
 
-/** Domain slugs this Unit exposes as agents to paired peers (ALLERAC_FEDERATION_AGENTS). */
+/** One Unit = one agent: expose only the `chat` agent under the Unit's name and role. */
+export function singleAgent(env: Env = process.env): boolean {
+  return envFlag(env, 'ALLERAC_SINGLE_AGENT', false);
+}
+
+/**
+ * Domain slugs this Unit exposes as agents to paired peers: `chat` alone with
+ * ALLERAC_SINGLE_AGENT, otherwise ALLERAC_FEDERATION_AGENTS.
+ */
 export function exposedAgentSlugs(env: Env = process.env): string[] {
+  if (singleAgent(env)) return ['chat'];
   return (envList(env, 'ALLERAC_FEDERATION_AGENTS') ?? []).map(slug => slug.toLowerCase());
 }

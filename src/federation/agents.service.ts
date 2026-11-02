@@ -11,7 +11,7 @@ import type { User } from '@/app/services/auth/auth.service';
 import { isDomainEnabled } from '@/modules/registry';
 import { askRequestHash, type AskDedupeStore, type AskResultState, type DedupeMode } from './ask-dedupe';
 import type { FederationAuditSink } from './audit.repository';
-import { exposedAgentSlugs, type Env } from './env';
+import { exposedAgentSlugs, singleAgent, type Env } from './env';
 import { FederationError, federationErrors } from './errors';
 import type { PeerAgent } from './federation-client';
 import type { PeerRecord, PeerStore } from './peer.types';
@@ -117,12 +117,15 @@ export class AgentsService {
       .filter(slug => !PUBLIC_DOMAINS.includes(slug) && isDomainEnabled(slug, this.env));
     if (slugs.length === 0) return [];
     const domains = await this.deps.runtime.listActiveDomains(slugs);
-    const descriptions = (await this.loadProfile())?.agentDescriptions ?? {};
+    const profile = await this.loadProfile();
+    const descriptions = profile?.agentDescriptions ?? {};
+    const single = singleAgent(this.env);
     const agents: PeerAgent[] = [];
     for (const domain of domains) {
-      if (await this.deps.runtime.canAccessDomain(user, domain.slug)) {
-        agents.push({ id: domain.slug, name: domain.displayName, description: descriptions[domain.slug]?.slice(0, 500) || null });
-      }
+      if (!await this.deps.runtime.canAccessDomain(user, domain.slug)) continue;
+      const description = (single ? profile?.role ?? descriptions[domain.slug] : descriptions[domain.slug])?.slice(0, 500) || null;
+      // Single agent: peers see the Unit's own name, not the domain's.
+      agents.push({ id: domain.slug, name: single && profile ? profile.displayName : domain.displayName, description });
     }
     return agents;
   }

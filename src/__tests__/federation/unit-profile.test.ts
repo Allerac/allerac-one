@@ -1,7 +1,7 @@
 /** @jest-environment node */
 
 import {
-  soulIdentityFor, peerUnitProfileSchema, resolveUnitProfile, shouldInjectIdentity,
+  MAX_INSTRUCTIONS_CHARS, agentIdentity, soulIdentityFor, peerUnitProfileSchema, resolveUnitProfile, shouldInjectIdentity,
   toPeerProfile, unitProfileInputSchema, type UnitProfileRow,
 } from '@/federation/unit-profile';
 import { buildSoul } from '@/app/config/allerac-soul';
@@ -83,5 +83,44 @@ describe('unitProfileInputSchema', () => {
     expect(unitProfileInputSchema.safeParse({ role: 'x', extra: 1 }).success).toBe(false);
     expect(unitProfileInputSchema.safeParse({ agentDescriptions: { 'Bad Slug': 'x' } }).success).toBe(false);
     expect(unitProfileInputSchema.safeParse({ role: 'docs', tags: ['a'], identityInPublicDomains: true }).success).toBe(true);
+  });
+});
+
+describe('agent instructions (one Unit = one agent)', () => {
+  const env = { ALLERAC_UNIT_NAME: 'santos' };
+  const withInstructions = resolveUnitProfile(row({ role: 'research', instructions: '  Always answer in Portuguese.  ' }), env);
+
+  it('trims, caps and falls back to env', () => {
+    expect(withInstructions.instructions).toBe('Always answer in Portuguese.');
+    expect(resolveUnitProfile(row({ instructions: 'x'.repeat(MAX_INSTRUCTIONS_CHARS + 50) }), env).instructions).toHaveLength(MAX_INSTRUCTIONS_CHARS);
+    expect(resolveUnitProfile(null, { ...env, ALLERAC_UNIT_INSTRUCTIONS: 'From env' }).instructions).toBe('From env');
+    expect(resolveUnitProfile(null, env).instructions).toBeNull();
+    expect(unitProfileInputSchema.safeParse({ instructions: 'x'.repeat(MAX_INSTRUCTIONS_CHARS + 1) }).success).toBe(false);
+    expect(unitProfileInputSchema.safeParse({ instructions: null }).success).toBe(true);
+  });
+
+  it('never sends instructions to peers', () => {
+    const peer = toPeerProfile(withInstructions);
+    expect(peer).not.toHaveProperty('instructions');
+    expect(JSON.stringify(peer)).not.toContain('Portuguese');
+  });
+
+  it('adds an instructions section after the identity and before the code addendum', () => {
+    const soul = buildSoul('code', soulIdentityFor(withInstructions, 'code'));
+    const section = soul.indexOf('## Agent instructions (set by the Unit owner)\nAlways answer in Portuguese.');
+    expect(soul.startsWith('You are Santos, an Allerac unit')).toBe(true);
+    expect(section).toBeGreaterThan(0);
+    expect(section).toBeLessThan(soul.indexOf('## Shell environment'));
+    expect(buildSoul('chat', soulIdentityFor(resolveUnitProfile(row(), env), 'chat'))).not.toContain('## Agent instructions');
+  });
+
+  it('applies on public domains only with the opt-in', () => {
+    expect(buildSoul('openworld', soulIdentityFor(withInstructions, 'openworld'))).not.toContain('Portuguese');
+    const optedIn = soulIdentityFor({ ...withInstructions, identityInPublicDomains: true }, 'openworld');
+    expect(buildSoul('openworld', optedIn)).toContain('## Agent instructions (set by the Unit owner)\nAlways answer in Portuguese.');
+  });
+
+  it('names the single agent after the Unit', () => {
+    expect(agentIdentity(withInstructions)).toEqual({ slug: 'chat', name: 'Santos', emoji: null, role: 'research' });
   });
 });

@@ -48,6 +48,8 @@ export interface SoulIdentity {
   description?: string | null;
   /** Short description of the current domain's agent, when set by the admin. */
   agentDescription?: string | null;
+  /** Owner-written agent instructions (unit_profile.instructions); local only. */
+  instructions?: string | null;
   /**
    * Display labels of active paired Units (e.g. "Santos (santos)"). Only set
    * when federation tools are offered (admin, private domains); never rendered
@@ -76,6 +78,12 @@ function identityLines(identity: SoulIdentity): string {
   return lines.join(' ');
 }
 
+/** Owner instructions come after the base guidance; the user's own learned rules are added later and win. */
+function instructionsSection(identity: SoulIdentity): string {
+  const text = identity.instructions?.trim();
+  return text ? `\n\n## Agent instructions (set by the Unit owner)\n${text}` : '';
+}
+
 /**
  * Returns the Soul for a given domain.
  * The code domain gets shell instructions; all others get the lean base.
@@ -85,10 +93,12 @@ export function buildSoul(domain?: string | null, identity?: SoulIdentity | null
   if (domain === 'sales' || domain === 'openworld') {
     return identity
       ? PUBLIC_AGENT_SOUL.replace(PUBLIC_OPENING, `You are ${identity.displayName}, an Allerac unit speaking with a visitor on a public website. ${identityLines(identity)}`)
+        + instructionsSection(identity)
       : PUBLIC_AGENT_SOUL;
   }
   const base = identity
     ? ALLERAC_SOUL.replace(ALLERAC_OPENING, `You are ${identity.displayName}, an Allerac unit: a private AI assistant. ${identityLines(identity)}${pairedUnitsLine(identity)}`)
+      + instructionsSection(identity)
     : ALLERAC_SOUL;
   if (domain === 'code') return `${base}\n\n${ALLERAC_CODE_ADDENDUM}`;
   return base;

@@ -7,7 +7,8 @@ import { buildLogsTool } from '../../tools/logs.tool';
 import { LOGS_TOOL_NAMES } from '../../tools/logs.tool.definitions';
 import { TOOLS } from '../../tools/tools';
 import { WorkerSpec } from './orchestrator.service';
-import { ALLERAC_SOUL } from '@/app/config/allerac-soul';
+import { ALLERAC_SOUL, buildSoul } from '@/app/config/allerac-soul';
+import { loadSoulIdentity } from '@/federation/unit-profile.repository';
 import { getUserWorkspaceRoot, normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
 import { isShellAllowedFor, shellAccessDeniedMessage, withoutShellTools } from '@/app/lib/shell-policy';
 
@@ -23,6 +24,17 @@ export interface WorkerExecutionConfig {
   modelBaseUrl: string;
   systemMessage: string;
   isAdmin: boolean;
+  /** Domain of the agent run; picks the soul (e.g. code shell addendum). */
+  domainSlug?: string | null;
+}
+
+/** Soul with this Unit's identity; the plain soul if the profile cannot be loaded. */
+async function workerSoul(domainSlug: string | null): Promise<string> {
+  try {
+    return buildSoul(domainSlug, await loadSoulIdentity(domainSlug));
+  } catch {
+    return ALLERAC_SOUL;
+  }
 }
 
 export interface WorkerResult {
@@ -50,7 +62,7 @@ export class WorkerService {
       const llmService = new LLMService(modelProvider, modelBaseUrl, { githubToken, geminiToken, anthropicToken, openaiToken });
 
       // Build worker-specific system message
-      let enrichedSystemMessage = ALLERAC_SOUL;
+      let enrichedSystemMessage = await workerSoul(config.domainSlug ?? null);
       if (systemMessage && systemMessage !== 'You are a helpful AI assistant.') {
         enrichedSystemMessage += `\n\n## About the user\n${systemMessage}`;
       }

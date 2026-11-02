@@ -2,6 +2,7 @@
 
 import { ASYNC_ASK_DEADLINE_MS, AgentsService, FederationRateLimitedError, MAX_ANSWER_CHARS } from '@/federation/agents.service';
 import { InMemoryAskDedupeStore, STALE_IN_PROGRESS_MS, askRequestHash } from '@/federation/ask-dedupe';
+import { resolveUnitProfile as resolveProfile } from '@/federation/unit-profile';
 import { InMemoryPeerStore, MemoryAudit, fakeAgentsRuntime } from '../__mocks__/federation-fakes';
 
 const allow = () => ({ allowed: true as const, lease: { release: jest.fn() }, headers: {} });
@@ -110,6 +111,45 @@ describe('AgentsService unit identity (P3.5)', () => {
     expect(result.unit).toEqual({
       name: 'barcelona', displayName: 'Barcelona', emoji: null, role: 'my medical matters', description: null, tags: [],
     });
+  });
+});
+
+describe('AgentsService single agent (ALLERAC_SINGLE_AGENT)', () => {
+  async function single(env: Record<string, string> = {}, runtime?: Parameters<typeof fakeAgentsRuntime>[0]) {
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      origin: 'https://napols.example', unitName: 'napols', displayName: null, direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    const fullEnv = { ALLERAC_SINGLE_AGENT: 'true', ALLERAC_FEDERATION_AGENTS: 'health,music', ALLERAC_UNIT_NAME: 'santos', ...env };
+    return new AgentsService({
+      runtime: fakeAgentsRuntime(runtime), store, audit: new MemoryAudit(), acquire: allow, env: fullEnv,
+      loadProfile: async () => resolveProfile({
+        displayName: null, emoji: '🏖️', role: 'Beach lab research', description: null, tags: [],
+        agentDescriptions: { health: 'Lab results' }, identityInPublicDomains: null, instructions: 'secret rules', updatedAt: null,
+      }, fullEnv),
+    });
+  }
+
+  it('exposes exactly one chat agent named after the Unit, with its role', async () => {
+    const service = await single();
+    const result = await service.listAgentsWithUnit('principal-1', 'user-1');
+    expect(result.agents).toEqual([{ id: 'chat', name: 'Santos', description: 'Beach lab research' }]);
+    expect(JSON.stringify(result)).not.toContain('secret rules');
+  });
+
+  it('accepts asks to chat only', async () => {
+    const service = await single();
+    await expect(service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' }))
+      .rejects.toMatchObject({ status: 404 });
+    const answer = await service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'chat', question: 'q' });
+    expect(answer.answer).toContain('q');
+  });
+
+  it('exposes nothing when the user cannot use chat, and the domain list when the flag is off', async () => {
+    expect(await (await single({}, { canAccessDomain: async (_user, slug) => slug !== 'chat' })).listAgents('principal-1', 'user-1')).toEqual([]);
+    const off = await single({ ALLERAC_SINGLE_AGENT: 'false' });
+    expect((await off.listAgents('principal-1', 'user-1')).map(agent => agent.id)).toEqual(['health', 'music']);
   });
 });
 

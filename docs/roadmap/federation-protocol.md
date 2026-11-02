@@ -158,6 +158,15 @@ documents", not a generic "Allerac".
 - **P4c:** async ask + run polling, unread/online realtime (mig 148 if needed).
 - **P4d:** Control Tower, heartbeats (mig 149).
 
+## Single-Agent Units
+
+With `ALLERAC_SINGLE_AGENT=true` a Unit lists exactly one agent to its peers:
+id `chat` (unchanged wire slug, so home Units of any version keep their threads),
+`name` = the Unit's display name, `description` = its role. Asks to any other
+slug return `404` (not found). No protocol version change. The Unit's
+owner-written instructions are local and never part of the listing or the
+unit profile sent to peers.
+
 ## Milestone 1: Two Connected Units
 
 **P0–P4 together:** connect two Units and chat with a remote agent end to end.
