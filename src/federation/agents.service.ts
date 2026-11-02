@@ -31,8 +31,11 @@ export interface AgentsRuntime {
   loadUser(userId: string): Promise<User | null>;
   listActiveDomains(slugs: string[]): Promise<Array<{ slug: string; displayName: string }>>;
   canAccessDomain(user: User, slug: string): Promise<boolean>;
-  /** Legacy (pre-P4b callers that send no conversation_id): one shared conversation per title. */
-  findOrCreateConversation(userId: string, slug: string, title: string): Promise<string>;
+  /**
+   * Legacy (pre-P4b callers that send no conversation_id). Phase 4a: appends to
+   * the principal's primary federated conversation for this agent.
+   */
+  findOrCreateConversation(userId: string, slug: string, title: string, principalId?: string): Promise<string>;
   /** P4b: a new federated conversation owned by the calling principal. */
   createFederatedConversation(params: { userId: string; slug: string; principalId: string; title: string }): Promise<string>;
   /** P4b: true only if the conversation exists, is federated, and belongs to this principal, user and agent. */
@@ -310,8 +313,8 @@ export class AgentsService {
           title: (threadTitle ? `${unitLabel} · ${threadTitle}` : unitLabel).slice(0, MAX_TITLE_CHARS),
         });
       } else {
-        // Older home Units send no conversation_id: keep the P4a shared conversation.
-        targetId = await this.deps.runtime.findOrCreateConversation(user.id, params.agent, unitLabel);
+        // Older home Units send no conversation_id: append to the principal's primary conversation.
+        targetId = await this.deps.runtime.findOrCreateConversation(user.id, params.agent, unitLabel, params.principalId);
       }
       const result = await withTimeout(this.deps.runtime.runChat({
         user,

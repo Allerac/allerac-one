@@ -33,6 +33,8 @@ export interface Message {
   tool_call_id?: string;
   responseTime?: number; // ms — only set on completed assistant messages
   actions?: MessageAction[];
+  /** Phase 4a: a "New topic" divider; context restarts after it. */
+  topicMarker?: boolean;
 }
 
 export interface Conversation {

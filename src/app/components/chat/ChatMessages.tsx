@@ -207,7 +207,13 @@ export default function ChatMessages({
   return (
     <div data-name="chat-messages-wrapper" className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       <div className="space-y-6">
-        {messages.map((message, index) => (
+        {messages.map((message, index) => message.topicMarker ? (
+          <div key={index} data-name="topic-marker" className={`flex items-center gap-3 text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            <div className={`flex-1 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`} />
+            <span>New topic</span>
+            <div className={`flex-1 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`} />
+          </div>
+        ) : (
           <div key={index} className={`${message.role === 'user' ? 'flex justify-end' : ''}`}>
             {/* User message - simple bubble on right */}
             {message.role === 'user' ? (
