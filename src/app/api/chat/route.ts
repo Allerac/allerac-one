@@ -12,6 +12,7 @@
  *   data: {"type":"error","message":"..."}
  */
 
+import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import { cookies } from 'next/headers';
 import {
   authenticationErrorResponse,
@@ -200,7 +201,8 @@ export async function POST(request: Request): Promise<Response> {
             userId,
             isAdmin: user.is_admin === true,
             query: message,
-            domainSlug: effectiveDomain,
+            // The chat agent has one memory: reads are not filtered by domain.
+            domainSlug: memoryReadDomain(effectiveDomain),
             publicDomain: PUBLIC_DOMAINS.includes(effectiveDomain),
           });
         } catch (e) {

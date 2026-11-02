@@ -268,6 +268,7 @@ export async function executeChatTool(
       user,
       conversationId: conversationId || '',
       callerDomain: domain || 'chat',
+      federated: context.toolPolicy === 'federated',
     });
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
     return handler(toolArgs);

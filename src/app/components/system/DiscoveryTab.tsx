@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import UnitProfileCard, { PeerRole } from './UnitProfileCard';
+import AgentToolsCard from './AgentToolsCard';
 
 // Admin-only Settings > Discovery: pair this Unit with other Allerac Units
 // (federation P2). Keys are never shown: the API does not return them.
@@ -219,6 +220,7 @@ export default function DiscoveryTab({ isDarkMode }: DiscoveryTabProps) {
       )}
 
       <UnitProfileCard isDarkMode={isDarkMode} />
+      <AgentToolsCard isDarkMode={isDarkMode} />
 
       <div className={`rounded-lg border p-4 space-y-3 ${panel}`}>
         <h3 className={text}>Add a Unit</h3>
