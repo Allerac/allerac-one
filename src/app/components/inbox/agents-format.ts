@@ -4,6 +4,7 @@
  */
 import type { InboxListing, InboxUpdates } from '@/federation/inbox.service';
 import { LOCAL_CONFIGURE_URL, SELF_AGENT_HREF } from '@/federation/configure-url';
+import type { AgentPageLink } from '@/app/services/agent/agent-pages';
 
 export { LOCAL_CONFIGURE_URL, SELF_AGENT_HREF, peerConfigureUrl } from '@/federation/configure-url';
 
@@ -39,6 +40,8 @@ export interface AgentItem {
   threads: AgentThreadItem[];
   /** Settings page of the agent's Unit (`https://<peer origin>/hub/settings`); null when unknown. */
   configureUrl: string | null;
+  /** Data pages of this agent on its Unit (absolute links); empty when unknown. */
+  pages: AgentPageLink[];
 }
 
 /** This Unit's own agent, always the first row (one Unit = one agent). */
@@ -137,6 +140,7 @@ export function flattenAgents(listing: InboxListing | null, updates?: InboxUpdat
         defaultThreadId: agent.threadId,
         threads,
         configureUrl: unit.configureUrl ?? null,
+        pages: unit.pages ?? [],
       });
     }
   }
@@ -198,4 +202,24 @@ export function timeAgo(iso: string | null, now = Date.now()): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+export interface ShellPageLink { id: string; label: string; icon: string; href: string; external: boolean }
+
+/**
+ * Pages menu of the agents shell for the selected agent: this Unit's pages
+ * for the local agent, the peer's own pages (opening on the peer) for a remote
+ * one, nothing while a remote agent is unknown or offline.
+ */
+export function pagesForActiveAgent(
+  activeKey: string | null,
+  localPages: ReadonlyArray<{ path: string; label: string; icon: string }>,
+  agents: readonly AgentItem[],
+): ShellPageLink[] {
+  if (!activeKey || activeKey === 'self') {
+    return localPages.map(p => ({ id: p.path, label: p.label, icon: p.icon, href: p.path, external: false }));
+  }
+  const agent = agents.find(a => a.key === activeKey);
+  if (!agent || agent.status === 'offline') return [];
+  return agent.pages.map(p => ({ id: p.id, label: p.label, icon: p.icon, href: p.url, external: true }));
 }

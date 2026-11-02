@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '@/app/context/ThemeContext';
 import AgentList from '@/app/components/inbox/AgentList';
 import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
-import { fallbackSelfAgent } from '@/app/components/inbox/agents-format';
+import { fallbackSelfAgent, flattenAgents, pagesForActiveAgent } from '@/app/components/inbox/agents-format';
+import type { InboxListing } from '@/federation/inbox.service';
 
 const DOMAIN = 'chat';
 
@@ -19,7 +20,7 @@ interface Props {
   localName?: string;
   /** Mobile index: show the list full width instead of the chat. */
   listOnly?: boolean;
-  /** Data pages of enabled modules, listed in a small 'Pages' menu. */
+  /** Data pages of this Unit's agent, shown in the 'Pages' menu when it is selected. */
   pages?: { path: string; label: string; icon: string }[];
   /** Main area; receives a callback that opens the mobile agents drawer. */
   children?: (openDrawer: () => void) => ReactNode;
@@ -35,6 +36,11 @@ export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit'
   const [drawerOpen, setDrawerOpen] = useState(false);
   const muted = d ? 'text-gray-400' : 'text-gray-500';
   const close = () => setDrawerOpen(false);
+  const [listing, setListing] = useState<InboxListing | null>(null);
+  const activePages = useMemo(
+    () => pagesForActiveAgent(activeKey, pages, flattenAgents(listing)),
+    [activeKey, pages, listing],
+  );
 
   const sidebar = (
     <div className="flex h-full flex-col" data-testid="agent-shell-sidebar">
@@ -44,7 +50,7 @@ export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit'
       </div>
       <div className="flex-1 overflow-y-auto">
         {isAdmin ? (
-          <AgentsInboxSection isDark={d} domainId={DOMAIN} activeKey={activeKey} onNavigate={close} />
+          <AgentsInboxSection isDark={d} domainId={DOMAIN} activeKey={activeKey} onNavigate={close} onListing={setListing} />
         ) : (
           <div className="px-4 pt-4">
             <AgentList agents={[]} self={fallbackSelfAgent(localName)} archived={[]} isDark={d} activeKey={activeKey}
@@ -52,15 +58,22 @@ export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit'
           </div>
         )}
       </div>
-      {pages.length > 0 && (
+      {activePages.length > 0 && (
         <nav aria-label="Pages" data-testid="agent-shell-pages" className={`border-t px-4 py-3 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
           <div className={`mb-1 text-xs font-semibold uppercase ${muted}`}>Pages</div>
           <ul className="space-y-1">
-            {pages.map(p => (
-              <li key={p.path}>
-                <Link href={p.path} onClick={close} className="block rounded px-2 py-1 text-sm hover:bg-gray-500/10">
-                  <span aria-hidden="true">{p.icon}</span> {p.label}
-                </Link>
+            {activePages.map(p => (
+              <li key={p.id}>
+                {p.external ? (
+                  // Remote agent: the page lives on its own Unit.
+                  <a href={p.href} target="_blank" rel="noopener noreferrer" onClick={close} className="block rounded px-2 py-1 text-sm hover:bg-gray-500/10">
+                    <span aria-hidden="true">{p.icon}</span> {p.label} <span aria-hidden="true" className={muted}>↗</span>
+                  </a>
+                ) : (
+                  <Link href={p.href} onClick={close} className="block rounded px-2 py-1 text-sm hover:bg-gray-500/10">
+                    <span aria-hidden="true">{p.icon}</span> {p.label}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

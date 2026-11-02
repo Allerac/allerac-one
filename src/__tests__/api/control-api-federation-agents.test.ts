@@ -28,6 +28,9 @@ jest.mock('@/app/services/api-keys/api-key.service', () => ({
 jest.mock('@/federation/agents.instance', () => ({
   agentsService: { listAgentsWithUnit: jest.fn(), ask: jest.fn(), askAsync: jest.fn(), getAskResult: jest.fn() },
 }));
+jest.mock('@/app/services/agent/agent-tool-settings.repository', () => ({
+  loadAgentToolSettings: jest.fn().mockResolvedValue({ modules: { health: false }, tools: {}, skills: {} }),
+}));
 jest.mock('@/federation/grants.instance', () => ({
   grantsService: { grantedCapabilities: jest.fn().mockResolvedValue(['federation.agents.list']) },
 }));
@@ -55,7 +58,13 @@ describe('federation agents routes', () => {
     svc.listAgentsWithUnit.mockResolvedValueOnce({ agents: [{ id: 'health', name: 'Health', description: null }], unit: null });
     const response = await listAgents(new Request('http://x', { headers: auth }));
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: { agents: [{ id: 'health', name: 'Health', description: null }], unit: null, protocol: { ask: 2 }, granted_capabilities: ['federation.agents.list'] } });
+    const body = await response.json();
+    const { pages, ...rest } = body.data;
+    expect(rest).toEqual({ agents: [{ id: 'health', name: 'Health', description: null }], unit: null, protocol: { ask: 2 }, granted_capabilities: ['federation.agents.list'] });
+    // Page ids only (no settings), following the agent tool settings: health is turned off here.
+    expect(pages).toEqual(expect.arrayContaining(['notes']));
+    expect(pages).not.toContain('health');
+    expect(pages.every((id: unknown) => typeof id === 'string')).toBe(true);
     expect(validate).toHaveBeenCalledWith('alr_live_service', 'federation:agents:list');
     expect(svc.listAgentsWithUnit).toHaveBeenCalledWith('principal-1', 'user-b');
   });

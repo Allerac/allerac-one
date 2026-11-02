@@ -40,6 +40,8 @@ const listResponseSchema = z.object({
   protocol: z.object({ ask: z.number().int().optional() }).passthrough().optional().catch(undefined),
   // P4d: capabilities our key holds on the peer; absent on older Units.
   granted_capabilities: z.array(z.string().max(64)).max(20).optional().catch(undefined),
+  // Data page ids of the peer's agent; absent on older Units (then no pages are shown).
+  pages: z.array(z.string().regex(/^[a-z0-9_-]{1,32}$/)).max(20).optional().catch(undefined),
 });
 const askResponseSchema = z.object({
   answer: z.string(),
@@ -125,7 +127,7 @@ export class FederationClient {
   /** Agents plus the peer's identity & role (null for older Units). */
   async listAgentsWithUnit(
     peerId: string, ctx: FederationCallContext, options: { timeoutMs?: number; auditOk?: boolean } = {},
-  ): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number; grantedCapabilities?: string[] }> {
+  ): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number; grantedCapabilities?: string[]; pages?: string[] }> {
     const data = await this.call({
       peerId, ctx, capability: 'federation.agents.list', target: null,
       path: '/api/v1/federation/agents', method: 'GET', timeoutMs: options.timeoutMs ?? LIST_TIMEOUT_MS,
@@ -137,6 +139,7 @@ export class FederationClient {
     return {
       agents: parsed.data.agents, unit: unit.success ? unit.data : null, askVersion: parsed.data.protocol?.ask ?? 1,
       ...(parsed.data.granted_capabilities ? { grantedCapabilities: parsed.data.granted_capabilities } : {}),
+      ...(parsed.data.pages ? { pages: parsed.data.pages } : {}),
     };
   }
 

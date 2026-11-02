@@ -88,7 +88,7 @@ export default function AgentChatTools({ isDarkMode, onJump, onOpenArchived }: P
 
   return (
     <div data-name="agent-chat-tools" className="relative flex-shrink-0">
-      <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-2 flex justify-end gap-1">
+      <div className="flex items-center gap-1">
         <button
           type="button"
           data-name="chat-search-button"
@@ -96,9 +96,9 @@ export default function AgentChatTools({ isDarkMode, onJump, onOpenArchived }: P
           aria-expanded={searchOpen}
           title="Search"
           onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
-          className={`p-1.5 rounded-md ${iconBtn}`}
+          className={`p-2 rounded-lg transition-colors ${iconBtn}`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
           </svg>
         </button>
@@ -108,9 +108,9 @@ export default function AgentChatTools({ isDarkMode, onJump, onOpenArchived }: P
           aria-label="Open archive"
           title="Archive"
           onClick={openArchive}
-          className={`p-1.5 rounded-md ${iconBtn}`}
+          className={`p-2 rounded-lg transition-colors ${iconBtn}`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 01-2-2V5a1 1 0 011-1h16a1 1 0 011 1v1a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
           </svg>
         </button>
@@ -122,7 +122,7 @@ export default function AgentChatTools({ isDarkMode, onJump, onOpenArchived }: P
           role="dialog"
           aria-label="Search your chat history"
           data-name="chat-search-popover"
-          className={`absolute z-30 right-3 sm:right-4 top-full mt-1 w-[min(24rem,calc(100vw-1.5rem))] rounded-lg border shadow-lg ${panel}`}
+          className={`absolute z-30 right-0 top-full mt-1 w-[min(24rem,calc(100vw-1.5rem))] rounded-lg border shadow-lg ${panel}`}
         >
           <div className="p-2">
             <input
