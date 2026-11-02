@@ -147,6 +147,7 @@ export async function POST(request: Request): Promise<Response> {
           userLocation,
           userInstructions,
           modelBaseUrl,
+          timezone,
         } = runtimeContext;
 
         // 4. Create or find conversation
@@ -230,6 +231,7 @@ export async function POST(request: Request): Promise<Response> {
           locale,
           domain: effectiveDomain,
           userLocation,
+          timezone,
           tavilyConfigured: Boolean(tavilyApiKey),
           userInstructions,
           postContext,
@@ -297,6 +299,7 @@ export async function POST(request: Request): Promise<Response> {
           messages: conversationMessages,
           emit: (event) => safeEnqueue(encode(event)),
           keepalive: () => writer.keepalive(),
+          timeZone: timezone,
         });
 
         // 13. Save assistant message to DB

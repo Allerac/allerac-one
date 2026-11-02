@@ -97,7 +97,7 @@ const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
     type: 'function',
     function: {
       name: 'get_health_metrics',
-      description: 'Get detailed health metrics (steps, heart rate, sleep, body battery) for a date range. Use this when the user wants to see specific data for a period or when building a training plan.',
+      description: 'Get detailed health metrics (steps, heart rate, sleep, body battery) for a date range. Use this when the user wants to see specific data for a period or when building a training plan. Sleep rows are dated on the wake-up day (the night from D-1 to D is under date D).',
       parameters: {
         type: 'object',
         properties: {
@@ -118,7 +118,7 @@ const HEALTH_TOOLS = process.env.HEALTH_WORKER_SECRET ? [
     type: 'function',
     function: {
       name: 'get_daily_snapshot',
-      description: 'Get all health metrics for a single specific day. Use this when the user asks about a particular day: "how was my sleep last night?", "how many steps did I take yesterday?", "what was my body battery today?"',
+      description: 'Get all health metrics for a single specific day. Use this when the user asks about a particular day: "how was my sleep last night?", "how many steps did I take yesterday?", "what was my body battery today?". Sleep is dated on the day the user woke up: for "last night" or "how did I sleep yesterday" (the most recent night), pass TODAY\'s date, not yesterday\'s. When the date has no data the result lists the nearest dates that do.',
       parameters: {
         type: 'object',
         properties: {

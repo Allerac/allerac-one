@@ -6,6 +6,31 @@ import type { ChatToolPolicy } from './chat-tool-registry';
 import type { ChatProvider } from './chat-request-parser';
 import { MODELS } from '@/app/services/llm/models';
 
+/** Tool-call rounds per turn before the model is made to answer with what it has. */
+export const MAX_TOOL_ROUNDS = 8;
+
+/** Shown (and saved) when the model produced no text even after retrying. */
+export const EMPTY_REPLY_MESSAGE = 'Sorry, I could not produce an answer this time. Please try again.';
+
+/**
+ * Structured, single-line log for chat pipeline events. Never includes tool
+ * arguments, results or message text.
+ */
+function logChatEvent(event: string, fields: Record<string, unknown>): void {
+  console.log(`[ChatPipeline] ${JSON.stringify({ event, ...fields })}`);
+}
+
+/** Text of an assistant message whose content may be a string or content parts. */
+export function messageText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map(part => (typeof part === 'string' ? part : part?.type === 'text' && typeof part.text === 'string' ? part.text : ''))
+      .join('');
+  }
+  return '';
+}
+
 export interface ChatPipelineMessage {
   role: string;
   content: string | any[];
@@ -36,6 +61,8 @@ export interface RunChatPipelineInput {
   emit: (event: object) => void;
   toolPolicy?: ChatToolPolicy;
   keepalive: () => void;
+  /** IANA timezone forwarded to tools (e.g. get_today_info). */
+  timeZone?: string;
 }
 
 function parseToolArguments(rawArguments: unknown): Record<string, any> {
@@ -153,7 +180,14 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
   }
 
   let assistantMessage = data.choices[0].message;
+  let toolRounds = 0;
   while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+    if (toolRounds >= MAX_TOOL_ROUNDS) {
+      // Loop guard: stop calling tools and let the final step answer with what we have.
+      logChatEvent('tool_round_cap', { conversationId: input.conversationId, domain: input.domain, rounds: toolRounds });
+      break;
+    }
+    toolRounds += 1;
     input.messages.push(assistantMessage);
 
     for (const toolCall of assistantMessage.tool_calls) {
@@ -166,6 +200,7 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
       // hint sent to the model. Providers can return malformed or unexpected
       // tool calls and those must never reach the runner.
       if (!allowedToolNames.has(toolName)) {
+        logChatEvent('tool_call', { conversationId: input.conversationId, domain: input.domain, tool: toolName, ok: false, error: 'not_allowed', ms: 0 });
         input.emit({ type: 'tool_result', name: toolName, success: false });
         input.messages.push({
           role: 'tool',
@@ -175,6 +210,7 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
         continue;
       }
 
+      const toolStarted = Date.now();
       try {
         const toolResult = await executeChatTool(toolName, toolArgs, {
           user: input.user,
@@ -186,6 +222,12 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
           domain: input.domain || 'chat',
           emit: input.emit,
           toolPolicy: input.toolPolicy,
+          timeZone: input.timeZone,
+        });
+        const reportedError = toolResult && typeof toolResult === 'object' && 'error' in toolResult && toolResult.error;
+        logChatEvent('tool_call', {
+          conversationId: input.conversationId, domain: input.domain, tool: toolName,
+          ok: !reportedError, ...(reportedError ? { error: 'tool_reported_error' } : {}), ms: Date.now() - toolStarted,
         });
         const resultEvent: Record<string, any> = {
           type: 'tool_result',
@@ -200,6 +242,10 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
           content: JSON.stringify(toolResult),
         });
       } catch (error: any) {
+        logChatEvent('tool_call', {
+          conversationId: input.conversationId, domain: input.domain, tool: toolName,
+          ok: false, error: 'exception', ms: Date.now() - toolStarted,
+        });
         input.emit({ type: 'tool_result', name: toolName, success: false });
         input.messages.push({
           role: 'tool',
@@ -222,6 +268,24 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
     assistantMessage = data.choices[0].message;
   }
 
+  // After tools ran, the model's last message usually already holds the answer:
+  // use it rather than asking again (a second call could come back empty).
+  const toolLoopText = toolRounds > 0 && !((assistantMessage.tool_calls?.length ?? 0) > 0)
+    ? messageText(assistantMessage.content)
+    : '';
+  if (toolLoopText.trim()) {
+    input.emit({ type: 'token', content: toolLoopText });
+    return toolLoopText;
+  }
+
+  // Final answer. Once tools ran, keep the same tool list (some providers reject
+  // a tool-call history without tool definitions) but ask for text only.
+  const finalToolOptions = toolRounds > 0 && input.activeTools.length > 0
+    ? {
+      tools: input.activeTools,
+      ...(input.provider !== 'gemini' && { tool_choice: 'none' }),
+    }
+    : {};
   let fullContent = '';
   while (true) {
     try {
@@ -230,6 +294,7 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
         model: activeModelId,
         temperature: input.temperature ?? 0.7,
         max_tokens: input.maxTokens ?? 2000,
+        ...finalToolOptions,
         userId: input.user.id,
         conversationId: input.conversationId,
       })) {
@@ -242,5 +307,33 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
     }
   }
 
-  return fullContent;
+  if (fullContent.trim()) return fullContent;
+
+  logChatEvent('empty_content', { conversationId: input.conversationId, domain: input.domain, stage: 'stream', toolRounds });
+  try {
+    const retry = await complete({
+      messages: input.messages,
+      model: activeModelId,
+      temperature: input.temperature ?? 0.7,
+      max_tokens: input.maxTokens ?? 2000,
+      ...finalToolOptions,
+      userId: input.user.id,
+      conversationId: input.conversationId,
+    });
+    const retryText = messageText(retry?.choices?.[0]?.message?.content);
+    if (retryText.trim()) {
+      input.emit({ type: 'token', content: retryText });
+      return retryText;
+    }
+  } catch (error) {
+    logChatEvent('empty_content', {
+      conversationId: input.conversationId, domain: input.domain, stage: 'retry_error',
+      error: error instanceof Error ? error.name : 'error',
+    });
+  }
+
+  logChatEvent('empty_content', { conversationId: input.conversationId, domain: input.domain, stage: 'final', toolRounds });
+  input.emit({ type: 'empty_reply' });
+  input.emit({ type: 'token', content: EMPTY_REPLY_MESSAGE });
+  return EMPTY_REPLY_MESSAGE;
 }

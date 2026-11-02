@@ -1,6 +1,7 @@
 import { buildSoul, type SoulIdentity } from '@/app/config/allerac-soul';
 import type { User } from '@/app/services/auth/auth.service';
 import type { Skill } from '@/app/services/skills/skills.service';
+import { localDateParts, resolveTimeZone } from '@/app/lib/timezone';
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: 'English',
@@ -35,16 +36,15 @@ export interface PromptBuilderInput {
 export function buildChatSystemPrompt(input: PromptBuilderInput): string {
   const now = input.now ?? new Date();
   const language = LANGUAGE_NAMES[input.locale] || 'English';
-  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const date = now.toISOString().split('T')[0];
-  const time = now.toTimeString().split(' ')[0];
-  const timezone = input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Date and time in the user's timezone (not UTC), so "today"/"yesterday" match the user's day.
+  const timezone = resolveTimeZone(input.timezone);
+  const { date, time, weekday } = localDateParts(now, timezone);
   const contextLines: string[] = [];
   const isPublicDomain = input.domain === 'sales' || input.domain === 'openworld';
 
   if (!isPublicDomain && input.user.name) contextLines.push(`- Name: ${input.user.name}`);
   contextLines.push(`- Language: ${language} — always reply in this language`);
-  contextLines.push(`- Current date & time: ${date} ${weekdays[now.getDay()]}, ${time} (${timezone})`);
+  contextLines.push(`- Current date & time: ${date} ${weekday}, ${time} (${timezone})`);
   if (!isPublicDomain && input.userLocation) contextLines.push(`- Location: ${input.userLocation}`);
 
   let prompt = `${buildSoul(input.domain, input.unitIdentity)}\n\n## User context\n${contextLines.join('\n')}`;

@@ -56,6 +56,39 @@ describe('AgentsService', () => {
     expect(audit.entries.at(-1)).toMatchObject({ direction: 'inbound', outcome: 'ok', target: 'health' });
   });
 
+  it('fails an empty answer with empty_answer instead of returning it', async () => {
+    const { service, audit } = await setup({ runtime: { runChat: async () => ({ content: '  \n' }) } });
+    await expect(service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' }))
+      .rejects.toMatchObject({ code: 'empty_answer' });
+    expect(audit.entries.at(-1)).toMatchObject({ outcome: 'error', errorCode: 'empty_answer' });
+  });
+
+  it('stores empty_answer as the failed state of an async ask', async () => {
+    const dedupe = new InMemoryAskDedupeStore();
+    const tasks: Promise<unknown>[] = [];
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      origin: 'https://napols.example', unitName: 'napols', displayName: null, direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    const service = new AgentsService({
+      runtime: fakeAgentsRuntime({ runChat: async () => ({ content: '' }) }), store, audit: new MemoryAudit(), acquire: allow,
+      env: { ALLERAC_FEDERATION_AGENTS: 'health' }, dedupe, runInBackground: task => { tasks.push(task); },
+    });
+    await service.askAsync({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q', idempotencyKey: 'key-empty-1' });
+    await Promise.all(tasks);
+    expect(await service.getAskResult('principal-1', 'user-1', 'key-empty-1')).toMatchObject({ status: 'failed', errorCode: 'empty_answer' });
+  });
+
+  it('forwards a valid caller timezone to the chat run and drops an invalid one', async () => {
+    const { service, runtime } = await setup();
+    const runChat = jest.spyOn(runtime, 'runChat');
+    await service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q', timeZone: 'Asia/Tokyo' });
+    expect(runChat.mock.calls[0][0]).toMatchObject({ timeZone: 'Asia/Tokyo' });
+    await service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q', timeZone: 'Not/AZone' });
+    expect(runChat.mock.calls[1][0]).not.toHaveProperty('timeZone');
+  });
+
   it('returns not found for public or unexposed agents', async () => {
     const { service, runtime, audit } = await setup();
     for (const agent of ['openworld', 'email']) {

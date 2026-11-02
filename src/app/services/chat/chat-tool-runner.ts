@@ -2,6 +2,7 @@ import path from 'path';
 import * as instagramActions from '@/app/actions/instagram';
 import type { User } from '@/app/services/auth/auth.service';
 import { HealthTool } from '@/app/tools/health.tool';
+import { loadUserTimeZone } from '@/app/lib/user-timezone';
 import { MusicTool } from '@/app/tools/music.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import { buildEmailTools } from '@/app/tools/email.tool';
@@ -51,6 +52,8 @@ export interface ChatToolRunnerContext {
   domain?: string;
   emit: (event: object) => void;
   toolPolicy?: ChatToolPolicy;
+  /** IANA timezone for "today". Loaded from the user's settings when omitted. */
+  timeZone?: string;
 }
 
 export async function executeChatTool(
@@ -105,7 +108,7 @@ export async function executeChatTool(
 
   if (toolName === 'get_today_info') {
     const { TodayTool } = await import('@/app/tools/today.tool');
-    return new TodayTool().execute();
+    return new TodayTool().execute(context.timeZone ?? await loadUserTimeZone(userId));
   }
 
   if (toolName === 'search_web' && tavilyApiKey) {
@@ -173,7 +176,7 @@ export async function executeChatTool(
     const healthTool = new HealthTool();
     const healthUser = { id: userId, email: user.email, name: user.name || user.email };
     if (toolName === 'get_health_summary') {
-      return healthTool.getSummary(healthUser, toolArgs.period || 'week');
+      return healthTool.getSummary(healthUser, toolArgs.period || 'week', context.timeZone ?? await loadUserTimeZone(userId));
     }
     if (toolName === 'get_health_metrics') {
       return healthTool.getMetrics(healthUser, toolArgs.start_date, toolArgs.end_date);

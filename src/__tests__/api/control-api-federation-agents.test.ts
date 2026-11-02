@@ -76,7 +76,7 @@ describe('federation agents routes', () => {
     expect(validate).toHaveBeenCalledWith('alr_live_service', 'federation:agents:ask');
     expect(svc.ask).toHaveBeenCalledWith({
       principalId: 'principal-1', actingUserId: 'user-b', agent: 'health', question: 'hi',
-      conversationId: undefined, threadTitle: null, idempotencyKey: null,
+      conversationId: undefined, threadTitle: null, idempotencyKey: null, timeZone: null,
     });
   });
 

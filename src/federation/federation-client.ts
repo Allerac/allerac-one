@@ -177,7 +177,7 @@ export class FederationClient {
   async askAgentAsync(
     peerId: string,
     agent: string,
-    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string },
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string; timeZone?: string | null },
     ctx: FederationCallContext,
   ): Promise<AsyncAskOutcome> {
     const data = await this.call({
@@ -188,6 +188,7 @@ export class FederationClient {
         question: input.question,
         conversation_id: input.conversationId,
         ...(input.threadTitle ? { thread_title: input.threadTitle.slice(0, 200) } : {}),
+        ...(input.timeZone ? { timezone: input.timeZone.slice(0, 64) } : {}),
       },
       headers: { 'Idempotency-Key': input.idempotencyKey },
       timeoutMs: ASYNC_ASK_TIMEOUT_MS,
@@ -224,7 +225,7 @@ export class FederationClient {
   async askAgentInConversation(
     peerId: string,
     agent: string,
-    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null },
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null; timeZone?: string | null },
     ctx: FederationCallContext,
   ): Promise<ConversationAskResult> {
     const data = await this.call({
@@ -235,6 +236,7 @@ export class FederationClient {
         question: input.question,
         conversation_id: input.conversationId,
         ...(input.threadTitle ? { thread_title: input.threadTitle.slice(0, 200) } : {}),
+        ...(input.timeZone ? { timezone: input.timeZone.slice(0, 64) } : {}),
       },
       headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
       timeoutMs: ASK_TIMEOUT_MS,
