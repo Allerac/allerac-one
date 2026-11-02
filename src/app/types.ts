@@ -18,6 +18,12 @@ export type MessageAction =
   | {
       type: 'agent_run';
       agentRunId: string;
+    }
+  | {
+      /** Link to a module data page (e.g. the health dashboard). Relative URL only. */
+      type: 'page_link';
+      href: string;
+      label: string;
     };
 
 export interface Message {

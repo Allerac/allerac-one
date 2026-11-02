@@ -1,3 +1,4 @@
+import { isSafeRelativeHref } from '@/lib/legacy-domains';
 import { Message, MessageAction, Model } from '../../types';
 
 interface ChatMessageServiceConfig {
@@ -174,6 +175,11 @@ export class ChatMessageService {
             if (this.config.onSkillActivated) {
               this.config.onSkillActivated(event.skill);
             }
+          } else if (event.type === 'tool_result' && event.link) {
+            const link = event.link;
+            if (isSafeRelativeHref(link.href) && typeof link.label === 'string') {
+              this.config.setMessages(prev => addPageLink(prev, link.href, link.label));
+            }
           } else if (event.type === 'instagram_draft') {
             // Add instagram_draft action to the assistant message
             this.config.setMessages(prev => {
@@ -242,4 +248,14 @@ export class ChatMessageService {
       });
     }
   }
+}
+
+/** Adds a data page link to the streaming assistant message, once per href. */
+export function addPageLink(messages: Message[], href: string, label: string): Message[] {
+  const msgs = [...messages];
+  const last = msgs[msgs.length - 1];
+  if (!last || last.role !== 'assistant') return messages;
+  if (last.actions?.some(a => a.type === 'page_link' && a.href === href)) return messages;
+  msgs[msgs.length - 1] = { ...last, actions: [...(last.actions || []), { type: 'page_link' as const, href, label }] };
+  return msgs;
 }

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { requireDomainAccess } from '@/app/lib/domain-access';
 import ChatClient from './ChatClient';
+import { AGENT_HOME_PATH, isLegacyDomainsEnabled } from '@/lib/legacy-domains';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -26,5 +27,7 @@ export default async function ChatPage({ searchParams }: Props) {
     const target = await legacyInboxTarget(user.id, legacy).catch(() => null);
     if (target) redirect(target);
   }
+  // The domain chat is hidden without legacy domains; old conversations stay in the DB.
+  if (!isLegacyDomainsEnabled()) redirect(AGENT_HOME_PATH);
   return <ChatClient domainSlug="chat" defaultSidebarCollapsed isAdmin={user.is_admin} />;
 }

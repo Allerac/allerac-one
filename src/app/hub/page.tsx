@@ -3,6 +3,7 @@ import { requireAdmin } from '@/app/lib/domain-access';
 import { getUserAccessibleDomains } from '@/app/actions/domains';
 import pool from '@/app/clients/db';
 import { isGrampeadorEnabled } from '@/app/actions/clippy';
+import { isLegacyDomainsEnabled } from '@/lib/legacy-domains';
 
 /** The domain tile hub (former home page), admins only. */
 export default async function HubPage() {
@@ -29,6 +30,7 @@ export default async function HubPage() {
       completedHubTour={completedHubTour}
       allowedDomains={allowedDomains}
       grampeadorBubblesEnabled={await isGrampeadorEnabled()}
+      legacyDomains={isLegacyDomainsEnabled()}
     />
   );
 }

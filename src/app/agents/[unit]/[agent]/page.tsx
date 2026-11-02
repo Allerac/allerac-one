@@ -5,6 +5,8 @@ import { SELF_UNIT } from '@/app/components/inbox/agents-format';
 import { resolveUnitProfile } from '@/federation/unit-profile';
 import LocalAgentClient from '@/app/agents/_shell/LocalAgentClient';
 import AgentChatClient from './AgentChatClient';
+import { getEnabledDataPages } from '@/lib/legacy-domains';
+import { AuthService } from '@/app/services/auth/auth.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +18,17 @@ type Props = {
   searchParams: Promise<{ thread?: string | string[] }>;
 };
 
+/** Data pages of enabled modules the user can open, for the 'Pages' menu. */
+async function localDataPages(userId: string, isAdmin: boolean) {
+  const auth = new AuthService();
+  const pages = [];
+  for (const p of getEnabledDataPages()) {
+    const ok = await auth.canAccessDomain(userId, isAdmin, p.id).catch(() => false);
+    if (ok) pages.push({ path: p.path, label: p.label, icon: p.icon });
+  }
+  return pages;
+}
+
 /**
  * `/agents/self/agent` is this Unit's own agent (the local chat, embedded),
  * for anyone with chat access. Any other unit is a remote agent: admins only;
@@ -26,7 +39,8 @@ export default async function AgentChatPage({ params, searchParams }: Props) {
   if (decodeURIComponent(unit).toLowerCase() === SELF_UNIT) {
     if (decodeURIComponent(agent).toLowerCase() !== 'agent') notFound();
     const user = await requireDomainAccess('chat');
-    return <LocalAgentClient isAdmin={user.is_admin} localName={resolveUnitProfile(null).displayName} />;
+    const pages = await localDataPages(user.id, user.is_admin);
+    return <LocalAgentClient isAdmin={user.is_admin} localName={resolveUnitProfile(null).displayName} pages={pages} />;
   }
   try {
     await requireCurrentAdmin();
