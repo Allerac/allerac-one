@@ -128,6 +128,16 @@ function buildActivityContext(ctx: ActivityChatContext | null): string {
   return lines.join('\n');
 }
 
+function toUiMessage(msg: any): Message {
+  return {
+    role: msg.role as 'user' | 'assistant' | 'system',
+    content: msg.content,
+    timestamp: new Date(msg.created_at),
+    actions: msg.agent_run_id ? [{ type: 'agent_run' as const, agentRunId: msg.agent_run_id }] : undefined,
+    ...(msg.kind === 'topic_marker' ? { topicMarker: true } : {}),
+  };
+}
+
 export default function AdminChat({
   defaultSkillName,
   domainSlug,
@@ -439,6 +449,17 @@ const savedModel = localStorage.getItem('selected_model');
     if (savedModel) setSelectedModel(savedModel);
   }, []);
 
+  // Phase 4a: the agents shell reopens the primary conversation on entry.
+  useEffect(() => {
+    if (!embedded || !userId) return;
+    let cancelled = false;
+    chatActions.openPrimaryConversation(domainSlug)
+      .then(id => { if (!cancelled && id) return loadConversation(id); })
+      .catch(err => console.error('[Chat] Failed to open primary conversation:', err));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded, userId, domainSlug]);
+
   // Load domain-scoped instructions when userId or domain changes
   useEffect(() => {
     if (userId) {
@@ -479,12 +500,7 @@ const savedModel = localStorage.getItem('selected_model');
       if (document.hidden || inputMessage.trim().length > 0) return;
       try {
         const data = await chatActions.loadMessages(currentConversationId);
-        const loadedMessages: Message[] = data?.map((msg: any) => ({
-          role: msg.role as 'user' | 'assistant' | 'system',
-          content: msg.content,
-          timestamp: new Date(msg.created_at),
-          actions: msg.agent_run_id ? [{ type: 'agent_run' as const, agentRunId: msg.agent_run_id }] : undefined,
-        })) || [];
+        const loadedMessages: Message[] = data?.map(toUiMessage) || [];
 
         // Only update if there are new messages
         if (loadedMessages.length > messages.length) {
@@ -671,12 +687,7 @@ const savedModel = localStorage.getItem('selected_model');
 
     const data = await chatActions.loadMessages(conversationId);
 
-    const loadedMessages: Message[] = data?.map((msg: any) => ({
-      role: msg.role as 'user' | 'assistant' | 'system',
-      content: msg.content,
-      timestamp: new Date(msg.created_at),
-      actions: msg.agent_run_id ? [{ type: 'agent_run' as const, agentRunId: msg.agent_run_id }] : undefined,
-    })) || [];
+    const loadedMessages: Message[] = data?.map(toUiMessage) || [];
 
     setMessages(loadedMessages);
     setCurrentConversationId(conversationId);
@@ -939,7 +950,21 @@ const savedModel = localStorage.getItem('selected_model');
     }
   };
 
+  // Phase 4a: inside the agents shell there is one continuous conversation.
+  // "New topic" adds a marker (context restarts after it) instead of a new chat.
+  const startNewTopic = async () => {
+    if (!currentConversationId || isSending) return;
+    const result = await chatActions.startNewTopic(currentConversationId);
+    if (result.success) {
+      setMessages(prev => [...prev, { role: 'system', content: '', timestamp: new Date(), topicMarker: true }]);
+    }
+  };
+
   const clearChat = () => {
+    if (embedded) {
+      void startNewTopic();
+      return;
+    }
     setMessages([]);
     setCurrentConversationId(null);
     setActiveSkill(null);
@@ -1362,6 +1387,20 @@ const savedModel = localStorage.getItem('selected_model');
               </div>
               <div data-name="input-area-wrapper" className={`flex-shrink-0 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
                 <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-3 pb-2">
+                  {embedded && currentConversationId && (
+                    <div className="flex justify-end pb-2">
+                      <button
+                        type="button"
+                        data-name="new-topic-button"
+                        onClick={() => void startNewTopic()}
+                        disabled={isSending || messages[messages.length - 1]?.topicMarker === true}
+                        title="Start a new topic: the agent stops using earlier messages as context. Nothing is deleted."
+                        className={`text-xs px-2 py-1 rounded-md border disabled:opacity-40 ${isDarkMode ? 'border-gray-700 text-gray-400 hover:bg-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        New topic
+                      </button>
+                    </div>
+                  )}
                   <ChatInput
                     inputMessage={inputMessage}
                     setInputMessage={setInputMessage}

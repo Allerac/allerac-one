@@ -2,6 +2,7 @@
 import pool from '@/app/clients/db';
 import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 import { assertDomainAccess } from '@/app/lib/domain-access-check';
+import { getOrCreatePrimaryConversation } from '@/app/services/chat/primary-conversation';
 import { executeChatMessage } from '@/app/services/chat/chat-execution.service';
 import type { ChatProvider } from '@/app/services/chat/chat-request-parser';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
@@ -62,9 +63,14 @@ export const agentsService = new AgentsService({
         return false;
       }
     },
-    async findOrCreateConversation(userId, slug, title) {
+    async findOrCreateConversation(userId, slug, title, principalId) {
       // Federated conversations stay in chat history, tagged source='federation'
       // so memory extraction skips them (P4 decision 1, mig 146).
+      if (principalId) {
+        // Phase 4a: one primary conversation per (user, agent, principal).
+        // P4b threads (explicit conversation_id or null) keep their own conversations.
+        return getOrCreatePrimaryConversation({ userId, domain: slug, source: 'federation', principalId }, title);
+      }
       const existing = await pool.query(
         `SELECT id FROM chat_conversations
          WHERE user_id = $1 AND domain_slug = $2 AND title = $3 AND source = 'federation'

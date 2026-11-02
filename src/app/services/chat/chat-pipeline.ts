@@ -6,12 +6,13 @@ import { executeChatTool } from './chat-tool-runner';
 import type { ChatToolPolicy } from './chat-tool-registry';
 import type { ChatProvider } from './chat-request-parser';
 import { MODELS } from '@/app/services/llm/models';
+import { EMPTY_REPLY_MESSAGE } from './empty-reply';
 
 /** Tool-call rounds per turn before the model is made to answer with what it has. */
 export const MAX_TOOL_ROUNDS = 8;
 
 /** Shown (and saved) when the model produced no text even after retrying. */
-export const EMPTY_REPLY_MESSAGE = 'Sorry, I could not produce an answer this time. Please try again.';
+export { EMPTY_REPLY_MESSAGE };
 
 /**
  * Structured, single-line log for chat pipeline events. Never includes tool

@@ -2,6 +2,7 @@
 
 import { ChatService } from '@/app/services/database/chat.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
+import { getOrCreatePrimaryConversation, insertTopicMarker } from '@/app/services/chat/primary-conversation';
 
 const chatService = new ChatService();
 
@@ -50,4 +51,17 @@ export async function pinConversation(conversationId: string, pinned: boolean) {
 export async function renameConversation(conversationId: string, title: string) {
     const user = await requireCurrentUser();
     return await chatService.renameConversation(conversationId, title, user.id);
+}
+
+/** Phase 4a: the user's single conversation with the local agent, created lazily. */
+export async function openPrimaryConversation(domainSlug: string = 'chat') {
+    const user = await requireCurrentUser();
+    await assertDomainAccess(user, domainSlug);
+    return await getOrCreatePrimaryConversation({ userId: user.id, domain: domainSlug });
+}
+
+/** Phase 4a: "New topic" inserts a marker; nothing is deleted. */
+export async function startNewTopic(conversationId: string) {
+    const user = await requireCurrentUser();
+    return { success: await insertTopicMarker(conversationId, user.id) };
 }

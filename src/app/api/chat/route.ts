@@ -12,6 +12,8 @@
  *   data: {"type":"error","message":"..."}
  */
 
+import { acquireConversationLock, loadPrimaryPromptHistory, scheduleCompaction } from '@/app/services/chat/primary-conversation';
+import { makeSegmentSummarizer } from '@/app/services/chat/segment-summarizer';
 import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import { cookies } from 'next/headers';
 import {
@@ -118,6 +120,7 @@ export async function POST(request: Request): Promise<Response> {
       const writer = new SseWriter(controller, request.signal);
       writer.keepalive();
       const safeEnqueue = (data: Uint8Array) => writer.write(data);
+      let releaseLock: (() => Promise<void>) | null = null;
 
       try {
         // Log domain entry — visible in System Monitor
@@ -152,6 +155,7 @@ export async function POST(request: Request): Promise<Response> {
 
         // 4. Create or find conversation
         let convId = inputConversationId ?? null;
+        let isPrimary = false;
         if (!convId) {
           const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
           convId = await chatService.createConversation(userId, title, effectiveDomain);
@@ -168,7 +172,10 @@ export async function POST(request: Request): Promise<Response> {
             writer.close();
             return;
           }
+          isPrimary = conversation.is_primary === true;
         }
+        // Phase 4a: serialize writes to the primary conversation across channels.
+        if (isPrimary) releaseLock = await acquireConversationLock(convId);
 
         const activeSkill = await resolveActiveChatSkill({
           conversationId: convId,
@@ -246,8 +253,17 @@ export async function POST(request: Request): Promise<Response> {
           allowFederation: federationOffered,
         });
 
-        // Load conversation history and build messages array
-        const history = await chatService.loadMessages(convId, userId);
+        // Load conversation history and build messages array. Primary
+        // conversations use the bounded window (segments + recent messages);
+        // the just-saved user message is appended below, so drop it here.
+        let history: Array<{ role: string; content: string }>;
+        if (isPrimary) {
+          history = await loadPrimaryPromptHistory(convId);
+          const last = history[history.length - 1];
+          if (last?.role === 'user' && last.content === messageToSave) history.pop();
+        } else {
+          history = await chatService.loadMessages(convId, userId);
+        }
         const conversationMessages: Array<{
           role: string;
           content: string | any[];
@@ -315,6 +331,19 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
+        if (releaseLock) { await releaseLock(); releaseLock = null; }
+        if (isPrimary) {
+          scheduleCompaction(convId, makeSegmentSummarizer({
+            provider: resolvedModel.provider,
+            baseUrl: modelBaseUrl,
+            modelId: resolvedModel.modelId,
+            githubToken,
+            geminiToken: googleApiKey,
+            anthropicToken: anthropicApiKey,
+            openaiToken: openaiApiKey,
+          }));
+        }
+
         // 14. Signal completion
         safeEnqueue(encode({ type: 'done', conversationId: convId }));
         writer.close();
@@ -331,6 +360,7 @@ export async function POST(request: Request): Promise<Response> {
           console.error('[ChatRoute] Failed to send error event (controller already closed):', closeError.message);
         }
       } finally {
+        if (releaseLock) await releaseLock().catch(() => undefined);
         limitResult.lease.release();
       }
     },
