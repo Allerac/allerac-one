@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { ALLERAC_DOMAINS, getDomainByKey, type AlleracDomain } from './allerac-domains';
+import { domainNavPath } from '@/lib/legacy-domains';
 import { useTheme } from '@/app/context/ThemeContext';
 import { updateLanguage } from '@/app/actions/user';
 import { getMyCreditBalance } from '@/app/actions/credits';
@@ -29,6 +30,8 @@ interface Props {
   isAdmin: boolean;
   allowedDomains: string[];
   onLogout: () => void;
+  /** ALLERAC_LEGACY_DOMAINS=true: chat-only domains keep their own chat page. */
+  legacyDomains?: boolean;
 }
 
 // ── Win95 border helpers ──────────────────────────────────────────────────────
@@ -36,7 +39,7 @@ const RAISED  = '#ffffff #808080 #808080 #ffffff';
 const SUNKEN  = '#808080 #ffffff #ffffff #808080';
 const TRAY_BG = '#c0c0c0';
 
-export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEmail, isAdmin, allowedDomains, onLogout }: Props) {
+export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEmail, isAdmin, allowedDomains, onLogout, legacyDomains = false }: Props) {
   const router = useRouter();
   const { isDark, toggleDark } = useTheme();
   const locale = useLocale();
@@ -143,7 +146,8 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEm
 
     if (key === domainKey) {
       const next = updated[updated.length - 1];
-      router.push(next ? (getDomainByKey(next)?.path ?? '/') : '/');
+      const nextDomain = next ? getDomainByKey(next) : undefined;
+      router.push(nextDomain ? domainNavPath(nextDomain.key, nextDomain.path, legacyDomains) : '/');
     }
   };
 
@@ -214,7 +218,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEm
               {/* Menu items */}
               <div style={{ flex: 1, padding: '4px 0' }}>
                 {ALLERAC_DOMAINS.filter(d => allowedDomains.includes(d.key)).map(d => (
-                  <StartMenuItem key={d.key} icon={d.icon} label={d.name} onClick={() => navigate(d.path)} />
+                  <StartMenuItem key={d.key} icon={d.icon} label={d.name} onClick={() => navigate(domainNavPath(d.key, d.path, legacyDomains))} />
                 ))}
                 <StartMenuItem icon="⌨️" label="CLI" onClick={() => navigate('/cli')} />
                 {isAdmin && (
@@ -278,7 +282,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEm
                         key={key}
                         domain={d}
                         active={active}
-                        onNavigate={() => { setWindowsOpen(false); navigate(d.path); }}
+                        onNavigate={() => { setWindowsOpen(false); navigate(domainNavPath(d.key, d.path, legacyDomains)); }}
                         onClose={() => closeDomain(key)}
                       />
                     );
@@ -298,7 +302,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEm
                 key={key}
                 domain={d}
                 active={active}
-                onNavigate={() => navigate(d.path)}
+                onNavigate={() => navigate(domainNavPath(d.key, d.path, legacyDomains))}
                 onClose={() => closeDomain(key)}
               />
             );

@@ -1,5 +1,5 @@
 import {
-  AGENT_HOME_PATH, dataPageLinkForTool, getEnabledDataPages, isLegacyDomainsEnabled, isSafeRelativeHref,
+  AGENT_HOME_PATH, domainNavPath, dataPageLinkForTool, getEnabledDataPages, isLegacyDomainsEnabled, isSafeRelativeHref,
 } from '@/lib/legacy-domains';
 import { addPageLink } from '@/app/services/chat/chat-message.service';
 import type { Message } from '@/app/types';
@@ -60,5 +60,17 @@ describe('addPageLink', () => {
   });
   it('ignores a non-assistant tail', () => {
     expect(addPageLink(base.slice(0, 1), '/health', 'x')).toEqual(base.slice(0, 1));
+  });
+});
+
+describe('domainNavPath', () => {
+  it('sends chat-only domains to the agent without legacy domains', () => {
+    expect(domainNavPath('chat', '/chat', false)).toBe(AGENT_HOME_PATH);
+    expect(domainNavPath('search', '/search', false)).toBe(AGENT_HOME_PATH);
+    expect(domainNavPath('social', '/social', false)).toBe('/social');
+    expect(domainNavPath('admin', '/admin', false)).toBe('/admin');
+  });
+  it('keeps every path with legacy domains', () => {
+    expect(domainNavPath('chat', '/chat', true)).toBe('/chat');
   });
 });
