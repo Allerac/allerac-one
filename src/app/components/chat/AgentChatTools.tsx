@@ -22,7 +22,9 @@ export default function AgentChatTools({ isDarkMode, onJump, onOpenArchived }: P
   const [searching, setSearching] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archive, setArchive] = useState<ArchivedConversation[] | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const seq = useRef(0);
 
   useEffect(() => {
@@ -44,13 +46,24 @@ export default function AgentChatTools({ isDarkMode, onJump, onOpenArchived }: P
     return () => clearTimeout(timer);
   }, [query]);
 
+  // Popover: focus the input on open; close on Esc or a click outside.
   useEffect(() => {
-    const close = (e: PointerEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setResults(null);
+    if (!searchOpen) return;
+    inputRef.current?.focus();
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (boxRef.current?.contains(target)) return;
+      if ((target as Element).closest?.('[data-name="chat-search-button"]')) return;
+      closeSearch();
     };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  }, []);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeSearch(); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [searchOpen]);
 
   const openArchive = async () => {
     setArchiveOpen(true);
@@ -65,30 +78,73 @@ export default function AgentChatTools({ isDarkMode, onJump, onOpenArchived }: P
   const panel = d ? 'bg-gray-900 border-gray-700 text-gray-200' : 'bg-white border-gray-200 text-gray-800';
   const muted = d ? 'text-gray-500' : 'text-gray-400';
   const hover = d ? 'hover:bg-gray-800' : 'hover:bg-gray-50';
+  const iconBtn = d ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100';
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setQuery('');
+    setResults(null);
+  };
 
   return (
-    <div data-name="agent-chat-tools" className={`flex-shrink-0 border-b ${d ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-white'}`}>
-      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-2 flex items-center gap-2">
-        <div ref={boxRef} className="relative flex-1">
-          <input
-            type="search"
-            data-name="chat-search-input"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setResults(null); } }}
-            placeholder="Search your chat history"
-            aria-label="Search your chat history"
-            className={`w-full text-sm rounded-md border px-3 py-1.5 outline-none ${d ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'}`}
-          />
+    <div data-name="agent-chat-tools" className="relative flex-shrink-0">
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-2 flex justify-end gap-1">
+        <button
+          type="button"
+          data-name="chat-search-button"
+          aria-label="Search your chat history"
+          aria-expanded={searchOpen}
+          title="Search"
+          onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+          className={`p-1.5 rounded-md ${iconBtn}`}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          data-name="archive-button"
+          aria-label="Open archive"
+          title="Archive"
+          onClick={openArchive}
+          className={`p-1.5 rounded-md ${iconBtn}`}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 01-2-2V5a1 1 0 011-1h16a1 1 0 011 1v1a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          </svg>
+        </button>
+      </div>
+
+      {searchOpen && (
+        <div
+          ref={boxRef}
+          role="dialog"
+          aria-label="Search your chat history"
+          data-name="chat-search-popover"
+          className={`absolute z-30 right-3 sm:right-4 top-full mt-1 w-[min(24rem,calc(100vw-1.5rem))] rounded-lg border shadow-lg ${panel}`}
+        >
+          <div className="p-2">
+            <input
+              ref={inputRef}
+              type="search"
+              data-name="chat-search-input"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search your chat history"
+              aria-label="Search query"
+              className={`w-full text-sm rounded-md border px-3 py-1.5 outline-none ${d ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'}`}
+            />
+          </div>
           {(results || searching) && (
-            <div data-name="chat-search-results" className={`absolute z-30 left-0 right-0 mt-1 max-h-96 overflow-y-auto rounded-md border shadow-lg ${panel}`}>
+            <div data-name="chat-search-results" className={`max-h-80 overflow-y-auto border-t ${d ? 'border-gray-800' : 'border-gray-100'}`}>
               {searching && !results && <p className={`px-3 py-2 text-xs ${muted}`}>Searching…</p>}
               {results && results.length === 0 && <p className={`px-3 py-2 text-xs ${muted}`}>No results</p>}
               {results?.map(hit => (
                 <button
                   key={`${hit.conversationId}:${hit.messageId}:${hit.source}`}
                   type="button"
-                  onClick={() => { setResults(null); onJump(hit); }}
+                  onClick={() => { closeSearch(); onJump(hit); }}
                   className={`w-full text-left px-3 py-2 border-b last:border-b-0 ${d ? 'border-gray-800' : 'border-gray-100'} ${hover}`}
                 >
                   <div className={`text-[11px] ${muted}`}>
@@ -102,15 +158,7 @@ export default function AgentChatTools({ isDarkMode, onJump, onOpenArchived }: P
             </div>
           )}
         </div>
-        <button
-          type="button"
-          data-name="archive-button"
-          onClick={openArchive}
-          className={`text-xs px-2 py-1.5 rounded-md border ${d ? 'border-gray-700 text-gray-400 hover:bg-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-        >
-          Archive
-        </button>
-      </div>
+      )}
 
       {archiveOpen && (
         <>
