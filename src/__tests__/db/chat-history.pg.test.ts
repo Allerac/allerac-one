@@ -8,6 +8,7 @@ import pool from '@/app/clients/db';
 import {
   listArchivedConversations,
   loadMessagePage,
+  loadNewerMessages,
   loadPageAround,
   searchChatHistory,
 } from '@/app/services/chat/chat-history.service';
@@ -83,10 +84,51 @@ describePg('chat history against Postgres', () => {
     expect(page!.messages.map(m => m.id)).toContain(hit.messageId);
     expect(page!.olderCursor).not.toBeNull();
     expect(page!.newerCursor).not.toBeNull();
+    const ids = page!.messages.map(m => m.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Walking older and newer from the jump page covers everything exactly once.
+    const all = [...ids];
+    let older = page!.olderCursor;
+    while (older) {
+      const p = await loadMessagePage(primary, users[0], { before: older, limit: 7 });
+      all.unshift(...p.messages.map(m => m.id));
+      older = p.olderCursor;
+    }
+    let newer = page!.newerCursor;
+    while (newer) {
+      const p = await loadNewerMessages(primary, users[0], newer, 7);
+      all.push(...p.messages.map(m => m.id));
+      newer = p.newerCursor;
+    }
+    expect(all).toHaveLength(120);
+    expect(new Set(all).size).toBe(120);
+  });
+
+  it('pages through rows with identical timestamps without gaps or repeats (id tie-break)', async () => {
+    const conv = (await pool.query(
+      `INSERT INTO chat_conversations (user_id, title, domain_slug) VALUES ($1, 'Ties', 'chat') RETURNING id`, [users[0]],
+    )).rows[0].id;
+    await pool.query(
+      `INSERT INTO chat_messages (conversation_id, role, content, created_at)
+       SELECT $1, 'user', 'tie ' || g, '2026-01-01 00:00:00.123456+00'::timestamptz FROM generate_series(1, 9) g`,
+      [conv],
+    );
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const p = await loadMessagePage(conv, users[0], { before: cursor, limit: 2 });
+      seen.unshift(...p.messages.map(m => m.id));
+      cursor = p.olderCursor;
+    } while (cursor);
+    expect(seen).toHaveLength(9);
+    expect(new Set(seen).size).toBe(9);
   });
 
   it('lists the archive without the primary and without tooling domains', async () => {
     const archive = await listArchivedConversations(users[0]);
-    expect(archive.map(c => c.title)).toEqual(['Old trip']);
+    const titles = archive.map(c => c.title);
+    expect(titles).toContain('Old trip');
+    expect(titles).not.toContain('Ticket chat');
+    expect(archive.map(c => c.id)).not.toContain(primary);
   });
 });

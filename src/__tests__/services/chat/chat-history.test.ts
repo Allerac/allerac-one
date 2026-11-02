@@ -29,6 +29,11 @@ describe('cursors', () => {
     expect(decodeCursor(cursor)).toEqual({ createdAt: '2026-11-02T10:00:00.123Z', id: ID });
   });
 
+  it('keeps the full-precision Postgres timestamp when present (no ms truncation)', () => {
+    const cursor = encodeCursor({ created_at: new Date(), cursor_at: '2026-11-02 19:46:01.123456+00', id: ID });
+    expect(decodeCursor(cursor)).toEqual({ createdAt: '2026-11-02 19:46:01.123456+00', id: ID });
+  });
+
   it('rejects garbage, bad ids and bad dates', () => {
     expect(decodeCursor('not-base64-json')).toBeNull();
     expect(decodeCursor(Buffer.from(JSON.stringify(['2026-01-01', 'x'])).toString('base64url'))).toBeNull();

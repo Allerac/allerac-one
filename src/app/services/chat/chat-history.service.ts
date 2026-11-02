@@ -25,11 +25,19 @@ export const NON_AGENT_DOMAINS = ['tickets', 'code', 'job', 'openworld', 'sales'
 
 export interface PageCursor { createdAt: string; id: string }
 
-export function encodeCursor(row: { created_at: Date | string; id: string }): string {
-  const createdAt = new Date(row.created_at).toISOString();
+/**
+ * Cursors carry the full-precision timestamp. Postgres stores microseconds, a
+ * JS Date only milliseconds, so rows select `created_at::text AS cursor_at` and
+ * that exact string goes into the cursor; comparing a truncated value would
+ * skip or repeat rows (and the anchor itself). Ties are broken by id.
+ */
+export function encodeCursor(row: { created_at: Date | string; id: string; cursor_at?: string | null }): string {
+  const createdAt = row.cursor_at ?? new Date(row.created_at).toISOString();
   return Buffer.from(JSON.stringify([createdAt, row.id]), 'utf8').toString('base64url');
 }
 
+/** ISO 8601 or Postgres timestamptz text, up to microseconds. */
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}(:?\d{2})?)?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function decodeCursor(cursor: string | null | undefined): PageCursor | null {
@@ -39,7 +47,7 @@ export function decodeCursor(cursor: string | null | undefined): PageCursor | nu
     if (!Array.isArray(parsed) || parsed.length !== 2) return null;
     const [createdAt, id] = parsed;
     if (typeof createdAt !== 'string' || typeof id !== 'string' || !UUID.test(id)) return null;
-    if (Number.isNaN(new Date(createdAt).getTime())) return null;
+    if (!TIMESTAMP.test(createdAt)) return null;
     return { createdAt, id };
   } catch {
     return null;
@@ -69,14 +77,14 @@ export interface MessagePage {
 }
 
 /** Turns a DESC-fetched batch with one extra row into an ASC page + cursor. */
-export function toPage<T extends { created_at: Date | string; id: string }>(
+export function toPage<T extends { created_at: Date | string; id: string; cursor_at?: string | null }>(
   rowsDesc: T[], limit: number,
 ): { rows: T[]; hasMore: boolean } {
   const hasMore = rowsDesc.length > limit;
   return { rows: rowsDesc.slice(0, limit).reverse(), hasMore };
 }
 
-const MESSAGE_COLUMNS = 'cm.id, cm.role, cm.content, cm.created_at, cm.kind, cm.agent_run_id';
+const MESSAGE_COLUMNS = 'cm.id, cm.role, cm.content, cm.created_at, cm.created_at::text AS cursor_at, cm.kind, cm.agent_run_id';
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -148,7 +156,7 @@ export async function loadPageAround(
 ): Promise<MessagePage | null> {
   const size = clampPageSize(limit);
   const anchor = await pool.query(
-    `SELECT cm.id, cm.created_at FROM chat_messages cm
+    `SELECT cm.id, cm.created_at, cm.created_at::text AS cursor_at FROM chat_messages cm
      JOIN chat_conversations cc ON cc.id = cm.conversation_id
      WHERE cm.id = $1 AND cm.conversation_id = $2 AND cc.user_id = $3`,
     [messageId, conversationId, userId],
@@ -157,14 +165,14 @@ export async function loadPageAround(
   if (!row) return null;
   const half = Math.max(1, Math.floor(size / 2));
   const cursorAfterAnchor = encodeCursor(row);
-  // Older side includes the anchor: everything strictly before a cursor just past it.
+  // Older side includes the anchor (<= anchor); the newer side starts strictly after it.
   const [older, newer] = await Promise.all([
     pool.query(
       `SELECT ${MESSAGE_COLUMNS}
        FROM chat_messages cm WHERE cm.conversation_id = $1
          AND (cm.created_at, cm.id) <= ($2::timestamptz, $3::uuid)
        ORDER BY cm.created_at DESC, cm.id DESC LIMIT $4`,
-      [conversationId, new Date(row.created_at).toISOString(), row.id, half + 1],
+      [conversationId, row.cursor_at, row.id, half + 1],
     ),
     loadNewerMessages(conversationId, userId, cursorAfterAnchor, half),
   ]);
