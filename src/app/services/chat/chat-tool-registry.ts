@@ -16,6 +16,11 @@ import { filterEnabledTools } from '@/modules/registry';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '@/app/tools/instructions.tool.definitions';
 import { SHELL_TOOL_NAMES, withoutShellTools } from '@/app/lib/shell-policy';
 import { FEDERATION_TOOL_DEFINITIONS, FEDERATION_TOOL_NAMES } from '@/app/tools/federation.tool.definitions';
+import { resolveAgentToolAccess, type AgentToolSettings } from '@/app/services/agent/agent-tool-settings';
+import { loadAgentToolSettings } from '@/app/services/agent/agent-tool-settings.repository';
+
+/** Domain of the local agent: it gets the tools of every enabled capability (phase 3a). */
+export const AGENT_DOMAIN = 'chat';
 
 export { GITHUB_TOOL_NAMES };
 export { LOGS_TOOL_NAMES };
@@ -121,6 +126,11 @@ export interface ResolveChatToolsOptions {
   toolPolicy?: ChatToolPolicy;
   /** Offer federation tools (caller checked admin + active peers). Fails closed. */
   allowFederation?: boolean;
+  /**
+   * Agent tool settings for the `chat` agent. Loaded from the DB when omitted.
+   * Ignored by every other domain.
+   */
+  agentToolSettings?: AgentToolSettings;
 }
 
 export async function resolveChatTools(
@@ -140,11 +150,13 @@ export async function resolveChatTools(
   }
 
   let tools: any[] = TOOLS;
+  let skillRestricted: string[] | null = null;
 
   if (skillId) {
     const allowedToolNames = await skillsService.getSkillTools(skillId);
     if (allowedToolNames.length > 0) {
       tools = TOOLS.filter((tool) => allowedToolNames.includes(tool.function.name));
+      skillRestricted = allowedToolNames;
     }
   }
 
@@ -153,6 +165,14 @@ export async function resolveChatTools(
   }
   if (PUBLIC_DOMAINS.includes(domain)) {
     tools = tools.filter((tool) => !isToolForbiddenInDomain(tool.function.name, domain));
+  }
+
+  if (domain === AGENT_DOMAIN) {
+    const settings = options.agentToolSettings ?? await loadAgentToolSettings();
+    const resolved = filterEnabledTools(resolveAgentTools(tools, settings, skillRestricted, options));
+    return options.toolPolicy === 'federated'
+      ? resolved.filter((tool) => !isToolForbiddenByPolicy(tool.function.name, 'federated'))
+      : resolved;
   }
 
   const resolved = filterEnabledTools([
@@ -181,4 +201,65 @@ export async function resolveChatTools(
   return options.toolPolicy === 'federated'
     ? resolved.filter((tool) => !isToolForbiddenByPolicy(tool.function.name, 'federated'))
     : resolved;
+}
+
+type ToolDefinition = { function: { name: string } };
+
+/**
+ * Tool assembly for the `chat` agent: the general tools (already filtered by
+ * the active skill and shell policy), plus the tools of every capability that
+ * is on in the agent settings. Module tools are already capped by
+ * ALLERAC_MODULES. When the active skill lists its tools, capability tools
+ * outside that list are left out too, to keep the prompt small.
+ */
+function resolveAgentTools<T extends ToolDefinition>(
+  baseTools: T[],
+  settings: AgentToolSettings,
+  skillRestricted: string[] | null,
+  options: ResolveChatToolsOptions,
+): ToolDefinition[] {
+  const access = resolveAgentToolAccess(settings);
+  // Notes were offered in every private domain regardless of the skill; keep that.
+  const offered = (name: string) => access.enabledTools.has(name)
+    && (skillRestricted === null || skillRestricted.includes(name) || NOTE_TOOL_NAMES.includes(name));
+  const capabilityTools = [
+    ...NOTES_TOOL_DEFINITIONS,
+    ...MEMORY_DOMAIN_TOOL_DEFINITIONS,
+    ...EMAIL_TOOL_DEFINITIONS,
+    ...JOBS_TOOL_DEFINITIONS,
+    ...TICKETS_TOOL_DEFINITIONS,
+  ];
+  // A paired Unit keeps the reach it had before phase 3a: notes only, never
+  // email, job management, tickets or memory management of this Unit.
+  const peerCapabilityTools = options.toolPolicy === 'federated' ? NOTES_TOOL_DEFINITIONS : capabilityTools;
+  const capabilityNames = new Set(capabilityTools.map((tool) => tool.function.name));
+  const alwaysOn = [
+    RECALL_MEMORY_TOOL_DEFINITION,
+    SEARCH_KNOWLEDGE_TOOL_DEFINITION,
+    CREATE_MEMORY_TOOL_DEFINITION,
+    SCHEDULE_TASK_TOOL_DEFINITION,
+    LEARN_INSTRUCTION_TOOL_DEFINITION,
+  ];
+  const alwaysOnNames = new Set(alwaysOn.map((tool) => tool.function.name));
+
+  const general = baseTools.filter((tool) => {
+    const name = tool.function.name;
+    if (alwaysOnNames.has(name) || capabilityNames.has(name) || DOMAIN_TOOL_NAMES.includes(name)) return false;
+    // Module tools living in TOOLS (health, music, social): drop them when their capability is off.
+    return !access.disabledTools.has(name);
+  });
+  const seen = new Set<string>();
+  const extra = peerCapabilityTools.filter((tool) => {
+    const name = tool.function.name;
+    if (seen.has(name) || !offered(name)) return false;
+    seen.add(name);
+    return true;
+  });
+
+  return [
+    ...general,
+    ...alwaysOn,
+    ...extra,
+    ...(options.allowFederation === true && options.toolPolicy !== 'federated' ? FEDERATION_TOOL_DEFINITIONS : []),
+  ];
 }

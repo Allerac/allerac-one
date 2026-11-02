@@ -124,3 +124,18 @@ describe('agent instructions (one Unit = one agent)', () => {
     expect(agentIdentity(withInstructions)).toEqual({ slug: 'chat', name: 'Santos', emoji: null, role: 'research' });
   });
 });
+
+describe('peer profile privacy (phase 3a)', () => {
+  it('never carries instructions or agent tool settings', () => {
+    const { resolveUnitProfile: resolve, toPeerProfile: toPeer } = jest.requireActual('@/federation/unit-profile');
+    const profile = resolve({
+      displayName: 'Santos', emoji: null, role: null, description: null, tags: [], agentDescriptions: {},
+      identityInPublicDomains: null, instructions: 'secret rules', updatedAt: null,
+      agentToolSettings: { modules: { music: true } },
+    }, {});
+    const peer = JSON.stringify(toPeer(profile));
+    expect(peer).not.toContain('secret rules');
+    expect(peer).not.toContain('music');
+    expect(peer).not.toContain('instructions');
+  });
+});

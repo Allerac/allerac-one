@@ -1,6 +1,7 @@
 'use server';
 
 import { ConversationMemoryService } from '@/app/services/memory/conversation-memory.service';
+import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import { ConversationSummary } from '@/app/services/memory/conversation-memory.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { assertDomainAccess, requireCurrentUser } from '@/app/lib/auth-session';
@@ -53,7 +54,8 @@ export async function getRecentSummaries(limit?: number, minImportance?: number,
     const user = await requireCurrentUser();
     if (domainSlug) await assertDomainAccess(user, domainSlug);
     const llmConfig = await resolveLLMConfig();
-    const memoryService = new ConversationMemoryService(llmConfig, domainSlug);
+    // One memory for the chat agent: its summaries are not filtered by domain.
+    const memoryService = new ConversationMemoryService(llmConfig, memoryReadDomain(domainSlug));
     return await memoryService.getRecentSummaries(user.id, limit, minImportance);
 }
 
@@ -74,7 +76,7 @@ export async function getSummaryStats(domainSlug?: string | null) {
     const user = await requireCurrentUser();
     if (domainSlug) await assertDomainAccess(user, domainSlug);
     const llmConfig = await resolveLLMConfig();
-    const memoryService = new ConversationMemoryService(llmConfig, domainSlug);
+    const memoryService = new ConversationMemoryService(llmConfig, memoryReadDomain(domainSlug));
     return await memoryService.getSummaryStats(user.id);
 }
 

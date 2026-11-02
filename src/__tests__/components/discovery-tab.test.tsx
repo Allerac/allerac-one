@@ -7,6 +7,8 @@ jest.mock('@/app/components/system/UnitProfileCard', () => ({
   default: () => null,
   PeerRole: () => null,
 }));
+// Covered in agent-tools-card.test.tsx.
+jest.mock('@/app/components/system/AgentToolsCard', () => ({ __esModule: true, default: () => null }));
 
 const mockFetch = jest.fn();
 

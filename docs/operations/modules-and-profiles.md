@@ -147,3 +147,22 @@ The user's own learned instructions are added after them and win on conflicts.
 
 The Agents list of the Unit's own sidebar shows this Unit's agent first ("This
 Unit"), opening the local chat.
+
+## Agent tools (phase 3a)
+
+The local `chat` agent gets the tools of every enabled capability: personal
+modules (health, email, music, social) and core features (notes, memory
+management, scheduled jobs, tickets). Admins toggle capabilities, single tools
+and skills in **Settings > Discovery > Agent tools** (`unit_profile.agent_tool_settings`,
+migration 151). `ALLERAC_MODULES` / `ALLERAC_PROFILE` still caps the list: a
+module turned off there is never offered.
+
+Defaults: health, email, notes, memory management and jobs are on; music,
+social and tickets are off to keep the prompt small. When the active skill lists
+its tools, capability tools outside that list are left out. Other domains keep
+their previous tool sets. Paired Units keep their previous reach (notes and
+module tools only) and never see the instructions or the tool settings.
+
+The chat agent has one memory: recall, auto-RAG and summaries are not filtered
+by domain, and `domain_slug` stays only as a tag on new memories. Tickets are
+never a knowledge source.

@@ -1,3 +1,4 @@
+import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import type { User } from '@/app/services/auth/auth.service';
 import { ChatService } from '@/app/services/database/chat.service';
 import { loadChatKnowledgeContext } from '@/app/services/knowledge/chat-knowledge-context';
@@ -114,7 +115,8 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
         userId: input.user.id,
         isAdmin: input.user.is_admin === true,
         query: input.message,
-        domainSlug: input.domain,
+        // One memory for the chat agent; paired Units keep the domain-scoped reach.
+        domainSlug: memoryReadDomain(input.domain, { federated: input.toolPolicy === 'federated' }),
       });
     } catch (error) {
       console.log('[ChatExecution] RAG search failed:', error);

@@ -126,3 +126,32 @@ describe('memory tools', () => {
     expect(result).toEqual({ success: true, memory_id: 'memory-1' });
   });
 });
+
+describe('unified memory for the chat agent (phase 3a)', () => {
+  const hit = {
+    source_type: 'memory', source_id: 'm-2', title: 't', snippet: 's', content: 'Runs on Sundays',
+    domain_slug: 'health', score: 0.8, similarity: 0.8, match: 'semantic', importance: 7, key_topics: [],
+    created_at: '2026-10-01T00:00:00.000Z',
+  };
+  beforeEach(() => {
+    knowledgeSearch.mockReset();
+    assertAccess.mockReset();
+  });
+
+  test('recall_memory from the chat agent is not filtered by domain', async () => {
+    knowledgeSearch.mockResolvedValueOnce({ semanticAvailable: true, hits: [hit] });
+    const tools = buildMemoryTools({ user, conversationId: 'c', callerDomain: 'chat' });
+    const result = await tools.recall_memory({ query: 'running' });
+    expect(knowledgeSearch).toHaveBeenCalledWith(user, 'running', expect.objectContaining({ domainSlug: null }));
+    expect(assertAccess).not.toHaveBeenCalled();
+    expect(result.memories[0]).toEqual(expect.objectContaining({ domain_slug: 'health' }));
+  });
+
+  test('legacy domains and paired Units keep the domain-scoped recall', async () => {
+    knowledgeSearch.mockResolvedValue({ semanticAvailable: true, hits: [] });
+    await buildMemoryTools({ user, conversationId: 'c', callerDomain: 'health' }).recall_memory({ query: 'x' });
+    expect(knowledgeSearch).toHaveBeenLastCalledWith(user, 'x', expect.objectContaining({ domainSlug: 'health' }));
+    await buildMemoryTools({ user, conversationId: 'c', callerDomain: 'chat', federated: true }).recall_memory({ query: 'x' });
+    expect(knowledgeSearch).toHaveBeenLastCalledWith(user, 'x', expect.objectContaining({ domainSlug: 'chat' }));
+  });
+});

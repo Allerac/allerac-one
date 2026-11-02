@@ -2,6 +2,9 @@
 jest.mock('@/app/services/skills/skills.service', () => ({
   skillsService: { getSkillTools: jest.fn().mockResolvedValue([]) },
 }));
+jest.mock('@/app/services/agent/agent-tool-settings.repository', () => ({
+  loadAgentToolSettings: jest.fn().mockResolvedValue({ modules: {}, tools: {}, skills: {} }),
+}));
 jest.mock('@/app/actions/instagram', () => ({ generateCaption: jest.fn(), generateTags: jest.fn() }));
 jest.mock('@/app/tools/instagram.tool', () => ({ InstagramTool: jest.fn() }));
 const mockListAgents = jest.fn();

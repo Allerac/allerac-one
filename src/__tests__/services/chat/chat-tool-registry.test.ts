@@ -4,6 +4,10 @@ jest.mock('@/app/services/skills/skills.service', () => ({
   },
 }));
 
+jest.mock('@/app/services/agent/agent-tool-settings.repository', () => ({
+  loadAgentToolSettings: jest.fn().mockResolvedValue({ modules: {}, tools: {}, skills: {} }),
+}));
+
 import { skillsService } from '@/app/services/skills/skills.service';
 import { resolveChatTools } from '@/app/services/chat/chat-tool-registry';
 
@@ -38,7 +42,7 @@ describe('resolveChatTools', () => {
     expect(names).not.toContain('execute_shell');
   });
 
-  test('allows every domain to create memories while reserving global management for memory', async () => {
+  test('allows every domain to create memories; the chat agent also manages memory (unified memory)', async () => {
     mockedGetSkillTools.mockResolvedValue(['search_web']);
 
     const memoryNames = (await resolveChatTools('skill-1', 'memory'))
@@ -54,8 +58,11 @@ describe('resolveChatTools', () => {
     ]));
     expect(chatNames).toContain('recall_memory');
     expect(chatNames).toContain('create_memory');
+    // The skill lists only search_web, so chat leaves out memory management.
     expect(chatNames).not.toContain('search_memory');
-    expect(chatNames).not.toContain('delete_memory');
+    const codeNames = (await resolveChatTools('skill-1', 'code')).map((tool) => tool.function.name);
+    expect(codeNames).not.toContain('search_memory');
+    expect(codeNames).not.toContain('delete_memory');
   });
 
   test('gives sales exactly zero tools even when its skill assignment is missing', async () => {
