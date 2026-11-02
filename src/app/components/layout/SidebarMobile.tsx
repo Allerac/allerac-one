@@ -137,7 +137,7 @@ export default function SidebarMobile({
           <span>My Allerac</span>
         </button>
         {isAdmin && (
-          <button onClick={() => router.push('/')} className={btn} title="Hub">
+          <button onClick={() => router.push('/hub')} className={btn} title="Hub">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>

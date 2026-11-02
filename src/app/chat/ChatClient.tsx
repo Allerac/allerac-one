@@ -147,6 +147,7 @@ export default function AdminChat({
   chatMode = 'default',
   terminalTheme,
   systemDashboardInitialTab: initialDashboardTab,
+  embedded = false,
 }: {
   defaultSkillName?: string;
   domainSlug: string;
@@ -166,6 +167,12 @@ export default function AdminChat({
   chatMode?: 'default' | 'terminal';
   terminalTheme?: TerminalTheme;
   systemDashboardInitialTab?: 'preferences' | 'system' | 'apiKeys' | 'apiAccess';
+  /**
+   * Rendered inside the agents shell (`/agents/self/agent`): the fixed desktop
+   * sidebar is dropped (the shell owns the left column) and the conversation
+   * list is reached through the drawer on every screen size.
+   */
+  embedded?: boolean;
 }) {
   const t = useTranslations('home');
   const tChat = useTranslations('chat');
@@ -1024,15 +1031,15 @@ const savedModel = localStorage.getItem('selected_model');
       {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className={`fixed inset-0 bg-black/50 z-40 ${embedded ? '' : 'lg:hidden'}`}
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar + Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Mobile Sidebar (< lg breakpoint) */}
-        <div className="lg:hidden">
+        {/* Mobile Sidebar (< lg breakpoint; every breakpoint when embedded) */}
+        <div className={embedded ? '' : 'lg:hidden'}>
           <SidebarMobile
             isSidebarOpen={isSidebarOpen}
             isDarkMode={isDarkMode}
@@ -1057,7 +1064,7 @@ const savedModel = localStorage.getItem('selected_model');
         </div>
 
         {/* Desktop Sidebar (>= lg breakpoint) */}
-        <div className="hidden lg:block">
+        {!embedded && <div className="hidden lg:block">
           <SidebarDesktop
             isSidebarCollapsed={isSidebarCollapsed}
             setIsSidebarCollapsed={setIsSidebarCollapsed}
@@ -1085,10 +1092,10 @@ const savedModel = localStorage.getItem('selected_model');
             onLogout={handleLogout}
             onToggleTheme={toggleTheme}
           />
-        </div>
+        </div>}
 
         {/* Content wrapper — owns header + all columns */}
-        <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+        <div className={`flex-1 flex flex-col overflow-hidden ${embedded ? '' : isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
           {/* Chat Header — title only, same as every other domain */}
           <ChatHeader
@@ -1108,6 +1115,7 @@ const savedModel = localStorage.getItem('selected_model');
             userEmail={userEmail}
             onLogout={handleLogout}
             titleOnly
+            alwaysShowSidebarButton={embedded}
           />
 
           {/* Mobile tab bar — social page */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import SidebarRow from '@/app/components/layout/SidebarRow';
 import AgentAvatar from './AgentAvatar';
 import AgentRow from './AgentRow';
@@ -18,6 +18,32 @@ interface Props {
   onNavigate: (href: string) => void;
 }
 
+/** "Configure" item of a row: the agent Unit's settings page (remote ones open in a new tab). */
+export function ConfigureLink({ href, label, isDark, external }: { href: string; label: string; isDark: boolean; external: boolean }) {
+  return (
+    <a
+      href={href}
+      title="Configure"
+      aria-label={`Configure ${label}`}
+      data-testid="agent-configure"
+      {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      className={`flex-shrink-0 rounded-lg px-2 py-1 text-xs opacity-60 hover:opacity-100 focus:opacity-100 ${isDark ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-500 hover:bg-gray-100'}`}
+    >
+      ⚙
+    </a>
+  );
+}
+
+function withConfigure(row: ReactNode, href: string | null, label: string, isDark: boolean, external: boolean) {
+  if (!href) return row;
+  return (
+    <div className="flex items-center gap-0.5">
+      <div className="min-w-0 flex-1">{row}</div>
+      <ConfigureLink href={href} label={label} isDark={isDark} external={external} />
+    </div>
+  );
+}
+
 /** Flat, activity-sorted list of remote agents plus a collapsed "Archived" fold. */
 export default function AgentList({ agents, self = null, archived, isDark, activeKey, collapsed = false, onNavigate }: Props) {
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -32,7 +58,7 @@ export default function AgentList({ agents, self = null, archived, isDark, activ
           className={`mx-auto flex rounded-lg p-1.5 ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}>
           <AgentAvatar name={self.name} colorKey="self" emoji={self.emoji} status="online" isDark={isDark} />
         </button>
-      ) : (
+      ) : withConfigure(
         <SidebarRow
           isDark={isDark}
           active={activeKey === 'self'}
@@ -42,10 +68,18 @@ export default function AgentList({ agents, self = null, archived, isDark, activ
           leading={<AgentAvatar name={self.name} colorKey="self" emoji={self.emoji} status="online" isDark={isDark} />}
           title={self.name}
           subtitle={self.roleShort ? `This Unit · ${self.roleShort}` : 'This Unit'}
-        />
+        />,
+        self.configureUrl, self.name, isDark, false,
       ))}
       {agents.map(agent => (
-        <AgentRow key={agent.key} agent={agent} isDark={isDark} active={agent.key === activeKey} collapsed={collapsed} onOpen={open} />
+        <div key={agent.key}>
+          {collapsed
+            ? <AgentRow agent={agent} isDark={isDark} active={agent.key === activeKey} collapsed onOpen={open} />
+            : withConfigure(
+              <AgentRow agent={agent} isDark={isDark} active={agent.key === activeKey} onOpen={open} />,
+              agent.configureUrl, agent.name, isDark, true,
+            )}
+        </div>
       ))}
       {!collapsed && archived.length > 0 && (
         <div className="pt-1">

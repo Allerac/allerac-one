@@ -1,15 +1,14 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '@/app/context/ThemeContext';
 import AgentAvatar from '@/app/components/inbox/AgentAvatar';
-import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
+import AgentShell from '@/app/agents/_shell/AgentShell';
 import FederatedComposer from '@/app/components/inbox/FederatedComposer';
 import FederatedMessageList from '@/app/components/inbox/FederatedMessageList';
 import ThreadSwitcher from '@/app/components/inbox/ThreadSwitcher';
-import { agentHref, flattenAgents, type AgentItem, type AgentThreadItem } from '@/app/components/inbox/agents-format';
+import { agentHref, agentTitle, flattenAgents, type AgentItem, type AgentThreadItem } from '@/app/components/inbox/agents-format';
 import { inboxApi, type InboxListing, type InboxMessageView, type InboxThreadView, type SendResult } from '@/app/components/inbox/inbox-api';
 
 /** Open-thread poll while a reply is pending (the server polls the peer on each read). */
@@ -74,7 +73,6 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const agentKey = `${unitName}/${agentSlug}`;
   const target = useMemo(() => (listing ? findTarget(listing, unitName, agentSlug) : null), [listing, unitName, agentSlug]);
@@ -235,30 +233,11 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
   const readOnly = view?.readOnly ?? !target?.canSend;
   const muted = d ? 'text-gray-400' : 'text-gray-500';
 
-  const sidebar = (
-    <div className="flex h-full flex-col">
-      <div className={`flex items-center gap-2 border-b px-4 py-3 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
-        <Link href="/chat" className={`text-sm ${muted} hover:underline`}>← Chat</Link>
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        <AgentsInboxSection isDark={d} domainId={DOMAIN} activeKey={agentKey} onNavigate={() => setDrawerOpen(false)} />
-      </div>
-    </div>
-  );
-
   return (
-    <div className={`flex h-[100dvh] ${d ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-900'}`}>
-      <aside className={`hidden w-72 flex-shrink-0 border-r lg:block ${d ? 'border-gray-800 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}>{sidebar}</aside>
-      {drawerOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" data-testid="agents-drawer">
-          <button type="button" aria-label="Close agents" className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
-          <aside className={`absolute inset-y-0 left-0 w-72 ${d ? 'bg-gray-900' : 'bg-white'}`}>{sidebar}</aside>
-        </div>
-      )}
-
-      <main className="flex min-w-0 flex-1 flex-col">
+    <AgentShell activeKey={agentKey} isAdmin>
+      {openDrawer => (<>
         <header className={`flex items-center gap-3 border-b px-3 py-2.5 sm:px-4 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
-          <button type="button" aria-label="Open agents" className="rounded-lg p-1.5 lg:hidden" onClick={() => setDrawerOpen(true)}>☰</button>
+          <button type="button" aria-label="Open agents" className="rounded-lg p-1.5 lg:hidden" onClick={openDrawer}>☰</button>
           <AgentAvatar name={agentName} colorKey={agentKey} status={target?.status ?? 'offline'} isDark={d} size="md" />
           <div className="min-w-0 flex-1">
             {renaming !== null ? (
@@ -270,7 +249,7 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
                 }}
                 className={`w-full rounded border px-1 text-sm ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-white'}`} />
             ) : (
-              <h1 className="truncate text-sm font-semibold">{agentName} · {unitLabel}</h1>
+              <h1 className="truncate text-sm font-semibold">{agentTitle(agentName, unitLabel)}</h1>
             )}
             {target?.unitRole && <p className={`hidden truncate text-xs sm:block ${muted}`} title={target.unitRole}>{target.unitRole}</p>}
           </div>
@@ -323,7 +302,7 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
             <FederatedComposer isDark={d} disabled={!view || sending} placeholder={`Message ${agentName} on ${unitLabel}…`} onSend={send} />
           )}
         </div>
-      </main>
-    </div>
+      </>)}
+    </AgentShell>
   );
 }

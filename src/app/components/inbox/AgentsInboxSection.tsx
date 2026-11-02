@@ -70,7 +70,8 @@ export default function AgentsInboxSection({ isDark: d, domainId, collapsed = fa
   const self = useMemo(() => selfAgent(listing), [listing]);
   const totalUnread = updates?.totalUnread ?? agents.reduce((sum, agent) => sum + agent.unread, 0);
 
-  if (!listing || (agents.length === 0 && archived.length === 0)) {
+  // The local agent row always shows, so the section only hides before the first load.
+  if (!listing || (!self && agents.length === 0 && archived.length === 0)) {
     return error && !collapsed ? <p className="px-4 text-xs text-red-500">{error}</p> : null;
   }
 
