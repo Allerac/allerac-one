@@ -25,10 +25,10 @@ type El = { type: { name: string }; props: unknown };
 const page = (fn: unknown) => fn as () => Promise<El>;
 const dataPages: [string, () => Promise<El>][] = [
   ['health', page(HealthPage)], ['notes', page(NotesPage)], ['email', page(EmailPage)], ['jobs', page(JobsPage)],
-  ['memory', page(MemoryPage)], ['music', page(MusicPage)], ['channels', page(ChannelsPage)],
+  ['memory', page(MemoryPage)], ['music', page(MusicPage)], ['channels', page(ChannelsPage)], ['social', page(SocialPage)],
 ];
 const chatRoutes: [string, () => Promise<unknown>][] = [
-  ['chat', () => ChatPage({})], ['search', SearchPage], ['social', SocialPage],
+  ['chat', () => ChatPage({})], ['search', SearchPage],
 ];
 
 const original = process.env.ALLERAC_LEGACY_DOMAINS;

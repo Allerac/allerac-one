@@ -4,7 +4,7 @@
  * hub tiles, the agents 'Pages' menu, data page view and tool result links.
  */
 import type React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }) }));
 jest.mock('next/link', () => {
@@ -27,6 +27,8 @@ jest.mock('@/app/jobs/JobsPanel', () => () => null);
 jest.mock('@/app/memory/MemoryGraphPanel', () => () => null);
 jest.mock('@/app/components/music/MusicDashboard', () => () => null);
 jest.mock('@/app/components/settings/TelegramBotSettings', () => () => null);
+jest.mock('@/app/components/social/SocialPostStudio', () => () => <div data-testid="studio" />);
+jest.mock('@/app/components/social/InstagramDMPanel', () => ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div data-testid="dms" /> : null));
 jest.mock('@/app/components/chat/MarkdownContent', () => ({ children, content }: { children?: React.ReactNode; content?: string }) => <div>{content ?? children}</div>);
 jest.mock('@/app/components/agents/AgentRunView', () => ({ AgentRunView: () => null }));
 jest.mock('@/app/components/memory/CorrectAndMemorize', () => () => null);
@@ -45,18 +47,19 @@ beforeEach(() => {
 const hubProps = { userName: 'g', userEmail: 'g@x', userId: 'u', completedHubTour: true, allowedDomains: ['chat', 'health', 'notes'], grampeadorBubblesEnabled: false };
 
 describe('hub', () => {
-  it('hides the taskbar by default', async () => {
+  it('always renders the taskbar (legacy off)', async () => {
     render(<HubClient {...hubProps} />);
     await waitFor(() => expect(screen.getByText('Health')).toBeInTheDocument());
-    expect(screen.queryByTestId('taskbar')).toBeNull();
+    expect(screen.getByTestId('taskbar')).toBeInTheDocument();
   });
-  it('keeps the taskbar with legacy domains', async () => {
+  it('renders the taskbar with legacy domains', async () => {
     render(<HubClient {...hubProps} legacyDomains />);
     expect(await screen.findByText('Code')).toBeInTheDocument();
     expect(screen.getByTestId('taskbar')).toBeInTheDocument();
   });
-  it('shows agent + data page tiles without legacy domains', () => {
-    expect(hubTiles(['chat', 'health', 'notes', 'code'], false).map(t => t.path)).toEqual(['/agents/self/agent', '/health', '/notes', '#docs']);
+  it('replaces chat-only tiles with the agent without legacy domains', () => {
+    expect(hubTiles(['chat', 'health', 'search', 'social', 'code'], false).map(t => t.path))
+      .toEqual(['/agents/self/agent', '/health', '/social', '/code', '#docs']);
   });
   it('shows every domain tile with legacy domains', () => {
     expect(hubTiles(['chat', 'health', 'code'], true).map(t => t.path)).toEqual(['/chat', '/health', '/code', '#docs']);
@@ -102,6 +105,16 @@ describe('DataPageView', () => {
     render(<DataPageView page="notes" userId="u" isAdmin />);
     expect(screen.getByTestId('vault')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Hub' })).toHaveAttribute('href', '/hub');
+  });
+});
+
+describe('social page', () => {
+  it('renders the studio and opens DMs without a chat', () => {
+    render(<DataPageView page="social" userId="u" isAdmin={false} />);
+    expect(screen.getByTestId('studio')).toBeInTheDocument();
+    expect(screen.queryByTestId('dms')).toBeNull();
+    fireEvent.click(screen.getByTestId('social-dms'));
+    expect(screen.getByTestId('dms')).toBeInTheDocument();
   });
 });
 

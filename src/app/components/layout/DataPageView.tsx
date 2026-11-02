@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTheme } from '@/app/context/ThemeContext';
 import { AGENT_HOME_PATH, getDataPage, type DataPageId } from '@/lib/legacy-domains';
 import HealthDashboard from '@/app/components/health/HealthDashboard';
@@ -12,6 +12,8 @@ import JobsPanel from '@/app/jobs/JobsPanel';
 import MemoryGraphPanel from '@/app/memory/MemoryGraphPanel';
 import MusicDashboard from '@/app/components/music/MusicDashboard';
 import TelegramBotSettings from '@/app/components/settings/TelegramBotSettings';
+import SocialPostStudio from '@/app/components/social/SocialPostStudio';
+import InstagramDMPanel from '@/app/components/social/InstagramDMPanel';
 
 interface Props {
   page: DataPageId;
@@ -28,6 +30,7 @@ export default function DataPageView({ page, userId, isAdmin }: Props) {
   const router = useRouter();
   const meta = getDataPage(page);
   const back = () => router.push(AGENT_HOME_PATH);
+  const [dmOpen, setDmOpen] = useState(false);
 
   let body: ReactNode = null;
   switch (page) {
@@ -52,6 +55,14 @@ export default function DataPageView({ page, userId, isAdmin }: Props) {
     case 'channels':
       body = <TelegramBotSettings userId={userId} displayMode="page" isDarkMode={d} />;
       break;
+    case 'social':
+      body = (
+        <>
+          <div className="flex min-h-0 flex-1 overflow-hidden"><SocialPostStudio userId={userId} isDarkMode={d} /></div>
+          <InstagramDMPanel isOpen={dmOpen} onClose={() => setDmOpen(false)} isDarkMode={d} />
+        </>
+      );
+      break;
   }
 
   const muted = d ? 'text-gray-400' : 'text-gray-500';
@@ -60,6 +71,9 @@ export default function DataPageView({ page, userId, isAdmin }: Props) {
       <header className={`flex flex-shrink-0 items-center gap-3 border-b px-4 py-2 text-sm ${d ? 'border-gray-800' : 'border-gray-200'}`}>
         <Link href={AGENT_HOME_PATH} className={`${muted} hover:underline`} data-testid="data-page-back">← Agents</Link>
         {isAdmin && <Link href="/hub" className={`${muted} hover:underline`}>Hub</Link>}
+        {page === 'social' && (
+          <button type="button" onClick={() => setDmOpen(true)} className={`${muted} hover:underline`} data-testid="social-dms">Messages</button>
+        )}
         <span className="flex-1 text-right font-semibold">{meta ? `${meta.icon} ${meta.label}` : page}</span>
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{body}</div>

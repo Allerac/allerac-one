@@ -1,7 +1,8 @@
 /**
- * Phase 3b of the simplification plan: domain tabs, the taskbar and the
- * per-domain chats are hidden unless ALLERAC_LEGACY_DOMAINS=true. Data pages
- * (health dashboard, notes, email inbox, ...) stay reachable as plain views.
+ * Phase 3b of the simplification plan: per-domain chats and the DomainChip
+ * are hidden unless ALLERAC_LEGACY_DOMAINS=true. Data pages (health
+ * dashboard, notes, email inbox, social studio, ...) stay reachable as plain
+ * views. The AlleracTaskbar always renders.
  *
  * This file has no server-only imports so client components can use the
  * pure helpers (DATA_PAGES, isSafeRelativeHref).
@@ -13,7 +14,7 @@ type Env = Record<string, string | undefined>;
 /** Home of the single conversation surface. */
 export const AGENT_HOME_PATH = '/agents/self/agent';
 
-/** Legacy domain UI (tabs, taskbar, DomainChip, per-domain chats). Default off. */
+/** Legacy per-domain chats and DomainChip. Default off. */
 export function isLegacyDomainsEnabled(env: Env = process.env): boolean {
   return (env.ALLERAC_LEGACY_DOMAINS ?? '').trim().toLowerCase() === 'true';
 }
@@ -57,9 +58,13 @@ export const DATA_PAGES: readonly DataPage[] = [
     tools: ['get_music_recommendations', 'get_top_tracks', 'get_listening_stats', 'get_spotify_status', 'get_playlists', 'get_playlist_tracks', 'create_playlist', 'add_tracks_to_playlist'],
   },
   { id: 'channels', label: 'Channels', icon: '📡', path: '/channels', linkLabel: 'Open channels', tools: [] },
+  {
+    id: 'social', label: 'Social', icon: '📸', path: '/social', linkLabel: 'Open social studio',
+    tools: ['instagram_get_profile', 'instagram_get_recent_posts', 'instagram_publish_post'],
+  },
 ];
 
-export type DataPageId = 'health' | 'notes' | 'email' | 'jobs' | 'memory' | 'music' | 'channels';
+export type DataPageId = 'health' | 'notes' | 'email' | 'jobs' | 'memory' | 'music' | 'channels' | 'social';
 
 export function getDataPage(id: string): DataPage | undefined {
   return DATA_PAGES.find(p => p.id === id);
@@ -71,7 +76,12 @@ export function getEnabledDataPages(allowedSlugs?: readonly string[] | null, env
 }
 
 /** Domains whose own chat route redirects to the agent when legacy domains are off. */
-export const CHAT_ONLY_DOMAINS: readonly string[] = ['chat', 'search', 'social'];
+export const CHAT_ONLY_DOMAINS: readonly string[] = ['chat', 'search'];
+
+/** Where a navigation entry for a domain goes: chat-only domains open the agent unless legacy domains are on. */
+export function domainNavPath(key: string, path: string, legacyDomains: boolean): string {
+  return !legacyDomains && CHAT_ONLY_DOMAINS.includes(key) ? AGENT_HOME_PATH : path;
+}
 
 export interface PageLink { href: string; label: string }
 

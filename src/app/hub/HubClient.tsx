@@ -6,7 +6,7 @@ import HubTour from '@/app/components/hub/HubTour';
 import AlleracTaskbar from '@/app/components/layout/AlleracTaskbar';
 import ClippyAssistant from '@/app/jobs/ClippyAssistant';
 import * as authActions from '@/app/actions/auth';
-import { AGENT_HOME_PATH, DATA_PAGES } from '@/lib/legacy-domains';
+import { AGENT_HOME_PATH, CHAT_ONLY_DOMAINS } from '@/lib/legacy-domains';
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 
@@ -37,16 +37,16 @@ const DOCS_SHORTCUT = {
 const AGENT_SHORTCUT = { id: 'agent', label: 'Agent', icon: '💬', path: AGENT_HOME_PATH, desc: 'Talk to your agent' };
 
 /**
- * Tiles shown on the hub. Legacy mode keeps every domain; otherwise the hub is
- * a launcher for the agent plus the data pages of the enabled domains.
+ * Tiles shown on the hub: every visible domain. Without legacy domains the
+ * chat-only domains (chat, search) collapse into one tile for the agent.
  */
 export function hubTiles(visible: string[], legacyDomains: boolean) {
-  if (legacyDomains) {
-    return [...visible.map(slug => DOMAINS_ALL.find(d => d.id === slug)).filter((d): d is typeof DOMAINS_ALL[number] => Boolean(d)), DOCS_SHORTCUT];
-  }
-  const pages = DATA_PAGES.filter(p => visible.includes(p.id))
-    .map(p => ({ id: p.id, label: p.label, icon: p.icon, path: p.path, desc: p.linkLabel }));
-  return [AGENT_SHORTCUT, ...pages, DOCS_SHORTCUT];
+  const tiles = visible
+    .map(slug => DOMAINS_ALL.find(d => d.id === slug))
+    .filter((d): d is typeof DOMAINS_ALL[number] => Boolean(d));
+  if (legacyDomains) return [...tiles, DOCS_SHORTCUT];
+  const others = tiles.filter(t => !CHAT_ONLY_DOMAINS.includes(t.id));
+  return [AGENT_SHORTCUT, ...others, DOCS_SHORTCUT];
 }
 
 function getDocsUrl(): string {
@@ -244,7 +244,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           ))}
         </div>
 
-        {legacyDomains && (
+        {(
           <AlleracTaskbar
             domainKey="hub"
             domainName="Hub"
@@ -255,6 +255,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
             isAdmin={true}
             allowedDomains={allowedDomains}
             onLogout={handleShutDown}
+            legacyDomains={legacyDomains}
           />
         )}
       </div>
