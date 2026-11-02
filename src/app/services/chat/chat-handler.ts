@@ -23,6 +23,7 @@ import { SCHEDULE_TASK_TOOL_DEFINITION } from '../../tools/jobs.tool.definitions
 import { buildInstructionTools } from '../../tools/instructions.tool';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '../../tools/instructions.tool.definitions';
 import { HealthTool } from '../../tools/health.tool';
+import { loadUserTimeZone } from '@/app/lib/user-timezone';
 import { buildSoul } from '@/app/config/allerac-soul';
 import { loadSoulIdentity } from '@/federation/unit-profile.repository';
 import pool from '@/app/clients/db';
@@ -331,7 +332,7 @@ export async function handleChatMessage(
         let toolResult: any;
         if (toolName === 'get_today_info') {
           const { TodayTool } = await import('@/app/tools/today.tool');
-          toolResult = new TodayTool().execute();
+          toolResult = new TodayTool().execute(await loadUserTimeZone(userId));
         } else if (toolName === 'search_web' && tavilyApiKey) {
           const searchTool = new SearchWebTool(tavilyApiKey);
           toolResult = await searchTool.execute(toolArgs.query);
@@ -369,7 +370,7 @@ export async function handleChatMessage(
             const healthTool = new HealthTool();
             const healthUser = { id: u.id, email: u.email, name: u.name || u.email };
             if (toolName === 'get_health_summary') {
-              toolResult = await healthTool.getSummary(healthUser, toolArgs.period || 'week');
+              toolResult = await healthTool.getSummary(healthUser, toolArgs.period || 'week', await loadUserTimeZone(u.id));
             } else if (toolName === 'get_health_metrics') {
               toolResult = await healthTool.getMetrics(healthUser, toolArgs.start_date, toolArgs.end_date);
             } else if (toolName === 'get_daily_snapshot') {

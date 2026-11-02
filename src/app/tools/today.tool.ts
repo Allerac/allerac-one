@@ -1,14 +1,15 @@
-export class TodayTool {
-  execute() {
-    const now = new Date();
-    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+import { localDateParts, resolveTimeZone } from '@/app/lib/timezone';
 
+export class TodayTool {
+  /** Current date and time in the given timezone (user setting, ALLERAC_TIMEZONE, or server). */
+  execute(timeZone?: string | null, now: Date = new Date()) {
+    const timezone = resolveTimeZone(timeZone);
+    const { date, time, weekday } = localDateParts(now, timezone);
     return {
-      date: now.toISOString().split('T')[0],
-      time: now.toTimeString().split(' ')[0],
+      date,
+      time,
       datetime: now.toISOString(),
-      weekday: weekdays[now.getDay()],
+      weekday,
       timezone,
     };
   }

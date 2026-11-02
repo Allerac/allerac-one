@@ -113,12 +113,14 @@ export const agentsService = new AgentsService({
         provider: input.provider as ChatProvider,
         toolPolicy: 'federated',
       });
+      // The pipeline saves a fallback text when the model said nothing; report it as empty.
+      const empty = result.events.some(event => event.type === 'empty_reply');
       const latest = await pool.query(
         `SELECT id FROM chat_messages WHERE conversation_id = $1 AND role = 'assistant'
          ORDER BY created_at DESC LIMIT 1`,
         [input.conversationId],
       );
-      return { content: result.content, messageId: latest.rows[0]?.id ? String(latest.rows[0].id) : null };
+      return { content: empty ? '' : result.content, messageId: latest.rows[0]?.id ? String(latest.rows[0].id) : null };
     },
   },
 });

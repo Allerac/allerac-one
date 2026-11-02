@@ -85,4 +85,18 @@ describe('buildChatSystemPrompt', () => {
     expect(prompt).not.toContain('private AI assistant');
     expect(prompt).toContain('- Language: Portuguese');
   });
+
+  it('renders the date and time in the given timezone, not UTC', () => {
+    const prompt = buildChatSystemPrompt({
+      user: { id: 'u', email: 'u@example.com', name: 'Ada', is_admin: false, created_at: new Date() },
+      locale: 'en',
+      domain: 'chat',
+      userLocation: null,
+      tavilyConfigured: false,
+      now: new Date('2026-11-01T23:30:00Z'),
+      timezone: 'Europe/Madrid',
+      unitIdentity: undefined,
+    });
+    expect(prompt).toContain('Current date & time: 2026-11-02 Monday, 00:30:00 (Europe/Madrid)');
+  });
 });

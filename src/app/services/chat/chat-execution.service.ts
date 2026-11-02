@@ -1,3 +1,4 @@
+import { resolveTimeZone } from '@/app/lib/timezone';
 import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import type { User } from '@/app/services/auth/auth.service';
 import { ChatService } from '@/app/services/database/chat.service';
@@ -32,6 +33,11 @@ export interface ChatExecutionInput {
   keepalive?: () => void;
   /** 'federated' when answering a paired Unit (federation P3). */
   toolPolicy?: ChatToolPolicy;
+  /**
+   * IANA timezone for dates in the prompt and tools. Overrides the user's
+   * setting, e.g. when a home Unit forwards its user's timezone.
+   */
+  timeZone?: string;
 }
 
 export interface ChatExecutionResult {
@@ -81,6 +87,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     userInstructions,
     modelBaseUrl,
   } = runtimeContext;
+  const timeZone = resolveTimeZone(input.timeZone ?? runtimeContext.timezone);
 
   const activeSkill = await resolveActiveChatSkill({
     conversationId: input.conversationId,
@@ -147,6 +154,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     locale: input.locale,
     domain: input.domain,
     userLocation: isPublicDomain ? null : userLocation,
+    timezone: timeZone,
     tavilyConfigured: Boolean(tavilyApiKey),
     userInstructions: isPublicDomain ? '' : userInstructions,
     postContext: isPublicDomain ? undefined : input.postContext,
@@ -205,6 +213,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     emit,
     keepalive: input.keepalive ?? (() => undefined),
     toolPolicy: input.toolPolicy,
+    timeZone,
   });
 
   const savedAssistantMessage = await chatService.saveMessage(input.conversationId, 'assistant', content, { userId: input.user.id });

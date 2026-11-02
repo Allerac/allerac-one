@@ -15,6 +15,8 @@ const bodySchema = z.object({
   // P4b continuity: omitted = legacy (shared conversation), null = new conversation.
   conversation_id: z.string().uuid().nullable().optional(),
   thread_title: z.string().trim().max(200).nullable().optional(),
+  // IANA timezone of the asking user on the home Unit; ignored when invalid.
+  timezone: z.string().trim().max(64).nullable().optional(),
 });
 
 /**
@@ -47,6 +49,7 @@ export async function POST(
       question: parsed.data.question,
       conversationId: parsed.data.conversation_id,
       threadTitle: parsed.data.thread_title ?? null,
+      timeZone: parsed.data.timezone ?? null,
       idempotencyKey,
     };
     if (new URL(request.url).searchParams.get('async') === '1') {

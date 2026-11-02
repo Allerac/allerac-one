@@ -1,3 +1,4 @@
+import { addDays, localDateParts, resolveTimeZone } from '@/app/lib/timezone';
 // Health data tool — queries health_daily_metrics directly from PostgreSQL.
 // Used by the AI in conversations to surface Garmin health data.
 
@@ -39,9 +40,19 @@ export interface DailySnapshotResult {
   distance_meters?: number | null;
   resting_hr?: number | null;
   sleep_duration_minutes?: number | null;
+  sleep_deep_minutes?: number | null;
+  sleep_light_minutes?: number | null;
+  sleep_rem_minutes?: number | null;
+  sleep_score?: number | null;
   body_battery_end?: number | null;
+  /** How sleep is dated, so the model maps "last night" to the right row. */
+  sleep_note?: string;
+  /** When the requested date has no row: the closest dates that do (most recent first). */
+  nearest_dates_with_data?: string[];
   error?: string;
 }
+
+export const SLEEP_DATE_NOTE = 'Sleep is stored on the day the user woke up: the night from day D-1 to day D is under date D. "Last night" or "how did I sleep yesterday" asked in the morning is under today\'s date.';
 
 export interface GarminStatusResult {
   is_connected: boolean;
@@ -205,11 +216,13 @@ export class HealthTool {
     return true; // Always available — reads from local PostgreSQL
   }
 
-  async getSummary(user: HealthUser, period: string): Promise<HealthSummaryResult> {
+  async getSummary(user: HealthUser, period: string, timeZone?: string | null): Promise<HealthSummaryResult> {
     const validPeriods = ['day', 'week', 'month', 'year'] as const;
     const p = (validPeriods.includes(period as any) ? period : 'week') as typeof validPeriods[number];
     const days = { day: 1, week: 7, month: 30, year: 365 }[p];
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // "Today" in the user's timezone, not UTC.
+    const today = localDateParts(new Date(), resolveTimeZone(timeZone)).date;
+    const since = addDays(today, -days);
 
     try {
       const connected = await this._isConnected(user.id);
@@ -271,7 +284,10 @@ export class HealthTool {
         'SELECT * FROM health_daily_metrics WHERE user_id = $1 AND date = $2',
         [user.id, date]
       );
-      if (res.rows.length === 0) return { date, error: 'No data for this date' };
+      if (res.rows.length === 0) {
+        const nearest = await this.nearestDatesWithData(user.id, date);
+        return { date, error: 'No data for this date', sleep_note: SLEEP_DATE_NOTE, nearest_dates_with_data: nearest };
+      }
       const r = res.rows[0];
       return {
         date,
@@ -280,10 +296,32 @@ export class HealthTool {
         distance_meters: r.distance_meters,
         resting_hr: r.resting_hr,
         sleep_duration_minutes: r.sleep_duration_minutes,
+        sleep_deep_minutes: r.sleep_deep_minutes ?? null,
+        sleep_light_minutes: r.sleep_light_minutes ?? null,
+        sleep_rem_minutes: r.sleep_rem_minutes ?? null,
+        sleep_score: r.sleep_score ?? null,
         body_battery_end: r.body_battery_end,
+        sleep_note: SLEEP_DATE_NOTE,
       };
     } catch (e: any) {
       return { date, error: e.message };
+    }
+  }
+
+  /** Up to 3 dates with data, closest to `date` first (ties: the later date). */
+  private async nearestDatesWithData(userId: string, date: string): Promise<string[]> {
+    try {
+      const res = await pool.query(
+        `SELECT to_char(date, 'YYYY-MM-DD') AS date
+           FROM health_daily_metrics
+          WHERE user_id = $1 AND date BETWEEN $2::date - 7 AND $2::date + 7
+          ORDER BY abs(date - $2::date), date DESC
+          LIMIT 3`,
+        [userId, date],
+      );
+      return res.rows.map(row => String(row.date));
+    } catch {
+      return [];
     }
   }
 

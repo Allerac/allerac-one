@@ -7,6 +7,7 @@ import type { InboxMessageView } from './inbox-api';
 export const ERROR_LABELS: Record<string, string> = {
   timeout: 'No answer within 10 minutes.',
   result_lost: 'The unit lost the answer; retry.',
+  empty_answer: 'The agent returned an empty answer; retry.',
   unit_not_paired: 'Unit no longer paired.',
   peer_unreachable: 'The unit could not be reached.',
   peer_access_denied: 'The unit refused the request.',

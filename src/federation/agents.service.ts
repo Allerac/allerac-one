@@ -1,3 +1,4 @@
+import { isValidTimeZone } from '@/app/lib/timezone';
 /**
  * Inbound federation agents (roadmap P3): what a paired Unit may list and ask.
  *
@@ -45,6 +46,7 @@ export interface AgentsRuntime {
     modelId: string;
     provider: string;
     locale: string;
+    timeZone?: string;
   }): Promise<{ content: string; messageId?: string | null }>;
 }
 
@@ -78,6 +80,8 @@ export interface AskParams {
   /** P4b: home thread title, used for the peer-side conversation title. */
   threadTitle?: string | null;
   idempotencyKey?: string | null;
+  /** IANA timezone of the asking user (home Unit); used for "today" when valid. */
+  timeZone?: string | null;
 }
 
 export interface AskResult {
@@ -317,7 +321,14 @@ export class AgentsService {
         modelId: model.modelId,
         provider: model.provider,
         locale: 'en',
+        ...(isValidTimeZone(params.timeZone) ? { timeZone: params.timeZone } : {}),
       }), timeoutMs);
+
+      if (!result.content.trim()) {
+        // Never deliver a blank answer as success: the home shows it as an error.
+        console.log(`[Federation] ${JSON.stringify({ event: 'empty_answer', peerId: peer.id, agent: params.agent })}`);
+        throw new FederationError('empty_answer', 'The agent returned an empty answer', 502);
+      }
 
       const truncated = result.content.length > MAX_ANSWER_CHARS;
       const answer = truncated ? result.content.slice(0, MAX_ANSWER_CHARS) : result.content;

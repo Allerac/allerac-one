@@ -309,7 +309,7 @@ describe('pollDelay', () => {
 });
 
 describe('InboxService async asks and polling (P4c)', () => {
-  function asyncSetup() {
+  function asyncSetup(options: { userTimeZone?: (userId: string) => Promise<string | null> } = {}) {
     let clock = 1_000_000;
     const store = new InMemoryInboxStore();
     const peers = new InMemoryPeerStore();
@@ -323,6 +323,7 @@ describe('InboxService async asks and polling (P4c)', () => {
       store, peers, federation, log: jest.fn(), now: () => clock, random: () => 0.5,
       localAgents: async () => [],
       loadHomeUnit: async () => ({ name: 'napols', displayName: 'Napols', emoji: null, role: null, description: null, tags: [] }),
+      userTimeZone: options.userTimeZone,
     });
     return { store, peers, federation, service, advance: (ms: number) => { clock += ms; }, now: () => clock };
   }
@@ -395,6 +396,38 @@ describe('InboxService async asks and polling (P4c)', () => {
     other.advance(3_000);
     await other.service.pollDue(null);
     expect(other.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'result_lost' });
+  });
+
+  it('turns an empty polled answer into a visible empty_answer failure', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.federation.getAskResult.mockResolvedValueOnce({ ...done, result: { ...done.result, answer: '  ' } });
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages).toHaveLength(1);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'empty_answer' });
+  });
+
+  it('fails a send whose immediate answer is empty instead of storing a blank bubble', async () => {
+    const setup = asyncSetup();
+    await setup.peers.insert(peerFixture());
+    const thread = await setup.service.openThread(user, peerFixture().id, 'chat');
+    setup.federation.askAgentAsync.mockResolvedValueOnce({ ...done, result: { ...done.result, answer: '' } });
+    const sent = await setup.service.send(user, thread.id, 'q');
+    expect(sent.userMessage).toMatchObject({ status: 'failed', errorCode: 'empty_answer' });
+    expect(sent.agentMessage).toBeNull();
+  });
+
+  it('forwards the asking user\'s timezone to the peer', async () => {
+    const setup = asyncSetup({ userTimeZone: async () => 'America/Sao_Paulo' });
+    await pendingThread(setup);
+    expect(setup.federation.askAgentAsync.mock.calls[0][2]).toMatchObject({ timeZone: 'America/Sao_Paulo' });
+  });
+
+  it('sends no timezone when none is known or the lookup fails', async () => {
+    const setup = asyncSetup({ userTimeZone: async () => { throw new Error('db down'); } });
+    await pendingThread(setup);
+    expect(setup.federation.askAgentAsync.mock.calls[0][2]).not.toHaveProperty('timeZone');
   });
 
   it('logs a local failure after a done result and fails the message after repeated failures', async () => {

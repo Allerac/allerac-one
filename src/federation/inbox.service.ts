@@ -59,20 +59,31 @@ export class InboxError extends Error {
   }
 }
 
+/**
+ * A "done" reply with no text (e.g. from a peer on an older version) becomes a
+ * visible failure instead of a blank agent bubble.
+ */
+export function rejectEmptyAnswer(outcome: AsyncAskOutcome): AsyncAskOutcome {
+  if (outcome.status === 'done' && !outcome.result.answer?.trim()) {
+    return { status: 'failed', errorCode: 'empty_answer' };
+  }
+  return outcome;
+}
+
 /** The subset of FederationClient the inbox needs. */
 export interface InboxFederationPort {
   listAgentsWithUnit(peerId: string, ctx: { initiatedByUserId: string | null }): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number }>;
   askAgentInConversation(
     peerId: string,
     agent: string,
-    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null },
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null; timeZone?: string | null },
     ctx: { initiatedByUserId: string | null; threadId?: string | null },
   ): Promise<{ answer: string; truncated: boolean; conversationId: string | null; messageId: string | null }>;
   /** P4c (peers with ask protocol >= 2). Optional so older wiring keeps working. */
   askAgentAsync?(
     peerId: string,
     agent: string,
-    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string },
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string; timeZone?: string | null },
     ctx: { initiatedByUserId: string | null; threadId?: string | null },
   ): Promise<AsyncAskOutcome>;
   getAskResult?(peerId: string, key: string, ctx: { initiatedByUserId: string | null; threadId?: string | null }): Promise<AsyncAskOutcome>;
@@ -96,6 +107,8 @@ export interface InboxServiceDeps {
   log?: (line: string) => void;
   /** Jitter source for poll backoff (tests pass a fixed value). */
   random?: () => number;
+  /** IANA timezone of the asking user, forwarded so the peer's "today" matches the user's. */
+  userTimeZone?(userId: string): Promise<string | null>;
 }
 
 /** A heartbeat older than this is ignored in favour of the live list probe. */
@@ -509,15 +522,17 @@ export class InboxService {
       // context reset (new conversation, different body) gets its own key.
       const useAsync = await this.supportsAsync(peer, user);
       const ask = async (conversationId: string | null): Promise<{ outcome: AsyncAskOutcome; key: string }> => {
+        const timeZone = await this.userTimeZone(user.id);
         const input = {
+          ...(timeZone ? { timeZone } : {}),
           // With a handle the peer already has the context; send only the new message.
           question: conversationId ? pending.content : packQuestion(history, pending.content),
           conversationId, threadTitle: thread.title, idempotencyKey: `${pending.id}:${conversationId ?? 'new'}`,
         };
         const ctx = { initiatedByUserId: user.id, threadId: thread.id };
-        if (useAsync) return { outcome: await this.deps.federation.askAgentAsync!(peer.id, thread.agentSlug, input, ctx), key: input.idempotencyKey };
+        if (useAsync) return { outcome: rejectEmptyAnswer(await this.deps.federation.askAgentAsync!(peer.id, thread.agentSlug, input, ctx)), key: input.idempotencyKey };
         const result = await this.deps.federation.askAgentInConversation(peer.id, thread.agentSlug, input, ctx);
-        return { outcome: { status: 'done', result }, key: input.idempotencyKey };
+        return { outcome: rejectEmptyAnswer({ status: 'done', result }), key: input.idempotencyKey };
       };
       try {
         let asked;
@@ -571,6 +586,15 @@ export class InboxService {
       }
     } finally {
       this.inFlight.delete(thread.id);
+    }
+  }
+
+  private async userTimeZone(userId: string): Promise<string | null> {
+    if (!this.deps.userTimeZone) return null;
+    try {
+      return await this.deps.userTimeZone(userId);
+    } catch {
+      return null;
     }
   }
 
@@ -642,9 +666,9 @@ export class InboxService {
     try {
       let outcome: AsyncAskOutcome | null = null;
       try {
-        outcome = await this.deps.federation.getAskResult!(peer.id, message.remoteRunId!, {
+        outcome = rejectEmptyAnswer(await this.deps.federation.getAskResult!(peer.id, message.remoteRunId!, {
           initiatedByUserId: thread.userId, threadId: thread.id,
-        });
+        }));
       } catch (error) {
         if (!(error instanceof FederationError)) throw error;
         if (error.code === 'peer_ask_not_found') return await finish('failed', 'result_lost');
