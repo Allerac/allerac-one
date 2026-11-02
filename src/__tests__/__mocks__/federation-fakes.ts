@@ -118,12 +118,16 @@ const allowAll = () => ({ allowed: true as const, lease: { release: () => undefi
 export function fakeAgentsRuntime(overrides: Partial<AgentsRuntime> = {}): AgentsRuntime & {
   chats: Array<Record<string, unknown>>;
   conversations: Map<string, { userId: string; slug: string; principalId: string; title: string }>;
+  topicResets: Array<{ conversationId: string; userId: string }>;
 } {
+  const topicResets: Array<{ conversationId: string; userId: string }> = [];
   const chats: Array<Record<string, unknown>> = [];
   const conversations = new Map<string, { userId: string; slug: string; principalId: string; title: string }>();
   return {
     chats,
     conversations,
+    topicResets,
+    resetTopic: async params => { topicResets.push(params); },
     loadUser: async id => ({ id, email: `${id}@example.com`, name: id, is_admin: true, created_at: new Date() } as unknown as User),
     listActiveDomains: async slugs => slugs.map(slug => ({ slug, displayName: slug[0].toUpperCase() + slug.slice(1) })),
     canAccessDomain: async () => true,
@@ -156,6 +160,8 @@ export interface FakeUnit {
   client: FederationClient;
   /** Background (async) asks started on this Unit; await them in tests. */
   background: Array<Promise<void>>;
+  /** Body of the last ask this Unit received (protocol tests). */
+  lastAskBody?: Record<string, unknown>;
   /** P4d: per-pairing grants and the Control Tower status. */
   grants: GrantsService;
   status: StatusService;
@@ -196,7 +202,8 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
         const principalId = unit.principals.resolve(key, 'federation:agents:list');
         if (!principalId) return json({ error: { code: 'unauthorized' } }, 401);
         const actingUserId = unit.principals.principals.get(principalId)!.actingUserId;
-        const protocol = unit.env.FAKE_LEGACY_ASK === 'true' ? {} : { protocol: { ask: 2 } };
+        // FAKE_ASK_VERSION simulates an older peer (mixed versions); FAKE_LEGACY_ASK one without async.
+        const protocol = unit.env.FAKE_LEGACY_ASK === 'true' ? {} : { protocol: { ask: Number(unit.env.FAKE_ASK_VERSION ?? 3) } };
         const granted = { granted_capabilities: await unit.grants.grantedCapabilities(principalId) };
         return json({ data: { agents: await unit.agents.listAgents(principalId, actingUserId), ...protocol, ...granted } });
       }
@@ -217,7 +224,11 @@ export function createNetwork(units: Array<{ origin: string; name: string; env?:
           principalId, actingUserId, agent: decodeURIComponent(ask[1]), question: body.question,
           conversationId: body.conversation_id, threadTitle: body.thread_title ?? null,
           idempotencyKey: new Headers(init?.headers).get('idempotency-key'),
+          // Peers before v3 do not know these fields (zod strips them).
+          ...(Number(unit.env.FAKE_ASK_VERSION ?? 3) >= 3 && unit.env.FAKE_LEGACY_ASK !== 'true'
+            ? { primary: body.primary === true, topicReset: body.topic_reset === true } : {}),
         };
+        unit.lastAskBody = body;
         if (url.searchParams.get('async') === '1' && unit.env.FAKE_LEGACY_ASK !== 'true') {
           const outcome = await unit.agents.askAsync(input);
           const reply = asyncAskReply(outcome, input.idempotencyKey!);

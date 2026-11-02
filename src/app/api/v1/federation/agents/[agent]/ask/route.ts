@@ -17,6 +17,9 @@ const bodySchema = z.object({
   thread_title: z.string().trim().max(200).nullable().optional(),
   // IANA timezone of the asking user on the home Unit; ignored when invalid.
   timezone: z.string().trim().max(64).nullable().optional(),
+  // Ask protocol v3: the principal's primary conversation, and "New topic".
+  primary: z.boolean().optional(),
+  topic_reset: z.boolean().optional(),
 });
 
 /**
@@ -51,6 +54,8 @@ export async function POST(
       threadTitle: parsed.data.thread_title ?? null,
       timeZone: parsed.data.timezone ?? null,
       idempotencyKey,
+      ...(parsed.data.primary ? { primary: true } : {}),
+      ...(parsed.data.topic_reset ? { topicReset: true } : {}),
     };
     if (new URL(request.url).searchParams.get('async') === '1') {
       if (!idempotencyKey) return apiError('validation_error', 'Idempotency-Key is required for async asks', 400);

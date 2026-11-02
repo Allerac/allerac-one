@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '@/app/context/ThemeContext';
 import AgentAvatar from '@/app/components/inbox/AgentAvatar';
 import AgentShell from '@/app/agents/_shell/AgentShell';
 import FederatedComposer from '@/app/components/inbox/FederatedComposer';
 import FederatedMessageList from '@/app/components/inbox/FederatedMessageList';
-import ThreadSwitcher from '@/app/components/inbox/ThreadSwitcher';
 import { agentHref, agentTitle, flattenAgents, type AgentItem, type AgentThreadItem } from '@/app/components/inbox/agents-format';
 import { inboxApi, type InboxListing, type InboxMessageView, type InboxThreadView, type SendResult } from '@/app/components/inbox/inbox-api';
 
@@ -29,6 +28,7 @@ interface Target {
   status: AgentItem['status'];
   canSend: boolean;
   threads: AgentThreadItem[];
+  archivedThreads: AgentThreadItem[];
   defaultThreadId: string | null;
 }
 
@@ -37,7 +37,8 @@ function findTarget(listing: InboxListing, unitName: string, agentSlug: string):
   if (agent) {
     return {
       peerId: agent.peerId, unitDisplayName: agent.unitDisplayName, unitRole: agent.unitRole, agentName: agent.name,
-      status: agent.status, canSend: agent.available, threads: agent.threads, defaultThreadId: agent.defaultThreadId,
+      status: agent.status, canSend: agent.available, threads: agent.threads, archivedThreads: agent.archivedThreads,
+      defaultThreadId: agent.defaultThreadId,
     };
   }
   const group = listing.archived.find(item => item.name === unitName);
@@ -46,6 +47,7 @@ function findTarget(listing: InboxListing, unitName: string, agentSlug: string):
   return {
     peerId: group.peerId, unitDisplayName: group.displayName, unitRole: null, agentName: agentSlug, status: 'offline', canSend: false,
     threads: threads.map((thread, index) => ({ threadId: thread.threadId, title: thread.title, isDefault: index === 0, lastMessageAt: thread.lastMessageAt, unread: 0, pending: false })),
+    archivedThreads: [],
     defaultThreadId: threads[0].threadId,
   };
 }
@@ -58,8 +60,9 @@ function applyResult(messages: InboxMessageView[], result: SendResult): InboxMes
 }
 
 /**
- * Full chat view with one remote agent (Agents redesign). The sidebar lists
- * every remote agent; the main area is this thread, with a thread switcher.
+ * Full chat view with one remote agent (Agents redesign). Phase 5: one thread
+ * per agent; "New topic" restarts the agent's context, and older threads are
+ * read-only in the Archive (opened with ?thread=).
  */
 export default function AgentChatClient({ unitName, agentSlug, threadId: requestedThread }: Props) {
   const { isDark: d } = useTheme();
@@ -71,22 +74,10 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const agentKey = `${unitName}/${agentSlug}`;
   const target = useMemo(() => (listing ? findTarget(listing, unitName, agentSlug) : null), [listing, unitName, agentSlug]);
-
-  const refreshListing = useCallback(async () => {
-    try {
-      const next = await inboxApi.list(DOMAIN);
-      setListing(next);
-      return next;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load agents');
-      return null;
-    }
-  }, []);
 
   // Resolve the agent and its thread (default thread, or create one on first open).
   useEffect(() => {
@@ -97,7 +88,8 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
       setListing(next);
       const found = findTarget(next, unitName, agentSlug);
       if (!found) { setMissing(true); return; }
-      const known = requestedThread && found.threads.some(thread => thread.threadId === requestedThread) ? requestedThread : null;
+      const known = requestedThread && [...found.threads, ...found.archivedThreads].some(thread => thread.threadId === requestedThread)
+        ? requestedThread : null;
       let id = known ?? found.defaultThreadId;
       if (!id && found.canSend) {
         try {
@@ -148,47 +140,20 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
   }, [waitingReply, threadId]);
 
   const switchThread = (id: string) => {
+    setArchiveOpen(false);
     setThreadId(id);
     setView(null);
     router.replace(agentHref(unitName, agentSlug, id));
   };
 
-  const createThread = async (title: string | null) => {
-    if (!target) return;
+  const newTopic = async () => {
+    if (!threadId || sending) return;
+    setError(null);
     try {
-      const { thread } = await inboxApi.openThread(DOMAIN, target.peerId, agentSlug, { new: true, ...(title ? { title } : {}) });
-      await refreshListing();
-      switchThread(thread.id);
+      const { divider } = await inboxApi.newTopic(DOMAIN, threadId);
+      setView(current => current ? { ...current, messages: [...current.messages, divider] } : current);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create thread');
-    }
-  };
-
-  const deleteThread = async () => {
-    setMenuOpen(false);
-    if (!threadId || !window.confirm('Delete this thread from this unit? The other unit keeps its own copy.')) return;
-    try {
-      await inboxApi.deleteThread(DOMAIN, threadId);
-      const next = await refreshListing();
-      const rest = next ? findTarget(next, unitName, agentSlug)?.threads.filter(thread => thread.threadId !== threadId) ?? [] : [];
-      const fallback = rest.find(thread => thread.isDefault) ?? rest[0];
-      if (fallback) switchThread(fallback.threadId);
-      else { setView(null); setThreadId(null); router.replace(agentHref(unitName, agentSlug)); }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed');
-    }
-  };
-
-  const saveTitle = async () => {
-    const title = renaming?.trim();
-    setRenaming(null);
-    if (!title || !view || !threadId || title === view.thread.title) return;
-    try {
-      const { thread } = await inboxApi.renameThread(DOMAIN, threadId, title);
-      setView(current => current ? { ...current, thread: { ...current.thread, title: thread.title } } : current);
-      void refreshListing();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Rename failed');
+      setError(err instanceof Error ? err.message : 'Could not start a new topic');
     }
   };
 
@@ -232,6 +197,7 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
   const agentName = target?.agentName ?? agentSlug;
   const readOnly = view?.readOnly ?? !target?.canSend;
   const muted = d ? 'text-gray-400' : 'text-gray-500';
+  const archived = view?.archived === true;
 
   return (
     <AgentShell activeKey={agentKey} isAdmin>
@@ -240,30 +206,32 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
           <button type="button" aria-label="Open agents" className="rounded-lg p-1.5 lg:hidden" onClick={openDrawer}>☰</button>
           <AgentAvatar name={agentName} colorKey={agentKey} status={target?.status ?? 'offline'} isDark={d} size="md" />
           <div className="min-w-0 flex-1">
-            {renaming !== null ? (
-              <input aria-label="Thread title" autoFocus value={renaming} maxLength={200}
-                onChange={event => setRenaming(event.target.value)} onBlur={() => void saveTitle()}
-                onKeyDown={event => {
-                  if (event.key === 'Enter') { event.preventDefault(); void saveTitle(); }
-                  if (event.key === 'Escape') setRenaming(null);
-                }}
-                className={`w-full rounded border px-1 text-sm ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-white'}`} />
-            ) : (
-              <h1 className="truncate text-sm font-semibold">{agentTitle(agentName, unitLabel)}</h1>
-            )}
-            {target?.unitRole && <p className={`hidden truncate text-xs sm:block ${muted}`} title={target.unitRole}>{target.unitRole}</p>}
+            <h1 className="truncate text-sm font-semibold">{agentTitle(agentName, unitLabel)}</h1>
+            {archived
+              ? <p className={`truncate text-xs ${muted}`} data-testid="archived-label">Archived: {view?.thread.title ?? 'thread'}</p>
+              : target?.unitRole && <p className={`hidden truncate text-xs sm:block ${muted}`} title={target.unitRole}>{target.unitRole}</p>}
           </div>
-          {target && (
-            <ThreadSwitcher isDark={d} threads={target.threads} currentId={threadId} canCreate={target.canSend}
-              onSelect={switchThread} onCreate={title => void createThread(title)} />
+          {archived && target?.defaultThreadId && (
+            <button type="button" className="rounded-lg px-2 py-1 text-xs underline" onClick={() => switchThread(target.defaultThreadId!)}>Back to chat</button>
           )}
-          {view && !view.readOnly && (
+          {target && target.archivedThreads.length > 0 && (
             <div className="relative">
-              <button type="button" aria-label="Thread actions" onClick={() => setMenuOpen(value => !value)} className="rounded-lg px-2 py-1">⋯</button>
-              {menuOpen && (
-                <div className={`absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border py-1 text-sm shadow-xl ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
-                  <button type="button" className="block w-full px-3 py-2 text-left hover:bg-black/5" onClick={() => { setMenuOpen(false); setRenaming(view.thread.title ?? ''); }}>Rename thread</button>
-                  <button type="button" className="block w-full px-3 py-2 text-left text-red-500 hover:bg-black/5" onClick={() => void deleteThread()}>Delete thread</button>
+              <button type="button" aria-label="Archive" title="Archived threads (read-only)" onClick={() => setArchiveOpen(value => !value)}
+                className={`rounded-lg p-1.5 ${d ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}>
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+              </button>
+              {archiveOpen && (
+                <div data-testid="archive-list" className={`absolute right-0 top-full z-50 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border py-1 text-sm shadow-xl ${d ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+                  <p className={`px-3 py-1 text-xs ${muted}`}>Archived threads (read-only)</p>
+                  {target.archivedThreads.map(thread => (
+                    <button key={thread.threadId} type="button" onClick={() => switchThread(thread.threadId)}
+                      className={`block w-full truncate px-3 py-2 text-left hover:bg-black/5 ${thread.threadId === threadId ? 'font-semibold' : ''}`}>
+                      {thread.title ?? 'Untitled'}
+                      {thread.lastMessageAt && <span className={`block text-xs ${muted}`}>{new Date(thread.lastMessageAt).toLocaleDateString()}</span>}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -296,8 +264,20 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
 
         {error && <p className="px-4 pb-1 text-center text-xs text-red-500" role="alert">{error}</p>}
         <div className="mx-auto w-full max-w-3xl px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-4">
+          {!readOnly && view && (
+            <div className="flex justify-end pb-2">
+              <button type="button" data-testid="new-topic-button" onClick={() => void newTopic()}
+                disabled={sending || waitingReply || (view.messages.at(-1)?.role === 'system' && view.messages.at(-1)?.content === 'New topic')}
+                title="Start a new topic: the agent stops using earlier messages as context. Nothing is deleted."
+                className={`rounded-md border px-2 py-1 text-xs disabled:opacity-40 ${d ? 'border-gray-700 text-gray-400 hover:bg-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                New topic
+              </button>
+            </div>
+          )}
           {readOnly && view ? (
-            <p className={`py-3 text-center text-xs ${muted}`}>Unit no longer paired. This history is read-only.</p>
+            <p className={`py-3 text-center text-xs ${muted}`}>
+              {archived ? 'This thread is archived and read-only.' : 'Unit no longer paired. This history is read-only.'}
+            </p>
           ) : (
             <FederatedComposer isDark={d} disabled={!view || sending} placeholder={`Message ${agentName} on ${unitLabel}…`} onSend={send} />
           )}

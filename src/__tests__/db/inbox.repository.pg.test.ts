@@ -6,6 +6,8 @@
  * RUN_PG_TESTS=1 and DATABASE_URL (the "DB Integration" CI job).
  */
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
+import path from 'path';
 import pool from '@/app/clients/db';
 import { InboxRepository } from '@/federation/inbox.repository';
 import { InboxService, type InboxFederationPort } from '@/federation/inbox.service';
@@ -38,6 +40,50 @@ describePg('InboxRepository against Postgres', () => {
 
   const newThread = () => repo.createThread({ userId, peerId, agentSlug: 'chat', title: 'PG thread' });
   const row = async (id: string) => (await pool.query('SELECT status, error_code, next_poll_at FROM federated_messages WHERE id = $1', [id])).rows[0];
+
+  it('migration 155 keeps one active thread per agent, archives the rest, spares pending ones', async () => {
+    const thread = (slug: string, isDefault: boolean, at: string) => pool.query(
+      `INSERT INTO federated_threads (user_id, peer_id, agent_slug, title, is_default, last_message_at)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, [userId, peerId, slug, `${slug} ${at}`, isDefault, at],
+    ).then(result => result.rows[0].id as string);
+    // Group 1: a default thread (older) plus two extras, one with a pending async ask.
+    const main = await thread('mig', true, '2026-01-01T00:00:00Z');
+    const extra = await thread('mig', false, '2026-03-01T00:00:00Z');
+    const busy = await thread('mig', false, '2026-02-01T00:00:00Z');
+    await repo.insertMessage({ threadId: extra, role: 'agent', content: 'unread', status: 'done' });
+    const pending = await repo.insertMessage({ threadId: busy, role: 'user', content: 'q', status: 'pending' });
+    await repo.schedulePoll(pending.id, { remoteRunId: `${pending.id}:new`, nextPollAt: new Date(), pollAttempts: 0, pendingDeadlineAt: null });
+    // Group 2: no default; the most recent one is kept.
+    const olderNoDefault = await thread('nodef', false, '2026-01-01T00:00:00Z');
+    const newerNoDefault = await thread('nodef', false, '2026-02-01T00:00:00Z');
+
+    const sql = readFileSync(path.join(process.cwd(), 'src/database/migrations/155_one_thread_per_agent.sql'), 'utf8');
+    await pool.query(sql);
+    await pool.query(sql); // idempotent
+
+    const state = async (id: string) => (await pool.query('SELECT is_default, archived_at FROM federated_threads WHERE id = $1', [id])).rows[0];
+    expect(await state(main)).toMatchObject({ is_default: true, archived_at: null });
+    expect((await state(extra)).archived_at).not.toBeNull();
+    expect(await state(busy)).toMatchObject({ is_default: false, archived_at: null });
+    expect(await state(newerNoDefault)).toMatchObject({ is_default: true, archived_at: null });
+    expect((await state(olderNoDefault)).archived_at).not.toBeNull();
+    // Nothing deleted, and archived threads never count as unread.
+    expect((await pool.query('SELECT COUNT(*)::int AS n FROM federated_messages WHERE thread_id = $1', [extra])).rows[0].n).toBe(1);
+    const summaries = await repo.listThreads(userId);
+    expect(summaries.find(t => t.id === extra)).toMatchObject({ unread: 0 });
+
+    // Once the pending reply resolves, the next listing archives the thread.
+    expect(await repo.archiveResolvedExtraThreads(userId)).toBe(0);
+    await repo.updateMessage(pending.id, { status: 'done' });
+    expect(await repo.archiveResolvedExtraThreads(userId)).toBeGreaterThanOrEqual(1);
+    expect((await state(busy)).archived_at).not.toBeNull();
+    expect((await state(main)).archived_at).toBeNull();
+
+    await repo.setTopicResetPending(main, true);
+    expect((await repo.getThreadById(main))?.topicResetPending).toBe(true);
+    await repo.setTopicResetPending(main, false);
+    expect((await repo.getThreadById(main))?.topicResetPending).toBe(false);
+  });
 
   it.each(['pending', 'done', 'failed', 'timeout'] as const)('updateMessage sets status %s', async status => {
     const thread = await newThread();

@@ -42,6 +42,16 @@ export default function FederatedMessageList({
   return (
     <div className="space-y-4">
       {messages.map(message => {
+        if (message.role === 'system' && message.content === 'New topic') {
+          // Phase 5 "New topic" divider, same look as the local chat's topic marker.
+          return (
+            <div key={message.id} data-testid="topic-divider" className={`flex items-center gap-3 text-xs ${d ? 'text-gray-500' : 'text-gray-400'}`}>
+              <div className={`flex-1 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`} />
+              <span>New topic</span>
+              <div className={`flex-1 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`} />
+            </div>
+          );
+        }
         if (message.role === 'system') {
           return (
             <p key={message.id} data-testid="system-note" className={`text-center text-xs italic ${d ? 'text-gray-500' : 'text-gray-400'}`}>

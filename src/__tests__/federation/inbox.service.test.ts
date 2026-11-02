@@ -195,22 +195,64 @@ describe('InboxService', () => {
       .toEqual([`${failed.userMessage.id}:new`, `${failed.userMessage.id}:new`]);
   });
 
-  it('supports several threads per agent, rename and pagination', async () => {
+  it('keeps one thread per agent; extra threads are archived and read-only (phase 5)', async () => {
     const { service, peers, store } = setup();
     await peers.insert(peerFixture());
     const main = await service.openThread(user, peerFixture().id, 'chat');
     expect((await service.openThread(user, peerFixture().id, 'chat')).id).toBe(main.id);
-    const extra = await service.openThread(user, peerFixture().id, 'chat', { newThread: true, title: '  Trip   plans ' });
-    expect(extra.id).not.toBe(main.id);
-    expect(extra.title).toBe('Trip plans');
+    // Older clients asking for a new thread get the single thread.
+    expect((await service.openThread(user, peerFixture().id, 'chat', { newThread: true, title: 'x' })).id).toBe(main.id);
 
-    const row = (await service.list(user)).units[0].agents[0];
+    // Threads left over from P4b: one resolved, one still waiting on an async reply.
+    const old = await store.createThread({ userId: user.id, peerId: peerFixture().id, agentSlug: 'chat', title: 'Old topic' });
+    const waiting = await store.createThread({ userId: user.id, peerId: peerFixture().id, agentSlug: 'chat', title: 'Waiting' });
+    await store.insertMessage({ threadId: old.id, role: 'agent', content: 'unread old reply', status: 'done' });
+    const pending = await store.insertMessage({ threadId: waiting.id, role: 'user', content: 'q', status: 'pending' });
+    await store.schedulePoll(pending.id, { remoteRunId: `${pending.id}:new`, nextPollAt: new Date(0), pollAttempts: 0, pendingDeadlineAt: null });
+
+    let row = (await service.list(user)).units[0].agents[0];
     expect(row.threadId).toBe(main.id);
-    expect(row.threads.map(thread => thread.threadId).sort()).toEqual([main.id, extra.id].sort());
+    // The pending thread stays active until its reply resolves.
+    expect(row.threads.map(thread => thread.threadId).sort()).toEqual([main.id, waiting.id].sort());
+    expect(row.archivedThreads?.map(thread => thread.threadId)).toEqual([old.id]);
+    expect(row.unread).toBe(0);
+    expect((await service.updates(user)).totalUnread).toBe(0);
 
-    await expect(service.renameThread(user, extra.id, '')).rejects.toMatchObject({ code: 'validation_error' });
-    expect(await service.renameThread(user, extra.id, 'Renamed')).toEqual({ id: extra.id, title: 'Renamed' });
+    await store.updateMessage(pending.id, { status: 'failed', errorCode: 'timeout' });
+    row = (await service.list(user)).units[0].agents[0];
+    expect(row.threads.map(thread => thread.threadId)).toEqual([main.id]);
+    expect(row.archivedThreads?.map(thread => thread.threadId).sort()).toEqual([old.id, waiting.id].sort());
 
+    // Archived threads open (?thread=) but are read-only.
+    const archived = await service.getThread(user, old.id);
+    expect(archived).toMatchObject({ readOnly: true, archived: true });
+    expect(archived.messages.map(m => m.content)).toEqual(['unread old reply']);
+    await expect(service.send(user, old.id, 'hi')).rejects.toMatchObject({ code: 'thread_archived', status: 409 });
+    await expect(service.newTopic(user, old.id)).rejects.toMatchObject({ code: 'thread_archived' });
+    await expect(service.renameThread(user, old.id, 'x')).rejects.toMatchObject({ code: 'thread_archived' });
+    expect(await service.getThread(user, main.id)).toMatchObject({ readOnly: false, archived: false });
+  });
+
+  it('"New topic" adds a divider and cuts the packed context (phase 5)', async () => {
+    const { service, peers, federation } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await service.send(user, thread.id, 'about cats');
+    const { divider } = await service.newTopic(user, thread.id);
+    expect(divider).toMatchObject({ role: 'system', content: 'New topic' });
+    await service.send(user, thread.id, 'about dogs');
+    const lastInput = federation.askAgentInConversation.mock.calls.at(-1)?.[2];
+    expect(lastInput.question).toBe('about dogs');
+    expect(lastInput.conversationId).toBeNull();
+    const view = await service.getThread(user, thread.id);
+    expect(view.messages.map(m => m.role)).toEqual(['user', 'agent', 'system', 'user', 'agent']);
+  });
+
+  it('pages a long thread', async () => {
+    const { service, peers, store } = setup();
+    await peers.insert(peerFixture());
+    const main = await service.openThread(user, peerFixture().id, 'chat');
+    await expect(service.renameThread(user, main.id, '')).rejects.toMatchObject({ code: 'validation_error' });
     for (let i = 0; i < 60; i += 1) await store.insertMessage({ threadId: main.id, role: 'user', content: `m${i}`, status: 'done' });
     const view = await service.getThread(user, main.id);
     expect(view.messages).toHaveLength(50);

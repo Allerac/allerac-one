@@ -15,7 +15,10 @@ export interface FederatedThread {
   isDefault: boolean;
   lastMessageAt: Date | null;
   lastReadAt: Date | null;
+  /** Phase 5: archived threads are read-only history; one active thread per (user, peer, agent). */
   archivedAt: Date | null;
+  /** Phase 5: "New topic" was pressed; the next ask carries topic_reset (v3 peers). */
+  topicResetPending?: boolean;
   createdAt: Date;
 }
 
@@ -84,4 +87,11 @@ export interface InboxStore {
   /** P4c: due pending async messages, oldest due first. */
   listDuePending(params: { userId: string | null; threadId: string | null; now: Date; limit: number }): Promise<Array<{ message: FederatedMessage; thread: FederatedThread }>>;
   hasPendingAsync(threadId: string): Promise<boolean>;
+  /** Phase 5: sets or clears the pending "New topic" flag. */
+  setTopicResetPending(threadId: string, pending: boolean): Promise<void>;
+  /**
+   * Phase 5: archives this user's non-default threads that have no pending async
+   * ask (the rule of migration 155, for threads that were pending then). Returns the count.
+   */
+  archiveResolvedExtraThreads(userId: string): Promise<number>;
 }

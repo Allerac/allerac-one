@@ -38,6 +38,8 @@ export interface AgentItem {
   preview: string | null;
   defaultThreadId: string | null;
   threads: AgentThreadItem[];
+  /** Phase 5: archived, read-only threads with this agent (most recent first). */
+  archivedThreads: AgentThreadItem[];
   /** Settings page of the agent's Unit (`https://<peer origin>/hub/settings`); null when unknown. */
   configureUrl: string | null;
   /** Data pages of this agent on its Unit (absolute links); empty when unknown. */
@@ -139,6 +141,9 @@ export function flattenAgents(listing: InboxListing | null, updates?: InboxUpdat
         preview: agent.preview,
         defaultThreadId: agent.threadId,
         threads,
+        archivedThreads: (agent.archivedThreads ?? []).map(thread => ({
+          threadId: thread.threadId, title: thread.title, isDefault: false, lastMessageAt: thread.lastMessageAt, unread: 0, pending: false,
+        })),
         configureUrl: unit.configureUrl ?? null,
         pages: unit.pages ?? [],
       });

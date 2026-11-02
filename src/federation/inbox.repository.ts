@@ -20,6 +20,7 @@ function mapThread(row: Row): FederatedThread {
     lastMessageAt: (row.last_message_at as Date | null) ?? null,
     lastReadAt: (row.last_read_at as Date | null) ?? null,
     archivedAt: (row.archived_at as Date | null) ?? null,
+    topicResetPending: Boolean(row.topic_reset_pending),
     createdAt: row.created_at as Date,
   };
 }
@@ -48,9 +49,11 @@ export class InboxRepository implements InboxStore {
     const result = await pool.query(
       `SELECT t.*,
               LEFT(last_msg.content, ${PREVIEW_CHARS}) AS preview,
-              (SELECT COUNT(*)::int FROM federated_messages m
-                WHERE m.thread_id = t.id AND m.role = 'agent'
-                  AND m.created_at > COALESCE(t.last_read_at, '-infinity'::timestamptz)) AS unread,
+              -- Archived threads (phase 5) never count as unread.
+              CASE WHEN t.archived_at IS NOT NULL THEN 0 ELSE
+                (SELECT COUNT(*)::int FROM federated_messages m
+                  WHERE m.thread_id = t.id AND m.role = 'agent'
+                    AND m.created_at > COALESCE(t.last_read_at, '-infinity'::timestamptz)) END AS unread,
               EXISTS (SELECT 1 FROM federated_messages p
                 WHERE p.thread_id = t.id AND p.status = 'pending' AND p.remote_run_id IS NOT NULL) AS pending
        FROM federated_threads t
@@ -224,6 +227,24 @@ export class InboxRepository implements InboxStore {
       [threadId],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async setTopicResetPending(threadId: string, pending: boolean): Promise<void> {
+    await pool.query('UPDATE federated_threads SET topic_reset_pending = $2 WHERE id = $1', [threadId, pending]);
+  }
+
+  async archiveResolvedExtraThreads(userId: string): Promise<number> {
+    // Same rule as migration 155, for threads that still had a pending async ask then.
+    const result = await pool.query(
+      `UPDATE federated_threads t SET archived_at = NOW()
+        WHERE t.user_id = $1 AND NOT t.is_default AND t.archived_at IS NULL
+          AND EXISTS (SELECT 1 FROM federated_threads d
+                       WHERE d.user_id = t.user_id AND d.peer_id = t.peer_id AND d.agent_slug = t.agent_slug AND d.is_default)
+          AND NOT EXISTS (SELECT 1 FROM federated_messages m
+                           WHERE m.thread_id = t.id AND m.status = 'pending' AND m.remote_run_id IS NOT NULL)`,
+      [userId],
+    );
+    return result.rowCount ?? 0;
   }
 
   async deleteThreadsForPeer(userId: string, peerId: string): Promise<number> {

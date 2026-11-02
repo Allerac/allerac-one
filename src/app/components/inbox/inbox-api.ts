@@ -52,6 +52,8 @@ export const inboxApi = {
     call<SendResult>(`/api/inbox/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/retry`, domain, {
       method: 'POST',
     }),
+  newTopic: (domain: string, threadId: string) =>
+    call<{ divider: InboxMessageView }>(`/api/inbox/threads/${encodeURIComponent(threadId)}/topic`, domain, { method: 'POST' }),
   updates: (domain: string) => call<InboxUpdates>('/api/inbox/updates', domain),
   markRead: (domain: string, threadId: string) =>
     call<{ read: boolean }>(`/api/inbox/threads/${encodeURIComponent(threadId)}/read`, domain, { method: 'POST' }),

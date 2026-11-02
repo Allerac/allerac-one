@@ -17,7 +17,7 @@ export class InMemoryInboxStore implements InboxStore {
       return {
         ...t,
         preview: own.at(-1)?.content ?? null,
-        unread: own.filter(m => m.role === 'agent' && (!t.lastReadAt || m.createdAt > t.lastReadAt)).length,
+        unread: t.archivedAt ? 0 : own.filter(m => m.role === 'agent' && (!t.lastReadAt || m.createdAt > t.lastReadAt)).length,
         pending: own.some(m => m.status === 'pending' && m.remoteRunId !== null),
       };
     });
@@ -37,7 +37,7 @@ export class InMemoryInboxStore implements InboxStore {
   private addThread(p: { userId: string; peerId: string; agentSlug: string; title: string }, isDefault: boolean) {
     const t: FederatedThread = {
       id: `thread-${++this.seq}`, userId: p.userId, peerId: p.peerId, agentSlug: p.agentSlug, title: p.title,
-      remoteConversationId: null, isDefault, lastMessageAt: isDefault ? null : this.tick(), lastReadAt: null, archivedAt: null, createdAt: this.tick(),
+      remoteConversationId: null, isDefault, lastMessageAt: isDefault ? null : this.tick(), lastReadAt: null, archivedAt: null, topicResetPending: false, createdAt: this.tick(),
     };
     this.threads.set(t.id, t);
     return t;
@@ -104,6 +104,18 @@ export class InMemoryInboxStore implements InboxStore {
   }
   async hasPendingAsync(threadId: string) {
     return this.messages.some(m => m.threadId === threadId && m.status === 'pending' && m.remoteRunId !== null);
+  }
+  async setTopicResetPending(id: string, pending: boolean) { const t = this.threads.get(id); if (t) t.topicResetPending = pending; }
+  async archiveResolvedExtraThreads(userId: string) {
+    let count = 0;
+    for (const t of this.threads.values()) {
+      if (t.userId !== userId || t.isDefault || t.archivedAt) continue;
+      const hasDefault = [...this.threads.values()].some(d => d.isDefault && d.userId === t.userId && d.peerId === t.peerId && d.agentSlug === t.agentSlug);
+      if (!hasDefault || await this.hasPendingAsync(t.id)) continue;
+      t.archivedAt = this.tick();
+      count += 1;
+    }
+    return count;
   }
   async deleteThreadsForPeer(userId: string, peerId: string) {
     const ids = [...this.threads.values()].filter(t => t.userId === userId && t.peerId === peerId).map(t => t.id);
