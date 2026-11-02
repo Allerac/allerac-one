@@ -158,6 +158,43 @@ documents", not a generic "Allerac".
 - **P4c:** async ask + run polling, unread/online realtime (mig 148 if needed).
 - **P4d:** Control Tower, heartbeats (mig 149).
 
+## Ask Protocol Versions
+
+Peers advertise `protocol.ask` in `GET /api/v1/federation/agents`. Missing = 1.
+
+| Version | Adds |
+|---|---|
+| 1 | Stateless `POST /agents/:agent/ask` (`question`). |
+| 2 | P4b `conversation_id` + `Idempotency-Key`; P4c `?async=1` and `GET /asks/:key`. |
+| 3 | Phase 5 `primary` and `topic_reset` (below). |
+
+`conversation_id` semantics are unchanged for every caller: a UUID continues
+that conversation, `null` starts a new titled one, and an omitted field is a
+legacy ask that lands in the principal's primary conversation for the agent
+(no handle returned).
+
+**v3 (phase 5: one thread per remote agent)**
+
+- `primary: true`: append to the principal's primary federated conversation
+  for this agent (the same one legacy asks use). It wins over
+  `conversation_id`, which is ignored and not checked. The response carries
+  that conversation's id as `conversation_id`.
+- `topic_reset: true`: insert a topic marker in the target conversation before
+  the turn, so the agent's context restarts there. Nothing is deleted. A
+  replayed `Idempotency-Key` does not insert a second marker. Both flags are
+  part of the request hash, so reusing a key with other flags is
+  `idempotency_key_reused`.
+- Home Units send `primary: true` (no `conversation_id`) only to peers that
+  advertise `ask >= 3`, and `topic_reset: true` once, on the first ask after
+  the user pressed "New topic". Older peers receive `conversation_id` exactly
+  as before; for them "New topic" starts a fresh conversation (`null`), and
+  the packed context never crosses the divider.
+- Home side: one active thread per (user, peer, agent) (mig 155). Extra
+  threads from P4b are archived (read-only, listed in the agent page's
+  Archive, still opened with `?thread=`), never merged or deleted, and never
+  counted as unread. Threads still waiting for an async reply are archived on
+  the next inbox listing after the reply resolves.
+
 ## Single-Agent Units
 
 With `ALLERAC_SINGLE_AGENT=true` a Unit lists exactly one agent to its peers:

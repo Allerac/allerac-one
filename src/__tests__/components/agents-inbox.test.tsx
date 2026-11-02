@@ -38,8 +38,8 @@ const listing = () => ({
         slug: 'chat', name: 'Santos Chat', description: null, threadId: T1, preview: 'last reply', lastMessageAt: '2026-01-01T00:00:00Z', unread: 2, available: true,
         threads: [
           { threadId: T1, title: null, isDefault: true, preview: 'last reply', lastMessageAt: '2026-01-01T00:00:00Z', unread: 2 },
-          { threadId: T2, title: 'Trip plans', isDefault: false, preview: null, lastMessageAt: null, unread: 1 },
         ],
+        archivedThreads: [{ threadId: T2, title: 'Trip plans', isDefault: false, preview: null, lastMessageAt: '2025-12-01T00:00:00Z', unread: 0 }],
       }],
     },
     {
@@ -56,7 +56,7 @@ const msg = (id: string, role: string, content: string, status = 'done', extra: 
 const threadView = (id = T1, overrides: Record<string, unknown> = {}) => ({
   thread: { id, agentSlug: 'chat', title: id === T2 ? 'Trip plans' : null },
   unit: { peerId: 'p1', name: 'santos', displayName: 'Santos' },
-  readOnly: false, nextCursor: null,
+  readOnly: id === T2, archived: id === T2, nextCursor: null,
   messages: [msg('m1', 'user', 'hi'), msg('m2', 'agent', '**bold** reply')],
   ...overrides,
 });
@@ -99,7 +99,9 @@ describe('agents-format', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const items = flattenAgents(listing() as any, null);
     expect(items.map(item => item.key)).toEqual(['santos/chat', 'barcelona/coach']);
-    expect(items[0].unread).toBe(3);
+    // Archived threads never count (phase 5).
+    expect(items[0].unread).toBe(2);
+    expect(items[0].archivedThreads.map(thread => thread.threadId)).toEqual([T2]);
     expect([...items].reverse().sort(compareAgents)[0].key).toBe('santos/chat');
   });
 });
@@ -122,7 +124,7 @@ describe('AgentsInboxSection', () => {
     render(<AgentsInboxSection isDark={false} domainId="chat" />);
     const row = await screen.findByTestId('agent-santos/chat');
     expect(within(row).getByText(/🏖️ Santos · Beach lab/)).toBeInTheDocument();
-    expect(within(row).getByTestId('unread')).toHaveTextContent('3');
+    expect(within(row).getByTestId('unread')).toHaveTextContent('2');
     expect(within(row).getByTestId('status-dot')).toHaveAttribute('data-status', 'online');
     expect(within(screen.getByTestId('agent-barcelona/coach')).getByTestId('status-dot')).toHaveAttribute('data-status', 'degraded');
     expect(screen.getByTestId('total-unread')).toHaveTextContent('3');
@@ -146,7 +148,7 @@ describe('AgentsInboxSection', () => {
 
   it('marks pending replies from updates and folds archived threads', async () => {
     route(url => (url.startsWith('/api/inbox/updates')
-      ? { totalUnread: 0, threads: [{ threadId: T2, unread: 1, pending: true, lastMessageAt: '2026-03-01T00:00:00Z', preview: null }], serverTime: '2026-03-01T00:00:00Z' }
+      ? { totalUnread: 0, threads: [{ threadId: T1, unread: 1, pending: true, lastMessageAt: '2026-03-01T00:00:00Z', preview: null }], serverTime: '2026-03-01T00:00:00Z' }
       : undefined));
     const onNavigate = jest.fn();
     render(<AgentsInboxSection isDark={false} domainId="chat" onNavigate={onNavigate} />);
@@ -161,7 +163,7 @@ describe('AgentsInboxSection', () => {
     render(<AgentsInboxSection isDark={false} domainId="chat" collapsed />);
     const row = await screen.findByTestId('agent-santos/chat');
     expect(within(row).queryByText(/Santos ·/)).toBeNull();
-    expect(within(row).getByTestId('unread')).toHaveTextContent('3');
+    expect(within(row).getByTestId('unread')).toHaveTextContent('2');
   });
 });
 
@@ -190,45 +192,41 @@ describe('MarkdownContent (untrusted)', () => {
 });
 
 describe('AgentChatClient', () => {
-  it('opens the default thread with header, markdown reply and thread switcher', async () => {
+  it('opens the single thread with header and markdown reply; no thread switcher (phase 5)', async () => {
     render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
     expect(await screen.findByText('**bold** reply')).toBeInTheDocument();
     expect(screen.getByRole('heading')).toHaveTextContent('Santos Chat · Santos');
-    expect(screen.getByTestId('other-unread')).toHaveTextContent('1');
-    fireEvent.click(screen.getByRole('button', { name: /Main thread/ }));
-    fireEvent.click(within(screen.getByTestId('thread-switcher')).getByText('Trip plans'));
+    expect(screen.queryByTestId('thread-switcher')).toBeNull();
+    expect(screen.queryByLabelText('Thread actions')).toBeNull();
+    expect(screen.getByTestId('new-topic-button')).toBeEnabled();
+  });
+
+  it('"New topic" posts to the thread and shows the divider', async () => {
+    route((url, init) => (url.includes(`${T1}/topic`) && init?.method === 'POST'
+      ? { divider: msg('m9', 'system', 'New topic') } : undefined));
+    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
+    await screen.findByText('**bold** reply');
+    fireEvent.click(screen.getByTestId('new-topic-button'));
+    expect(await screen.findByTestId('topic-divider')).toHaveTextContent('New topic');
+    expect(screen.getByTestId('new-topic-button')).toBeDisabled();
+  });
+
+  it('lists archived threads and opens one read-only via ?thread', async () => {
+    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
+    await screen.findByText('**bold** reply');
+    fireEvent.click(screen.getByLabelText('Archive'));
+    fireEvent.click(within(screen.getByTestId('archive-list')).getByText('Trip plans'));
     expect(replace).toHaveBeenCalledWith(`/agents/santos/chat?thread=${T2}`);
   });
 
-  it('honours ?thread and creates a new thread', async () => {
-    route((url, init) => (url.startsWith('/api/inbox/threads?') && init?.method === 'POST'
-      ? { thread: { id: T3, agentSlug: 'chat', title: 'Ideas' } } : undefined));
-    route((url, init) => (url.startsWith(`/api/inbox/threads/${T3}?`) && !init?.method ? threadView(T3, { messages: [] }) : undefined));
+  it('shows an archived thread read-only, with no composer or New topic', async () => {
     render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={T2} />);
-    expect(await screen.findByRole('button', { name: /Trip plans/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Trip plans/ }));
-    fireEvent.click(screen.getByText('＋ New thread'));
-    fireEvent.change(screen.getByLabelText('New thread title'), { target: { value: 'Ideas' } });
-    fireEvent.click(screen.getByText('Create'));
-    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/agents/santos/chat?thread=${T3}`));
-    const create = calls.find(([url, init]) => url.startsWith('/api/inbox/threads?') && init?.method === 'POST');
-    expect(JSON.parse(String(create?.[1]?.body))).toMatchObject({ new: true, title: 'Ideas' });
-  });
-
-  it('renames and deletes the thread', async () => {
-    route((url, init) => (init?.method === 'PATCH' ? { thread: { id: T1, title: 'Renamed' } } : undefined));
-    route((url, init) => (init?.method === 'DELETE' ? { deleted: true } : undefined));
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
-    render(<AgentChatClient unitName="santos" agentSlug="chat" threadId={null} />);
-    await screen.findByText('**bold** reply');
-    fireEvent.click(screen.getByLabelText('Thread actions'));
-    fireEvent.click(screen.getByText('Rename thread'));
-    fireEvent.change(screen.getByLabelText('Thread title'), { target: { value: 'Renamed' } });
-    fireEvent.keyDown(screen.getByLabelText('Thread title'), { key: 'Enter' });
-    await waitFor(() => expect(calls.some(([, init]) => init?.method === 'PATCH')).toBe(true));
-    fireEvent.click(screen.getByLabelText('Thread actions'));
-    fireEvent.click(screen.getByText('Delete thread'));
-    await waitFor(() => expect(calls.some(([url, init]) => init?.method === 'DELETE' && url.includes(T1))).toBe(true));
+    expect(await screen.findByText('This thread is archived and read-only.')).toBeInTheDocument();
+    expect(screen.getByTestId('archived-label')).toHaveTextContent('Trip plans');
+    expect(screen.queryByLabelText('Message')).toBeNull();
+    expect(screen.queryByTestId('new-topic-button')).toBeNull();
+    fireEvent.click(screen.getByText('Back to chat'));
+    expect(replace).toHaveBeenCalledWith('/agents/santos/chat?thread=' + T1);
   });
 
   it('polls while a reply is pending, then marks it read', async () => {

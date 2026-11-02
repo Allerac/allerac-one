@@ -224,6 +224,39 @@ describe('AgentsService conversation continuity (P4b)', () => {
     expect(runtime.chats[1]).toMatchObject({ conversationId: CONV, message: 'next' });
   });
 
+  it('v3 primary: appends to the primary conversation and returns its id (phase 5)', async () => {
+    const { service, runtime } = await withDedupe();
+    const first = await service.ask({ ...base, primary: true });
+    expect(first.conversation_id).toBe('conv:health:Federation · Napols');
+    // primary wins over a stale conversation id, which is not even checked.
+    const second = await service.ask({ ...base, primary: true, conversationId: CONV, question: 'next' });
+    expect(second.conversation_id).toBe(first.conversation_id);
+    expect(runtime.chats.map(chat => chat.conversationId)).toEqual([first.conversation_id, first.conversation_id]);
+    expect(runtime.topicResets).toHaveLength(0);
+  });
+
+  it('v3 topic_reset inserts a topic marker before the turn, once per ask (replays do not repeat it)', async () => {
+    const { service, runtime } = await withDedupe();
+    const order: string[] = [];
+    runtime.resetTopic = async params => { runtime.topicResets.push(params); order.push('marker'); };
+    const runChat = runtime.runChat;
+    runtime.runChat = async input => { order.push('turn'); return runChat(input); };
+    const first = await service.ask({ ...base, primary: true, topicReset: true, idempotencyKey: 'k-topic' });
+    await service.ask({ ...base, primary: true, topicReset: true, idempotencyKey: 'k-topic' });
+    expect(order).toEqual(['marker', 'turn']);
+    expect(runtime.topicResets).toEqual([{ conversationId: first.conversation_id, userId: 'user-1' }]);
+    // The v3 flags are part of the request hash: same key, other flags = reuse error.
+    await expect(service.ask({ ...base, primary: true, idempotencyKey: 'k-topic' }))
+      .rejects.toMatchObject({ code: 'idempotency_key_reused' });
+  });
+
+  it('v2 callers keep the old semantics (null = new conversation, omitted = legacy, no handle)', async () => {
+    const { service, runtime } = await withDedupe();
+    expect((await service.ask(base)).conversation_id).toBeNull();
+    expect((await service.ask({ ...base, conversationId: null })).conversation_id).toBe(CONV);
+    expect(runtime.topicResets).toHaveLength(0);
+  });
+
   it('returns 404 for conversations of another principal, user or agent', async () => {
     const { service, runtime, audit } = await withDedupe();
     runtime.conversations.set(CONV, { userId: 'user-1', slug: 'health', principalId: 'principal-2', title: 'x' });

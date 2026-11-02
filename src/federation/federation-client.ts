@@ -92,6 +92,23 @@ export interface PeerSummary {
   capabilities: string[];
 }
 
+/** Ask protocol v3 flags; only sent to peers that advertise `protocol.ask >= 3`. */
+export interface AskV3Flags {
+  primary?: boolean;
+  topicReset?: boolean;
+}
+
+function askBody(input: { question: string; conversationId: string | null; threadTitle?: string | null; timeZone?: string | null } & AskV3Flags) {
+  return {
+    question: input.question,
+    // v3 primary asks carry no conversation id; older peers get it exactly as before.
+    ...(input.primary ? { primary: true } : { conversation_id: input.conversationId }),
+    ...(input.topicReset ? { topic_reset: true } : {}),
+    ...(input.threadTitle ? { thread_title: input.threadTitle.slice(0, 200) } : {}),
+    ...(input.timeZone ? { timezone: input.timeZone.slice(0, 64) } : {}),
+  };
+}
+
 export class FederationClient {
   private readonly now: () => number;
 
@@ -180,19 +197,14 @@ export class FederationClient {
   async askAgentAsync(
     peerId: string,
     agent: string,
-    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string; timeZone?: string | null },
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string; timeZone?: string | null } & AskV3Flags,
     ctx: FederationCallContext,
   ): Promise<AsyncAskOutcome> {
     const data = await this.call({
       peerId, ctx, capability: 'federation.agents.ask', target: agent,
       path: `/api/v1/federation/agents/${encodeURIComponent(agent)}/ask?async=1`,
       method: 'POST',
-      body: {
-        question: input.question,
-        conversation_id: input.conversationId,
-        ...(input.threadTitle ? { thread_title: input.threadTitle.slice(0, 200) } : {}),
-        ...(input.timeZone ? { timezone: input.timeZone.slice(0, 64) } : {}),
-      },
+      body: askBody(input),
       headers: { 'Idempotency-Key': input.idempotencyKey },
       timeoutMs: ASYNC_ASK_TIMEOUT_MS,
     });
@@ -228,19 +240,14 @@ export class FederationClient {
   async askAgentInConversation(
     peerId: string,
     agent: string,
-    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null; timeZone?: string | null },
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null; timeZone?: string | null } & AskV3Flags,
     ctx: FederationCallContext,
   ): Promise<ConversationAskResult> {
     const data = await this.call({
       peerId, ctx, capability: 'federation.agents.ask', target: agent,
       path: `/api/v1/federation/agents/${encodeURIComponent(agent)}/ask`,
       method: 'POST',
-      body: {
-        question: input.question,
-        conversation_id: input.conversationId,
-        ...(input.threadTitle ? { thread_title: input.threadTitle.slice(0, 200) } : {}),
-        ...(input.timeZone ? { timezone: input.timeZone.slice(0, 64) } : {}),
-      },
+      body: askBody(input),
       headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
       timeoutMs: ASK_TIMEOUT_MS,
     });

@@ -52,9 +52,14 @@ export interface AskDedupeStore {
   get(principalId: string, key: string, now: Date): Promise<AskResultState | null>;
 }
 
-export function askRequestHash(parts: { agent: string; conversationId: string | null | undefined; question: string }): string {
+export function askRequestHash(parts: {
+  agent: string; conversationId: string | null | undefined; question: string; primary?: boolean; topicReset?: boolean;
+}): string {
+  // v3 flags only join the hash when set, so v2 requests keep their old hash.
+  const base: unknown[] = [parts.agent, parts.conversationId ?? null, parts.question];
+  if (parts.primary || parts.topicReset) base.push({ primary: !!parts.primary, topicReset: !!parts.topicReset });
   return createHash('sha256')
-    .update(JSON.stringify([parts.agent, parts.conversationId ?? null, parts.question]))
+    .update(JSON.stringify(base))
     .digest('hex');
 }
 

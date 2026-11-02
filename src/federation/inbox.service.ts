@@ -72,19 +72,31 @@ export function rejectEmptyAnswer(outcome: AsyncAskOutcome): AsyncAskOutcome {
 }
 
 /** The subset of FederationClient the inbox needs. */
+/** Ask protocol v3 flags (phase 5); sent only to peers advertising `protocol.ask >= 3`. */
+export interface AskV3Flags {
+  primary?: boolean;
+  topicReset?: boolean;
+}
+
+/** Phase 5: first ask protocol version with `primary` and `topic_reset`. */
+export const PRIMARY_ASK_VERSION = 3;
+/** Content of the local "New topic" divider (a system message). */
+export const TOPIC_DIVIDER = 'New topic';
+
+/** The subset of FederationClient the inbox needs. */
 export interface InboxFederationPort {
   listAgentsWithUnit(peerId: string, ctx: { initiatedByUserId: string | null }): Promise<{ agents: PeerAgent[]; unit: PeerUnitProfile | null; askVersion?: number; pages?: string[] }>;
   askAgentInConversation(
     peerId: string,
     agent: string,
-    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null; timeZone?: string | null },
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey?: string | null; timeZone?: string | null } & AskV3Flags,
     ctx: { initiatedByUserId: string | null; threadId?: string | null },
   ): Promise<{ answer: string; truncated: boolean; conversationId: string | null; messageId: string | null }>;
   /** P4c (peers with ask protocol >= 2). Optional so older wiring keeps working. */
   askAgentAsync?(
     peerId: string,
     agent: string,
-    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string; timeZone?: string | null },
+    input: { question: string; conversationId: string | null; threadTitle?: string | null; idempotencyKey: string; timeZone?: string | null } & AskV3Flags,
     ctx: { initiatedByUserId: string | null; threadId?: string | null },
   ): Promise<AsyncAskOutcome>;
   getAskResult?(peerId: string, key: string, ctx: { initiatedByUserId: string | null; threadId?: string | null }): Promise<AsyncAskOutcome>;
@@ -142,8 +154,10 @@ export interface InboxAgentRow {
   description: string | null;
   /** Default thread (or the most recent one); null until one is opened. */
   threadId: string | null;
-  /** All threads with this agent, most recent first (P4b). */
+  /** Active threads with this agent, most recent first: one, plus any extra still waiting on a reply (phase 5). */
   threads: InboxThreadRow[];
+  /** Phase 5: archived (read-only) threads, most recent first; never counted as unread. */
+  archivedThreads?: InboxThreadRow[];
   preview: string | null;
   lastMessageAt: string | null;
   unread: number;
@@ -199,6 +213,8 @@ export interface InboxThreadView {
   thread: { id: string; agentSlug: string; title: string | null };
   unit: { peerId: string; name: string; displayName: string };
   readOnly: boolean;
+  /** Phase 5: an archived thread (read-only history). */
+  archived?: boolean;
   messages: InboxMessageView[];
   /** Cursor for older messages (`before`), null when the start is loaded. */
   nextCursor: string | null;
@@ -292,6 +308,9 @@ export class InboxService {
   }
 
   async list(user: InboxUser): Promise<InboxListing> {
+    // Phase 5: archive extra threads whose pending reply has resolved (see migration 155).
+    await this.deps.store.archiveResolvedExtraThreads(user.id)
+      .catch(error => this.log(`[Inbox] archive failed: ${error instanceof Error ? error.message : 'error'}`));
     const [home, peers, threads, beats] = await Promise.all([
       this.deps.loadHomeUnit(),
       this.deps.peers.list(),
@@ -309,16 +328,25 @@ export class InboxService {
       for (const agent of result?.agents ?? []) {
         rows.set(agent.id, {
           slug: agent.id, name: agent.name, description: agent.description ?? null,
-          threadId: null, threads: [], preview: null, lastMessageAt: null, unread: 0, available: true,
+          threadId: null, threads: [], archivedThreads: [], preview: null, lastMessageAt: null, unread: 0, available: true,
         });
       }
       const recentFirst = [...peerThreads].sort((a, b) => time(b.lastMessageAt ?? b.createdAt) - time(a.lastMessageAt ?? a.createdAt));
       for (const thread of recentFirst) {
         const row = rows.get(thread.agentSlug) ?? {
           slug: thread.agentSlug, name: thread.agentSlug, description: null,
-          threadId: null, threads: [], preview: null, lastMessageAt: null, unread: 0, available: false,
+          threadId: null, threads: [], archivedThreads: [], preview: null, lastMessageAt: null, unread: 0, available: false,
         };
         const preview = thread.preview?.slice(0, PREVIEW_CHARS) ?? null;
+        if (thread.archivedAt) {
+          rows.set(thread.agentSlug, {
+            ...row,
+            archivedThreads: [...(row.archivedThreads ?? []), {
+              threadId: thread.id, title: thread.title, isDefault: false, preview, lastMessageAt: iso(thread.lastMessageAt), unread: 0,
+            }],
+          });
+          continue;
+        }
         const first = row.threads.length === 0;
         rows.set(thread.agentSlug, {
           ...row,
@@ -384,10 +412,10 @@ export class InboxService {
     const agent = agents.find(item => item.id === slug);
     if (!agent) throw new InboxError('not_found', 'Agent not found on this unit', 404);
     const base = `${agent.name} @ ${peer.displayName ?? peer.unitName}`.slice(0, MAX_THREAD_TITLE_CHARS);
-    const params = { userId: user.id, peerId: peer.id, agentSlug: slug };
-    if (!options.newThread) return this.deps.store.findOrCreateThread({ ...params, title: base });
-    const title = options.title ? cleanTitle(options.title) : `${agent.name} · ${new Date(this.now()).toISOString().slice(0, 16).replace('T', ' ')}`;
-    return this.deps.store.createThread({ ...params, title: title.slice(0, MAX_THREAD_TITLE_CHARS) });
+    // Phase 5: one thread per (user, peer, agent). `newThread` is ignored (older clients get the
+    // default thread); "New topic" replaces it.
+    void options;
+    return this.deps.store.findOrCreateThread({ userId: user.id, peerId: peer.id, agentSlug: slug, title: base });
   }
 
   async getThread(user: InboxUser, threadId: string): Promise<InboxThreadView> {
@@ -399,7 +427,8 @@ export class InboxService {
     return {
       thread: { id: thread.id, agentSlug: thread.agentSlug, title: thread.title },
       unit: { peerId: thread.peerId, name: peer?.unitName ?? 'unknown', displayName: peer?.displayName ?? peer?.unitName ?? 'unknown' },
-      readOnly: peer?.status !== 'active',
+      readOnly: peer?.status !== 'active' || thread.archivedAt !== null,
+      archived: thread.archivedAt !== null,
       ...page,
     };
   }
@@ -486,7 +515,25 @@ export class InboxService {
   private async loadWritableThread(user: InboxUser, threadId: string) {
     const { thread, peer } = await this.loadThread(user, threadId);
     if (!peer || peer.status !== 'active') throw new InboxError('unit_not_paired', 'Unit no longer paired', 409);
+    if (thread.archivedAt) throw new InboxError('thread_archived', 'This thread is archived and read-only', 409);
     return { thread, peer };
+  }
+
+  /**
+   * "New topic" (phase 5): adds a visible divider and flags the thread so the next
+   * ask restarts the agent's context. v3 peers get `topic_reset: true` on their
+   * primary conversation; older peers get a fresh conversation (null handle).
+   * The packed history never crosses the divider.
+   */
+  async newTopic(user: InboxUser, threadId: string): Promise<{ divider: InboxMessageView }> {
+    const { thread } = await this.loadWritableThread(user, threadId);
+    if (this.inFlight.has(thread.id) || await this.deps.store.hasPendingAsync(thread.id)) {
+      throw new InboxError('send_in_progress', 'Wait for the current reply before starting a new topic', 409);
+    }
+    const divider = await this.deps.store.insertMessage({ threadId: thread.id, role: 'system', content: TOPIC_DIVIDER, status: 'done' });
+    await this.deps.store.setTopicResetPending(thread.id, true);
+    await this.deps.store.setRemoteConversationId(thread.id, null);
+    return { divider: toMessageView(divider) };
   }
 
   private acquirePeerSlot(peerId: string): boolean {
@@ -517,21 +564,33 @@ export class InboxService {
       }
       if (!this.acquirePeerSlot(peer.id)) throw new InboxError('rate_limited', 'Too many messages to this unit, try again in a minute', 429);
       const pending = await createPending();
-      const history = (await this.deps.store.listMessages(thread.id, 50))
+      const recent = (await this.deps.store.listMessages(thread.id, 50))
         .filter(message => message.id !== pending.id && new Date(message.createdAt) <= new Date(pending.createdAt));
+      // Context never crosses the latest "New topic" divider.
+      const divider = recent.map(message => message.role === 'system' && message.content === TOPIC_DIVIDER).lastIndexOf(true);
+      const history = recent.slice(divider + 1);
+      const askVersion = await this.askVersion(peer, user);
+      const usePrimary = askVersion >= PRIMARY_ASK_VERSION;
+      const topicReset = usePrimary && thread.topicResetPending === true;
 
       await this.deps.store.touchThread(thread.id, new Date(this.now()));
       const notices: FederatedMessage[] = [];
       // The key is stable per (message, remote conversation) so a retry replays, while a
       // context reset (new conversation, different body) gets its own key.
-      const useAsync = await this.supportsAsync(peer, user);
+      const useAsync = askVersion >= 2 && !!this.deps.federation.askAgentAsync && !!this.deps.federation.getAskResult;
       const ask = async (conversationId: string | null): Promise<{ outcome: AsyncAskOutcome; key: string }> => {
         const timeZone = await this.userTimeZone(user.id);
+        // v3 peers: the principal's primary conversation (phase 5). Older peers: the P4b handle.
+        const primary = usePrimary && conversationId === thread.remoteConversationId;
         const input = {
           ...(timeZone ? { timeZone } : {}),
           // With a handle the peer already has the context; send only the new message.
-          question: conversationId ? pending.content : packQuestion(history, pending.content),
-          conversationId, threadTitle: thread.title, idempotencyKey: `${pending.id}:${conversationId ?? 'new'}`,
+          question: conversationId || (primary && topicReset) ? pending.content : packQuestion(history, pending.content),
+          conversationId,
+          ...(primary ? { primary: true } : {}),
+          ...(primary && topicReset ? { topicReset: true } : {}),
+          threadTitle: thread.title,
+          idempotencyKey: `${pending.id}:${primary ? 'primary' : conversationId ?? 'new'}`,
         };
         const ctx = { initiatedByUserId: user.id, threadId: thread.id };
         if (useAsync) return { outcome: rejectEmptyAnswer(await this.deps.federation.askAgentAsync!(peer.id, thread.agentSlug, input, ctx)), key: input.idempotencyKey };
@@ -552,6 +611,8 @@ export class InboxService {
           asked = await ask(null);
         }
         const { outcome, key } = asked;
+        // The peer accepted the topic reset (it runs before the turn): clear the flag.
+        if (thread.topicResetPending && outcome.status !== 'failed') await this.deps.store.setTopicResetPending(thread.id, false);
         if (outcome.status === 'pending') {
           // P4c: the peer runs it in the background; the poller picks the reply up.
           const at = this.now();
@@ -602,13 +663,12 @@ export class InboxService {
     }
   }
 
-  /** Async asks need peer ask protocol >= 2 and a client that supports them (mixed-version fallback). */
-  private async supportsAsync(peer: PeerRecord, user: InboxUser): Promise<boolean> {
-    if (!this.deps.federation.askAgentAsync || !this.deps.federation.getAskResult) return false;
+  /** Peer ask protocol version (mixed-version fallback): 1 when unknown or unreachable. */
+  private async askVersion(peer: PeerRecord, user: InboxUser): Promise<number> {
     try {
-      return ((await this.peerAgents(peer, user)).askVersion ?? 1) >= 2;
+      return (await this.peerAgents(peer, user)).askVersion ?? 1;
     } catch {
-      return false;
+      return 1;
     }
   }
 

@@ -43,7 +43,7 @@ describe('pagesForActiveAgent', () => {
   const local = [{ path: '/health', label: 'Health', icon: '❤️' }];
   const agent = (over: Partial<AgentItem>): AgentItem => ({
     key: 'santos/chat', peerId: 'p', unitName: 'santos', unitDisplayName: 'Santos', unitEmoji: null, unitRole: null,
-    roleShort: null, status: 'online', slug: 'chat', name: 'Santos', available: true, unread: 0, pending: false,
+    roleShort: null, status: 'online', slug: 'chat', name: 'Santos', available: true, unread: 0, pending: false, archivedThreads: [],
     lastMessageAt: null, preview: null, defaultThreadId: null, threads: [], configureUrl: null,
     pages: [{ id: 'notes', label: 'Notes', icon: '📝', url: 'https://santos.example/notes' }], ...over,
   });

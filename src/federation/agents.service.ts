@@ -24,8 +24,11 @@ export const ASK_SERVER_TIMEOUT_MS = 55_000;
 /** P4c: background (async) asks may run this long before they read as timed out. */
 export const ASYNC_ASK_DEADLINE_MS = 10 * 60 * 1000;
 export const DEFAULT_ASYNC_MAX_RUNNING = 4;
-/** P4c: ask protocol version advertised in the agents list (2 = async + GET /asks/:key). */
-export const ASK_PROTOCOL_VERSION = 2;
+/**
+ * Ask protocol version advertised in the agents list.
+ * 2 (P4c) = async + GET /asks/:key. 3 (phase 5) = `primary` and `topic_reset`.
+ */
+export const ASK_PROTOCOL_VERSION = 3;
 
 export interface AgentsRuntime {
   loadUser(userId: string): Promise<User | null>;
@@ -38,6 +41,8 @@ export interface AgentsRuntime {
   findOrCreateConversation(userId: string, slug: string, title: string, principalId?: string): Promise<string>;
   /** P4b: a new federated conversation owned by the calling principal. */
   createFederatedConversation(params: { userId: string; slug: string; principalId: string; title: string }): Promise<string>;
+  /** Phase 5: inserts a "New topic" marker; the agent's context restarts after it. Optional for older wiring. */
+  resetTopic?(params: { conversationId: string; userId: string }): Promise<void>;
   /** P4b: true only if the conversation exists, is federated, and belongs to this principal, user and agent. */
   ownsFederatedConversation(params: { id: string; userId: string; slug: string; principalId: string }): Promise<boolean>;
   resolveModel(userId: string, slug: string): Promise<{ modelId: string; provider: string } | null>;
@@ -85,6 +90,10 @@ export interface AskParams {
   idempotencyKey?: string | null;
   /** IANA timezone of the asking user (home Unit); used for "today" when valid. */
   timeZone?: string | null;
+  /** v3: append to the principal's primary conversation for this agent (wins over conversationId). */
+  primary?: boolean;
+  /** v3: start a new topic in the target conversation before this question. */
+  topicReset?: boolean;
 }
 
 export interface AskResult {
@@ -222,7 +231,7 @@ export class AgentsService {
       throw federationErrors.agentNotFound();
     }
 
-    const conversationId = params.conversationId;
+    const conversationId = params.primary ? undefined : params.conversationId;
     if (typeof conversationId === 'string') {
       const owned = UUID.test(conversationId) && await this.deps.runtime.ownsFederatedConversation({
         id: conversationId, userId: user.id, slug: params.agent, principalId: params.principalId,
@@ -237,7 +246,9 @@ export class AgentsService {
     if (key) {
       const now = new Date(this.now());
       const begin = await this.deps.dedupe!.begin(
-        params.principalId, key, askRequestHash({ agent: params.agent, conversationId, question: params.question }), now,
+        params.principalId, key, askRequestHash({
+          agent: params.agent, conversationId, question: params.question, primary: params.primary, topicReset: params.topicReset,
+        }), now,
         mode === 'async' ? { mode, deadlineAt: new Date(now.getTime() + ASYNC_ASK_DEADLINE_MS) } : { mode },
       );
       if (begin.kind === 'replay') {
@@ -297,14 +308,17 @@ export class AgentsService {
 
   private async execute(prepared: PreparedAsk, run: { release: () => void }, timeoutMs: number): Promise<AskResult> {
     const { params, peer, user, audit, key, started } = prepared;
-    const conversationId = params.conversationId;
+    const conversationId = params.primary ? undefined : params.conversationId;
     try {
       const model = await this.deps.runtime.resolveModel(user.id, params.agent);
       if (!model) throw new FederationError('provider_not_configured', 'No model is configured for this agent', 422);
 
       const unitLabel = `Federation · ${peer.displayName ?? peer.unitName}`;
       let targetId: string;
-      if (typeof conversationId === 'string') {
+      if (params.primary) {
+        // v3: the single primary conversation of this principal for this agent.
+        targetId = await this.deps.runtime.findOrCreateConversation(user.id, params.agent, unitLabel, params.principalId);
+      } else if (typeof conversationId === 'string') {
         targetId = conversationId;
       } else if (conversationId === null) {
         const threadTitle = params.threadTitle?.trim();
@@ -315,6 +329,9 @@ export class AgentsService {
       } else {
         // Older home Units send no conversation_id: append to the principal's primary conversation.
         targetId = await this.deps.runtime.findOrCreateConversation(user.id, params.agent, unitLabel, params.principalId);
+      }
+      if (params.topicReset && this.deps.runtime.resetTopic) {
+        await this.deps.runtime.resetTopic({ conversationId: targetId, userId: user.id });
       }
       const result = await withTimeout(this.deps.runtime.runChat({
         user,
@@ -337,7 +354,8 @@ export class AgentsService {
       const answer = truncated ? result.content.slice(0, MAX_ANSWER_CHARS) : result.content;
       const response: AskResult = {
         answer, truncated,
-        conversation_id: conversationId === undefined ? null : targetId,
+        // Legacy callers (no conversation_id, no primary) get no handle, as before.
+        conversation_id: conversationId === undefined && !params.primary ? null : targetId,
         message_id: result.messageId ?? null,
       };
       if (key) await this.deps.dedupe!.finish(params.principalId, key, { status: 'done', response });

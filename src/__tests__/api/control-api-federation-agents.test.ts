@@ -60,7 +60,7 @@ describe('federation agents routes', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     const { pages, ...rest } = body.data;
-    expect(rest).toEqual({ agents: [{ id: 'health', name: 'Health', description: null }], unit: null, protocol: { ask: 2 }, granted_capabilities: ['federation.agents.list'] });
+    expect(rest).toEqual({ agents: [{ id: 'health', name: 'Health', description: null }], unit: null, protocol: { ask: 3 }, granted_capabilities: ['federation.agents.list'] });
     // Page ids only (no settings), following the agent tool settings: health is turned off here.
     expect(pages).toEqual(expect.arrayContaining(['notes']));
     expect(pages).not.toContain('health');

@@ -2,7 +2,7 @@
 import pool from '@/app/clients/db';
 import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 import { assertDomainAccess } from '@/app/lib/domain-access-check';
-import { getOrCreatePrimaryConversation } from '@/app/services/chat/primary-conversation';
+import { getOrCreatePrimaryConversation, insertTopicMarker } from '@/app/services/chat/primary-conversation';
 import { executeChatMessage } from '@/app/services/chat/chat-execution.service';
 import type { ChatProvider } from '@/app/services/chat/chat-request-parser';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
@@ -96,6 +96,9 @@ export const agentsService = new AgentsService({
       const id = created.rows[0]?.id;
       if (!id) throw new Error('Failed to create federation conversation');
       return id;
+    },
+    async resetTopic({ conversationId, userId }) {
+      await insertTopicMarker(conversationId, userId);
     },
     async ownsFederatedConversation({ id, userId, slug, principalId }) {
       const result = await pool.query(
