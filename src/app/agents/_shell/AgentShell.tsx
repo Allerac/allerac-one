@@ -19,6 +19,8 @@ interface Props {
   localName?: string;
   /** Mobile index: show the list full width instead of the chat. */
   listOnly?: boolean;
+  /** Data pages of enabled modules, listed in a small 'Pages' menu. */
+  pages?: { path: string; label: string; icon: string }[];
   /** Main area; receives a callback that opens the mobile agents drawer. */
   children?: (openDrawer: () => void) => ReactNode;
 }
@@ -27,7 +29,7 @@ interface Props {
  * Grok-Bot-like layout of the home screen: agent list on the left (a drawer
  * on mobile), the open chat on the right. Shared by remote and local chats.
  */
-export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit', listOnly = false, children }: Props) {
+export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit', listOnly = false, pages = [], children }: Props) {
   const { isDark: d } = useTheme();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -50,6 +52,20 @@ export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit'
           </div>
         )}
       </div>
+      {pages.length > 0 && (
+        <nav aria-label="Pages" data-testid="agent-shell-pages" className={`border-t px-4 py-3 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+          <div className={`mb-1 text-xs font-semibold uppercase ${muted}`}>Pages</div>
+          <ul className="space-y-1">
+            {pages.map(p => (
+              <li key={p.path}>
+                <Link href={p.path} onClick={close} className="block rounded px-2 py-1 text-sm hover:bg-gray-500/10">
+                  <span aria-hidden="true">{p.icon}</span> {p.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
     </div>
   );
 

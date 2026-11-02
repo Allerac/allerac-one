@@ -50,12 +50,19 @@ describe('/chat?inboxThread= redirect', () => {
     mockGetPeer.mockResolvedValueOnce({ id: 'p1', unitName: 'santos' });
     await expect(ChatPage({ searchParams: Promise.resolve({ inboxThread: T1 }) })).rejects.toThrow(`NEXT_REDIRECT /agents/santos/chat?thread=${T1}`);
   });
-  it('renders the chat for unknown threads and non-admins', async () => {
+  it('renders the chat for unknown threads and non-admins (legacy domains)', async () => {
+    process.env.ALLERAC_LEGACY_DOMAINS = 'true';
     mockRequireDomain.mockResolvedValueOnce({ id: 'a', is_admin: true });
     mockGetThread.mockResolvedValueOnce(null);
     await expect(ChatPage({ searchParams: Promise.resolve({ inboxThread: T1 }) })).resolves.toBeTruthy();
     mockRequireDomain.mockResolvedValueOnce({ id: 'b', is_admin: false });
     await expect(ChatPage({ searchParams: Promise.resolve({ inboxThread: T1 }) })).resolves.toBeTruthy();
     expect(mockGetThread).toHaveBeenCalledTimes(1);
+    delete process.env.ALLERAC_LEGACY_DOMAINS;
+  });
+  it('sends unknown threads to the local agent without legacy domains', async () => {
+    mockRequireDomain.mockResolvedValueOnce({ id: 'a', is_admin: true });
+    mockGetThread.mockResolvedValueOnce(null);
+    await expect(ChatPage({ searchParams: Promise.resolve({ inboxThread: T1 }) })).rejects.toThrow('NEXT_REDIRECT /agents/self/agent');
   });
 });

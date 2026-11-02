@@ -1,3 +1,4 @@
+import { dataPageLinkForTool } from '@/lib/legacy-domains';
 import type { User } from '@/app/services/auth/auth.service';
 import { LLMService } from '@/app/services/llm/llm.service';
 import type { Skill } from '@/app/services/skills/skills.service';
@@ -235,6 +236,9 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
           success: true,
         };
         if (toolName === 'search_web') resultEvent.data = toolResult;
+        // Deep link to the module's data page (relative URL), rendered under the reply.
+        const pageLink = reportedError ? null : dataPageLinkForTool(toolName);
+        if (pageLink) resultEvent.link = pageLink;
         input.emit(resultEvent);
         input.messages.push({
           role: 'tool',

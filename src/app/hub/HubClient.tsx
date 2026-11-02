@@ -6,6 +6,7 @@ import HubTour from '@/app/components/hub/HubTour';
 import AlleracTaskbar from '@/app/components/layout/AlleracTaskbar';
 import ClippyAssistant from '@/app/jobs/ClippyAssistant';
 import * as authActions from '@/app/actions/auth';
+import { AGENT_HOME_PATH, DATA_PAGES } from '@/lib/legacy-domains';
 
 type ShutdownPhase = 'running' | 'shutting-down' | 'safe-to-turn-off';
 
@@ -33,6 +34,21 @@ const DOCS_SHORTCUT = {
   desc: 'Allerac documentation',
 };
 
+const AGENT_SHORTCUT = { id: 'agent', label: 'Agent', icon: '💬', path: AGENT_HOME_PATH, desc: 'Talk to your agent' };
+
+/**
+ * Tiles shown on the hub. Legacy mode keeps every domain; otherwise the hub is
+ * a launcher for the agent plus the data pages of the enabled domains.
+ */
+export function hubTiles(visible: string[], legacyDomains: boolean) {
+  if (legacyDomains) {
+    return [...visible.map(slug => DOMAINS_ALL.find(d => d.id === slug)).filter((d): d is typeof DOMAINS_ALL[number] => Boolean(d)), DOCS_SHORTCUT];
+  }
+  const pages = DATA_PAGES.filter(p => visible.includes(p.id))
+    .map(p => ({ id: p.id, label: p.label, icon: p.icon, path: p.path, desc: p.linkLabel }));
+  return [AGENT_SHORTCUT, ...pages, DOCS_SHORTCUT];
+}
+
 function getDocsUrl(): string {
   const configuredUrl = process.env.NEXT_PUBLIC_DOCS_URL?.trim();
   if (configuredUrl) return configuredUrl;
@@ -41,7 +57,7 @@ function getDocsUrl(): string {
   return '/docs/index.html';
 }
 
-export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains, grampeadorBubblesEnabled = true }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[]; grampeadorBubblesEnabled?: boolean }) {
+export default function HubClient({ userName, userEmail, userId, completedHubTour, allowedDomains, grampeadorBubblesEnabled = true, legacyDomains = false }: { userName: string; userEmail: string; userId: string; completedHubTour: boolean; allowedDomains: string[]; grampeadorBubblesEnabled?: boolean; legacyDomains?: boolean }) {
   const router = useRouter();
   const [domains, setDomains] = useState<typeof DOMAINS_ALL>([]);
   const [booting, setBooting] = useState(() => {
@@ -74,13 +90,10 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
     fetch('/api/domains')
       .then(r => r.json())
       .then(data => {
-        const filtered = data.visible
-          .map((slug: string) => DOMAINS_ALL.find(d => d.id === slug))
-          .filter(Boolean);
-        setDomains([...filtered, DOCS_SHORTCUT]);
+        setDomains(hubTiles(Array.isArray(data.visible) ? data.visible : [], legacyDomains));
       })
-      .catch(() => setDomains([...DOMAINS_ALL, DOCS_SHORTCUT])); // Fallback to all
-  }, []);
+      .catch(() => setDomains(hubTiles(allowedDomains, legacyDomains)));
+  }, [legacyDomains, allowedDomains]);
 
   useEffect(() => {
     let i = 0;
@@ -231,7 +244,7 @@ export default function HubClient({ userName, userEmail, userId, completedHubTou
           ))}
         </div>
 
-        {(
+        {legacyDomains && (
           <AlleracTaskbar
             domainKey="hub"
             domainName="Hub"

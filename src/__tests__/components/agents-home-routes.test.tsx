@@ -59,9 +59,15 @@ describe('/agents', () => {
 describe('/agents/self/agent', () => {
   it('renders the embedded local chat behind chat access', async () => {
     mockDomain.mockResolvedValueOnce({ id: 'u', is_admin: false });
+    mockQuery.mockResolvedValue({ rows: [] });
     const el = await AgentChatPage(args('self', 'agent'));
     expect(mockDomain).toHaveBeenCalledWith('chat');
-    expect(el.props).toMatchObject({ isAdmin: false });
+    expect(el.props).toMatchObject({ isAdmin: false, pages: [] });
+  });
+  it('lists the enabled data pages in the Pages menu for admins', async () => {
+    mockDomain.mockResolvedValueOnce({ id: 'u', is_admin: true });
+    const el = await AgentChatPage(args('self', 'agent'));
+    expect(el.props.pages).toEqual(expect.arrayContaining([{ path: '/notes', label: 'Notes', icon: '📝' }]));
   });
   it('404s for other self slugs', async () => {
     await expect(AgentChatPage(args('self', 'other'))).rejects.toThrow('NEXT_NOT_FOUND');

@@ -15,11 +15,13 @@ interface Props {
   isAdmin: boolean;
   domainId: string;
   defaultSkillName?: string;
+  /** ALLERAC_LEGACY_DOMAINS=true: show the DomainChip switcher. */
+  legacyDomains?: boolean;
   children?: ReactNode;
 }
 
 export default function DomainLayout({
-  userId, userName, userEmail, isAdmin, domainId, defaultSkillName, children,
+  userId, userName, userEmail, isAdmin, domainId, defaultSkillName, legacyDomains = false, children,
 }: Props) {
   const router = useRouter();
   const [isDark, setIsDark]               = useState(true);
@@ -85,6 +87,7 @@ export default function DomainLayout({
           userName={userName}
           userEmail={userEmail}
           onLogout={handleLogout}
+          legacyDomains={legacyDomains}
         />
 
         {/* middle: domain content */}

@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { isSafeRelativeHref } from '@/lib/legacy-domains';
 import MarkdownContent from './MarkdownContent';
 import { Message, Model, MessageContentPart } from '../../types';
 import CorrectAndMemorize from '../memory/CorrectAndMemorize';
@@ -474,6 +476,20 @@ export default function ChatMessages({
                               >
                                 <span>Revisar e Postar no Instagram</span>
                               </button>
+                            </div>
+                          );
+                        }
+                        if (action.type === 'page_link') {
+                          if (!isSafeRelativeHref(action.href)) return null;
+                          return (
+                            <div key={idx} className="mt-2">
+                              <Link
+                                href={action.href}
+                                data-testid="page-link"
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${isDarkMode ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}
+                              >
+                                {action.label} →
+                              </Link>
                             </div>
                           );
                         }

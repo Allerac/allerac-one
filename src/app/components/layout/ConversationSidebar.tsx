@@ -11,6 +11,8 @@ import { canUseInbox } from '@/federation/inbox-policy';
 
 interface Props {
   isDark: boolean;
+  /** Show the DomainChip switcher (ALLERAC_LEGACY_DOMAINS=true only). */
+  legacyDomains?: boolean;
   conversations: ConvItem[];
   currentConvId: string | null;
   collapsed: boolean;
@@ -45,6 +47,7 @@ export default function ConversationSidebar({
   isDark: d, conversations, currentConvId, collapsed, onToggle,
   onSelect, onNew, onDelete, onPin, onRename,
   domainId, userId, isAdmin, onToggleTheme, userInitials, userName, userEmail, onLogout,
+  legacyDomains = false,
 }: Props) {
   const [openMenuId, setOpenMenuId]   = useState<string | null>(null);
   const [renamingId, setRenamingId]   = useState<string | null>(null);
@@ -257,7 +260,7 @@ export default function ConversationSidebar({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <DomainChip isDark={d} domainId={domainId} userId={userId} isAdmin={isAdmin} />
+        {legacyDomains && <DomainChip isDark={d} domainId={domainId} userId={userId} isAdmin={isAdmin} />}
       </div>
 
       {/* Action icons row */}
