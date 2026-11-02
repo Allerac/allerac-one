@@ -305,7 +305,12 @@ export async function compactIfNeeded(conversationId: string, summarize: Summari
 /** Fire-and-forget compaction; never blocks or fails the reply. */
 export function scheduleCompaction(conversationId: string, summarize: Summarize): void {
   setImmediate(() => {
-    compactIfNeeded(conversationId, summarize).catch(error => {
+    compactIfNeeded(conversationId, summarize).then(async compacted => {
+      if (!compacted) return;
+      // Phase 4b: embed the new segment for semantic search (no-op without a provider).
+      const { scheduleSegmentEmbedding } = await import('./chat-history.service');
+      scheduleSegmentEmbedding({ conversationId });
+    }).catch(error => {
       console.error('[Compaction] failed:', error instanceof Error ? error.message : error);
     });
   });

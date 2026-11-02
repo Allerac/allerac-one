@@ -16,6 +16,8 @@ export interface ChatRequestInput {
   defaultSkillName?: string;
   domain: string;
   postContext?: string;
+  /** 'agent': sent by the agent chat (phase 4b). Only the primary conversation is writable there. */
+  surface?: 'agent';
 }
 
 const ALLOWED_PROVIDERS = new Set<string>(CHAT_PROVIDERS);
@@ -53,6 +55,7 @@ export function parseChatRequestBody(body: unknown): ChatRequestInput {
   const defaultSkillName = optionalString(input.defaultSkillName);
   const domain = optionalString(input.domain) ?? 'chat';
   const postContext = optionalString(input.postContext);
+  const surface = input.surface === 'agent' ? 'agent' as const : undefined;
 
   const imagesValid = imageAttachments == null || (
     Array.isArray(imageAttachments)
@@ -94,5 +97,6 @@ export function parseChatRequestBody(body: unknown): ChatRequestInput {
     defaultSkillName,
     domain,
     postContext,
+    ...(surface ? { surface } : {}),
   };
 }

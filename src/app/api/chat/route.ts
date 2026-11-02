@@ -12,7 +12,7 @@
  *   data: {"type":"error","message":"..."}
  */
 
-import { acquireConversationLock, loadPrimaryPromptHistory, scheduleCompaction } from '@/app/services/chat/primary-conversation';
+import { acquireConversationLock, getOrCreatePrimaryConversation, loadPrimaryPromptHistory, scheduleCompaction } from '@/app/services/chat/primary-conversation';
 import { makeSegmentSummarizer } from '@/app/services/chat/segment-summarizer';
 import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import { cookies } from 'next/headers';
@@ -75,7 +75,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const {
     message,
-    conversationId: inputConversationId,
+    conversationId: requestedConversationId,
     model: modelId,
     provider,
     imageAttachments,
@@ -83,7 +83,9 @@ export async function POST(request: Request): Promise<Response> {
     defaultSkillName,
     domain: effectiveDomain,
     postContext,
+    surface,
   } = body;
+  let inputConversationId = requestedConversationId;
 
   try {
     await assertDomainAccess(user, effectiveDomain);
@@ -107,6 +109,26 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const userId = user.id;
+
+  // Phase 4b: in the agent chat only the primary conversation is writable;
+  // older conversations are a read-only archive. Other surfaces (domain
+  // panels, /code, /tickets, federation) are not affected by this rule.
+  if (surface === 'agent') {
+    try {
+      if (!inputConversationId) {
+        inputConversationId = await getOrCreatePrimaryConversation({ userId, domain: effectiveDomain });
+      } else {
+        const target = await chatService.getConversationForUser(inputConversationId, userId);
+        if (target && target.is_primary !== true) {
+          return Response.json({ error: 'This conversation is archived and read-only' }, { status: 409 });
+        }
+      }
+    } catch (error) {
+      console.error('[ChatRoute] Failed to resolve the primary conversation:', error);
+      return Response.json({ error: 'Failed to open the conversation' }, { status: 500 });
+    }
+  }
+
   const limitResult = acquireOperationLimit('chat', userId);
   if (!limitResult.allowed) {
     return operationLimitResponse(limitResult);

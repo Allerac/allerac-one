@@ -17,6 +17,8 @@ interface ChatMessageServiceConfig {
   preSelectedSkill?: any | null;
   defaultSkillName?: string;
   domain?: string;
+  /** 'agent' in the agents shell: the server only accepts the primary conversation. */
+  surface?: 'agent';
   isAdmin?: boolean;
   onConversationCreated?: () => void;
   onConversationCreatedWithSkill?: (conversationId: string, skillId: string) => Promise<void>;
@@ -93,6 +95,7 @@ export class ChatMessageService {
           provider,
           imageAttachments: encodedImages,
           domain: this.config.domain,
+          ...(this.config.surface ? { surface: this.config.surface } : {}),
           // Pass pre-selected skill ID only for new conversations so the server
           // activates and uses it on the very first message
           preSelectedSkillId: !this.config.currentConversationId && this.config.preSelectedSkill

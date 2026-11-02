@@ -19,6 +19,7 @@ interface SidebarContentProps {
   showInstagramDM?: boolean;
   onOpenInstagramPost?: () => void;
   instagramConnected?: boolean;
+  hideConversations?: boolean;
 }
 
 function SidebarButton({
@@ -67,6 +68,7 @@ export default function SidebarContent({
   showInstagramDM = false,
   onOpenInstagramPost,
   instagramConnected = false,
+  hideConversations = false,
 }: SidebarContentProps & { isSidebarCollapsed?: boolean }) {
   const t = useTranslations('sidebar');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export default function SidebarContent({
   return (
     <>
       {/* Conversations */}
-      {!isSidebarCollapsed && (
+      {!isSidebarCollapsed && !hideConversations && (
         <div className="flex-1 overflow-y-auto p-4 flex flex-col min-h-0">
           <div className="space-y-2">
             <button
