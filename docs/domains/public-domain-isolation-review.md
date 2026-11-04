@@ -4,13 +4,13 @@ Status: initial application-level mitigations implemented locally; production ac
 
 Date opened: 2026-09-05
 
-Initial affected domain: `sales`
+Initial affected domain: `alleracweb`
 
 Related public domain: `openworld`
 
 ## Purpose
 
-This document records the isolation failure observed in the public `sales` agent and defines the
+This document records the isolation failure observed in the public `alleracweb` agent and defines the
 security model and repeatable checks required before any Allerac domain is exposed to anonymous or
 external users.
 
@@ -20,7 +20,7 @@ server at every layer and verified by automated and deployment-time checks.
 
 ## Incident summary
 
-During a conversation through the `sales` widget on `allerac.ai`, the assistant disclosed the name
+During a conversation through the `alleracweb` widget on `allerac.ai`, the assistant disclosed the name
 and location associated with the API-key account:
 
 - Name: Gian
@@ -103,17 +103,17 @@ The authorization decision is the intersection of four independently enforced bo
 The model prompt is not part of the authorization boundary. It may describe restrictions for good
 behavior, but server code must make violations impossible.
 
-## Decisions for `sales`
+## Decisions for `alleracweb`
 
 The following remediation decisions were approved. The application-level items are implemented in
 the working tree; account, key, database, and production deployment items remain pending:
 
-- Disable `create_ticket` for `sales`.
-- Start with **zero tools** for `sales`.
+- Disable `create_ticket` for `alleracweb`.
+- Start with **zero tools** for `alleracweb`.
 - Do not expose personal name, email, location, memories, notes, reminders, instructions, documents,
-  or integration state to `sales`.
+  or integration state to `alleracweb`.
 - Do not allow the public caller to select a skill or submit `postContext`.
-- Use a dedicated, non-admin `sales` service account with no access to any other domain.
+- Use a dedicated, non-admin `alleracweb` service account with no access to any other domain.
 - Rotate the current widget API key after the owning account and its privileges are verified.
 - Keep lead capture outside the model tool loop. If lead capture is reintroduced later, prefer a
   purpose-built, validated website form or a narrowly scoped service endpoint with independent
@@ -124,8 +124,8 @@ the working tree; account, key, database, and production deployment items remain
 `openworld` is a useful reference for a domain with one explicit capability: `search_web`, backed
 by a domain-specific Tavily key and domain-specific usage controls.
 
-That should be the pattern if `sales` later demonstrates a real need for live web information, but
-it should not be the initial `sales` policy. Sales can normally answer from its reviewed skill
+That should be the pattern if `alleracweb` later demonstrates a real need for live web information, but
+it should not be the initial `alleracweb` policy. alleracweb can normally answer from its reviewed skill
 content or an explicitly approved public knowledge base. Web retrieval adds untrusted external
 content, prompt-injection risk, cost, and another credential, so it must be enabled deliberately,
 not inherited.
@@ -134,7 +134,7 @@ Proposed starting policies:
 
 | Domain | Allowed tools | Credential policy | Context policy |
 | --- | --- | --- | --- |
-| `sales` | None | Model credential dedicated or centrally controlled; no personal keys | Public skill content only |
+| `alleracweb` | None | Model credential dedicated or centrally controlled; no personal keys | Public skill content only |
 | `openworld` | `search_web` only | Tavily key dedicated to `openworld`, with its own limits | Public skill content plus sanitized search results |
 
 ## Required checks
@@ -204,7 +204,7 @@ No step should rely on a later step for safety.
 1. Contain: disable or rotate the current public key while its ownership is uncertain.
 2. Inventory: capture the production account, grants, key scopes, skill binding, tool rows, deployed
    revision, domain credentials, and the events from the observed conversation.
-3. Specify: approve the exact `sales` and `openworld` policies in this document.
+3. Specify: approve the exact `alleracweb` and `openworld` policies in this document.
 4. Enforce: introduce a server-derived, fail-closed public-domain policy for tools and context.
 5. Test: add unit, integration, adversarial, and end-to-end isolation tests.
 6. Deploy: apply account/key/configuration changes and application changes in a controlled order.
@@ -213,12 +213,12 @@ No step should rely on a later step for safety.
 
 ## Evidence still needed
 
-- The identity and `is_admin` value of the account that owns the current `sales` widget key.
+- The identity and `is_admin` value of the account that owns the current `alleracweb` widget key.
 - That account's domain grants and API-key scopes.
-- The production `sales` default-skill binding and all `skill_tools` rows for the bound skill.
+- The production `alleracweb` default-skill binding and all `skill_tools` rows for the bound skill.
 - The branch and commit currently deployed to Allerac One.
 - Tool-call events or logs for the dentist-note conversation.
-- Whether the production `sales` account has personal location, global instructions, documents, or
+- Whether the production `alleracweb` account has personal location, global instructions, documents, or
   integration credentials stored.
 - Whether the Tavily key configured in each public domain is truly domain-specific at runtime or
   can fall back to user/system/global credentials.

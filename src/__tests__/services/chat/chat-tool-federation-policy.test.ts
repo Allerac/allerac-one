@@ -42,13 +42,13 @@ describe('federation tool policy', () => {
     expect(names(await resolveChatTools(undefined, 'chat'))).not.toContain('ask_peer_agent');
     expect(names(await resolveChatTools(undefined, 'chat', { allowFederation: true })))
       .toEqual(expect.arrayContaining(['list_peer_agents', 'ask_peer_agent']));
-    expect(names(await resolveChatTools(undefined, 'sales', { allowFederation: true }))).not.toContain('ask_peer_agent');
+    expect(names(await resolveChatTools(undefined, 'alleracweb', { allowFederation: true }))).not.toContain('ask_peer_agent');
   });
 
   it('decides eligibility on admin, domain and policy', () => {
     expect(canUseFederationTools({ isAdmin: true, domain: 'chat' })).toBe(true);
     expect(canUseFederationTools({ isAdmin: false, domain: 'chat' })).toBe(false);
-    expect(canUseFederationTools({ isAdmin: true, domain: 'sales' })).toBe(false);
+    expect(canUseFederationTools({ isAdmin: true, domain: 'alleracweb' })).toBe(false);
     expect(canUseFederationTools({ isAdmin: true, domain: 'openworld' })).toBe(false);
     expect(canUseFederationTools({ isAdmin: true, domain: 'chat', policy: 'federated' })).toBe(false);
   });
@@ -72,9 +72,9 @@ describe('federation tool policy', () => {
   it('the runner refuses federation tools for non-admins and public domains', async () => {
     const asUser = await executeChatTool('ask_peer_agent', { peer: 'unit2', agent: 'health', question: 'q' },
       { ...ctx, user: { ...user, is_admin: false } });
-    const inSales = await executeChatTool('list_peer_agents', {}, { ...ctx, domain: 'sales' });
+    const inAlleracWeb = await executeChatTool('list_peer_agents', {}, { ...ctx, domain: 'alleracweb' });
     expect(asUser).toEqual({ error: expect.stringContaining('not available') });
-    expect(inSales).toEqual({ error: expect.stringContaining('not available') });
+    expect(inAlleracWeb).toEqual({ error: expect.stringContaining('not available') });
     expect(mockAskAgent).not.toHaveBeenCalled();
     expect(mockListAgents).not.toHaveBeenCalled();
   });

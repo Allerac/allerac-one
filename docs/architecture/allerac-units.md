@@ -54,7 +54,7 @@ Allerac already hosts more than one person and more than one agent:
   `agent_runs` and `agent_workers`;
 - skills define personas and tool allowlists (`skills`, `skill_tools`,
   `domain_skill_defaults`);
-- public-facing agents serve website visitors (`sales`, `openworld` in
+- public-facing agents serve website visitors (`alleracweb`, `openworld` in
   `PUBLIC_DOMAINS`, `src/app/services/chat/chat-tool-registry.ts`);
 - per-user Telegram bots carry their own skills (`telegram_bot_configs`,
   `telegram_bot_skills`).
@@ -505,9 +505,9 @@ Public agents are the special case where the caller is anonymous.
 
 ### Today
 
-- `PUBLIC_DOMAINS = ['sales', 'openworld']` in
+- `PUBLIC_DOMAINS = ['alleracweb', 'openworld']` in
   `src/app/services/chat/chat-tool-registry.ts` withholds personal memory, notes,
-  scheduling, and instruction tools; `sales` is text-only.
+  scheduling, and instruction tools; `alleracweb` is text-only.
 - Each public domain is reached by a dedicated, non-admin service account through a
   website proxy ([How to expose an Allerac agent](../domains/expose-agent-to-website.md)).
 - Per-domain limits and alerts live in `domain_rate_limit_settings`
@@ -539,13 +539,13 @@ Today there are two of them, both public domains inside the main Unit:
 
 | Agent | Today | Target | Owned by |
 |---|---|---|---|
-| `sales` | Allerac website bot, public domain | **public Unit** of the operator | the operator |
+| `alleracweb` | Allerac website bot, public domain | **public Unit** of the operator | the operator |
 | `openworld` | import/export FAQ bot on a customer website, public domain | **customer Unit** | the customer |
 
 Two kinds of Unit:
 
 - **Public Unit** — operated and owned by the operator, serves anonymous visitors on
-  the operator's own sites (for example `sales`).
+  the operator's own sites (for example `alleracweb`).
 - **Customer Unit** — operated for, and ultimately owned by, a customer; serves that
   customer's visitors and holds that customer's data (for example `openworld`).
 
@@ -573,7 +573,7 @@ operator main Unit
     |    metrics.read            usage, cost, rate-limit status
     |    tickets.receive         failures and escalations arrive as tickets
     v
-public Unit (sales)        customer Unit (openworld)
+public Unit (alleracweb)        customer Unit (openworld)
   public agent only          public agent only
   no executor                no executor
   no operator memory         customer-owned knowledge
@@ -585,7 +585,7 @@ credentials that reach into the operator Unit.
 
 ### Transition
 
-1. **Today** — `sales` and `openworld` run as public domains in the main Unit,
+1. **Today** — `alleracweb` and `openworld` run as public domains in the main Unit,
    protected by public-domain isolation (dedicated service accounts, restricted
    tools, per-domain limits).
 2. **Next** — run a separate Allerac deployment per customer or public Unit, even

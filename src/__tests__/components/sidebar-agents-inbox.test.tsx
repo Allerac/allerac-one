@@ -44,7 +44,7 @@ describe.each([
     expect(screen.queryByTestId('agents-inbox')).toBeNull();
   });
   it('is hidden in public domains', () => {
-    render(<C {...baseProps} isAdmin inboxDomainId="sales" />);
+    render(<C {...baseProps} isAdmin inboxDomainId="alleracweb" />);
     expect(screen.queryByTestId('agents-inbox')).toBeNull();
   });
 });

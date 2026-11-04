@@ -13,6 +13,14 @@ jest.mock('@/app/lib/domain-access', () => ({
 jest.mock('@/app/lib/auth-session', () => ({ requireCurrentAdmin: jest.fn() }));
 const mockQuery = jest.fn();
 jest.mock('@/app/clients/db', () => ({ __esModule: true, default: { query: (...args: unknown[]) => mockQuery(...args) } }));
+const mockCanAccess = jest.fn(async (...args: unknown[]) => args[1] === true);
+const mockFirstSlug = jest.fn();
+jest.mock('@/app/services/auth/auth.service', () => ({
+  AuthService: jest.fn().mockImplementation(() => ({
+    canAccessDomain: (userId: unknown, isAdmin: unknown, slug: unknown) => mockCanAccess(userId, isAdmin, slug),
+    getFirstDomainSlug: (...a: unknown[]) => mockFirstSlug(...a),
+  })),
+}));
 jest.mock('@/app/agents/AgentsIndexClient', () => () => null);
 jest.mock('@/app/agents/_shell/LocalAgentClient', () => () => null);
 jest.mock('@/app/agents/[unit]/[agent]/AgentChatClient', () => () => null);
@@ -26,13 +34,33 @@ const args = (unit: string, agent: string) => ({ params: Promise.resolve({ unit,
 beforeEach(() => jest.clearAllMocks());
 
 describe('/ redirect', () => {
-  it.each([true, false])('sends any signed-in user to /agents (admin=%s)', async isAdmin => {
-    mockAuthed.mockResolvedValueOnce({ id: 'u', is_admin: isAdmin });
+  it('sends admins to /agents', async () => {
+    mockAuthed.mockResolvedValueOnce({ id: 'u', is_admin: true });
     await expect(RootPage()).rejects.toThrow('NEXT_REDIRECT /agents');
+    expect(mockCanAccess).not.toHaveBeenCalled();
   });
-  it('keeps the login redirect for signed-out users', async () => {
+  it('sends non-admins with chat access to /agents', async () => {
+    mockAuthed.mockResolvedValueOnce({ id: 'u', is_admin: false });
+    mockCanAccess.mockResolvedValueOnce(true);
+    await expect(RootPage()).rejects.toThrow('NEXT_REDIRECT /agents');
+    expect(mockCanAccess).toHaveBeenCalledWith('u', false, 'chat');
+  });
+  it.each(['openworld', 'alleracweb'])('sends a %s-only bot account straight to /%s (no extra hops)', async slug => {
+    mockAuthed.mockResolvedValueOnce({ id: 'bot', is_admin: false });
+    mockCanAccess.mockResolvedValueOnce(false);
+    mockFirstSlug.mockResolvedValueOnce(slug);
+    await expect(RootPage()).rejects.toThrow(`NEXT_REDIRECT /${slug}`);
+  });
+  it('shows the no-access notice to a non-admin without any domain', async () => {
+    mockAuthed.mockResolvedValueOnce({ id: 'u', is_admin: false });
+    mockCanAccess.mockResolvedValueOnce(false);
+    mockFirstSlug.mockResolvedValueOnce(null);
+    await expect(RootPage()).rejects.toThrow('NEXT_REDIRECT /login?error=no-access');
+  });
+  it('keeps the login redirect for anonymous visitors', async () => {
     mockAuthed.mockImplementationOnce(() => { throw new Error('NEXT_REDIRECT /login'); });
     await expect(RootPage()).rejects.toThrow('NEXT_REDIRECT /login');
+    expect(mockCanAccess).not.toHaveBeenCalled();
   });
 });
 

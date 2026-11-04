@@ -40,7 +40,7 @@ export function buildChatSystemPrompt(input: PromptBuilderInput): string {
   const timezone = resolveTimeZone(input.timezone);
   const { date, time, weekday } = localDateParts(now, timezone);
   const contextLines: string[] = [];
-  const isPublicDomain = input.domain === 'sales' || input.domain === 'openworld';
+  const isPublicDomain = input.domain === 'alleracweb' || input.domain === 'openworld';
 
   if (!isPublicDomain && input.user.name) contextLines.push(`- Name: ${input.user.name}`);
   contextLines.push(`- Language: ${language} — always reply in this language`);
@@ -63,7 +63,7 @@ Never show the user which tool you called, its raw arguments, or its raw output 
 
   if (!isPublicDomain && input.userLocation) {
     prompt += '\n\nWhen the user asks about weather, temperature, or anything requiring real-time local information, use the search_web tool to find current data for their location.';
-  } else if (input.domain !== 'sales' && input.tavilyConfigured) {
+  } else if (input.domain !== 'alleracweb' && input.tavilyConfigured) {
     prompt += '\n\nWhen the user asks about current weather, news, prices, or any real-time information, use the search_web tool.';
   }
 

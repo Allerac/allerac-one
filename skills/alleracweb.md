@@ -1,9 +1,9 @@
 ---
-name: sales
-display_name: 📣 Sales
-description: Public-facing sales agent for the allerac.ai website chat widget.
+name: alleracweb
+display_name: 📣 Allerac Web
+description: Public-facing agent (sales and lead qualification) for the allerac.ai website chat widget.
 category: assistant
-domain: sales
+domain: alleracweb
 version: 1.0.0
 ---
 

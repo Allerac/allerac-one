@@ -108,7 +108,7 @@ documents", not a generic "Allerac".
 - Admin-only "This Unit" card in Settings > Discovery, backed by
   `GET/PUT /api/v1/unit/profile` (session admin, like `/api/v1/peers`).
 - The Soul (`buildSoul(domain, identity)`) opens with the Unit identity and role
-  in chat, federated asks, and jobs. Public domains (`sales`, `openworld`) keep
+  in chat, federated asks, and jobs. Public domains (`alleracweb`, `openworld`) keep
   the generic public Soul unless the admin turns the toggle on.
 - Paired peers get the role through `GET /api/v1/federation/agents` (new `unit`
   field, existing `federation:agents:list` scope, so existing pairings work).

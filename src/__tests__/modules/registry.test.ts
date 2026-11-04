@@ -14,7 +14,7 @@ import {
   isToolEnabled,
 } from '@/modules/registry';
 
-const KNOWN = ['health', 'music', 'email', 'social', 'openworld', 'sales'];
+const KNOWN = ['health', 'music', 'email', 'social', 'openworld', 'alleracweb'];
 
 describe('resolveModuleSelection', () => {
   test('defaults to every module (profile all) when nothing is set', () => {
@@ -25,14 +25,14 @@ describe('resolveModuleSelection', () => {
 
   test('blank ALLERAC_MODULES counts as unset', () => {
     expect(resolveModuleSelection(KNOWN, { ALLERAC_MODULES: '  ' }).enabled).toEqual(KNOWN);
-    expect(resolveModuleSelection(KNOWN, { ALLERAC_MODULES: '', ALLERAC_PROFILE: 'sales' }).enabled).toEqual(['sales']);
+    expect(resolveModuleSelection(KNOWN, { ALLERAC_MODULES: '', ALLERAC_PROFILE: 'alleracweb' }).enabled).toEqual(['alleracweb']);
   });
 
   test.each([
     ['all', KNOWN],
     ['personal', ['health', 'music', 'email', 'social']],
     ['openworld', ['openworld']],
-    ['sales', ['sales']],
+    ['alleracweb', ['alleracweb']],
     [' Personal ', ['health', 'music', 'email', 'social']],
   ])('profile %p', (profile, expected) => {
     const selection = resolveModuleSelection(KNOWN, { ALLERAC_PROFILE: profile });
@@ -41,8 +41,8 @@ describe('resolveModuleSelection', () => {
   });
 
   test('explicit ALLERAC_MODULES overrides ALLERAC_PROFILE', () => {
-    const selection = resolveModuleSelection(KNOWN, { ALLERAC_PROFILE: 'personal', ALLERAC_MODULES: 'music, Sales' });
-    expect(selection).toEqual({ enabled: ['music', 'sales'], source: 'ALLERAC_MODULES', profile: null, unknown: [] });
+    const selection = resolveModuleSelection(KNOWN, { ALLERAC_PROFILE: 'personal', ALLERAC_MODULES: 'music, AlleracWeb' });
+    expect(selection).toEqual({ enabled: ['music', 'alleracweb'], source: 'ALLERAC_MODULES', profile: null, unknown: [] });
   });
 
   test('ALLERAC_MODULES supports all, * and none, and reports unknown ids', () => {
@@ -85,7 +85,7 @@ describe('module registry', () => {
       expect(['core', 'external', 'personal']).toContain(m.group);
       expect(m.nav.every((n) => m.domains.includes(n.key))).toBe(true);
     }
-    expect(MODULES.filter((m) => m.group === 'external').map((m) => m.id).sort()).toEqual(['openworld', 'sales']);
+    expect(MODULES.filter((m) => m.group === 'external').map((m) => m.id).sort()).toEqual(['alleracweb', 'openworld']);
   });
 
   test('default (nothing set) disables nothing', () => {
@@ -98,14 +98,14 @@ describe('module registry', () => {
     expect(filterEnabledDomainSlugs(slugs, {})).toBe(slugs);
   });
 
-  test('openworld profile disables personal modules and sales, keeps core', () => {
+  test('openworld profile disables personal modules and alleracweb, keeps core', () => {
     const env = { ALLERAC_PROFILE: 'openworld' };
     expect(isModuleEnabled('openworld', env)).toBe(true);
     expect(isModuleEnabled('health', env)).toBe(false);
     expect(isDomainEnabled('openworld', env)).toBe(true);
     expect(isDomainEnabled('chat', env)).toBe(true);
     expect(isDomainEnabled('health', env)).toBe(false);
-    expect(isDomainEnabled('sales', env)).toBe(false);
+    expect(isDomainEnabled('alleracweb', env)).toBe(false);
     expect(isToolEnabled('get_health_summary', env)).toBe(false);
     expect(isToolEnabled('send_email', env)).toBe(false);
     expect(isToolEnabled('search_web', env)).toBe(true);
@@ -115,7 +115,7 @@ describe('module registry', () => {
 
   test('personal profile keeps personal modules and hides external ones', () => {
     const env = { ALLERAC_PROFILE: 'personal' };
-    expect(getDisabledDomainSlugs(env).sort()).toEqual(['openworld', 'sales']);
+    expect(getDisabledDomainSlugs(env).sort()).toEqual(['alleracweb', 'openworld']);
     expect(getDisabledToolNames(env)).toEqual([]);
   });
 });

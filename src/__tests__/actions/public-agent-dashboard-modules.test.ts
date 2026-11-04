@@ -41,7 +41,7 @@ afterAll(() => {
 describe('public bots dashboard', () => {
   it('lists every public bot with the default profile', async () => {
     const slugs = (await getPublicAgentDashboard()).map((s) => s.domainSlug);
-    expect(slugs.sort()).toEqual(['openworld', 'sales']);
+    expect(slugs.sort()).toEqual(['alleracweb', 'openworld']);
   });
 
   it('lists only bots whose module is enabled', async () => {
@@ -56,8 +56,8 @@ describe('public bots dashboard', () => {
 
   it('rejects chart requests for a bot whose module is disabled', async () => {
     process.env.ALLERAC_PROFILE = 'openworld';
-    await expect(getPublicAgentRequestSeries('sales', 'day')).rejects.toThrow('not a public-facing domain');
-    await expect(getPublicAgentTopModels('sales')).rejects.toThrow('not a public-facing domain');
+    await expect(getPublicAgentRequestSeries('alleracweb', 'day')).rejects.toThrow('not a public-facing domain');
+    await expect(getPublicAgentTopModels('alleracweb')).rejects.toThrow('not a public-facing domain');
     await expect(getPublicAgentTopModels('openworld')).resolves.toEqual([]);
   });
 });

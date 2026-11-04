@@ -41,7 +41,7 @@ const DOMAIN_TOOL_NAMES = [
 ];
 
 // Public-facing domains (reached by a service account with no personal data
-// access, e.g. the website sales widget) that must not get the personal
+// access, e.g. the website (allerac.ai) chat widget) that must not get the personal
 // notes vault, even though every other domain does by default below. Also
 // used outside this file (e.g. the messages route) to apply extra abuse
 // limits — anonymous website visitors get less trust than logged-in users.
@@ -138,10 +138,10 @@ export async function resolveChatTools(
   domain: string,
   options: ResolveChatToolsOptions = {},
 ): Promise<any[]> {
-  // Sales is deliberately text-only. Check the domain before querying its
+  // alleracweb is deliberately text-only. Check the domain before querying its
   // skill: missing tool rows must not fall through to the unrestricted base
   // registry below.
-  if (domain === 'sales') {
+  if (domain === 'alleracweb') {
     return [];
   }
 

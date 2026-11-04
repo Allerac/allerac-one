@@ -1,6 +1,6 @@
 # How to expose an Allerac agent on an external website
 
-This documents the pattern used for the `sales` domain: a **public-facing** agent, embedded as a
+This documents the pattern used for the `alleracweb` domain: a **public-facing** agent, embedded as a
 chat widget on `allerac-web` (allerac.ai), talking to a real Allerac One agent instead of a canned
 form. This is meant to be repeated for future customer-facing agents — read this before starting
 the next one.
@@ -12,7 +12,7 @@ because the caller is an **anonymous website visitor**, not a logged-in Allerac 
 
 ```
 Visitor (browser)
-   |  POST /api/sales-chat
+   |  POST /api/alleracweb-chat
    v
 allerac-web — Cloudflare Worker (src/worker.ts)
    - rate limit per IP (Workers KV)
@@ -36,7 +36,7 @@ API key is only as safe as the account it belongs to — see "The admin bypass t
 - [ ] 2. Restrict tools for this domain in `chat-tool-registry.ts` (deny-by-default, not just "don't add new tools")
 - [ ] 3. Create a dedicated, **non-admin** service account for the bot (never reuse your own admin account)
 - [ ] 4. Grant that account access to the new domain only
-- [ ] 5. Add a self-service screen at `/<name>` (copy `src/app/sales/`) so the bot account can mint its own key without needing the full Settings UI
+- [ ] 5. Add a self-service screen at `/<name>` (copy `src/app/alleracweb/`) so the bot account can mint its own key without needing the full Settings UI
 - [ ] 6. Add the scope(s) that screen needs to `DEFAULT_DOMAIN_USERS_SCOPES` (`src/app/api/v1/api-keys/_lib.ts`)
 - [ ] 7. Register the domain's icon/path in `allerac-domains.ts` (hub nav) and `DomainSkillsModal.tsx` (admin config UI)
 - [ ] 8. Configure the domain's model (`user_domain_model_settings`) for the bot account — either via the `/<name>` model picker or SQL (see below); the Control API's `model`/`provider` are only optional if this is set
@@ -65,7 +65,7 @@ verify it's non-admin, and grant it only the one domain it needs.
 `chat-tool-registry.ts`'s `resolveChatTools` adds several tool groups **unconditionally to every
 domain** (at the time of writing: notes, memory, `schedule_task`, `learn_instruction`). A new
 public-facing domain inherits all of them unless explicitly excluded — this is a real gap that bit
-the sales domain (`learn_instruction` in particular would let a visitor durably alter the agent's
+the alleracweb domain (`learn_instruction` in particular would let a visitor durably alter the agent's
 behavior). Add the new domain to `PUBLIC_DOMAINS` in that file and audit every unconditional block,
 don't assume "I didn't add a tool for it" means "it doesn't have tools."
 
@@ -84,10 +84,10 @@ checklist above: the other personal tools still follow the account's permissions
 
 `add-domain.md` documents the current standard: a `skills/<name>.md` file with `domain: <slug>` in
 its frontmatter, auto-loaded and bound by `SystemSkillsLoader` on startup — **no skill SQL needed in
-the migration.** Use this from the start; the `sales` domain's migration originally used the older
+the migration.** Use this from the start; the `alleracweb` domain's migration originally used the older
 `082_robot_assistant_domain.sql`-style raw `DO $$ ... INSERT INTO skills ...` pattern instead
 (copied from that older domain before this doc existed), which still works but doesn't get the
-loader's duplicate-row protection and left an orphaned skill row once `skills/sales.md` was added
+loader's duplicate-row protection and left an orphaned skill row once `skills/alleracweb.md` was added
 to fix it. If you ever inherit a domain built the old way, migrate it with:
 
 1. Add `skills/<name>.md` with `domain: <slug>` in the frontmatter (content only — tools still go
@@ -115,7 +115,7 @@ DELETE FROM skills WHERE id = '<old-skill-uuid>';
 ## Migration numbering on a fast-moving branch
 
 If multiple people/agents work on this repo concurrently, migration numbers collide easily (this
-happened twice while building `sales`). Before naming a migration file, check the actual highest
+happened twice while building `alleracweb`). Before naming a migration file, check the actual highest
 number on the branch you're targeting — `git ls-tree -r --name-only origin/<branch> --
 src/database/migrations/ | sort -V | tail`, not just your local working copy, which may be stale or
 on the wrong branch entirely (see next section).
@@ -156,7 +156,7 @@ caller (the website's Worker) has no browser session and sends no cookie, so it 
 to English regardless of what language the visitor was actually using on the site. Fixed by adding
 an optional `locale` field to `POST /api/v1/conversations/:id/messages`'s body (falls back to the
 cookie, then `'en'`, if omitted) and having the website thread its own selected locale through:
-widget → `/api/sales-chat` Worker → this field. One more gotcha: `LANGUAGE_NAMES` only recognizes
+widget → `/api/alleracweb-chat` Worker → this field. One more gotcha: `LANGUAGE_NAMES` only recognizes
 bare 2-letter codes (`en`, `pt`, `es`) — a region-qualified locale like the website's `pt-BR` has to
 be stripped to `pt` before use, or the lookup misses and falls back to English anyway.
 
@@ -173,7 +173,7 @@ never reads history back).
 `operation-limiter.ts`'s `acquireOperationLimit('chat', userId)` is **per account**, not per
 visitor — every website visitor authenticates as the same bot account, so this becomes one shared
 bucket for the whole website. The real per-visitor limit has to live in the website's own proxy
-(Workers KV keyed by `CF-Connecting-IP`, in the sales implementation).
+(Workers KV keyed by `CF-Connecting-IP`, in the alleracweb implementation).
 
 For domains in `PUBLIC_DOMAINS` there's a third layer: `acquireOperationLimit('public-chat',
 userId)`, a much longer-window (24h by default) volume cap stacked on top of `chat` in
@@ -186,7 +186,7 @@ threat model this is addressing, and what's still open.
 ### Per-domain override + Telegram alerting
 
 The `public-chat` limit's *value* (300 requests/24h by default) used to be one env var shared by
-every domain in `PUBLIC_DOMAINS` — raising it for `openworld` would have raised it for `sales` too.
+every domain in `PUBLIC_DOMAINS` — raising it for `openworld` would have raised it for `alleracweb` too.
 `domain_rate_limit_settings` (migration 129) lets each domain override its own
 `daily_requests`/`daily_window_seconds`, resolved in `messages/route.ts` via
 `domainRateLimitSettingsService.get(domain)` → `toOverride()` → passed as `acquireOperationLimit`'s
@@ -217,11 +217,22 @@ itself. Configured from the domain's own self-service screen (see `RateLimitPane
 
 ---
 
-## Pending / not done yet for the `sales` domain
+## Pending / not done yet for the `alleracweb` domain
 
-- Rebuild/redeploy the app so `SystemSkillsLoader` picks up `skills/sales.md`, then run the
+- Rebuild/redeploy the app so `SystemSkillsLoader` picks up `skills/alleracweb.md`, then run the
   one-time cleanup SQL in "Skill definition" above to remove the old raw-SQL skill row.
 - See [public-agent-security-considerations.md](./public-agent-security-considerations.md) for the
   open (not-yet-addressed) risks — bot-challenge/CAPTCHA, lead-capture spam, output content
   moderation, PII retention policy, and the `chat` concurrency limit's site-wide bottleneck for
   public domains.
+
+## Rename from `sales` (migration 156)
+
+This domain used to be called `sales`. Migration 156 renames the domain row
+and everything keyed by its slug or id (bot account access, model and rate
+limit settings, conversations, memories, documents, skill binding, Unit profile
+agent description) to `alleracweb`, keeping the bot account and its API key, so
+the widget token stays valid. The system skill row is renamed from `sales.md`
+to `alleracweb.md` (same skill id). `ALLERAC_PROFILE=sales` is no longer
+recognised: set `ALLERAC_PROFILE=alleracweb`. The old `/sales` page permanently
+redirects to `/alleracweb`.

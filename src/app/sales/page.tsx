@@ -1,10 +1,7 @@
-import { requireDomainAccess } from '@/app/lib/domain-access';
-import SalesAgentClient from './SalesAgentClient';
+import { permanentRedirect } from 'next/navigation';
 
-export default async function SalesPage() {
-  const user = await requireDomainAccess('sales');
-
-  return (
-    <SalesAgentClient userId={user.id} userName={user.name} userEmail={user.email} />
-  );
+// The public website chatbot domain was renamed from 'sales' to 'alleracweb'.
+// Keep old links working.
+export default function LegacySalesPage(): never {
+  permanentRedirect('/alleracweb');
 }

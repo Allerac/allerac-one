@@ -139,7 +139,7 @@ describe('executeChatTool in public (website-facing) domains', () => {
     await expect(executeChatTool('github_create_pr', { title: 'x', head: 'y' }, {
       ...adminContext,
       githubToken: 'ghp_system',
-      domain: 'sales',
+      domain: 'alleracweb',
     })).resolves.toEqual({ error: 'Tool github_create_pr is not available in this domain.' });
   });
 });

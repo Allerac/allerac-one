@@ -181,7 +181,7 @@ export default function UnitProfileCard({ isDarkMode }: Props) {
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={form.identityInPublicDomains}
           onChange={event => setForm({ ...form, identityInPublicDomains: event.target.checked })} />
-        Also use this identity in public domains (sales, openworld)
+        Also use this identity in public domains (alleracweb, openworld)
       </label>
 
       <p className={`text-xs ${muted}`}>Preview: “{form.emoji ? `${form.emoji} ` : ''}{preview}”</p>

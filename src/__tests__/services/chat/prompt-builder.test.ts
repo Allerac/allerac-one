@@ -63,7 +63,7 @@ describe('buildChatSystemPrompt', () => {
       unitIdentity: undefined,
       user,
       locale: 'pt',
-      domain: 'sales',
+      domain: 'alleracweb',
       userLocation: 'PRIVATE_LOCATION_CANARY',
       tavilyConfigured: true,
       userInstructions: 'PRIVATE_INSTRUCTION_CANARY',

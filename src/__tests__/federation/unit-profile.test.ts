@@ -49,9 +49,9 @@ describe('identity injection', () => {
 
   it('injects for private domains and skips public ones unless opted in', () => {
     expect(shouldInjectIdentity('health', base)).toBe(true);
-    expect(shouldInjectIdentity('sales', base)).toBe(false);
+    expect(shouldInjectIdentity('alleracweb', base)).toBe(false);
     expect(shouldInjectIdentity('openworld', base)).toBe(false);
-    expect(shouldInjectIdentity('sales', { ...base, identityInPublicDomains: true })).toBe(true);
+    expect(shouldInjectIdentity('alleracweb', { ...base, identityInPublicDomains: true })).toBe(true);
   });
 
   it('makes the Soul identity-aware', () => {
@@ -63,8 +63,8 @@ describe('identity injection', () => {
   });
 
   it('keeps public domains generic unless the toggle is on', () => {
-    expect(soulIdentityFor(base, 'sales')).toBeUndefined();
-    expect(buildSoul('sales', soulIdentityFor(base, 'sales'))).toMatch(/^You are Allerac, an AI assistant speaking with a visitor/);
+    expect(soulIdentityFor(base, 'alleracweb')).toBeUndefined();
+    expect(buildSoul('alleracweb', soulIdentityFor(base, 'alleracweb'))).toMatch(/^You are Allerac, an AI assistant speaking with a visitor/);
     const optedIn = soulIdentityFor({ ...base, identityInPublicDomains: true }, 'openworld');
     expect(buildSoul('openworld', optedIn)).toMatch(/^You are Barcelona, an Allerac unit speaking with a visitor/);
   });

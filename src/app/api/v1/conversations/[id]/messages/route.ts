@@ -185,7 +185,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
 
     // Tagged '[ChatRoute]' (same context the internal /api/chat route uses) so this
     // shows up under the /logs viewer's existing "CHAT" filter — previously this
-    // endpoint (used by the CLI and public-facing domains like sales/openworld)
+    // endpoint (used by the CLI and public-facing domains like alleracweb/openworld)
     // logged nothing at all, making it impossible to see which model actually
     // answered a given request.
     const providerLabel = provider === 'ollama' ? `● LOCAL · ${modelId}` : `◌ ${provider} · ${modelId}`;

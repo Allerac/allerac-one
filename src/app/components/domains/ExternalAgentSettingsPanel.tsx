@@ -1,7 +1,7 @@
 'use client';
 
 // Shared settings widgets for a public-facing external agent's self-service screen
-// (e.g. /sales, /openworld — see docs/domains/expose-agent-to-website.md). Each such
+// (e.g. /alleracweb, /openworld — see docs/domains/expose-agent-to-website.md). Each such
 // domain's page is UI-less by design otherwise: the bot account it belongs to has no
 // access to any other domain, so this is the only place it can configure itself.
 //

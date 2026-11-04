@@ -1,6 +1,6 @@
-skill: sales
+skill: alleracweb
 version: "1.0.0"
-description: "Public-facing, text-only sales agent for the allerac.ai chat widget — lead qualification, no price quoting, zero tools"
+description: "Public-facing, text-only website agent for the allerac.ai chat widget — lead qualification, no price quoting, zero tools"
 cases:
   - id: concrete_need_routes_to_contact
     description: "Routes a qualified visitor to the published contact channel without claiming to store their details"

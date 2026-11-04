@@ -28,7 +28,7 @@ Allerac One
 | [search](search.md) | Search | Active | 🔍 | search | Tavily API |
 | [email](email.md) | Email | Active | ✉️ | — | IMAP / SMTP |
 | [tickets](tickets.md) | Tickets | Active | 🎫 | tickets | GitHub API |
-| sales | Sales | Active | 📣 | sales | None (public, text-only — see [public-domain-isolation-review.md](./public-domain-isolation-review.md)) |
+| alleracweb | Allerac Web | Active | 📣 | alleracweb | None (public, text-only — see [public-domain-isolation-review.md](./public-domain-isolation-review.md)) |
 
 ## What a domain owns
 

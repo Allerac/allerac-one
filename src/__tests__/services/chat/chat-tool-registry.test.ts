@@ -65,10 +65,10 @@ describe('resolveChatTools', () => {
     expect(codeNames).not.toContain('delete_memory');
   });
 
-  test('gives sales exactly zero tools even when its skill assignment is missing', async () => {
+  test('gives alleracweb exactly zero tools even when its skill assignment is missing', async () => {
     mockedGetSkillTools.mockResolvedValue([]);
 
-    const tools = await resolveChatTools('sales-skill', 'sales');
+    const tools = await resolveChatTools('alleracweb-skill', 'alleracweb');
 
     expect(tools).toEqual([]);
     expect(mockedGetSkillTools).not.toHaveBeenCalled();
