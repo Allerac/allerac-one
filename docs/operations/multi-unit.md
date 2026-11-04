@@ -179,6 +179,39 @@ that already exists in the target, and always creates the account as
 account; the import demotes it and says so. Give the Unit its own admin
 (the first account registered on it).
 
+### Example: the sales Unit
+
+The same steps as openworld, for the text-only `sales` bot (port offset and
+hostname are examples; `new-unit.sh` picks the first free offset):
+
+```bash
+cd ~/allerac-one && git fetch origin
+scripts/units/new-unit.sh sales --profile sales --hostname sales.allerac.ai --dry-run
+scripts/units/new-unit.sh sales --profile sales --hostname sales.allerac.ai
+cd ~/allerac-units/sales
+docker compose up -d --build
+git push -u origin unit/sales        # publish the Unit branch once
+# move the bot from the Unit that hosts it today
+(cd ~/allerac-one && scripts/units/export-domain.sh --domain sales --account <bot email> --unit-dir . --out /tmp/sales.json)
+scripts/units/import-domain.sh /tmp/sales.json --unit-dir .
+scripts/units/import-domain.sh /tmp/sales.json --unit-dir . --verify-only
+shred -u /tmp/sales.json
+```
+
+Then add the `sales` public hostname to the tunnel, register the Unit's own
+admin, re-enter the provider key, point the website Worker's
+`ALLERAC_ONE_BASE_URL` at the new hostname (the imported key hash keeps the
+widget token valid), and smoke-test the widget.
+
+### Retire a public domain on the old Unit
+
+Once the widget answers from the new Unit, set the old Unit's profile so the
+module is off there (e.g. `ALLERAC_PROFILE=personal`) and run `./update.sh`.
+The domain then disappears from the hub, taskbar, `/domains` and the tool
+list, `/sales` or `/openworld` answer 404 and the old bot key can no longer
+chat in that domain. Its conversation history stays in the old database,
+read-only; nothing is deleted.
+
 ## Lean public profile
 
 `docker-compose.public.yml` is an override file. A Unit selects it with

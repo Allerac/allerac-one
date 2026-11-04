@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { DOMAINS } from './domains-list';
 import { useRouter } from 'next/navigation';
 import * as skillActions from '@/app/actions/skills';
 import * as domainActions from '@/app/actions/domains';
@@ -16,32 +17,19 @@ interface DomainBinding {
   display_name: string | null;
 }
 
-const DOMAINS = [
-  { slug: 'chat',    label: 'Chat',    icon: '💬' },
-  { slug: 'code',    label: 'Code',    icon: '💻' },
-  { slug: 'health',  label: 'Health',  icon: '❤️' },
-  { slug: 'music',   label: 'Music',   icon: '🎵' },
-  { slug: 'social',  label: 'Social',  icon: '📸' },
-  { slug: 'tickets', label: 'Tickets', icon: '🎫' },
-  { slug: 'search',  label: 'Search',  icon: '🔍' },
-  { slug: 'email',   label: 'Email',   icon: '✉️' },
-  { slug: 'notes',   label: 'Notes',   icon: '📝' },
-  { slug: 'jobs',    label: 'Jobs',    icon: '⏰' },
-  { slug: 'memory',  label: 'Knowledge', icon: '🗂️' },
-  { slug: 'sales',   label: 'Sales',   icon: '📣' },
-  { slug: 'openworld', label: 'OpenWorld', icon: '🌐' },
-];
 
 type MobileTab = 'prompt' | 'tools' | 'assistant';
 
-export default function DomainsPageClient() {
+/** `enabledSlugs`: domains of the modules enabled in this Unit (ALLERAC_PROFILE / ALLERAC_MODULES). */
+export default function DomainsPageClient({ enabledSlugs }: { enabledSlugs?: string[] } = {}) {
+  const domains = enabledSlugs ? DOMAINS.filter(domain => enabledSlugs.includes(domain.slug)) : DOMAINS;
   const router = useRouter();
   const { isDark: d } = useTheme();
 
   const [bindings, setBindings] = useState<DomainBinding[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSlug, setSelectedSlug] = useState<string>(DOMAINS[0].slug);
+  const [selectedSlug, setSelectedSlug] = useState<string>(domains[0].slug);
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -85,7 +73,7 @@ export default function DomainsPageClient() {
   // Load the first domain once bindings/skills have arrived.
   useEffect(() => {
     if (!loading && !editing) {
-      const domain = DOMAINS.find(dm => dm.slug === selectedSlug) ?? DOMAINS[0];
+      const domain = domains.find(dm => dm.slug === selectedSlug) ?? domains[0];
       loadDomain(domain);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,7 +105,7 @@ export default function DomainsPageClient() {
   };
 
   const handleRevert = () => {
-    const domain = DOMAINS.find(dm => dm.slug === selectedSlug);
+    const domain = domains.find(dm => dm.slug === selectedSlug);
     if (domain) loadDomain(domain);
   };
 
@@ -127,7 +115,7 @@ export default function DomainsPageClient() {
   };
 
   const jumpToSkill = async (domainSlug: string, skillId: string) => {
-    const domain = DOMAINS.find(dm => dm.slug === domainSlug);
+    const domain = domains.find(dm => dm.slug === domainSlug);
     if (!domain) return;
     setImprovementsOpen(false);
     setSelectedSlug(domainSlug);
@@ -192,10 +180,10 @@ export default function DomainsPageClient() {
       ) : (
         <>
           <DomainToolbar
-            domains={DOMAINS}
+            domains={domains}
             selectedSlug={selectedSlug}
             onSelectDomain={slug => {
-              const domain = DOMAINS.find(dm => dm.slug === slug);
+              const domain = domains.find(dm => dm.slug === slug);
               if (domain) loadDomain(domain);
             }}
             skills={skills}
