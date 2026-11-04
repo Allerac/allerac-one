@@ -175,7 +175,7 @@ Original wording:
 
 - Code: `src/federation/inbox.{types,repository,service,instance}.ts`, `src/federation/inbox-policy.ts`,
   routes `src/app/api/inbox/*`, UI `src/app/components/inbox/*` (mounted in `ConversationSidebar`).
-- Routes are `/api/inbox/*` with session auth + `requireCurrentAdmin`, and refuse `?domain=sales|openworld`.
+- Routes are `/api/inbox/*` with session auth + `requireCurrentAdmin`, and refuse `?domain=alleracweb|openworld`.
 - Home-side limits: 1 send in flight per thread, 10 sends/min per peer (in-process), input capped at `MAX_QUESTION_CHARS`
   including packed context (oldest turns dropped first).
 - Timeout detection: `PeerClient` reports aborts as `peer_unreachable`; the service marks `timeout` when the call took

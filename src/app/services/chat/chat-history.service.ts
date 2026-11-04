@@ -19,7 +19,7 @@ export const MAX_SEMANTIC_DISTANCE = 0.6;
 const RRF_K = 60;
 
 /** Domains whose conversations are not part of the agent chat (own UIs or public). */
-export const NON_AGENT_DOMAINS = ['tickets', 'code', 'job', 'openworld', 'sales'];
+export const NON_AGENT_DOMAINS = ['tickets', 'code', 'job', 'openworld', 'alleracweb'];
 
 // ---------------------------------------------------------------- cursors
 

@@ -13,7 +13,7 @@ describe('canUseInbox', () => {
   });
 
   it('is never available in public domains', () => {
-    expect(canUseInbox({ is_admin: true }, 'sales')).toBe(false);
+    expect(canUseInbox({ is_admin: true }, 'alleracweb')).toBe(false);
     expect(canUseInbox({ is_admin: true }, 'OpenWorld')).toBe(false);
     expect(canUseInbox({ is_admin: true }, 'health')).toBe(true);
   });

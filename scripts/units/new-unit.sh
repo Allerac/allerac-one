@@ -6,7 +6,7 @@
 #   scripts/units/new-unit.sh <name> --profile <profile> --hostname <host> [options]
 #
 # Options:
-#   --profile P        openworld | sales | personal | all (required)
+#   --profile P        openworld | alleracweb | personal | all (required)
 #   --hostname H       public hostname of the Unit, e.g. openworld.allerac.ai (required)
 #   --branch B         git branch of the Unit (default unit/<name>)
 #   --base REF         where a new branch starts (default origin/development)
@@ -51,11 +51,11 @@ done
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,30}$ ]] || die "invalid Unit name '$NAME' (lowercase letters, digits, '-', '_'; max 31 chars)"
 # The primary Unit is 'allerac'; its scripts match containers by the 'allerac-' prefix.
 case "$NAME" in allerac*) die "Unit names must not start with 'allerac' (reserved for the primary Unit)" ;; esac
-case "$PROFILE" in openworld|sales|personal|all) ;; *) die "--profile must be one of: openworld, sales, personal, all" ;; esac
+case "$PROFILE" in openworld|alleracweb|personal|all) ;; *) die "--profile must be one of: openworld, alleracweb, personal, all" ;; esac
 [[ "$HOSTNAME_ARG" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || die "--hostname must be a DNS name like openworld.allerac.ai"
 BRANCH="${BRANCH:-unit/$NAME}"
 if [ -z "$WITH_OLLAMA" ]; then
-    case "$PROFILE" in openworld|sales) WITH_OLLAMA=0 ;; *) WITH_OLLAMA=1 ;; esac
+    case "$PROFILE" in openworld|alleracweb) WITH_OLLAMA=0 ;; *) WITH_OLLAMA=1 ;; esac
 fi
 git -C "$REPO_DIR" check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || die "invalid branch name '$BRANCH'"
 DIR="${DIR:-$UNITS_DIR/$NAME}"
@@ -182,7 +182,7 @@ set_env EXECUTOR_SECRET "$(secret 32)"
 set_env POSTGRES_PASSWORD "$(secret 24)"
 set_env N8N_ENCRYPTION_KEY "$(secret 32)"
 set_env ALLOW_REGISTRATION false
-if [ "$WITH_OLLAMA" = 0 ] || [ "$PROFILE" = openworld ] || [ "$PROFILE" = sales ]; then
+if [ "$WITH_OLLAMA" = 0 ] || [ "$PROFILE" = openworld ] || [ "$PROFILE" = alleracweb ]; then
     # No embedding backend, or nothing personal to embed in a public Unit.
     set_env MEMORY_INDEX_SWEEP_ENABLED false
     set_env NOTE_REINDEX_SWEEP_ENABLED false

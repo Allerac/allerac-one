@@ -9,7 +9,7 @@ it runs. Core features are always on.
 | Group | Modules | Notes |
 |---|---|---|
 | Core (always on) | chat, memories, RAG, notes, knowledge, crawler, tickets, code, auth, admin, API, agents/workers, telegram, github, benchmark | Not configurable. |
-| External | `openworld`, `sales` | Public-facing (website widgets). Must never break. |
+| External | `openworld`, `alleracweb` | Public-facing (website widgets). Must never break. |
 | Personal | `health` (Garmin/Strava), `music` (Spotify), `email`, `social` (Instagram/TikTok) | Personal data. |
 
 Each module has a manifest in `src/modules/<id>/module.ts` (id, group, domain
@@ -29,7 +29,7 @@ they point at code that still lives under `src/app`; nothing has moved.
 | `all` (default when nothing is set) | every module: identical to a classic install |
 | `personal` | `health`, `music`, `email`, `social` |
 | `openworld` | `openworld` |
-| `sales` | `sales` |
+| `alleracweb` | `alleracweb` |
 
 The variables are read by the app, agent-worker and Telegram bot processes
 (`src/lib/runtime-config.ts`, `resolveModuleSelection`). Restart the
@@ -66,7 +66,7 @@ runs with the `health` Compose profile.
 |---|---|
 | nothing set / `ALLERAC_PROFILE=all` | `health` (same services as before modules existed) |
 | `ALLERAC_PROFILE=personal` | `health` |
-| `ALLERAC_PROFILE=openworld` or `sales` | none |
+| `ALLERAC_PROFILE=openworld` or `alleracweb` | none |
 | `ALLERAC_MODULES` containing `health` | `health` |
 
 Rules:
@@ -96,7 +96,7 @@ is not started.
 
 - `garmin-auth-worker` stays under the `local` profile (it exists to use a
   home IP for Garmin login), so enable `local` too if you use it.
-- A lean public Unit should set `ALLERAC_PROFILE=openworld` or `sales`;
+- A lean public Unit should set `ALLERAC_PROFILE=openworld` or `alleracweb`;
   with nothing set the scripts treat it as `all` and start health-worker.
 - CI (`scripts/ci/security-integration.sh`) and the multi-unit smoke
   (`scripts/smoke/multi-unit-smoke.sh`) call `docker compose` directly with
@@ -105,7 +105,7 @@ is not started.
 
 ## Example env files
 
-`deploy/profiles/personal.env`, `openworld.env`, `sales.env`. Merge the lines
+`deploy/profiles/personal.env`, `openworld.env`, `alleracweb.env`. Merge the lines
 into the Unit's env file:
 
 ```bash
@@ -136,7 +136,7 @@ Each Unit presents itself as **one agent**. The agent's name, emoji and role are
 the Unit profile's (Settings > Discovery > **Agent**), and the owner can add
 **instructions** (up to 4,000 characters) that shape this Unit's soul in chat,
 scheduled jobs, sub-agent workers and federated asks. Instructions stay on the
-Unit: they are never sent to paired Units, and public domains (sales,
+Unit: they are never sent to paired Units, and public domains (alleracweb,
 openworld) only get them when "Also use this identity in public domains" is on.
 The user's own learned instructions are added after them and win on conflicts.
 

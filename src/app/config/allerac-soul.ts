@@ -90,7 +90,7 @@ function instructionsSection(identity: SoulIdentity): string {
  * With an identity, the opening line names this Unit instead of "Allerac".
  */
 export function buildSoul(domain?: string | null, identity?: SoulIdentity | null): string {
-  if (domain === 'sales' || domain === 'openworld') {
+  if (domain === 'alleracweb' || domain === 'openworld') {
     return identity
       ? PUBLIC_AGENT_SOUL.replace(PUBLIC_OPENING, `You are ${identity.displayName}, an Allerac unit speaking with a visitor on a public website. ${identityLines(identity)}`)
         + instructionsSection(identity)

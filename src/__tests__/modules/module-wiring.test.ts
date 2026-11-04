@@ -92,24 +92,24 @@ describe('assertDomainAccess', () => {
   });
 
   test('disabled module domain is denied for everyone, admins included', async () => {
-    withEnv({ ALLERAC_PROFILE: 'sales' });
+    withEnv({ ALLERAC_PROFILE: 'alleracweb' });
     await expect(assertDomainAccess(admin, 'health')).rejects.toThrow('Domain not available in this Unit');
     await expect(assertDomainAccess(user, 'openworld')).rejects.toThrow('Domain not available in this Unit');
     expect(mockedQuery).not.toHaveBeenCalled();
-    await expect(assertDomainAccess(admin, 'sales')).resolves.toBeUndefined();
+    await expect(assertDomainAccess(admin, 'alleracweb')).resolves.toBeUndefined();
     await expect(assertDomainAccess(admin, 'chat')).resolves.toBeUndefined();
   });
 });
 
 describe('DomainService.listAccessible and AuthService', () => {
-  const rows = ['chat', 'health', 'music', 'sales', 'openworld'].map((slug) => ({ slug, display_name: slug, is_active: true }));
+  const rows = ['chat', 'health', 'music', 'alleracweb', 'openworld'].map((slug) => ({ slug, display_name: slug, is_active: true }));
 
   test('hides disabled module domains from the hub/taskbar list; default keeps all', async () => {
     const { domainService } = jest.requireActual('@/app/services/domains/domain.service') as typeof import('@/app/services/domains/domain.service');
     withEnv({});
     mockedQuery.mockResolvedValueOnce({ rows });
     expect((await domainService.listAccessible({ userId: 'a', isAdmin: true })).map((d) => d.slug))
-      .toEqual(['chat', 'health', 'music', 'sales', 'openworld']);
+      .toEqual(['chat', 'health', 'music', 'alleracweb', 'openworld']);
     withEnv({ ALLERAC_PROFILE: 'personal' });
     mockedQuery.mockResolvedValueOnce({ rows });
     expect((await domainService.listAccessible({ userId: 'a', isAdmin: true })).map((d) => d.slug))
@@ -124,7 +124,7 @@ describe('DomainService.listAccessible and AuthService', () => {
     await expect(auth.canAccessDomain('a', true, 'openworld')).resolves.toBe(true);
     mockedQuery.mockResolvedValueOnce({ rows: [{ slug: 'chat' }] });
     await expect(auth.getFirstDomainSlug('u')).resolves.toBe('chat');
-    expect(mockedQuery.mock.calls[0][1]).toEqual(['u', expect.arrayContaining(['health', 'music', 'email', 'social', 'sales'])]);
+    expect(mockedQuery.mock.calls[0][1]).toEqual(['u', expect.arrayContaining(['health', 'music', 'email', 'social', 'alleracweb'])]);
 
     withEnv({});
     mockedQuery.mockReset();

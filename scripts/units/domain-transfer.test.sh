@@ -65,7 +65,7 @@ INSERT INTO domain_skill_defaults (domain_slug, skill_id) VALUES ('openworld', '
   ON CONFLICT (domain_slug) DO UPDATE SET skill_id = EXCLUDED.skill_id;
 -- A custom skill owned by the bot account, and a migration-seeded system skill it enabled.
 INSERT INTO skills (id, user_id, name, display_name, description, content, category, force_tool)
-VALUES ('$CUSTOM', '$SVC', 'faq-pricing', 'FAQ pricing', 'Pricing answers', 'Quote only public prices.', 'sales', 'search_web');
+VALUES ('$CUSTOM', '$SVC', 'faq-pricing', 'FAQ pricing', 'Pricing answers', 'Quote only public prices.', 'alleracweb', 'search_web');
 INSERT INTO skill_tools (skill_id, tool_name) VALUES ('$CUSTOM', 'search_web'), ('$CUSTOM', 'get_today_info');
 INSERT INTO user_skills (user_id, skill_id, is_default, enabled, order_index)
 VALUES ('$SVC', '$CUSTOM', false, true, 1),
@@ -94,7 +94,7 @@ SQL
 # ── Export ────────────────────────────────────────────────────────────────────
 if bash "$HERE/export-domain.sh" --domain openworld --account admin@example.test --db-url "$SRC" --out "$TMP/x.json" >/dev/null 2>&1; then
     fail "export refuses an admin account"; else ok "export refuses an admin account"; fi
-if bash "$HERE/export-domain.sh" --domain sales --account bot@openworld.test --db-url "$SRC" --out "$TMP/x.json" >/dev/null 2>&1; then
+if bash "$HERE/export-domain.sh" --domain alleracweb --account bot@openworld.test --db-url "$SRC" --out "$TMP/x.json" >/dev/null 2>&1; then
     fail "export refuses a domain the account cannot access"; else ok "export refuses a domain the account cannot access"; fi
 bash "$HERE/export-domain.sh" --domain openworld --account bot@openworld.test --db-url "$SRC" --dry-run > "$TMP/dry.txt"
 check "export dry run writes nothing" "0" "$(ls "$TMP"/*.json 2>/dev/null | wc -l | tr -d ' ')"

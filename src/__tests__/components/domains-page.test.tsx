@@ -11,9 +11,9 @@ afterEach(() => { process.env = { ...ORIGINAL }; });
 
 describe('/domains lists only enabled modules', () => {
   it.each([
-    ['personal', ['health', 'music'], ['sales', 'openworld']],
-    ['openworld', ['openworld', 'chat'], ['sales', 'health', 'music']],
-    ['sales', ['sales', 'chat'], ['openworld', 'health']],
+    ['personal', ['health', 'music'], ['alleracweb', 'openworld']],
+    ['openworld', ['openworld', 'chat'], ['alleracweb', 'health', 'music']],
+    ['alleracweb', ['alleracweb', 'chat'], ['openworld', 'health']],
   ])('profile %s', async (profile, present, absent) => {
     delete process.env.ALLERAC_MODULES;
     process.env.ALLERAC_PROFILE = profile;
@@ -24,6 +24,6 @@ describe('/domains lists only enabled modules', () => {
   it('lists every domain on a classic install', async () => {
     delete process.env.ALLERAC_MODULES;
     delete process.env.ALLERAC_PROFILE;
-    expect((await DomainsPage()).props.enabledSlugs).toEqual(expect.arrayContaining(['sales', 'openworld', 'health']));
+    expect((await DomainsPage()).props.enabledSlugs).toEqual(expect.arrayContaining(['alleracweb', 'openworld', 'health']));
   });
 });

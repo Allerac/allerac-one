@@ -599,7 +599,7 @@ HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET}
 
 # --------------------------------------------
 # Optional modules (docs/operations/modules-and-profiles.md)
-# all (default) | personal | openworld | sales; install.sh, update.sh and
+# all (default) | personal | openworld | alleracweb; install.sh, update.sh and
 # allerac start derive COMPOSE_PROFILES (e.g. health) from it.
 # --------------------------------------------
 # ALLERAC_PROFILE=all

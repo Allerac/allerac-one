@@ -9,7 +9,7 @@ const UNIT2 = 'https://unit2.example';
 async function pairedUnits(unit2Grants: string[], unit2Env: Record<string, string> = {}) {
   const network = createNetwork([
     { origin: NAPOLS, name: 'napols' },
-    { origin: UNIT2, name: 'unit2', env: { ALLERAC_FEDERATION_AGENTS: 'health,sales,music', ...unit2Env } },
+    { origin: UNIT2, name: 'unit2', env: { ALLERAC_FEDERATION_AGENTS: 'health,alleracweb,music', ...unit2Env } },
   ]);
   const a = network.units.get(NAPOLS)!;
   const b = network.units.get(UNIT2)!;
@@ -26,7 +26,7 @@ describe('federation agents between two Units (mocked network)', () => {
     const ctx = { initiatedByUserId: 'admin-a' };
 
     const agents = await a.client.listAgents(peerOnA.id, ctx);
-    // Public domains (sales) are never exposed.
+    // Public domains (alleracweb) are never exposed.
     expect(agents.map(agent => agent.id)).toEqual(['health', 'music']);
 
     const result = await a.client.askAgent(peerOnA.id, 'health', 'How did I sleep?', ctx);
@@ -58,7 +58,7 @@ describe('federation agents between two Units (mocked network)', () => {
 
   it('returns not found for agents that are not exposed', async () => {
     const { a, peerOnA } = await pairedUnits(['federation.agents.ask']);
-    await expect(a.client.askAgent(peerOnA.id, 'sales', 'hi', { initiatedByUserId: null }))
+    await expect(a.client.askAgent(peerOnA.id, 'alleracweb', 'hi', { initiatedByUserId: null }))
       .rejects.toBeInstanceOf(FederationError);
     await expect(a.client.askAgent(peerOnA.id, 'email', 'hi', { initiatedByUserId: null }))
       .rejects.toMatchObject({ code: 'peer_error' });

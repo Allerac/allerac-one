@@ -16,7 +16,7 @@ export function isManifestEnabled(env: Env = process.env): boolean {
   return envFlag(env, 'ALLERAC_FEDERATION_MANIFEST', true);
 }
 
-/** True when the Unit serves any public-facing domain (e.g. openworld, sales). */
+/** True when the Unit serves any public-facing domain (e.g. openworld, alleracweb). */
 export function isPublicUnit(env: Env = process.env): boolean {
   return getModuleSelection(env).enabled.some(id => (
     getModule(id)?.domains.some(domain => PUBLIC_DOMAINS.includes(domain)) ?? false

@@ -39,7 +39,7 @@ export async function sendPublicAgentTestMessage(input: {
   modelId?: string | null;
 }) {
   // Unlike the BOTS dashboard actions above (admin-only, viewed from /logs), this is
-  // invoked from the domain's own self-service screen (/openworld, /sales) — reachable
+  // invoked from the domain's own self-service screen (/openworld, /alleracweb) — reachable
   // by that domain's non-admin bot account, not just an admin. Same check as the
   // model/rate-limit settings actions on that same screen.
   const user = await requireCurrentUser();

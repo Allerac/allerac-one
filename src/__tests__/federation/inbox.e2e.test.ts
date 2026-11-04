@@ -10,7 +10,7 @@ describe('unified inbox between two Units (mocked network)', () => {
   it('pair → list → chat → unpair → read-only (sync peer, pre-P4c)', async () => {
     const network = createNetwork([
       { origin: NAPOLS, name: 'napols' },
-      { origin: SANTOS, name: 'santos', env: { ALLERAC_FEDERATION_AGENTS: 'chat,sales', FAKE_LEGACY_ASK: 'true' } },
+      { origin: SANTOS, name: 'santos', env: { ALLERAC_FEDERATION_AGENTS: 'chat,alleracweb', FAKE_LEGACY_ASK: 'true' } },
     ]);
     const a = network.units.get(NAPOLS)!;
     const b = network.units.get(SANTOS)!;

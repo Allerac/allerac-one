@@ -1,6 +1,6 @@
 /**
  * Control Tower API guard (federation P4d): session admin only, never inside a
- * public domain (sales, openworld), never reachable with an API key.
+ * public domain (alleracweb, openworld), never reachable with an API key.
  */
 import { authenticationErrorResponse, ForbiddenError, requireCurrentAdmin } from '@/app/lib/auth-session';
 import type { User } from '@/app/services/auth/auth.service';

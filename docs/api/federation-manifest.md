@@ -67,5 +67,5 @@ pairing and a scoped service key.
 | `ALLERAC_UNIT_DISPLAY_NAME` | unit name | `unit.displayName` |
 | `ALLERAC_PUBLIC_URL` | request origin | `unit.url` |
 | `ALLERAC_PAIRING_ACCEPT` | `false` | Advertise that pairing is accepted |
-| `ALLERAC_PAIRING_ACCEPT_PUBLIC` | `false` | Also required on public profiles (`openworld`, `sales`) |
+| `ALLERAC_PAIRING_ACCEPT_PUBLIC` | `false` | Also required on public profiles (`openworld`, `alleracweb`) |
 | `ALLERAC_FEDERATION_CAPABILITIES` | all | Comma list narrowing advertised capability ids |

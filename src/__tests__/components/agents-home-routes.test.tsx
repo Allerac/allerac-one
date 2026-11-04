@@ -45,7 +45,7 @@ describe('/ redirect', () => {
     await expect(RootPage()).rejects.toThrow('NEXT_REDIRECT /agents');
     expect(mockCanAccess).toHaveBeenCalledWith('u', false, 'chat');
   });
-  it.each(['openworld', 'sales'])('sends a %s-only bot account straight to /%s (no extra hops)', async slug => {
+  it.each(['openworld', 'alleracweb'])('sends a %s-only bot account straight to /%s (no extra hops)', async slug => {
     mockAuthed.mockResolvedValueOnce({ id: 'bot', is_admin: false });
     mockCanAccess.mockResolvedValueOnce(false);
     mockFirstSlug.mockResolvedValueOnce(slug);

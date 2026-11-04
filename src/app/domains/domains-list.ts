@@ -11,6 +11,6 @@ export const DOMAINS = [
   { slug: 'notes',   label: 'Notes',   icon: '📝' },
   { slug: 'jobs',    label: 'Jobs',    icon: '⏰' },
   { slug: 'memory',  label: 'Knowledge', icon: '🗂️' },
-  { slug: 'sales',   label: 'Sales',   icon: '📣' },
+  { slug: 'alleracweb',   label: 'Allerac Web',   icon: '📣' },
   { slug: 'openworld', label: 'OpenWorld', icon: '🌐' },
 ];

@@ -116,8 +116,8 @@ describe('operation limiter', () => {
     const denied = acquireOperationLimit('public-chat', 'bot-openworld', 1_001, override);
     expect(denied).toMatchObject({ allowed: false, reason: 'rate' });
 
-    // A different account (e.g. the sales bot) is unaffected by openworld's override.
-    expect(acquireOperationLimit('public-chat', 'bot-sales', 1_002).allowed).toBe(true);
+    // A different account (e.g. the alleracweb bot) is unaffected by openworld's override.
+    expect(acquireOperationLimit('public-chat', 'bot-alleracweb', 1_002).allowed).toBe(true);
   });
 
   it('peekOperationLimit reports usage without consuming a slot', () => {

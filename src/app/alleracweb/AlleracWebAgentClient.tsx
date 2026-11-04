@@ -6,20 +6,20 @@ import * as authActions from '@/app/actions/auth';
 import AgentAccessPanel from '@/app/components/settings/AgentAccessPanel';
 import { ModelPicker, RateLimitPanel, TestChatPanel } from '@/app/components/domains/ExternalAgentSettingsPanel';
 
-// This domain is UI-less by design: the sales-bot account it belongs to has
+// This domain is UI-less by design: the alleracweb-bot account it belongs to has
 // no access to any other domain, so it can't reach a normal Settings page.
 // This screen exists only so that account can self-issue and rotate its own
 // chat:write key for the allerac.ai website widget — same pattern as /bridge —
 // plus pick which model answers on its behalf and configure its rate limit.
-const SCOPE_OPTIONS = [{ scope: 'chat:write', label: 'Sales chat widget', provider: 'sales' }];
+const SCOPE_OPTIONS = [{ scope: 'chat:write', label: 'Allerac Web chat widget', provider: 'alleracweb' }];
 
-interface SalesAgentClientProps {
+interface AlleracWebAgentClientProps {
   userId: string;
   userName: string | null;
   userEmail: string;
 }
 
-export default function SalesAgentClient({ userName, userEmail }: SalesAgentClientProps) {
+export default function AlleracWebAgentClient({ userName, userEmail }: AlleracWebAgentClientProps) {
   const router = useRouter();
   const { isDark } = useTheme();
 
@@ -36,7 +36,7 @@ export default function SalesAgentClient({ userName, userEmail }: SalesAgentClie
       <div className={`sticky top-0 z-10 border-b ${isDark ? 'bg-gray-950 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className={`text-lg font-semibold ${text}`}>Sales</h1>
+            <h1 className={`text-lg font-semibold ${text}`}>Allerac Web</h1>
             <p className={`text-xs ${muted}`}>{userName ? `${userName} · ` : ''}{userEmail}</p>
           </div>
           <button
@@ -54,18 +54,18 @@ export default function SalesAgentClient({ userName, userEmail }: SalesAgentClie
           and set it as the <code>SALES_BOT_API_KEY</code> secret on the website&apos;s Cloudflare Worker.
         </p>
 
-        <ModelPicker domainSlug="sales" description="Which model answers in the sales chat widget." isDark={isDark} />
+        <ModelPicker domainSlug="alleracweb" description="Which model answers in the alleracweb chat widget." isDark={isDark} />
 
-        <RateLimitPanel domainSlug="sales" isDark={isDark} />
+        <RateLimitPanel domainSlug="alleracweb" isDark={isDark} />
 
-        <TestChatPanel domainSlug="sales" isDark={isDark} />
+        <TestChatPanel domainSlug="alleracweb" isDark={isDark} />
 
         <AgentAccessPanel
           isDarkMode={isDark}
           scopeOptions={SCOPE_OPTIONS}
-          connectedProviders={['sales']}
+          connectedProviders={['alleracweb']}
           title="Access Keys"
-          description="Generate the chat:write key for the sales widget."
+          description="Generate the chat:write key for the alleracweb widget."
         />
       </div>
     </div>

@@ -29,14 +29,14 @@ describe('Control Tower admin API (P4d)', () => {
   it('is 404 for non-admins and on public domains, 401 without a session', async () => {
     jest.mocked(requireCurrentAdmin).mockRejectedValueOnce(new auth.ForbiddenError('Admin access required'));
     expect((await overview(new Request('http://x/api/admin/control-tower'))).status).toBe(404);
-    for (const domain of ['sales', 'openworld']) {
+    for (const domain of ['alleracweb', 'openworld']) {
       jest.mocked(requireCurrentAdmin).mockResolvedValueOnce(admin as never);
       expect((await overview(new Request(`http://x/api/admin/control-tower?domain=${domain}`))).status).toBe(404);
     }
     jest.mocked(requireCurrentAdmin).mockRejectedValueOnce(new auth.UnauthorizedError());
     expect((await overview(new Request('http://x/api/admin/control-tower'))).status).toBe(401);
     jest.mocked(requireCurrentAdmin).mockResolvedValueOnce(admin as never);
-    expect((await refresh(new Request('http://x/api/admin/control-tower/refresh?domain=sales', { method: 'POST' }))).status).toBe(404);
+    expect((await refresh(new Request('http://x/api/admin/control-tower/refresh?domain=alleracweb', { method: 'POST' }))).status).toBe(404);
     expect(controlTowerService.overview).not.toHaveBeenCalled();
     expect(controlTowerHeartbeat.refresh).not.toHaveBeenCalled();
   });

@@ -17,7 +17,7 @@ import { PUBLIC_DOMAINS } from '@/app/services/chat/chat-tool-registry';
 const userSettingsService = new UserSettingsService();
 
 /**
- * For a PUBLIC_DOMAINS entry (a dedicated single-bot-account domain like sales/
+ * For a PUBLIC_DOMAINS entry (a dedicated single-bot-account domain like alleracweb/
  * openworld), always resolve to that account's own id — regardless of who's
  * actually viewing the page. Without this, an admin viewing /openworld (they
  * bypass assertDomainAccess) reads/writes settings under their OWN account, a

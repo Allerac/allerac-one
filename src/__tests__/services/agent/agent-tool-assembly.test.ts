@@ -91,7 +91,7 @@ describe('chat agent tool assembly (phase 3a)', () => {
     const health = names(await resolveChatTools(null, 'health'));
     expect(health).not.toContain('list_emails');
     expect(mockLoadSettings).not.toHaveBeenCalled();
-    expect(await resolveChatTools(null, 'sales')).toEqual([]);
+    expect(await resolveChatTools(null, 'alleracweb')).toEqual([]);
   });
 
   it('keeps the reach of paired Units unchanged (federated chat agent)', async () => {

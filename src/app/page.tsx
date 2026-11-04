@@ -8,7 +8,7 @@ const authService = new AuthService();
 /**
  * Home: signed-in users land on the agents screen (the old hub lives at /hub).
  * Non-admins without chat access, e.g. the bot account of a public Unit
- * (openworld, sales), go straight to their first domain, the same target as
+ * (openworld, alleracweb), go straight to their first domain, the same target as
  * after login, instead of bouncing through /agents.
  */
 export default async function RootPage() {

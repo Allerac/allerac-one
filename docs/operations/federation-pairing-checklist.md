@@ -34,7 +34,7 @@ example napols and a second Unit on the same host
 - [ ] Ask a question through `ask_peer_agent`; the answer is attributed to the other Unit.
 - [ ] With no domain model set on the other Unit but a provider key configured (e.g. `ANTHROPIC_API_KEY`), the ask still succeeds using the Unit default model; with no provider key at all it returns `422`.
 - [ ] The other Unit shows a `Federation · <unit1>` conversation for the acting user.
-- [ ] Federation tools are not offered to non-admin users, in `sales`/`openworld`, or when there is no active peer.
+- [ ] Federation tools are not offered to non-admin users, in `alleracweb`/`openworld`, or when there is no active peer.
 - [ ] Asking an agent that is not exposed returns "not found"; a public domain is never listed even if configured.
 - [ ] Revoking only `federation.agents.ask` (re-pair without it) makes `ask_peer_agent` fail without a network call.
 - [ ] `GET /api/v1/peers/:id/audit` on both Units shows inbound/outbound rows without question or answer text.

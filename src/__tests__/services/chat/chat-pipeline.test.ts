@@ -205,7 +205,7 @@ describe('runChatPipeline', () => {
       openaiApiKey: 'key',
       user,
       conversationId: 'conv-1',
-      domain: 'sales',
+      domain: 'alleracweb',
       message: 'run this',
       locale: 'en',
       activeSkill: null,

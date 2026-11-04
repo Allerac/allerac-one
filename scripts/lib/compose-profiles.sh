@@ -12,10 +12,10 @@
 #   - ALLERAC_MODULE_COMPOSE_PROFILES <-> dockerProfile in src/modules/*/module.ts
 #   - ALLERAC_ALL_MODULES <-> MODULES in src/modules/registry.ts
 
-ALLERAC_ALL_MODULES="health,music,email,social,openworld,sales"
+ALLERAC_ALL_MODULES="health,music,email,social,openworld,alleracweb"
 
 # profile=comma list of modules ("all" = every module)
-ALLERAC_PROFILE_MODULES="all=all;personal=health,music,email,social;openworld=openworld;sales=sales"
+ALLERAC_PROFILE_MODULES="all=all;personal=health,music,email,social;openworld=openworld;alleracweb=alleracweb"
 
 # module=compose profile (only modules that have Docker services)
 ALLERAC_MODULE_COMPOSE_PROFILES="health=health"

@@ -71,7 +71,7 @@ describe('/api/inbox routes', () => {
 
   it('is never available inside a public domain', async () => {
     auth.mockResolvedValue(admin as never);
-    const response = await listAgents(new Request('http://x/api/inbox/agents?domain=sales'));
+    const response = await listAgents(new Request('http://x/api/inbox/agents?domain=alleracweb'));
     expect(response.status).toBe(403);
     expect(svc.list).not.toHaveBeenCalled();
   });

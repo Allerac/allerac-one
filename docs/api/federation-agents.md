@@ -19,7 +19,7 @@ A domain is listed to a peer only when it is:
 - in `ALLERAC_FEDERATION_AGENTS`;
 - enabled (module selection, `ALLERAC_MODULES` / `ALLERAC_PROFILE`) and active in the `domains` table;
 - accessible to the peer's acting user (the local user the peer principal acts as);
-- not a public domain (`sales`, `openworld`). Public domains are never exposed.
+- not a public domain (`alleracweb`, `openworld`). Public domains are never exposed.
 
 The peer also needs the matching capability, granted at pairing time:
 `federation.agents.list` (scope `federation:agents:list`) and
@@ -144,7 +144,7 @@ the home Unit's session-authenticated, admin-only `/api/inbox/*` routes:
 | `POST /api/inbox/threads/:id/messages/:messageId/retry` | Retry a `failed` or `timeout` message |
 | `DELETE /api/inbox/peers/:peerId/history` | Delete local history with a Unit that is no longer paired |
 
-All routes accept `?domain=<slug>` and refuse public domains (`sales`, `openworld`).
+All routes accept `?domain=<slug>` and refuse public domains (`alleracweb`, `openworld`).
 The home Unit calls the peer's existing `ask` endpoint through `FederationClient`,
 packing the last 6 turns into the question. Pairing keys and peer origins never
 reach the browser.
