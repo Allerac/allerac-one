@@ -20,6 +20,7 @@ import SidebarMobile from '../components/layout/SidebarMobile';
 import SidebarDesktop from '../components/layout/SidebarDesktop';
 import ChatHeader from '../components/chat/ChatHeader';
 import ChatMessages from '../components/chat/ChatMessages';
+import AgentChatTools from '../components/chat/AgentChatTools';
 import ChatInput from '../components/chat/ChatInput';
 import TerminalMessageArea, { type TerminalTheme } from '../components/chat/TerminalMessageArea';
 import CorrectAndMemorize from '../components/memory/CorrectAndMemorize';
@@ -128,6 +129,17 @@ function buildActivityContext(ctx: ActivityChatContext | null): string {
   return lines.join('\n');
 }
 
+function toUiMessage(msg: any): Message {
+  return {
+    ...(msg.id ? { id: String(msg.id) } : {}),
+    role: msg.role as 'user' | 'assistant' | 'system',
+    content: msg.content,
+    timestamp: new Date(msg.created_at),
+    actions: msg.agent_run_id ? [{ type: 'agent_run' as const, agentRunId: msg.agent_run_id }] : undefined,
+    ...(msg.kind === 'topic_marker' ? { topicMarker: true } : {}),
+  };
+}
+
 export default function AdminChat({
   defaultSkillName,
   domainSlug,
@@ -147,6 +159,8 @@ export default function AdminChat({
   chatMode = 'default',
   terminalTheme,
   systemDashboardInitialTab: initialDashboardTab,
+  embedded = false,
+  onOpenAgents,
 }: {
   defaultSkillName?: string;
   domainSlug: string;
@@ -166,6 +180,14 @@ export default function AdminChat({
   chatMode?: 'default' | 'terminal';
   terminalTheme?: TerminalTheme;
   systemDashboardInitialTab?: 'preferences' | 'system' | 'apiKeys' | 'apiAccess';
+  /**
+   * Rendered inside the agents shell (`/agents/self/agent`): the fixed desktop
+   * sidebar is dropped (the shell owns the left column) and the conversation
+   * list is reached through the drawer on every screen size.
+   */
+  embedded?: boolean;
+  /** Agents shell: opens its drawer (agent list and Pages) on small screens. */
+  onOpenAgents?: () => void;
 }) {
   const t = useTranslations('home');
   const tChat = useTranslations('chat');
@@ -269,6 +291,14 @@ export default function AdminChat({
   const [userName, setUserName] = useState('Dev User'); // Default user name
   const [userEmail, setUserEmail] = useState('dev@local.host'); // Default user email
   const [messages, setMessages] = useState<Message[]>([]);
+  // Phase 4b (agent chat): paged history, archive (read-only) and search jumps.
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  const [newerCursor, setNewerCursor] = useState<string | null>(null);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [primaryConversationId, setPrimaryConversationId] = useState<string | null>(null);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
+  const suppressAutoScrollRef = useRef(false);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [inputMessage, setInputMessage] = useState('');
@@ -403,6 +433,7 @@ export default function AdminChat({
     preSelectedSkill,
     defaultSkillName,
     domain: domainSlug,
+    ...(embedded ? { surface: 'agent' as const } : {}),
     isAdmin,
     onConversationCreated: () => {
       if (userId) loadConversations(userId);
@@ -432,6 +463,21 @@ const savedModel = localStorage.getItem('selected_model');
     if (savedModel) setSelectedModel(savedModel);
   }, []);
 
+  // Phase 4a: the agents shell reopens the primary conversation on entry.
+  useEffect(() => {
+    if (!embedded || !userId) return;
+    let cancelled = false;
+    chatActions.openPrimaryConversation(domainSlug)
+      .then(id => {
+        if (cancelled || !id) return;
+        setPrimaryConversationId(id);
+        return loadConversation(id);
+      })
+      .catch(err => console.error('[Chat] Failed to open primary conversation:', err));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded, userId, domainSlug]);
+
   // Load domain-scoped instructions when userId or domain changes
   useEffect(() => {
     if (userId) {
@@ -440,6 +486,10 @@ const savedModel = localStorage.getItem('selected_model');
   }, [userId, domainSlug]);
 
   useEffect(() => {
+    if (suppressAutoScrollRef.current) {
+      suppressAutoScrollRef.current = false;
+      return;
+    }
     scrollToBottom();
   }, [messages]);
 
@@ -471,13 +521,22 @@ const savedModel = localStorage.getItem('selected_model');
     const pollMessages = async () => {
       if (document.hidden || inputMessage.trim().length > 0) return;
       try {
+        if (embedded) {
+          // Paged history: only merge the latest page, and only when showing the latest.
+          if (newerCursor) return;
+          const page = await chatActions.loadMessagePage(currentConversationId);
+          const latest = page.messages.map(toUiMessage);
+          setMessages(prev => {
+            const known = new Set(prev.map(m => m.id).filter(Boolean));
+            const fresh = latest.filter(m => m.id && !known.has(m.id));
+            if (fresh.length === 0 || prev.some(m => !m.id && m.role !== 'system')) return prev;
+            setTimeout(() => scrollToBottom(), 100);
+            return [...prev, ...fresh];
+          });
+          return;
+        }
         const data = await chatActions.loadMessages(currentConversationId);
-        const loadedMessages: Message[] = data?.map((msg: any) => ({
-          role: msg.role as 'user' | 'assistant' | 'system',
-          content: msg.content,
-          timestamp: new Date(msg.created_at),
-          actions: msg.agent_run_id ? [{ type: 'agent_run' as const, agentRunId: msg.agent_run_id }] : undefined,
-        })) || [];
+        const loadedMessages: Message[] = data?.map(toUiMessage) || [];
 
         // Only update if there are new messages
         if (loadedMessages.length > messages.length) {
@@ -493,11 +552,81 @@ const savedModel = localStorage.getItem('selected_model');
     // Poll every 20 seconds — frequent enough for Telegram sync, not disruptive while typing
     const interval = setInterval(pollMessages, 20000);
     return () => clearInterval(interval);
-  }, [currentConversationId, messages.length, isSending, inputMessage]);
+  }, [currentConversationId, messages.length, isSending, inputMessage, embedded, newerCursor]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  /** Agent chat: fetch the previous page when scrolled to the top, keeping the view in place. */
+  const loadOlderMessages = async () => {
+    if (!embedded || !currentConversationId || !olderCursor || isLoadingOlder) return;
+    const container = messagesContainerRef.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    setIsLoadingOlder(true);
+    try {
+      const page = await chatActions.loadMessagePage(currentConversationId, olderCursor);
+      suppressAutoScrollRef.current = true;
+      setMessages(prev => [...page.messages.map(toUiMessage), ...prev]);
+      setOlderCursor(page.olderCursor);
+      requestAnimationFrame(() => {
+        if (container) container.scrollTop += container.scrollHeight - previousHeight;
+      });
+    } catch (error) {
+      console.error('[Chat] Failed to load older messages:', error);
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  };
+
+  const loadNewerMessages = async () => {
+    if (!embedded || !currentConversationId || !newerCursor || isLoadingOlder) return;
+    setIsLoadingOlder(true);
+    try {
+      const page = await chatActions.loadNewerMessagePage(currentConversationId, newerCursor);
+      suppressAutoScrollRef.current = true;
+      setMessages(prev => [...prev, ...page.messages.map(toUiMessage)]);
+      setNewerCursor(page.newerCursor);
+    } catch (error) {
+      console.error('[Chat] Failed to load newer messages:', error);
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  };
+
+  const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (!embedded) return;
+    const el = e.currentTarget;
+    if (el.scrollTop < 80) void loadOlderMessages();
+    else if (newerCursor && el.scrollHeight - el.scrollTop - el.clientHeight < 80) void loadNewerMessages();
+  };
+
+  /** Agent chat: open a search hit on the page that contains it, highlighted. */
+  const jumpToSearchHit = async (hit: { conversationId: string; messageId: string }) => {
+    const page = await chatActions.loadMessagePageAround(hit.conversationId, hit.messageId);
+    if (!page) return;
+    suppressAutoScrollRef.current = true;
+    setMessages(page.messages.map(toUiMessage));
+    setOlderCursor(page.olderCursor);
+    setNewerCursor(page.newerCursor);
+    setCurrentConversationId(hit.conversationId);
+    setHighlightMessageId(hit.messageId);
+    if (hit.conversationId !== currentConversationId) await loadActiveSkill(hit.conversationId);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-message-id="${hit.messageId}"]`)?.scrollIntoView({ block: 'center' });
+    });
+    setTimeout(() => setHighlightMessageId(null), 4000);
+  };
+
+  const backToPrimary = async () => {
+    const id = primaryConversationId ?? await chatActions.openPrimaryConversation(domainSlug);
+    if (!id) return;
+    setPrimaryConversationId(id);
+    await loadConversation(id);
+  };
+
+  const isArchiveView = embedded && !!currentConversationId && !!primaryConversationId
+    && currentConversationId !== primaryConversationId;
 
   // Handler for downloading Ollama models
   const handleDownloadModel = async (modelId: string) => {
@@ -662,14 +791,17 @@ const savedModel = localStorage.getItem('selected_model');
       }
     }
 
-    const data = await chatActions.loadMessages(conversationId);
-
-    const loadedMessages: Message[] = data?.map((msg: any) => ({
-      role: msg.role as 'user' | 'assistant' | 'system',
-      content: msg.content,
-      timestamp: new Date(msg.created_at),
-      actions: msg.agent_run_id ? [{ type: 'agent_run' as const, agentRunId: msg.agent_run_id }] : undefined,
-    })) || [];
+    let loadedMessages: Message[];
+    if (embedded) {
+      // Agent chat: latest page only; older pages load on scroll up.
+      const page = await chatActions.loadMessagePage(conversationId);
+      loadedMessages = page.messages.map(toUiMessage);
+      setOlderCursor(page.olderCursor);
+      setNewerCursor(null);
+    } else {
+      const data = await chatActions.loadMessages(conversationId);
+      loadedMessages = data?.map(toUiMessage) || [];
+    }
 
     setMessages(loadedMessages);
     setCurrentConversationId(conversationId);
@@ -798,6 +930,9 @@ const savedModel = localStorage.getItem('selected_model');
   };
 
   const handleSendMessage = async () => {
+    if (isArchiveView) return;
+    // After a search jump inside the primary conversation, go back to the latest page first.
+    if (embedded && newerCursor) await backToPrimary();
     // Build message content from current input state
     let message = inputMessage;
     if (documentAttachments.length > 0) {
@@ -932,7 +1067,21 @@ const savedModel = localStorage.getItem('selected_model');
     }
   };
 
+  // Phase 4a: inside the agents shell there is one continuous conversation.
+  // "New topic" adds a marker (context restarts after it) instead of a new chat.
+  const startNewTopic = async () => {
+    if (!currentConversationId || isSending || isArchiveView) return;
+    const result = await chatActions.startNewTopic(currentConversationId);
+    if (result.success) {
+      setMessages(prev => [...prev, { role: 'system', content: '', timestamp: new Date(), topicMarker: true }]);
+    }
+  };
+
   const clearChat = () => {
+    if (embedded) {
+      void startNewTopic();
+      return;
+    }
     setMessages([]);
     setCurrentConversationId(null);
     setActiveSkill(null);
@@ -1024,20 +1173,21 @@ const savedModel = localStorage.getItem('selected_model');
       {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className={`fixed inset-0 bg-black/50 z-40 ${embedded ? '' : 'lg:hidden'}`}
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar + Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Mobile Sidebar (< lg breakpoint) */}
-        <div className="lg:hidden">
+        {/* Mobile Sidebar (< lg breakpoint; every breakpoint when embedded) */}
+        <div className={embedded ? '' : 'lg:hidden'}>
           <SidebarMobile
             isSidebarOpen={isSidebarOpen}
             isDarkMode={isDarkMode}
             onClose={() => setIsSidebarOpen(false)}
             conversations={conversations}
+            hideConversations={embedded}
             currentConversationId={currentConversationId}
             loadConversation={loadConversation}
             deleteConversation={deleteConversation}
@@ -1057,7 +1207,7 @@ const savedModel = localStorage.getItem('selected_model');
         </div>
 
         {/* Desktop Sidebar (>= lg breakpoint) */}
-        <div className="hidden lg:block">
+        {!embedded && <div className="hidden lg:block">
           <SidebarDesktop
             isSidebarCollapsed={isSidebarCollapsed}
             setIsSidebarCollapsed={setIsSidebarCollapsed}
@@ -1085,10 +1235,10 @@ const savedModel = localStorage.getItem('selected_model');
             onLogout={handleLogout}
             onToggleTheme={toggleTheme}
           />
-        </div>
+        </div>}
 
         {/* Content wrapper — owns header + all columns */}
-        <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+        <div className={`flex-1 flex flex-col overflow-hidden ${embedded ? '' : isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
 
           {/* Chat Header — title only, same as every other domain */}
           <ChatHeader
@@ -1108,7 +1258,28 @@ const savedModel = localStorage.getItem('selected_model');
             userEmail={userEmail}
             onLogout={handleLogout}
             titleOnly
+            alwaysShowSidebarButton={embedded}
+            onOpenAgents={embedded ? onOpenAgents : undefined}
+            rightSlot={embedded ? (
+              <AgentChatTools
+                isDarkMode={isDarkMode}
+                onJump={(hit) => { void jumpToSearchHit(hit); }}
+                onOpenArchived={(conv) => { void loadConversation(conv.id); }}
+              />
+            ) : undefined}
           />
+
+          {isArchiveView && (
+            <div data-name="archive-banner" className={`flex-shrink-0 text-xs px-4 py-2 flex items-center justify-center gap-3 ${isDarkMode ? 'bg-gray-800 text-gray-300' : 'bg-amber-50 text-amber-800'}`}>
+              <span>Archived conversation (read-only)</span>
+              <button type="button" onClick={() => void backToPrimary()} className="underline">Back to current conversation</button>
+            </div>
+          )}
+          {embedded && !isArchiveView && newerCursor && (
+            <div className={`flex-shrink-0 text-xs px-4 py-1.5 flex justify-center ${isDarkMode ? 'bg-gray-800 text-gray-300' : 'bg-gray-50 text-gray-600'}`}>
+              <button type="button" onClick={() => void backToPrimary()} className="underline">Jump to latest messages</button>
+            </div>
+          )}
 
           {/* Mobile tab bar — social page */}
           {isInstagramPostOpen && (
@@ -1338,8 +1509,17 @@ const savedModel = localStorage.getItem('selected_model');
           ) : (
             /* Conversation State — messages scroll + input pinned at bottom */
             <>
-              <div data-name="messages-container" className={`flex-1 overflow-y-auto ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+              <div
+                data-name="messages-container"
+                ref={messagesContainerRef}
+                onScroll={handleMessagesScroll}
+                className={`flex-1 overflow-y-auto ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}
+              >
+                {embedded && isLoadingOlder && (
+                  <p className={`text-center text-xs py-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Loading…</p>
+                )}
                 <ChatMessages
+                  highlightMessageId={highlightMessageId}
                   messages={messages}
                   isSending={isSending}
                   selectedModel={selectedModel}
@@ -1354,37 +1534,55 @@ const savedModel = localStorage.getItem('selected_model');
               </div>
               <div data-name="input-area-wrapper" className={`flex-shrink-0 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
                 <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-3 pb-2">
-                  <ChatInput
-                    inputMessage={inputMessage}
-                    setInputMessage={setInputMessage}
-                    handleKeyPress={handleKeyPress}
-                    handleSendMessage={handleSendMessage}
-                    isSending={isSending}
-                    onStop={stopChat}
-                    githubToken={githubToken}
-                    isDarkMode={isDarkMode}
-                    setIsDocumentModalOpen={() => router.push('/memory/documents')}
-                    imageAttachments={imageAttachments}
-                    onImageSelect={handleImageSelect}
-                    onRemoveImage={removeImage}
-                    fileInputRef={fileInputRef}
-                    availableSkills={availableSkills}
-                    activeSkill={activeSkill}
-                    preSelectedSkill={preSelectedSkill}
-                    onActivateSkill={handleActivateSkill}
-                    onDeactivateSkill={handleDeactivateSkill}
-                    selectedModel={selectedModel}
-                    setSelectedModel={setSelectedModel}
-                    MODELS={MODELS}
-                    githubConfigured={!!githubToken || providerConfig.githubConfigured}
-                    googleConfigured={!!googleApiKey || providerConfig.googleConfigured}
-                    anthropicConfigured={!!anthropicApiKey || providerConfig.anthropicConfigured}
-                    ollamaConnected={ollamaConnected}
-                    ollamaModels={ollamaModels}
-                    onDownloadModel={handleDownloadModel}
-                    isAgentMode={isAgentMode}
-                    onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
-                  />
+                  {embedded && currentConversationId && !isArchiveView && (
+                    <div className="flex justify-end pb-2">
+                      <button
+                        type="button"
+                        data-name="new-topic-button"
+                        onClick={() => void startNewTopic()}
+                        disabled={isSending || messages[messages.length - 1]?.topicMarker === true}
+                        title="Start a new topic: the agent stops using earlier messages as context. Nothing is deleted."
+                        className={`text-xs px-2 py-1 rounded-md border disabled:opacity-40 ${isDarkMode ? 'border-gray-700 text-gray-400 hover:bg-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        New topic
+                      </button>
+                    </div>
+                  )}
+                  {isArchiveView ? (
+                    <p className={`text-center text-xs py-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>This conversation is archived and read-only.</p>
+                  ) : (
+                    <ChatInput
+                      inputMessage={inputMessage}
+                      setInputMessage={setInputMessage}
+                      handleKeyPress={handleKeyPress}
+                      handleSendMessage={handleSendMessage}
+                      isSending={isSending}
+                      onStop={stopChat}
+                      githubToken={githubToken}
+                      isDarkMode={isDarkMode}
+                      setIsDocumentModalOpen={() => router.push('/memory/documents')}
+                      imageAttachments={imageAttachments}
+                      onImageSelect={handleImageSelect}
+                      onRemoveImage={removeImage}
+                      fileInputRef={fileInputRef}
+                      availableSkills={availableSkills}
+                      activeSkill={activeSkill}
+                      preSelectedSkill={preSelectedSkill}
+                      onActivateSkill={handleActivateSkill}
+                      onDeactivateSkill={handleDeactivateSkill}
+                      selectedModel={selectedModel}
+                      setSelectedModel={setSelectedModel}
+                      MODELS={MODELS}
+                      githubConfigured={!!githubToken || providerConfig.githubConfigured}
+                      googleConfigured={!!googleApiKey || providerConfig.googleConfigured}
+                      anthropicConfigured={!!anthropicApiKey || providerConfig.anthropicConfigured}
+                      ollamaConnected={ollamaConnected}
+                      ollamaModels={ollamaModels}
+                      onDownloadModel={handleDownloadModel}
+                      isAgentMode={isAgentMode}
+                      onToggleAgentMode={() => setIsAgentMode(!isAgentMode)}
+                    />
+                  )}
                   {currentConversationId && (
                     <p
                       className={`text-center px-4 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}

@@ -52,7 +52,7 @@ describe('loadChatKnowledgeContext', () => {
   });
 
   it('uses document search only for public domains and when the flag is off', async () => {
-    expect(await loadChatKnowledgeContext({ ...input, domainSlug: 'sales', publicDomain: true })).toBe('LEGACY');
+    expect(await loadChatKnowledgeContext({ ...input, domainSlug: 'alleracweb', publicDomain: true })).toBe('LEGACY');
     process.env.KNOWLEDGE_UNIFIED_RAG = 'false';
     expect(await loadChatKnowledgeContext(input)).toBe('LEGACY');
     expect(search).not.toHaveBeenCalled();

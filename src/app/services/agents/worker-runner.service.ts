@@ -239,7 +239,8 @@ export class WorkerRunnerService {
         modelBaseUrl,
         systemMessage,
         tag,
-        () => this.checkCancelled(run.id)
+        () => this.checkCancelled(run.id),
+        run.domain_slug,
       );
 
       if (await this.checkCancelled(run.id)) return;
@@ -311,6 +312,7 @@ export class WorkerRunnerService {
       modelBaseUrl,
       systemMessage: skillContent,
       isAdmin: settings.is_admin,
+      domainSlug: run.domain_slug,
     };
 
     await this.repository.updateWorkerStatus(workerId, 'running', {
@@ -366,7 +368,8 @@ export class WorkerRunnerService {
     modelBaseUrl: string,
     systemMessage: string,
     tag: string,
-    isCancelled: () => Promise<boolean>
+    isCancelled: () => Promise<boolean>,
+    domainSlug: string | null = null,
   ): Promise<Array<{ workerId: string; name: string; task: string; result: string; success: boolean }>> {
     const promises = workerSpecs.map(async (spec) => {
       await this.repository.updateWorkerStatus(spec.id, 'running', {
@@ -389,6 +392,7 @@ export class WorkerRunnerService {
           modelBaseUrl,
           systemMessage,
           isAdmin: settings.is_admin,
+          domainSlug,
         };
 
         const result = await this.withTimeout(

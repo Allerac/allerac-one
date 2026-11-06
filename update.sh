@@ -307,13 +307,21 @@ fi
 
 # Step 1: Back up the database before changing code or schema
 echo -e "${YELLOW}[1/9]${NC} Creating pre-update database backup..."
-BACKUP_PATH_FILE="$(mktemp)"
-ALLERAC_BACKUP_PATH_FILE="$BACKUP_PATH_FILE" INSTALL_DIR="$(pwd)" \
-    ALLERAC_ENV_FILE="$ALLERAC_ENV_FILE" ALLERAC_UNIT="$UNIT" bash ./allerac.sh backup pre-update \
-    || fail_update "pre-update backup" "Update aborted: a verified database backup could not be created."
-PRE_UPDATE_BACKUP="$(cat "$BACKUP_PATH_FILE")"
-[ -n "$PRE_UPDATE_BACKUP" ] \
-    || fail_update "pre-update backup" "Update aborted: backup path was not recorded."
+DB_RUNNING_ID="$(docker compose $COMPOSE_ARGS $COMPOSE_FLAGS ps --status running -q db 2>/dev/null || true)"
+if [ -z "$DB_RUNNING_ID" ]; then
+    # First install (or the unit was never started): there is no database to
+    # back up yet. Skip the backup and continue with build/up/migrations.
+    echo -e "${YELLOW}⚠ Database service 'db' is not running (first install or unit never started).${NC}"
+    echo "  Skipping pre-update backup; nothing to back up yet."
+else
+    BACKUP_PATH_FILE="$(mktemp)"
+    ALLERAC_BACKUP_PATH_FILE="$BACKUP_PATH_FILE" INSTALL_DIR="$(pwd)" \
+        ALLERAC_ENV_FILE="$ALLERAC_ENV_FILE" ALLERAC_UNIT="$UNIT" bash ./allerac.sh backup pre-update \
+        || fail_update "pre-update backup" "Update aborted: a verified database backup could not be created."
+    PRE_UPDATE_BACKUP="$(cat "$BACKUP_PATH_FILE")"
+    [ -n "$PRE_UPDATE_BACKUP" ] \
+        || fail_update "pre-update backup" "Update aborted: backup path was not recorded."
+fi
 echo ""
 
 # Step 2: Pull latest changes
@@ -364,6 +372,8 @@ fi
 # Step 5: Run database migrations
 echo -e "${YELLOW}[5/9]${NC} Running database migrations..."
 MIGRATIONS_STARTED=true
+docker compose $COMPOSE_ARGS $COMPOSE_FLAGS build --pull migrations \
+    || fail_update "database migration" "Failed to build the migration image."
 docker compose $COMPOSE_ARGS $COMPOSE_FLAGS up --force-recreate migrations \
     || fail_update "database migration" "Failed to run migrations."
 echo -e "${GREEN}✓ Migrations complete${NC}"
@@ -371,18 +381,10 @@ echo ""
 
 # Step 6: Rebuild app images
 echo -e "${YELLOW}[6/9]${NC} Rebuilding application images..."
-if [ "$PRODUCT_LINE" = "cloud" ]; then
-    docker compose $COMPOSE_ARGS $COMPOSE_FLAGS build $(active_services app allerac-telegram notifier executor agent-worker) \
-        || fail_update "image build" "Failed to rebuild application images."
-else
-    # Only rebuild images that exist in this deployment
-    # executor and agent-worker carry the shell-hardening changes; rebuild them too.
-    BUILD_TARGETS="$(active_services app health-worker executor agent-worker)"
-    docker ps --format '{{.Names}}' | grep -qx "${UNIT}-telegram" && BUILD_TARGETS="$BUILD_TARGETS allerac-telegram"
-    docker ps --format '{{.Names}}' | grep -qx "${UNIT}-notifier" && BUILD_TARGETS="$BUILD_TARGETS notifier"
-    docker compose $COMPOSE_ARGS $COMPOSE_FLAGS build $BUILD_TARGETS \
-        || fail_update "image build" "Failed to rebuild application images."
-fi
+# Build every enabled service, including certificate-only vendor wrappers.
+# Compose profiles and public/cloud overrides still select the deployment.
+docker compose $COMPOSE_ARGS $COMPOSE_FLAGS build --pull \
+    || fail_update "image build" "Failed to rebuild application images."
 echo -e "${GREEN}✓ Images rebuilt${NC}"
 echo ""
 

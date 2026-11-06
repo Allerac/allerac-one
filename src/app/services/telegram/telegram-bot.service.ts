@@ -5,8 +5,9 @@
  * Uses polling (no webhook server needed).
  */
 
+import { getOrCreatePrimaryConversation, insertTopicMarker } from '../chat/primary-conversation';
 import TelegramBot from 'node-telegram-bot-api';
-import { handleChatMessage, maybeSummarizeConversation, ChatHandlerConfig, ChatImageAttachment } from '../chat/chat-handler';
+import { handleChatMessage, ChatHandlerConfig, ChatImageAttachment } from '../chat/chat-handler';
 import { UserSettingsService } from '../user/user-settings.service';
 import { ConversationMemoryService } from '../memory/conversation-memory.service';
 import { instructionDistillerService } from '../memory/instruction-distiller.service';
@@ -149,6 +150,19 @@ export class AlleracTelegramBot {
       current_conversation_id: null,
       telegram_user_id: userId,
     };
+  }
+
+  /**
+   * Phase 4a: Telegram always appends to the user's primary conversation with
+   * the local agent (shared with the web chat). Created lazily.
+   */
+  private async primaryConversationFor(chatId: number, mapping: { user_id: string; current_conversation_id: string | null }): Promise<string> {
+    const primaryId = await getOrCreatePrimaryConversation({ userId: mapping.user_id, domain: 'chat' });
+    if (mapping.current_conversation_id !== primaryId) {
+      await this.updateConversationId(chatId, primaryId);
+      mapping.current_conversation_id = primaryId;
+    }
+    return primaryId;
   }
 
   private async updateConversationId(chatId: number, conversationId: string) {
@@ -362,9 +376,8 @@ export class AlleracTelegramBot {
         `*Allerac One* - Your Private AI Agent\n\n` +
         `Send me any message and I'll respond using your AI agent.\n\n` +
         `*Commands:*\n` +
-        `/new - Start a new conversation\n` +
+        `/new - Start a new topic\n` +
         `/conversations - List your conversations\n` +
-        `/switch - Switch to a conversation\n` +
         `/model - Switch AI model\n` +
         `/memory - Show recent memories\n` +
         `/save - Save conversation to memory\n` +
@@ -387,19 +400,12 @@ export class AlleracTelegramBot {
 
       const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
 
-      // Summarize old conversation before starting new
-      if (mapping.current_conversation_id) {
-        const config = await this.getChatConfig(mapping.user_id, userId);
-        await maybeSummarizeConversation(mapping.current_conversation_id, mapping.user_id, config.githubToken);
-      }
+      // Phase 4a: "New topic" on the primary conversation. Nothing is deleted;
+      // the model context restarts after the marker.
+      const primaryId = await this.primaryConversationFor(chatId, mapping);
+      await insertTopicMarker(primaryId, mapping.user_id);
 
-      // Clear current conversation
-      await pool.query(
-        'UPDATE telegram_chat_mapping SET current_conversation_id = NULL WHERE telegram_chat_id = $1',
-        [chatId]
-      );
-
-      await this.bot.sendMessage(chatId, 'New conversation started. Send me a message!');
+      await this.bot.sendMessage(chatId, 'New topic started. Send me a message!');
     });
 
     // /model command
@@ -562,8 +568,7 @@ export class AlleracTelegramBot {
 
         await this.bot.sendMessage(chatId, 
           `*Your Conversations:*\n\n${conversations}\n\n` +
-          `Use \`/switch <number>\` to switch to a conversation.\n` +
-          `Example: \`/switch 1\``,
+          `Older conversations are kept as an archive. Use /new to start a new topic.`,
           { parse_mode: 'Markdown' }
         );
       } catch (error) {
@@ -573,95 +578,15 @@ export class AlleracTelegramBot {
     });
 
     // /switch command - Switch to a specific conversation
-    this.bot.onText(/\/switch(?:\s+(.+))?/, async (msg, match) => {
+    this.bot.onText(/\/switch(?:\s+(.+))?/, async (msg) => {
       const chatId = msg.chat.id;
       const userId = msg.from?.id;
       if (!userId || !this.isAllowed(userId)) return;
-
-      const mapping = await this.getOrCreateMapping(chatId, userId, msg.from?.username);
-      const input = match?.[1]?.trim();
-
-      if (!input) {
-        await this.bot.sendMessage(chatId, 
-          'Usage: `/switch <number>` or `/switch <conversation-id>`\n\n' +
-          'Use `/conversations` to see available conversations.',
-          { parse_mode: 'Markdown' }
-        );
-        return;
-      }
-
-      try {
-        let conversationId: string | null = null;
-
-        // Check if input is a number (conversation list index)
-        const index = parseInt(input, 10);
-        if (!isNaN(index) && index > 0) {
-          // Get conversation by index from the list
-          const result = await pool.query(
-            `SELECT id, title 
-             FROM chat_conversations 
-             WHERE user_id = $1 
-             ORDER BY updated_at DESC 
-             LIMIT 1 OFFSET $2`,
-            [mapping.user_id, index - 1]
-          );
-
-          if (result.rows.length > 0) {
-            conversationId = result.rows[0].id;
-          }
-        } else {
-          // Try to use input as conversation ID (UUID or partial UUID)
-          const result = await pool.query(
-            `SELECT id, title 
-             FROM chat_conversations 
-             WHERE user_id = $1 AND (id::text = $2 OR id::text LIKE $3)
-             LIMIT 1`,
-            [mapping.user_id, input, `${input}%`]
-          );
-
-          if (result.rows.length > 0) {
-            conversationId = result.rows[0].id;
-          }
-        }
-
-        if (!conversationId) {
-          await this.bot.sendMessage(chatId, 
-            `❌ Conversation not found.\n\n` +
-            `Use \`/conversations\` to see your available conversations.`,
-            { parse_mode: 'Markdown' }
-          );
-          return;
-        }
-
-        // Summarize old conversation before switching
-        if (mapping.current_conversation_id && mapping.current_conversation_id !== conversationId) {
-          const config = await this.getChatConfig(mapping.user_id, userId);
-          await maybeSummarizeConversation(mapping.current_conversation_id, mapping.user_id, config.githubToken);
-        }
-
-        // Update the current conversation
-        await this.updateConversationId(chatId, conversationId);
-
-        // Get conversation details – always verify ownership
-        const convResult = await pool.query(
-          'SELECT title FROM chat_conversations WHERE id = $1 AND user_id = $2',
-          [conversationId, mapping.user_id]
-        );
-
-        if (convResult.rows.length === 0) {
-          await this.bot.sendMessage(chatId, '❌ Conversation not found. It may have been deleted.');
-          return;
-        }
-
-        await this.bot.sendMessage(chatId,
-          `✅ Switched to: *${this.escapeMd(convResult.rows[0].title)}*\n\n` +
-          `Continue your conversation or use \`/new\` to start fresh.`,
-          { parse_mode: 'Markdown' }
-        );
-      } catch (error) {
-        console.error('[Telegram] Error switching conversation:', error);
-        await this.bot.sendMessage(chatId, '❌ Failed to switch conversation. Please try again.');
-      }
+      // Phase 4a: one continuous conversation per agent; older ones are an archive.
+      await this.bot.sendMessage(chatId,
+        'Switching is no longer needed: this chat continues your single conversation with the agent.\n\n' +
+        'Use /new to start a new topic.'
+      );
     });
 
     // /correct command - Start correction flow
@@ -848,9 +773,8 @@ export class AlleracTelegramBot {
 
       await this.safeSend(chatId,
         `*Allerac One - Commands*\n\n` +
-        `/new - Start a new conversation\n` +
+        `/new - Start a new topic\n` +
         `/conversations - List your conversations\n` +
-        `/switch <number> - Switch to a conversation\n` +
         `/model - Switch AI model\n` +
         `/model model-id - Switch to specific model\n` +
         `/skills - List available skills\n` +
@@ -1156,7 +1080,7 @@ export class AlleracTelegramBot {
 
         const result = await handleChatMessage(
           msg.text,
-          mapping.current_conversation_id,
+          await this.primaryConversationFor(chatId, mapping),
           chatConfig
         );
 
@@ -1231,7 +1155,7 @@ export class AlleracTelegramBot {
 
       const result = await handleChatMessage(
         caption,
-        mapping.current_conversation_id,
+        await this.primaryConversationFor(chatId, mapping),
         chatConfig,
         [imageAttachment]
       );
@@ -1307,7 +1231,7 @@ export class AlleracTelegramBot {
 
       const result = await handleChatMessage(
         caption,
-        mapping.current_conversation_id,
+        await this.primaryConversationFor(chatId, mapping),
         chatConfig,
         [imageAttachment]
       );

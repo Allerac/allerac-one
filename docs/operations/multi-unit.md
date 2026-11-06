@@ -40,13 +40,13 @@ Units through the host, like from the rest of your network.
 ## Modules and profiles per Unit
 
 Each Unit can run a different set of optional modules with `ALLERAC_PROFILE`
-(`all`, `personal`, `openworld`, `sales`) or an explicit `ALLERAC_MODULES`
+(`all`, `personal`, `openworld`, `alleracweb`) or an explicit `ALLERAC_MODULES`
 list. `install.sh`, `update.sh` and `allerac.sh` derive the module Compose
 profiles from it (e.g. `health` for health-worker) and merge them with the
 Unit's own `COMPOSE_PROFILES`; a `COMPOSE_PROFILES` set in the calling shell
 wins as is. Plain `docker compose --env-file .env.<unit> up -d` does not do
 this, so add `health` to `COMPOSE_PROFILES` there yourself. Public Units
-should set `ALLERAC_PROFILE=openworld` or `sales` (nothing set means `all`,
+should set `ALLERAC_PROFILE=openworld` or `alleracweb` (nothing set means `all`,
 which starts health-worker). Example env files live in `deploy/profiles/`.
 See [modules-and-profiles.md](modules-and-profiles.md).
 
@@ -80,7 +80,7 @@ pushes anything. It:
   `ALLERAC_UNIT`, `ALLERAC_PROFILE`, `DEPLOY_BRANCH=unit/<name>`, `APP_URL`,
   closed registration, and every host port shifted by the first free offset
   (`APP_PORT=8081`, `8082`, ...; executor dev ports in blocks of 20);
-- selects the lean public override, and for `openworld`/`sales` also
+- selects the lean public override, and for `openworld`/`alleracweb` also
   `docker-compose.no-ollama.yml` (see below; `--with-ollama` to keep it,
   `--full` for every service).
 
@@ -140,7 +140,7 @@ not start a second `cloudflared` per Unit. See *One hostname per Unit* below.
 ## Move a domain into a Unit
 
 `scripts/units/export-domain.sh` and `import-domain.sh` move a public bot
-(the service account behind `openworld` or `sales`) from one Unit's database
+(the service account behind `openworld` or `alleracweb`) from one Unit's database
 to another. Conversation history is not copied.
 
 ```bash
@@ -179,6 +179,41 @@ that already exists in the target, and always creates the account as
 account; the import demotes it and says so. Give the Unit its own admin
 (the first account registered on it).
 
+### Example: the alleracweb Unit
+
+The same steps as openworld, for the text-only `alleracweb` bot (the allerac.ai
+website chatbot; port offset and hostname are examples; `new-unit.sh` picks the
+first free offset). Unit names starting with `allerac` are reserved for the
+primary Unit, so the Unit is named `web` and its branch is set explicitly:
+
+```bash
+cd ~/allerac-one && git fetch origin
+scripts/units/new-unit.sh web --profile alleracweb --hostname alleracweb.allerac.ai --branch unit/alleracweb --dry-run
+scripts/units/new-unit.sh web --profile alleracweb --hostname alleracweb.allerac.ai --branch unit/alleracweb
+cd ~/allerac-units/web
+docker compose up -d --build
+git push -u origin unit/alleracweb        # publish the Unit branch once
+# move the bot from the Unit that hosts it today
+(cd ~/allerac-one && scripts/units/export-domain.sh --domain alleracweb --account <bot email> --unit-dir . --out /tmp/alleracweb.json)
+scripts/units/import-domain.sh /tmp/alleracweb.json --unit-dir .
+scripts/units/import-domain.sh /tmp/alleracweb.json --unit-dir . --verify-only
+shred -u /tmp/alleracweb.json
+```
+
+Then add the `alleracweb` public hostname to the tunnel, register the Unit's own
+admin, re-enter the provider key, point the website Worker's
+`ALLERAC_ONE_BASE_URL` at the new hostname (the imported key hash keeps the
+widget token valid), and smoke-test the widget.
+
+### Retire a public domain on the old Unit
+
+Once the widget answers from the new Unit, set the old Unit's profile so the
+module is off there (e.g. `ALLERAC_PROFILE=personal`) and run `./update.sh`.
+The domain then disappears from the hub, taskbar, `/domains` and the tool
+list, `/alleracweb` or `/openworld` answer 404 and the old bot key can no longer
+chat in that domain. Its conversation history stays in the old database,
+read-only; nothing is deleted.
+
 ## Lean public profile
 
 `docker-compose.public.yml` is an override file. A Unit selects it with
@@ -205,7 +240,7 @@ The base file is not changed by this override, so a normal install keeps every
 service without any new setting. The override needs Docker Compose v2.24.4 or
 newer (it uses the `!override` tag); check with `docker compose version`.
 
-Public domains (`sales`, `openworld`) already refuse shell, GitHub and log
+Public domains (`alleracweb`, `openworld`) already refuse shell, GitHub and log
 tools at the application level; the lean profile also removes the executor
 and the Docker socket from the Unit, so there is nothing to reach.
 
@@ -266,6 +301,14 @@ Unit's env file to that Unit's public URL.
 Only `caddy` (the `local` profile) binds ports 80/443, so normally only the
 primary Unit uses it. A second Unit that also needs Caddy must set
 `CADDY_HTTP_PORT` / `CADDY_HTTPS_PORT`.
+
+## Federation manifest per Unit
+
+Each Unit serves a public [federation manifest](../api/federation-manifest.md)
+at `/.well-known/allerac`. Set `ALLERAC_UNIT_NAME` (or rely on `ALLERAC_UNIT`)
+and `ALLERAC_PUBLIC_URL` in each Unit's env file so the manifest names the Unit
+and its hostname correctly. Pairing is off by default; public Units (profile
+`openworld` or `alleracweb`) keep it off unless `ALLERAC_PAIRING_ACCEPT_PUBLIC=true`.
 
 ## Sessions and cookies
 

@@ -11,6 +11,7 @@ import { handleChatMessage } from '@/app/services/chat/chat-handler';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { buildSoul } from '@/app/config/allerac-soul';
+import { loadSoulIdentity } from '@/federation/unit-profile.repository';
 import pool from '@/app/clients/db';
 import { resolveJobModel, type JobModelProvider } from '@/app/services/scheduled-jobs/job-model';
 
@@ -88,7 +89,7 @@ export async function POST(request: Request): Promise<Response> {
       hour12: false,
     }).format(now).replace(/(\d+)\/(\d+)\/(\d+),/, '$3-$1-$2');
 
-    let systemMessage = buildSoul('jobs');
+    let systemMessage = buildSoul('jobs', await loadSoulIdentity('jobs'));
     systemMessage += `\n\n## Context\n- Current date & time: ${todayStr} (${userTz})`;
 
     // Append user name if available

@@ -9,7 +9,7 @@ it runs. Core features are always on.
 | Group | Modules | Notes |
 |---|---|---|
 | Core (always on) | chat, memories, RAG, notes, knowledge, crawler, tickets, code, auth, admin, API, agents/workers, telegram, github, benchmark | Not configurable. |
-| External | `openworld`, `sales` | Public-facing (website widgets). Must never break. |
+| External | `openworld`, `alleracweb` | Public-facing (website widgets). Must never break. |
 | Personal | `health` (Garmin/Strava), `music` (Spotify), `email`, `social` (Instagram/TikTok) | Personal data. |
 
 Each module has a manifest in `src/modules/<id>/module.ts` (id, group, domain
@@ -29,7 +29,7 @@ they point at code that still lives under `src/app`; nothing has moved.
 | `all` (default when nothing is set) | every module: identical to a classic install |
 | `personal` | `health`, `music`, `email`, `social` |
 | `openworld` | `openworld` |
-| `sales` | `sales` |
+| `alleracweb` | `alleracweb` |
 
 The variables are read by the app, agent-worker and Telegram bot processes
 (`src/lib/runtime-config.ts`, `resolveModuleSelection`). Restart the
@@ -66,7 +66,7 @@ runs with the `health` Compose profile.
 |---|---|
 | nothing set / `ALLERAC_PROFILE=all` | `health` (same services as before modules existed) |
 | `ALLERAC_PROFILE=personal` | `health` |
-| `ALLERAC_PROFILE=openworld` or `sales` | none |
+| `ALLERAC_PROFILE=openworld` or `alleracweb` | none |
 | `ALLERAC_MODULES` containing `health` | `health` |
 
 Rules:
@@ -96,7 +96,7 @@ is not started.
 
 - `garmin-auth-worker` stays under the `local` profile (it exists to use a
   home IP for Garmin login), so enable `local` too if you use it.
-- A lean public Unit should set `ALLERAC_PROFILE=openworld` or `sales`;
+- A lean public Unit should set `ALLERAC_PROFILE=openworld` or `alleracweb`;
   with nothing set the scripts treat it as `all` and start health-worker.
 - CI (`scripts/ci/security-integration.sh`) and the multi-unit smoke
   (`scripts/smoke/multi-unit-smoke.sh`) call `docker compose` directly with
@@ -105,7 +105,7 @@ is not started.
 
 ## Example env files
 
-`deploy/profiles/personal.env`, `openworld.env`, `sales.env`. Merge the lines
+`deploy/profiles/personal.env`, `openworld.env`, `alleracweb.env`. Merge the lines
 into the Unit's env file:
 
 ```bash
@@ -129,3 +129,40 @@ ALLERAC_ENV_FILE=.env.openworld ./update.sh
 4. Put its Docker services under `profiles: [<id>]`, set `dockerProfile` in the
    manifest and add it to `ALLERAC_MODULE_COMPOSE_PROFILES` in
    `scripts/lib/compose-profiles.sh` (the sync test enforces it).
+
+## One Unit = one agent
+
+Each Unit presents itself as **one agent**. The agent's name, emoji and role are
+the Unit profile's (Settings > Discovery > **Agent**), and the owner can add
+**instructions** (up to 4,000 characters) that shape this Unit's soul in chat,
+scheduled jobs, sub-agent workers and federated asks. Instructions stay on the
+Unit: they are never sent to paired Units, and public domains (alleracweb,
+openworld) only get them when "Also use this identity in public domains" is on.
+The user's own learned instructions are added after them and win on conflicts.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `ALLERAC_SINGLE_AGENT` | `false` | Paired Units see one agent, `chat`, named after this Unit and described by its role. `ALLERAC_FEDERATION_AGENTS` is ignored. Threads that home Units have with other agents of this Unit become read-only. |
+| `ALLERAC_UNIT_INSTRUCTIONS` | (unset) | Fallback instructions when none are saved in the Agent card. |
+
+The Agents list of the Unit's own sidebar shows this Unit's agent first ("This
+Unit"), opening the local chat.
+
+## Agent tools (phase 3a)
+
+The local `chat` agent gets the tools of every enabled capability: personal
+modules (health, email, music, social) and core features (notes, memory
+management, scheduled jobs, tickets). Admins toggle capabilities, single tools
+and skills in **Settings > Discovery > Agent tools** (`unit_profile.agent_tool_settings`,
+migration 151). `ALLERAC_MODULES` / `ALLERAC_PROFILE` still caps the list: a
+module turned off there is never offered.
+
+Defaults: health, email, notes, memory management and jobs are on; music,
+social and tickets are off to keep the prompt small. When the active skill lists
+its tools, capability tools outside that list are left out. Other domains keep
+their previous tool sets. Paired Units keep their previous reach (notes and
+module tools only) and never see the instructions or the tool settings.
+
+The chat agent has one memory: recall, auto-RAG and summaries are not filtered
+by domain, and `domain_slug` stays only as a tag on new memories. Tickets are
+never a knowledge source.

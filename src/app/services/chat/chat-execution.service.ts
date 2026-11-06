@@ -1,9 +1,15 @@
+import { resolveTimeZone } from '@/app/lib/timezone';
+import { acquireConversationLock, loadPrimaryPromptHistory, scheduleCompaction, type Summarize } from './primary-conversation';
+import { makeSegmentSummarizer } from './segment-summarizer';
+import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import type { User } from '@/app/services/auth/auth.service';
 import { ChatService } from '@/app/services/database/chat.service';
 import { loadChatKnowledgeContext } from '@/app/services/knowledge/chat-knowledge-context';
+import { loadChatSoulIdentity } from '@/federation/unit-profile.repository';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
-import { PUBLIC_DOMAINS, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools, type ChatToolPolicy } from '@/app/services/chat/chat-tool-registry';
+import { hasActivePeers, listActivePeerLabels } from '@/federation/peer-presence';
 import { isShellAllowedFor } from '@/app/lib/shell-policy';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
@@ -27,6 +33,13 @@ export interface ChatExecutionInput {
   postContext?: string;
   emit?: (event: Record<string, any>) => void;
   keepalive?: () => void;
+  /** 'federated' when answering a paired Unit (federation P3). */
+  toolPolicy?: ChatToolPolicy;
+  /**
+   * IANA timezone for dates in the prompt and tools. Overrides the user's
+   * setting, e.g. when a home Unit forwards its user's timezone.
+   */
+  timeZone?: string;
 }
 
 export interface ChatExecutionResult {
@@ -50,6 +63,29 @@ export class ChatMessagePersistenceError extends Error {
 }
 
 export async function executeChatMessage(input: ChatExecutionInput): Promise<ChatExecutionResult> {
+  const conversation = await chatService.getConversationForUser(input.conversationId, input.user.id);
+  if (!conversation || conversation.domain_slug !== input.domain) {
+    throw new ChatConversationNotFoundError();
+  }
+  if (conversation.is_primary !== true) return executeChatTurn(input, false);
+  // Phase 4a: one writer at a time on the primary conversation (web, Telegram, federation).
+  const release = await acquireConversationLock(input.conversationId);
+  let result: ChatExecutionResult;
+  let summarizer = null as Summarize | null;
+  try {
+    result = await executeChatTurn(input, true, s => { summarizer = s; });
+  } finally {
+    await release();
+  }
+  if (summarizer) scheduleCompaction(input.conversationId, summarizer);
+  return result;
+}
+
+async function executeChatTurn(
+  input: ChatExecutionInput,
+  isPrimary: boolean,
+  onSummarizer?: (summarize: Summarize) => void,
+): Promise<ChatExecutionResult> {
   const events: Array<Record<string, any>> = [];
   const emit = (event: Record<string, any>) => {
     events.push(event);
@@ -61,8 +97,12 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     throw new ChatConversationNotFoundError();
   }
 
-  const history = await chatService.loadMessages(input.conversationId, input.user.id);
-  const isNewConversation = history.length === 0;
+  const history = isPrimary
+    ? await loadPrimaryPromptHistory(input.conversationId)
+    : await chatService.loadMessages(input.conversationId, input.user.id);
+  const isNewConversation = isPrimary
+    ? (await chatService.countMessages(input.conversationId)) === 0
+    : history.length === 0;
   const isPublicDomain = PUBLIC_DOMAINS.includes(input.domain);
   const processedImages = await processChatImages(input.imageAttachments);
   const runtimeContext = await loadChatRuntimeContext(input.user.id, input.domain, input.provider);
@@ -76,6 +116,7 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     userInstructions,
     modelBaseUrl,
   } = runtimeContext;
+  const timeZone = resolveTimeZone(input.timeZone ?? runtimeContext.timezone);
 
   const activeSkill = await resolveActiveChatSkill({
     conversationId: input.conversationId,
@@ -110,7 +151,8 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
         userId: input.user.id,
         isAdmin: input.user.is_admin === true,
         query: input.message,
-        domainSlug: input.domain,
+        // One memory for the chat agent; paired Units keep the domain-scoped reach.
+        domainSlug: memoryReadDomain(input.domain, { federated: input.toolPolicy === 'federated' }),
       });
     } catch (error) {
       console.log('[ChatExecution] RAG search failed:', error);
@@ -130,21 +172,31 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     }
   }
 
+  const federationOffered = canUseFederationTools({
+    isAdmin: input.user.is_admin === true,
+    domain: input.domain,
+    policy: input.toolPolicy,
+  }) && await hasActivePeers();
+
   const enrichedSystemMessage = buildChatSystemPrompt({
     user: isPublicDomain ? { ...input.user, name: '' } : input.user,
     locale: input.locale,
     domain: input.domain,
     userLocation: isPublicDomain ? null : userLocation,
+    timezone: timeZone,
     tavilyConfigured: Boolean(tavilyApiKey),
     userInstructions: isPublicDomain ? '' : userInstructions,
     postContext: isPublicDomain ? undefined : input.postContext,
     activeSkill,
     skillContent,
     relevantContext,
+    unitIdentity: await loadChatSoulIdentity(input.domain, federationOffered, listActivePeerLabels),
   });
 
   const activeTools = await resolveChatTools(activeSkill?.id, input.domain, {
     allowShell: isShellAllowedFor(input.user),
+    toolPolicy: input.toolPolicy,
+    allowFederation: federationOffered,
   });
   const conversationMessages: Array<{
     role: string;
@@ -189,6 +241,8 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
     messages: conversationMessages,
     emit,
     keepalive: input.keepalive ?? (() => undefined),
+    toolPolicy: input.toolPolicy,
+    timeZone,
   });
 
   const savedAssistantMessage = await chatService.saveMessage(input.conversationId, 'assistant', content, { userId: input.user.id });
@@ -203,6 +257,16 @@ export async function executeChatMessage(input: ChatExecutionInput): Promise<Cha
       console.error('[ChatExecution] Skill usage tracking failed:', error);
     }
   }
+
+  onSummarizer?.(makeSegmentSummarizer({
+    provider: input.provider,
+    baseUrl: modelBaseUrl,
+    modelId: input.modelId,
+    githubToken,
+    geminiToken: googleApiKey,
+    anthropicToken: anthropicApiKey,
+    openaiToken: openaiApiKey,
+  }));
 
   return {
     conversationId: input.conversationId,

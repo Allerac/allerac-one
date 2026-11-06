@@ -1,0 +1,22 @@
+meta {
+  name: Discover Peer
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/peers/discover
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Cookie: session_token={{sessionToken}}
+}
+
+body:json {
+  {
+    "url": "{{peerUrl}}"
+  }
+}

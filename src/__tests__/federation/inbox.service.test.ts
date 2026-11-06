@@ -1,0 +1,597 @@
+/** @jest-environment node */
+import { FederationError, federationErrors } from '@/federation/errors';
+import { ASK_TIMEOUT_MS } from '@/federation/federation-client';
+import {
+  CONTEXT_TURNS, InboxError, LOCAL_POLL_FAILURE_LIMIT, InboxService, PEER_SENDS_PER_MINUTE, PENDING_DEADLINE_MS, POLL_BACKOFF_MS, packQuestion, pollDelay,
+  type InboxFederationPort,
+} from '@/federation/inbox.service';
+import type { FederatedMessage } from '@/federation/inbox.types';
+import { InMemoryPeerStore } from '../__mocks__/federation-fakes';
+import { InMemoryInboxStore, peerFixture } from '../__mocks__/inbox-fakes';
+
+const user = { id: 'admin-1', is_admin: true };
+
+const REMOTE_CONV = '00000000-0000-4000-8000-0000000000aa';
+
+function setup(options: { now?: () => number; legacyPeer?: boolean } = {}) {
+  const store = new InMemoryInboxStore();
+  const peers = new InMemoryPeerStore();
+  const federation = {
+    listAgentsWithUnit: jest.fn().mockResolvedValue({
+      agents: [{ id: 'chat', name: 'Chat', description: 'General' }],
+      unit: { name: 'santos', displayName: 'Santos', emoji: '🏖️', role: 'Beach lab', description: null, tags: [] },
+    }),
+    askAgentInConversation: jest.fn().mockResolvedValue({
+      answer: 'hello from santos', truncated: false,
+      conversationId: options.legacyPeer ? null : REMOTE_CONV, messageId: options.legacyPeer ? null : 'remote-msg-1',
+    }),
+  } satisfies InboxFederationPort;
+  const log = jest.fn();
+  const service = new InboxService({
+    store, peers, federation, log,
+    localAgents: async () => [{ slug: 'chat', name: 'Chat' }],
+    loadHomeUnit: async () => ({ name: 'napols', displayName: 'Napols', emoji: '🍕', role: 'Home', description: null, tags: [] }),
+    now: options.now,
+  });
+  return { store, peers, federation, service, log };
+}
+
+describe('packQuestion', () => {
+  const msg = (role: 'user' | 'agent', content: string, status: FederatedMessage['status'] = 'done'): FederatedMessage => ({
+    id: content, threadId: 't', role, content, status, truncated: false, errorCode: null, remoteMessageId: null,
+    remoteRunId: null, nextPollAt: null, pollAttempts: 0, pendingDeadlineAt: null, createdAt: new Date(),
+  });
+
+  it('sends the plain message when there is no history', () => {
+    expect(packQuestion([], 'hi')).toBe('hi');
+  });
+
+  it('packs the last turns, skipping failed ones', () => {
+    const history = Array.from({ length: 10 }, (_, i) => msg(i % 2 ? 'agent' : 'user', `m${i}`));
+    history.push(msg('user', 'broken', 'failed'));
+    const packed = packQuestion(history, 'now?');
+    expect(packed).toContain('User: m4');
+    expect(packed).not.toContain('m3');
+    expect(packed).not.toContain('broken');
+    expect(packed.split('\n').filter(line => /^(User|Agent):/.test(line))).toHaveLength(CONTEXT_TURNS);
+    expect(packed.endsWith('Current message:\nnow?')).toBe(true);
+  });
+
+  it('drops oldest context to fit the size cap', () => {
+    const packed = packQuestion([msg('user', 'a'.repeat(900)), msg('agent', 'b'.repeat(900))], 'q', 1_000);
+    expect(packed.length).toBeLessThanOrEqual(1_000);
+    expect(packed).not.toContain('aaaa');
+    expect(packed).toContain('bbbb');
+  });
+});
+
+describe('InboxService', () => {
+  it('lists no local agents, peer agents grouped with identity, never secrets', async () => {
+    const { service, peers } = setup();
+    await peers.insert(peerFixture());
+    const listing = await service.list(user);
+    expect(listing.home).toMatchObject({ name: 'napols', emoji: '🍕', agents: [] });
+    expect(listing.home.agent).toEqual({ slug: 'chat', name: listing.home.displayName, emoji: '🍕', role: listing.home.role, href: '/agents/self/agent', configureUrl: '/hub/settings' });
+    expect(listing.units).toEqual([expect.objectContaining({
+      name: 'santos', emoji: '🏖️', role: 'Beach lab', status: 'online',
+      agents: [expect.objectContaining({ slug: 'chat', available: true, threadId: null })],
+    })]);
+    // The peer origin only leaves the server as its settings link (Configure item).
+    expect(listing.units[0].configureUrl).toMatch(/^https?:\/\/[^/]*santos\.example[^/]*\/hub\/settings$/);
+    const json = JSON.stringify({ ...listing, units: listing.units.map(unit => ({ ...unit, configureUrl: undefined, pages: undefined })) });
+    expect(json).not.toContain('secret-key');
+    expect(json).not.toContain('alr_live');
+    expect(json).not.toContain('santos.example');
+  });
+
+  it('lists the peer agent pages linked to the peer, and none when the peer is offline or older', async () => {
+    const { service, peers, federation } = setup();
+    await peers.insert(peerFixture());
+    federation.listAgentsWithUnit.mockResolvedValueOnce({
+      agents: [{ id: 'chat', name: 'Chat', description: null }], unit: null, pages: ['health', 'unknown'],
+    } as never);
+    const listing = await service.list(user);
+    expect(listing.units[0].pages).toEqual([{ id: 'health', label: 'Health', icon: '❤️', url: 'https://santos.example/health' }]);
+
+    const older = setup();
+    await older.peers.insert(peerFixture());
+    expect((await older.service.list(user)).units[0].pages).toEqual([]);
+
+    const offline = setup();
+    await offline.peers.insert(peerFixture());
+    offline.federation.listAgentsWithUnit.mockRejectedValueOnce(federationErrors.peerUnreachable());
+    expect((await offline.service.list(user)).units[0].pages).toEqual([]);
+  });
+
+  it('marks a peer offline when listing fails and caches successful listings', async () => {
+    const { service, peers, federation } = setup();
+    await peers.insert(peerFixture());
+    await service.list(user);
+    await service.list(user);
+    expect(federation.listAgentsWithUnit).toHaveBeenCalledTimes(1);
+
+    const second = setup();
+    await second.peers.insert(peerFixture());
+    second.federation.listAgentsWithUnit.mockRejectedValueOnce(federationErrors.peerUnreachable());
+    const listing = await second.service.list(user);
+    expect(listing.units[0]).toMatchObject({ status: 'offline', agents: [] });
+  });
+
+  it('continues the remote conversation without packing context, and audits with the thread id', async () => {
+    const { service, peers, federation, store, log } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'Chat');
+    const first = await service.send(user, thread.id, 'first question');
+    expect(first.userMessage.status).toBe('done');
+    expect(first.agentMessage?.content).toBe('hello from santos');
+    expect(federation.askAgentInConversation).toHaveBeenLastCalledWith(peerFixture().id, 'chat', {
+      question: 'first question', conversationId: null, threadTitle: 'Chat @ Santos', idempotencyKey: `${first.userMessage.id}:new`,
+    }, { initiatedByUserId: 'admin-1', threadId: thread.id });
+    expect(store.threads.get(thread.id)?.remoteConversationId).toBe(REMOTE_CONV);
+    expect(store.messages.find(m => m.role === 'agent')?.remoteMessageId).toBe('remote-msg-1');
+
+    const second = await service.send(user, thread.id, 'second');
+    expect(federation.askAgentInConversation.mock.calls[1][2]).toEqual({
+      question: 'second', conversationId: REMOTE_CONV, threadTitle: 'Chat @ Santos', idempotencyKey: `${second.userMessage.id}:${REMOTE_CONV}`,
+    });
+    expect(store.messages).toHaveLength(4);
+    expect(log.mock.calls[0][0]).toMatch(/\[Inbox\] send thread=thread-\d+ peer=santos agent=chat status=done/);
+    expect(log.mock.calls[0][0]).not.toContain('first question');
+  });
+
+  it('packs context once for a P4a thread on its first P4b send (decision 1)', async () => {
+    const { service, peers, federation, store } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await store.insertMessage({ threadId: thread.id, role: 'user', content: 'old question', status: 'done' });
+    await store.insertMessage({ threadId: thread.id, role: 'agent', content: 'old answer', status: 'done' });
+    await service.send(user, thread.id, 'new');
+    const firstInput = federation.askAgentInConversation.mock.calls[0][2];
+    expect(firstInput.conversationId).toBeNull();
+    expect(firstInput.question).toContain('User: old question');
+    expect(firstInput.question).toContain('Agent: old answer');
+    await service.send(user, thread.id, 'next');
+    expect(federation.askAgentInConversation.mock.calls[1][2].question).toBe('next');
+  });
+
+  it('keeps packing context with a pre-P4b peer (mixed versions)', async () => {
+    const { service, peers, federation, store } = setup({ legacyPeer: true });
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await service.send(user, thread.id, 'first question');
+    await service.send(user, thread.id, 'second');
+    const input = federation.askAgentInConversation.mock.calls[1][2];
+    expect(input.conversationId).toBeNull();
+    expect(input.question).toContain('User: first question');
+    expect(store.threads.get(thread.id)?.remoteConversationId).toBeNull();
+  });
+
+  it('resets context once when the peer no longer knows the conversation', async () => {
+    const { service, peers, federation, store } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await service.send(user, thread.id, 'first question');
+    federation.askAgentInConversation
+      .mockRejectedValueOnce(new FederationError('peer_conversation_not_found', 'gone', 502))
+      .mockResolvedValueOnce({ answer: 'fresh', truncated: false, conversationId: '00000000-0000-4000-8000-0000000000bb', messageId: null });
+    const result = await service.send(user, thread.id, 'still there?');
+    expect(result.agentMessage?.content).toBe('fresh');
+    expect(result.notices).toEqual([expect.objectContaining({ role: 'system', content: 'Context reset on Santos' })]);
+    const retryInput = federation.askAgentInConversation.mock.calls[2][2];
+    expect(retryInput.conversationId).toBeNull();
+    expect(retryInput.idempotencyKey).toBe(`${result.userMessage.id}:new`);
+    expect(retryInput.question).toContain('User: first question');
+    expect(store.threads.get(thread.id)?.remoteConversationId).toBe('00000000-0000-4000-8000-0000000000bb');
+  });
+
+  it('retries with the same idempotency key', async () => {
+    const { service, peers, federation } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    federation.askAgentInConversation.mockRejectedValueOnce(federationErrors.peerUnreachable());
+    const failed = await service.send(user, thread.id, 'hi');
+    await service.retry(user, thread.id, failed.userMessage.id);
+    expect(federation.askAgentInConversation.mock.calls.map(call => call[2].idempotencyKey))
+      .toEqual([`${failed.userMessage.id}:new`, `${failed.userMessage.id}:new`]);
+  });
+
+  it('keeps one thread per agent; extra threads are archived and read-only (phase 5)', async () => {
+    const { service, peers, store } = setup();
+    await peers.insert(peerFixture());
+    const main = await service.openThread(user, peerFixture().id, 'chat');
+    expect((await service.openThread(user, peerFixture().id, 'chat')).id).toBe(main.id);
+    // Older clients asking for a new thread get the single thread.
+    expect((await service.openThread(user, peerFixture().id, 'chat', { newThread: true, title: 'x' })).id).toBe(main.id);
+
+    // Threads left over from P4b: one resolved, one still waiting on an async reply.
+    const old = await store.createThread({ userId: user.id, peerId: peerFixture().id, agentSlug: 'chat', title: 'Old topic' });
+    const waiting = await store.createThread({ userId: user.id, peerId: peerFixture().id, agentSlug: 'chat', title: 'Waiting' });
+    await store.insertMessage({ threadId: old.id, role: 'agent', content: 'unread old reply', status: 'done' });
+    const pending = await store.insertMessage({ threadId: waiting.id, role: 'user', content: 'q', status: 'pending' });
+    await store.schedulePoll(pending.id, { remoteRunId: `${pending.id}:new`, nextPollAt: new Date(0), pollAttempts: 0, pendingDeadlineAt: null });
+
+    let row = (await service.list(user)).units[0].agents[0];
+    expect(row.threadId).toBe(main.id);
+    // The pending thread stays active until its reply resolves.
+    expect(row.threads.map(thread => thread.threadId).sort()).toEqual([main.id, waiting.id].sort());
+    expect(row.archivedThreads?.map(thread => thread.threadId)).toEqual([old.id]);
+    expect(row.unread).toBe(0);
+    expect((await service.updates(user)).totalUnread).toBe(0);
+
+    await store.updateMessage(pending.id, { status: 'failed', errorCode: 'timeout' });
+    row = (await service.list(user)).units[0].agents[0];
+    expect(row.threads.map(thread => thread.threadId)).toEqual([main.id]);
+    expect(row.archivedThreads?.map(thread => thread.threadId).sort()).toEqual([old.id, waiting.id].sort());
+
+    // Archived threads open (?thread=) but are read-only.
+    const archived = await service.getThread(user, old.id);
+    expect(archived).toMatchObject({ readOnly: true, archived: true });
+    expect(archived.messages.map(m => m.content)).toEqual(['unread old reply']);
+    await expect(service.send(user, old.id, 'hi')).rejects.toMatchObject({ code: 'thread_archived', status: 409 });
+    await expect(service.newTopic(user, old.id)).rejects.toMatchObject({ code: 'thread_archived' });
+    await expect(service.renameThread(user, old.id, 'x')).rejects.toMatchObject({ code: 'thread_archived' });
+    expect(await service.getThread(user, main.id)).toMatchObject({ readOnly: false, archived: false });
+  });
+
+  it('"New topic" adds a divider and cuts the packed context (phase 5)', async () => {
+    const { service, peers, federation } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await service.send(user, thread.id, 'about cats');
+    const { divider } = await service.newTopic(user, thread.id);
+    expect(divider).toMatchObject({ role: 'system', content: 'New topic' });
+    await service.send(user, thread.id, 'about dogs');
+    const lastInput = federation.askAgentInConversation.mock.calls.at(-1)?.[2];
+    expect(lastInput.question).toBe('about dogs');
+    expect(lastInput.conversationId).toBeNull();
+    const view = await service.getThread(user, thread.id);
+    expect(view.messages.map(m => m.role)).toEqual(['user', 'agent', 'system', 'user', 'agent']);
+  });
+
+  it('pages a long thread', async () => {
+    const { service, peers, store } = setup();
+    await peers.insert(peerFixture());
+    const main = await service.openThread(user, peerFixture().id, 'chat');
+    await expect(service.renameThread(user, main.id, '')).rejects.toMatchObject({ code: 'validation_error' });
+    for (let i = 0; i < 60; i += 1) await store.insertMessage({ threadId: main.id, role: 'user', content: `m${i}`, status: 'done' });
+    const view = await service.getThread(user, main.id);
+    expect(view.messages).toHaveLength(50);
+    expect(view.messages[0].content).toBe('m10');
+    expect(view.nextCursor).toBe(view.messages[0].id);
+    const older = await service.listMessages(user, main.id, null, 5);
+    expect(older.messages.at(-1)?.content).toBe('m59');
+    await expect(service.listMessages(user, main.id, 'not-a-uuid')).rejects.toMatchObject({ code: 'validation_error' });
+  });
+
+  it('rejects unknown agents and invalid slugs', async () => {
+    const { service, peers } = setup();
+    await peers.insert(peerFixture());
+    await expect(service.openThread(user, peerFixture().id, 'nope')).rejects.toMatchObject({ code: 'not_found' });
+    await expect(service.openThread(user, peerFixture().id, '../x')).rejects.toMatchObject({ code: 'validation_error' });
+  });
+
+  it('marks failures and timeouts, then retries', async () => {
+    let clock = 0;
+    const { service, peers, federation } = setup({ now: () => clock });
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+
+    federation.askAgentInConversation.mockRejectedValueOnce(new FederationError('peer_rate_limited', 'x', 502));
+    const failed = await service.send(user, thread.id, 'hi');
+    expect(failed.userMessage).toMatchObject({ status: 'failed', errorCode: 'peer_rate_limited' });
+    expect(failed.agentMessage).toBeNull();
+
+    federation.askAgentInConversation.mockImplementationOnce(async () => { clock += ASK_TIMEOUT_MS; throw federationErrors.peerUnreachable(); });
+    const timedOut = await service.retry(user, thread.id, failed.userMessage.id);
+    expect(timedOut.userMessage).toMatchObject({ status: 'timeout', errorCode: 'timeout' });
+
+    const ok = await service.retry(user, thread.id, failed.userMessage.id);
+    expect(ok.userMessage.status).toBe('done');
+    expect(ok.agentMessage?.content).toBe('hello from santos');
+    await expect(service.retry(user, thread.id, failed.userMessage.id)).rejects.toMatchObject({ code: 'invalid_state' });
+  });
+
+  it('validates message size', async () => {
+    const { service, peers } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await expect(service.send(user, thread.id, '   ')).rejects.toBeInstanceOf(InboxError);
+    await expect(service.send(user, thread.id, 'x'.repeat(4_001))).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('allows one send in flight per thread and rate limits per peer', async () => {
+    const { service, peers, federation } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    let release: () => void = () => undefined;
+    federation.askAgentInConversation.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve({ answer: 'a', truncated: false, conversationId: null, messageId: null }); }));
+    const first = service.send(user, thread.id, 'one');
+    await new Promise(resolve => setImmediate(resolve));
+    await expect(service.send(user, thread.id, 'two')).rejects.toMatchObject({ code: 'send_in_progress' });
+    release();
+    await first;
+
+    for (let i = 1; i < PEER_SENDS_PER_MINUTE; i += 1) await service.send(user, thread.id, `m${i}`);
+    await expect(service.send(user, thread.id, 'over')).rejects.toMatchObject({ code: 'rate_limited', status: 429 });
+  });
+
+  it('keeps unpaired threads read-only and allows deleting their history', async () => {
+    const { service, peers, store } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await service.send(user, thread.id, 'hi');
+    await expect(service.deleteArchivedHistory(user, peerFixture().id)).rejects.toMatchObject({ code: 'invalid_state' });
+    await expect(service.deleteThread(user, thread.id)).rejects.toMatchObject({ code: 'invalid_state' });
+
+    await peers.update(peerFixture().id, { status: 'revoked' });
+    const listing = await service.list(user);
+    expect(listing.units).toEqual([]);
+    expect(listing.archived).toEqual([expect.objectContaining({ name: 'santos', threads: [expect.objectContaining({ threadId: thread.id })] })]);
+
+    const view = await service.getThread(user, thread.id);
+    expect(view.readOnly).toBe(true);
+    expect(view.messages).toHaveLength(2);
+    await expect(service.send(user, thread.id, 'again')).rejects.toMatchObject({ code: 'unit_not_paired' });
+    await expect(service.renameThread(user, thread.id, 'x')).rejects.toMatchObject({ code: 'unit_not_paired' });
+
+    const extra = await store.createThread({ userId: user.id, peerId: peerFixture().id, agentSlug: 'chat', title: 'x' });
+    await service.deleteThread(user, extra.id);
+    expect(store.threads.has(extra.id)).toBe(false);
+    expect(await service.deleteArchivedHistory(user, peerFixture().id)).toBe(1);
+    expect((await service.list(user)).archived).toEqual([]);
+  });
+
+  it('shows unread counts and clears them when the thread is read', async () => {
+    const { service, peers, store } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await store.insertMessage({ threadId: thread.id, role: 'agent', content: 'ping', status: 'done' });
+    expect((await service.list(user)).units[0].agents[0]).toMatchObject({ unread: 1, preview: 'ping', threadId: thread.id });
+    await service.getThread(user, thread.id);
+    expect((await service.list(user)).units[0].agents[0].unread).toBe(0);
+  });
+
+  it('does not expose other users threads', async () => {
+    const { service, peers } = setup();
+    await peers.insert(peerFixture());
+    const thread = await service.openThread(user, peerFixture().id, 'chat');
+    await expect(service.getThread({ id: 'other', is_admin: true }, thread.id)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('pollDelay', () => {
+  it('follows the backoff table with ±20% jitter and repeats the last step', () => {
+    expect(pollDelay(0, () => 0.5)).toBe(3_000);
+    expect(pollDelay(0, () => 0)).toBe(2_400);
+    expect(pollDelay(0, () => 1)).toBe(3_600);
+    expect(pollDelay(3, () => 0.5)).toBe(10_000);
+    expect(pollDelay(99, () => 0.5)).toBe(POLL_BACKOFF_MS.at(-1));
+  });
+});
+
+describe('InboxService async asks and polling (P4c)', () => {
+  function asyncSetup(options: { userTimeZone?: (userId: string) => Promise<string | null> } = {}) {
+    let clock = 1_000_000;
+    const store = new InMemoryInboxStore();
+    const peers = new InMemoryPeerStore();
+    const federation = {
+      listAgentsWithUnit: jest.fn().mockResolvedValue({ agents: [{ id: 'chat', name: 'Chat' }], unit: null, askVersion: 2 }),
+      askAgentInConversation: jest.fn(),
+      askAgentAsync: jest.fn().mockResolvedValue({ status: 'pending', pollAfterMs: 3_000 }),
+      getAskResult: jest.fn().mockResolvedValue({ status: 'pending', pollAfterMs: 3_000 }),
+    } satisfies InboxFederationPort;
+    const service = new InboxService({
+      store, peers, federation, log: jest.fn(), now: () => clock, random: () => 0.5,
+      localAgents: async () => [],
+      loadHomeUnit: async () => ({ name: 'napols', displayName: 'Napols', emoji: null, role: null, description: null, tags: [] }),
+      userTimeZone: options.userTimeZone,
+    });
+    return { store, peers, federation, service, advance: (ms: number) => { clock += ms; }, now: () => clock };
+  }
+  const done = { status: 'done' as const, result: { answer: 'late', truncated: false, conversationId: '00000000-0000-4000-8000-0000000000cc', messageId: 'rm' } };
+
+  async function pendingThread(setup: ReturnType<typeof asyncSetup>) {
+    await setup.peers.insert(peerFixture());
+    const thread = await setup.service.openThread(user, peerFixture().id, 'chat');
+    const sent = await setup.service.send(user, thread.id, 'slow');
+    return { thread, sent };
+  }
+
+  it('keeps the message pending with a poll schedule and blocks a second send', async () => {
+    const setup = asyncSetup();
+    const { thread, sent } = await pendingThread(setup);
+    expect(sent.userMessage.status).toBe('pending');
+    expect(setup.federation.askAgentInConversation).not.toHaveBeenCalled();
+    const message = setup.store.messages[0];
+    expect(message).toMatchObject({ remoteRunId: `${message.id}:new`, pollAttempts: 0 });
+    expect(message.nextPollAt?.getTime()).toBe(setup.now() + 3_000);
+    expect(message.pendingDeadlineAt?.getTime()).toBe(setup.now() + PENDING_DEADLINE_MS);
+    await expect(setup.service.send(user, thread.id, 'more')).rejects.toMatchObject({ code: 'send_in_progress' });
+  });
+
+  it('backs off while pending, then delivers the late reply as unread', async () => {
+    const setup = asyncSetup();
+    const { thread } = await pendingThread(setup);
+    expect(await setup.service.pollDue(null)).toBe(0); // not due yet
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(0);
+    expect(setup.store.messages[0]).toMatchObject({ pollAttempts: 1 });
+    expect(setup.store.messages[0].nextPollAt?.getTime()).toBe(setup.now() + POLL_BACKOFF_MS[1]);
+
+    setup.federation.getAskResult.mockResolvedValueOnce(done);
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages.map(m => [m.role, m.status])).toEqual([['user', 'done'], ['agent', 'done']]);
+    expect(setup.store.messages[1].remoteMessageId).toBe('rm');
+    expect(setup.store.threads.get(thread.id)?.remoteConversationId).toBe(done.result.conversationId);
+    const updates = await setup.service.updates(user);
+    expect(updates.totalUnread).toBe(1);
+    expect(updates.threads[0]).toMatchObject({ unread: 1, pending: false, preview: 'late' });
+    await setup.service.markThreadRead(user, thread.id);
+    expect((await setup.service.updates(user)).totalUnread).toBe(0);
+  });
+
+  it('keeps polling while the peer is unreachable and times out after the deadline', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.federation.getAskResult.mockRejectedValue(federationErrors.peerUnreachable());
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(0);
+    expect(setup.store.messages[0].status).toBe('pending');
+    setup.advance(PENDING_DEADLINE_MS);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'timeout', errorCode: 'timeout' });
+  });
+
+  it('maps peer failures and lost results', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.federation.getAskResult.mockResolvedValueOnce({ status: 'failed', errorCode: 'provider_not_configured' });
+    setup.advance(3_000);
+    await setup.service.pollDue(null);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'provider_not_configured' });
+
+    const other = asyncSetup();
+    await pendingThread(other);
+    other.federation.getAskResult.mockRejectedValueOnce(new FederationError('peer_ask_not_found', 'gone', 502));
+    other.advance(3_000);
+    await other.service.pollDue(null);
+    expect(other.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'result_lost' });
+  });
+
+  it('turns an empty polled answer into a visible empty_answer failure', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.federation.getAskResult.mockResolvedValueOnce({ ...done, result: { ...done.result, answer: '  ' } });
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages).toHaveLength(1);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'empty_answer' });
+  });
+
+  it('fails a send whose immediate answer is empty instead of storing a blank bubble', async () => {
+    const setup = asyncSetup();
+    await setup.peers.insert(peerFixture());
+    const thread = await setup.service.openThread(user, peerFixture().id, 'chat');
+    setup.federation.askAgentAsync.mockResolvedValueOnce({ ...done, result: { ...done.result, answer: '' } });
+    const sent = await setup.service.send(user, thread.id, 'q');
+    expect(sent.userMessage).toMatchObject({ status: 'failed', errorCode: 'empty_answer' });
+    expect(sent.agentMessage).toBeNull();
+  });
+
+  it('forwards the asking user\'s timezone to the peer', async () => {
+    const setup = asyncSetup({ userTimeZone: async () => 'America/Sao_Paulo' });
+    await pendingThread(setup);
+    expect(setup.federation.askAgentAsync.mock.calls[0][2]).toMatchObject({ timeZone: 'America/Sao_Paulo' });
+  });
+
+  it('sends no timezone when none is known or the lookup fails', async () => {
+    const setup = asyncSetup({ userTimeZone: async () => { throw new Error('db down'); } });
+    await pendingThread(setup);
+    expect(setup.federation.askAgentAsync.mock.calls[0][2]).not.toHaveProperty('timeZone');
+  });
+
+  it('logs a local failure after a done result and fails the message after repeated failures', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    const original = setup.store.updateMessage.bind(setup.store);
+    jest.spyOn(setup.store, 'updateMessage').mockImplementation(async (id, patch) => {
+      if (patch.status === 'done') throw new Error('inconsistent types deduced for parameter $2');
+      return original(id, patch);
+    });
+    setup.federation.getAskResult.mockResolvedValue(done);
+    const log = (setup.service as unknown as { log: jest.Mock }).log;
+    for (let attempt = 1; attempt < LOCAL_POLL_FAILURE_LIMIT; attempt += 1) {
+      setup.advance(PENDING_DEADLINE_MS / 20);
+      expect(await setup.service.pollDue(null)).toBe(0);
+      expect(setup.store.messages[0]).toMatchObject({ status: 'pending', pollAttempts: attempt });
+    }
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/\[Inbox\] poll thread=.* status=error error=inconsistent types.* failures=1/));
+    setup.advance(PENDING_DEADLINE_MS / 20);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'internal_error' });
+    expect(setup.store.messages.filter(m => m.role === 'agent')).toHaveLength(0);
+  });
+
+  it('fails at once on non-retryable peer errors', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.federation.getAskResult.mockRejectedValueOnce(federationErrors.peerAccessDenied());
+    setup.advance(3_000);
+    expect(await setup.service.pollDue(null)).toBe(1);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'peer_access_denied' });
+  });
+
+  it('marks a send failed and logs when storing the reply throws', async () => {
+    const setup = asyncSetup();
+    await setup.peers.insert(peerFixture());
+    const thread = await setup.service.openThread(user, peerFixture().id, 'chat');
+    setup.federation.askAgentAsync.mockResolvedValueOnce(done);
+    jest.spyOn(setup.store, 'insertMessage').mockImplementation(async function (this: unknown, message) {
+      if (message.role === 'agent') throw new Error('insert failed');
+      return InMemoryInboxStore.prototype.insertMessage.call(setup.store, message);
+    });
+    const sent = await setup.service.send(user, thread.id, 'q');
+    expect(sent.userMessage).toMatchObject({ status: 'failed', errorCode: 'internal_error' });
+    expect((setup.service as unknown as { log: jest.Mock }).log).toHaveBeenCalledWith(expect.stringMatching(/\[Inbox\] send .* status=error error=insert failed/));
+  });
+
+  it('retries a timed-out message with the same key so a late result is replayed', async () => {
+    const setup = asyncSetup();
+    const { thread, sent } = await pendingThread(setup);
+    await setup.store.updateMessage(sent.userMessage.id, { status: 'timeout', errorCode: 'timeout' });
+    setup.federation.askAgentAsync.mockResolvedValueOnce(done);
+    const retried = await setup.service.retry(user, thread.id, sent.userMessage.id);
+    expect(retried.agentMessage?.content).toBe('late');
+    expect(setup.federation.askAgentAsync.mock.calls.map(call => call[2].idempotencyKey))
+      .toEqual([`${sent.userMessage.id}:new`, `${sent.userMessage.id}:new`]);
+  });
+
+  it('only polls the requesting user and does not double-poll a claimed message', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    setup.advance(3_000);
+    expect(await setup.service.pollDue({ id: 'someone-else' })).toBe(0);
+    expect(setup.federation.getAskResult).not.toHaveBeenCalled();
+    const message = setup.store.messages[0];
+    expect(await setup.store.claimPoll(message.id, message.nextPollAt, new Date(setup.now() + 30_000))).toBe(true);
+    expect(await setup.service.pollDue(null)).toBe(0);
+    expect(setup.federation.getAskResult).not.toHaveBeenCalled();
+  });
+
+  it('stays synchronous with a pre-P4c peer (mixed versions)', async () => {
+    const setup = asyncSetup();
+    setup.federation.listAgentsWithUnit.mockResolvedValue({ agents: [{ id: 'chat', name: 'Chat' }], unit: null, askVersion: 1 });
+    setup.federation.askAgentInConversation.mockResolvedValue(done.result);
+    const { sent } = await pendingThread(setup);
+    expect(sent.userMessage.status).toBe('done');
+    expect(sent.agentMessage?.content).toBe('late');
+    expect(setup.federation.askAgentAsync).not.toHaveBeenCalled();
+  });
+
+  it('fails polling for a unit that was unpaired', async () => {
+    const setup = asyncSetup();
+    await pendingThread(setup);
+    await setup.peers.update(peerFixture().id, { status: 'revoked' });
+    setup.advance(3_000);
+    await setup.service.pollDue(null);
+    expect(setup.store.messages[0]).toMatchObject({ status: 'failed', errorCode: 'unit_not_paired' });
+  });
+});
+
+describe('unitStatus', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { unitStatus, BEAT_FRESH_MS } = require('@/federation/inbox.service');
+  const now = 1_000_000_000;
+  it('uses a fresh heartbeat', () => {
+    expect(unitStatus(true, { state: 'degraded', at: new Date(now - 1000) }, now)).toBe('degraded');
+    expect(unitStatus(false, { state: 'online', at: new Date(now - 1000) }, now)).toBe('online');
+  });
+  it('treats an offline beat with a fresh answer as degraded', () => {
+    expect(unitStatus(true, { state: 'offline', at: new Date(now - 1000) }, now)).toBe('degraded');
+  });
+  it('falls back to the listing when the beat is stale or missing', () => {
+    expect(unitStatus(true, { state: 'offline', at: new Date(now - BEAT_FRESH_MS - 1) }, now)).toBe('online');
+    expect(unitStatus(false, null, now)).toBe('offline');
+  });
+});

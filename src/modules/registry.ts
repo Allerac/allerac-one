@@ -11,9 +11,9 @@ import music from './music/module';
 import email from './email/module';
 import social from './social/module';
 import openworld from './openworld/module';
-import sales from './sales/module';
+import alleracweb from './alleracweb/module';
 
-export const MODULES: readonly ModuleManifest[] = [health, music, email, social, openworld, sales];
+export const MODULES: readonly ModuleManifest[] = [health, music, email, social, openworld, alleracweb];
 
 export const MODULE_IDS: readonly string[] = MODULES.map((m) => m.id);
 

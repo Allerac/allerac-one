@@ -85,4 +85,15 @@ describe('MemoryIndexService', () => {
     expect(STALE_MEMORY_CANDIDATES_SQL).toContain('ksi.content_hash <>');
     expect(STALE_MEMORY_CANDIDATES_SQL).not.toMatch(/ticket/i);
   });
+
+  it('never indexes memories of federated conversations and drops stale rows (P4b)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ ...memory, federated: true }] } as never)
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 } as never);
+    const embeddings = fakeEmbeddings();
+    expect(await new MemoryIndexService(embeddings as never).indexMemory('user-1', 'mem-1')).toBe('missing');
+    expect(embeddings.generateEmbedding).not.toHaveBeenCalled();
+    expect(String(query.mock.calls[0][0])).toContain("fed_cc.source = 'federation'");
+    expect(String(query.mock.calls[1][0])).toContain('DELETE FROM knowledge_semantic_index');
+    expect(STALE_MEMORY_CANDIDATES_SQL).toContain("fed_cc.source = 'federation'");
+  });
 });

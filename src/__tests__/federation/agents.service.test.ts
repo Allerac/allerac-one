@@ -1,0 +1,397 @@
+/** @jest-environment node */
+
+import { ASYNC_ASK_DEADLINE_MS, AgentsService, FederationRateLimitedError, MAX_ANSWER_CHARS } from '@/federation/agents.service';
+import { InMemoryAskDedupeStore, STALE_IN_PROGRESS_MS, askRequestHash } from '@/federation/ask-dedupe';
+import { resolveUnitProfile as resolveProfile } from '@/federation/unit-profile';
+import { InMemoryPeerStore, MemoryAudit, fakeAgentsRuntime } from '../__mocks__/federation-fakes';
+
+const allow = () => ({ allowed: true as const, lease: { release: jest.fn() }, headers: {} });
+
+async function setup(options: {
+  env?: Record<string, string>;
+  runtime?: Parameters<typeof fakeAgentsRuntime>[0];
+  acquire?: ConstructorParameters<typeof AgentsService>[0]['acquire'];
+} = {}) {
+  const store = new InMemoryPeerStore();
+  const peer = await store.insert({
+    origin: 'https://napols.example', unitName: 'napols', displayName: null, direction: 'inbound',
+    status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+  } as never);
+  const audit = new MemoryAudit();
+  const runtime = fakeAgentsRuntime(options.runtime);
+  const service = new AgentsService({
+    runtime, store, audit, acquire: options.acquire ?? allow,
+    env: { ALLERAC_FEDERATION_AGENTS: 'Health,openworld,music', ...options.env },
+  });
+  return { service, audit, runtime, peer };
+}
+
+describe('AgentsService', () => {
+  it('rejects callers that are not an active peer', async () => {
+    const { service } = await setup();
+    await expect(service.listAgents('principal-unknown', 'user-1')).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('lists only exposed, non-public, accessible domains', async () => {
+    const { service } = await setup({ runtime: { canAccessDomain: async (_user, slug) => slug !== 'music' } });
+    expect(await service.listAgents('principal-1', 'user-1')).toEqual([
+      { id: 'health', name: 'Health', description: null },
+    ]);
+  });
+
+  it('honours disabled modules', async () => {
+    const { service } = await setup({ env: { ALLERAC_MODULES: 'health' } });
+    const ids = (await service.listAgents('principal-1', 'user-1')).map(agent => agent.id);
+    expect(ids).toEqual(['health']);
+  });
+
+  it('answers as the acting user and truncates long answers', async () => {
+    const { service, runtime, audit } = await setup({
+      runtime: { runChat: async () => ({ content: 'x'.repeat(MAX_ANSWER_CHARS + 10) }) },
+    });
+    const result = await service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' });
+    expect(result.truncated).toBe(true);
+    expect(result.answer).toHaveLength(MAX_ANSWER_CHARS);
+    expect(runtime.chats).toHaveLength(0);
+    expect(audit.entries.at(-1)).toMatchObject({ direction: 'inbound', outcome: 'ok', target: 'health' });
+  });
+
+  it('fails an empty answer with empty_answer instead of returning it', async () => {
+    const { service, audit } = await setup({ runtime: { runChat: async () => ({ content: '  \n' }) } });
+    await expect(service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' }))
+      .rejects.toMatchObject({ code: 'empty_answer' });
+    expect(audit.entries.at(-1)).toMatchObject({ outcome: 'error', errorCode: 'empty_answer' });
+  });
+
+  it('stores empty_answer as the failed state of an async ask', async () => {
+    const dedupe = new InMemoryAskDedupeStore();
+    const tasks: Promise<unknown>[] = [];
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      origin: 'https://napols.example', unitName: 'napols', displayName: null, direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    const service = new AgentsService({
+      runtime: fakeAgentsRuntime({ runChat: async () => ({ content: '' }) }), store, audit: new MemoryAudit(), acquire: allow,
+      env: { ALLERAC_FEDERATION_AGENTS: 'health' }, dedupe, runInBackground: task => { tasks.push(task); },
+    });
+    await service.askAsync({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q', idempotencyKey: 'key-empty-1' });
+    await Promise.all(tasks);
+    expect(await service.getAskResult('principal-1', 'user-1', 'key-empty-1')).toMatchObject({ status: 'failed', errorCode: 'empty_answer' });
+  });
+
+  it('forwards a valid caller timezone to the chat run and drops an invalid one', async () => {
+    const { service, runtime } = await setup();
+    const runChat = jest.spyOn(runtime, 'runChat');
+    await service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q', timeZone: 'Asia/Tokyo' });
+    expect(runChat.mock.calls[0][0]).toMatchObject({ timeZone: 'Asia/Tokyo' });
+    await service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q', timeZone: 'Not/AZone' });
+    expect(runChat.mock.calls[1][0]).not.toHaveProperty('timeZone');
+  });
+
+  it('returns not found for public or unexposed agents', async () => {
+    const { service, runtime, audit } = await setup();
+    for (const agent of ['openworld', 'email']) {
+      await expect(service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent, question: 'q' }))
+        .rejects.toMatchObject({ status: 404 });
+    }
+    expect(runtime.chats).toHaveLength(0);
+    expect(audit.entries.every(entry => entry.outcome === 'denied')).toBe(true);
+  });
+
+  it('applies the federation-ask rate limit per principal', async () => {
+    const acquire = jest.fn((operation: string) => operation === 'federation-ask'
+      ? { allowed: false as const, retryAfterSeconds: 30, headers: { 'Retry-After': '30' } }
+      : allow());
+    const { service, runtime } = await setup({ acquire: acquire as never });
+    await expect(service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' }))
+      .rejects.toBeInstanceOf(FederationRateLimitedError);
+    expect(acquire).toHaveBeenCalledWith('federation-ask', 'principal:principal-1');
+    expect(runtime.chats).toHaveLength(0);
+  });
+
+  it('releases leases and audits errors when no model is configured', async () => {
+    const lease = { release: jest.fn() };
+    const { service, audit } = await setup({
+      acquire: () => ({ allowed: true, lease, headers: {} }),
+      runtime: { resolveModel: async () => null },
+    });
+    await expect(service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' }))
+      .rejects.toMatchObject({ status: 422 });
+    expect(lease.release).toHaveBeenCalledTimes(2);
+    expect(audit.entries.at(-1)).toMatchObject({ outcome: 'error', errorCode: 'provider_not_configured' });
+  });
+});
+
+describe('AgentsService unit identity (P3.5)', () => {
+  it('returns the unit role and agent descriptions to paired peers', async () => {
+    const { resolveUnitProfile } = await import('@/federation/unit-profile');
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      origin: 'https://santos.example', unitName: 'santos', displayName: null, direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.list'],
+    } as never);
+    const env = { ALLERAC_FEDERATION_AGENTS: 'health', ALLERAC_UNIT_NAME: 'barcelona' };
+    const service = new AgentsService({
+      runtime: fakeAgentsRuntime(), store, audit: new MemoryAudit(), acquire: allow, env,
+      loadProfile: async () => resolveUnitProfile({
+        displayName: null, emoji: null, role: 'my medical matters', description: null, tags: [],
+        agentDescriptions: { health: 'Lab results' }, identityInPublicDomains: true, updatedAt: null,
+      }, env),
+    });
+    const result = await service.listAgentsWithUnit('principal-1', 'user-1');
+    expect(result.agents).toEqual([{ id: 'health', name: 'Health', description: 'Lab results' }]);
+    expect(result.unit).toEqual({
+      name: 'barcelona', displayName: 'Barcelona', emoji: null, role: 'my medical matters', description: null, tags: [],
+    });
+  });
+});
+
+describe('AgentsService single agent (ALLERAC_SINGLE_AGENT)', () => {
+  async function single(env: Record<string, string> = {}, runtime?: Parameters<typeof fakeAgentsRuntime>[0]) {
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      origin: 'https://napols.example', unitName: 'napols', displayName: null, direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    const fullEnv = { ALLERAC_SINGLE_AGENT: 'true', ALLERAC_FEDERATION_AGENTS: 'health,music', ALLERAC_UNIT_NAME: 'santos', ...env };
+    return new AgentsService({
+      runtime: fakeAgentsRuntime(runtime), store, audit: new MemoryAudit(), acquire: allow, env: fullEnv,
+      loadProfile: async () => resolveProfile({
+        displayName: null, emoji: '🏖️', role: 'Beach lab research', description: null, tags: [],
+        agentDescriptions: { health: 'Lab results' }, identityInPublicDomains: null, instructions: 'secret rules', updatedAt: null,
+      }, fullEnv),
+    });
+  }
+
+  it('exposes exactly one chat agent named after the Unit, with its role', async () => {
+    const service = await single();
+    const result = await service.listAgentsWithUnit('principal-1', 'user-1');
+    expect(result.agents).toEqual([{ id: 'chat', name: 'Santos', description: 'Beach lab research' }]);
+    expect(JSON.stringify(result)).not.toContain('secret rules');
+  });
+
+  it('accepts asks to chat only', async () => {
+    const service = await single();
+    await expect(service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' }))
+      .rejects.toMatchObject({ status: 404 });
+    const answer = await service.ask({ principalId: 'principal-1', actingUserId: 'user-1', agent: 'chat', question: 'q' });
+    expect(answer.answer).toContain('q');
+  });
+
+  it('exposes nothing when the user cannot use chat, and the domain list when the flag is off', async () => {
+    expect(await (await single({}, { canAccessDomain: async (_user, slug) => slug !== 'chat' })).listAgents('principal-1', 'user-1')).toEqual([]);
+    const off = await single({ ALLERAC_SINGLE_AGENT: 'false' });
+    expect((await off.listAgents('principal-1', 'user-1')).map(agent => agent.id)).toEqual(['health', 'music']);
+  });
+});
+
+describe('AgentsService conversation continuity (P4b)', () => {
+  const CONV = '00000000-0000-4000-8000-000000000001';
+  const base = { principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' };
+
+  async function withDedupe(runtime?: Parameters<typeof fakeAgentsRuntime>[0]) {
+    let clock = 1_000_000;
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      origin: 'https://napols.example', unitName: 'napols', displayName: 'Napols', direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    const audit = new MemoryAudit();
+    const fake = fakeAgentsRuntime(runtime);
+    const dedupe = new InMemoryAskDedupeStore();
+    const service = new AgentsService({
+      runtime: fake, store, audit, acquire: allow, dedupe, now: () => clock,
+      env: { ALLERAC_FEDERATION_AGENTS: 'Health' },
+    });
+    return { service, runtime: fake, audit, dedupe, advance: (ms: number) => { clock += ms; } };
+  }
+
+  it('keeps the shared legacy conversation when conversation_id is omitted', async () => {
+    const { service, runtime } = await withDedupe();
+    const result = await service.ask(base);
+    expect(result.conversation_id).toBeNull();
+    expect(runtime.chats[0].conversationId).toBe('conv:health:Federation · Napols');
+  });
+
+  it('creates a titled conversation owned by the principal and continues it', async () => {
+    const { service, runtime } = await withDedupe();
+    const first = await service.ask({ ...base, conversationId: null, threadTitle: 'Trip plans' });
+    expect(first.conversation_id).toBe(CONV);
+    expect(runtime.conversations.get(CONV)).toMatchObject({ principalId: 'principal-1', title: 'Federation · Napols · Trip plans' });
+    const second = await service.ask({ ...base, conversationId: CONV, question: 'next' });
+    expect(second.conversation_id).toBe(CONV);
+    expect(runtime.chats[1]).toMatchObject({ conversationId: CONV, message: 'next' });
+  });
+
+  it('v3 primary: appends to the primary conversation and returns its id (phase 5)', async () => {
+    const { service, runtime } = await withDedupe();
+    const first = await service.ask({ ...base, primary: true });
+    expect(first.conversation_id).toBe('conv:health:Federation · Napols');
+    // primary wins over a stale conversation id, which is not even checked.
+    const second = await service.ask({ ...base, primary: true, conversationId: CONV, question: 'next' });
+    expect(second.conversation_id).toBe(first.conversation_id);
+    expect(runtime.chats.map(chat => chat.conversationId)).toEqual([first.conversation_id, first.conversation_id]);
+    expect(runtime.topicResets).toHaveLength(0);
+  });
+
+  it('v3 topic_reset inserts a topic marker before the turn, once per ask (replays do not repeat it)', async () => {
+    const { service, runtime } = await withDedupe();
+    const order: string[] = [];
+    runtime.resetTopic = async params => { runtime.topicResets.push(params); order.push('marker'); };
+    const runChat = runtime.runChat;
+    runtime.runChat = async input => { order.push('turn'); return runChat(input); };
+    const first = await service.ask({ ...base, primary: true, topicReset: true, idempotencyKey: 'k-topic' });
+    await service.ask({ ...base, primary: true, topicReset: true, idempotencyKey: 'k-topic' });
+    expect(order).toEqual(['marker', 'turn']);
+    expect(runtime.topicResets).toEqual([{ conversationId: first.conversation_id, userId: 'user-1' }]);
+    // The v3 flags are part of the request hash: same key, other flags = reuse error.
+    await expect(service.ask({ ...base, primary: true, idempotencyKey: 'k-topic' }))
+      .rejects.toMatchObject({ code: 'idempotency_key_reused' });
+  });
+
+  it('v2 callers keep the old semantics (null = new conversation, omitted = legacy, no handle)', async () => {
+    const { service, runtime } = await withDedupe();
+    expect((await service.ask(base)).conversation_id).toBeNull();
+    expect((await service.ask({ ...base, conversationId: null })).conversation_id).toBe(CONV);
+    expect(runtime.topicResets).toHaveLength(0);
+  });
+
+  it('returns 404 for conversations of another principal, user or agent', async () => {
+    const { service, runtime, audit } = await withDedupe();
+    runtime.conversations.set(CONV, { userId: 'user-1', slug: 'health', principalId: 'principal-2', title: 'x' });
+    await expect(service.ask({ ...base, conversationId: CONV })).rejects.toMatchObject({ code: 'conversation_not_found', status: 404 });
+    runtime.conversations.set(CONV, { userId: 'user-2', slug: 'health', principalId: 'principal-1', title: 'x' });
+    await expect(service.ask({ ...base, conversationId: CONV })).rejects.toMatchObject({ status: 404 });
+    await expect(service.ask({ ...base, conversationId: 'not-a-uuid' })).rejects.toMatchObject({ status: 404 });
+    expect(runtime.chats).toHaveLength(0);
+    expect(audit.entries.at(-1)).toMatchObject({ outcome: 'denied', errorCode: 'conversation_not_found' });
+  });
+
+  it('replays a completed ask for the same Idempotency-Key without running the agent', async () => {
+    const { service, runtime } = await withDedupe();
+    const first = await service.ask({ ...base, conversationId: null, idempotencyKey: 'k1' });
+    const replay = await service.ask({ ...base, conversationId: null, idempotencyKey: 'k1' });
+    expect(replay).toEqual(first);
+    expect(runtime.chats).toHaveLength(1);
+    await expect(service.ask({ ...base, question: 'other', conversationId: null, idempotencyKey: 'k1' }))
+      .rejects.toMatchObject({ code: 'idempotency_key_reused', status: 422 });
+  });
+
+  it('rejects a concurrent duplicate, then lets a stale in_progress key be retried', async () => {
+    let release: (value: { content: string }) => void = () => undefined;
+    const { service, runtime, dedupe, advance } = await withDedupe({
+      runChat: () => new Promise(resolve => { release = resolve; }),
+    });
+    const running = service.ask({ ...base, idempotencyKey: 'k2' });
+    await new Promise(resolve => setImmediate(resolve));
+    await expect(service.ask({ ...base, idempotencyKey: 'k2' })).rejects.toMatchObject({ code: 'ask_in_progress', status: 409 });
+    release({ content: 'done' });
+    await running;
+
+    // Simulate a crash: the row stays in_progress, then expires.
+    await dedupe.begin('principal-1', 'k3', 'h', new Date(1_000_000));
+    advance(STALE_IN_PROGRESS_MS + 1);
+    runtime.runChat = async () => ({ content: 'recovered' });
+    const row = dedupe.rows.get('principal-1:k3')!;
+    row.requestHash = askRequestHash({ agent: 'health', conversationId: undefined, question: 'q' });
+    expect((await service.ask({ ...base, idempotencyKey: 'k3' })).answer).toBe('recovered');
+  });
+
+  it('frees the key after a failure so a retry can run', async () => {
+    const { service } = await withDedupe({ resolveModel: async () => null });
+    await expect(service.ask({ ...base, idempotencyKey: 'k4' })).rejects.toMatchObject({ code: 'provider_not_configured' });
+    await expect(service.ask({ ...base, idempotencyKey: 'k4' })).rejects.toMatchObject({ code: 'provider_not_configured' });
+  });
+});
+
+describe('AgentsService async asks (P4c)', () => {
+  const base = { principalId: 'principal-1', actingUserId: 'user-1', agent: 'health', question: 'q' };
+
+  async function asyncSetup(options: { env?: Record<string, string>; runtime?: Parameters<typeof fakeAgentsRuntime>[0] } = {}) {
+    let clock = 1_000_000;
+    const store = new InMemoryPeerStore();
+    await store.insert({
+      id: 'peer-1', origin: 'https://napols.example', unitName: 'napols', displayName: 'Napols', direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-1', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    await store.insert({
+      id: 'peer-2', origin: 'https://other.example', unitName: 'other', displayName: null, direction: 'inbound',
+      status: 'active', inboundPrincipalId: 'principal-2', inboundCapabilities: ['federation.agents.ask'],
+    } as never);
+    const background: Array<Promise<void>> = [];
+    const lease = { release: jest.fn() };
+    const runtime = fakeAgentsRuntime(options.runtime);
+    const service = new AgentsService({
+      runtime, store, audit: new MemoryAudit(), dedupe: new InMemoryAskDedupeStore(), now: () => clock,
+      acquire: () => ({ allowed: true as const, lease, headers: {} }),
+      env: { ALLERAC_FEDERATION_AGENTS: 'Health', ...options.env },
+      runInBackground: task => { background.push(task); },
+    });
+    return { service, runtime, background, lease, advance: (ms: number) => { clock += ms; } };
+  }
+
+  it('requires an Idempotency-Key', async () => {
+    const { service } = await asyncSetup();
+    await expect(service.askAsync(base)).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('returns pending, runs in the background, then serves the result by key', async () => {
+    const { service, background, lease } = await asyncSetup();
+    expect(await service.askAsync({ ...base, idempotencyKey: 'k1' })).toEqual({ status: 'pending' });
+    expect(service.runningAsyncAsks).toBe(1);
+    await Promise.all(background);
+    expect(service.runningAsyncAsks).toBe(0);
+    expect(lease.release).toHaveBeenCalledTimes(2);
+    expect(await service.getAskResult('principal-1', 'user-1', 'k1')).toMatchObject({ status: 'done', response: { answer: 'answer from health: q' } });
+    // A repeat returns the stored answer without running again.
+    expect(await service.askAsync({ ...base, idempotencyKey: 'k1' })).toMatchObject({ status: 'done', result: { answer: 'answer from health: q' } });
+  });
+
+  it('hides results from other principals', async () => {
+    const { service, background } = await asyncSetup();
+    await service.askAsync({ ...base, idempotencyKey: 'k1' });
+    await Promise.all(background);
+    await expect(service.getAskResult('principal-2', 'user-1', 'k1')).rejects.toMatchObject({ code: 'ask_not_found', status: 404 });
+    await expect(service.getAskResult('principal-1', 'user-1', 'nope')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('reports pending while running and a repeated POST does not start a second run', async () => {
+    let release: (value: { content: string }) => void = () => undefined;
+    const { service, runtime, background } = await asyncSetup({
+      runtime: { runChat: input => new Promise(resolve => { runtimeCalls.push(input); release = resolve; }) },
+    });
+    const runtimeCalls: unknown[] = [];
+    await service.askAsync({ ...base, idempotencyKey: 'k2' });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(await service.askAsync({ ...base, idempotencyKey: 'k2' })).toEqual({ status: 'pending' });
+    expect(await service.getAskResult('principal-1', 'user-1', 'k2')).toEqual({ status: 'pending' });
+    release({ content: 'x' });
+    await Promise.all(background);
+    expect(runtimeCalls).toHaveLength(1);
+    expect(runtime.chats).toHaveLength(0);
+  });
+
+  it('reads as timed out after the deadline (e.g. the process restarted)', async () => {
+    const { service, advance } = await asyncSetup({ runtime: { runChat: () => new Promise(() => undefined) } });
+    await service.askAsync({ ...base, idempotencyKey: 'k3' });
+    advance(ASYNC_ASK_DEADLINE_MS + 1);
+    expect(await service.getAskResult('principal-1', 'user-1', 'k3')).toEqual({ status: 'failed', errorCode: 'timeout' });
+  });
+
+  it('stores failures with their error code', async () => {
+    const { service, background } = await asyncSetup({ runtime: { resolveModel: async () => null } });
+    await service.askAsync({ ...base, idempotencyKey: 'k4' });
+    await Promise.all(background);
+    expect(await service.getAskResult('principal-1', 'user-1', 'k4')).toEqual({ status: 'failed', errorCode: 'provider_not_configured' });
+  });
+
+  it('caps concurrent background runs', async () => {
+    const { service } = await asyncSetup({
+      env: { FEDERATION_ASYNC_MAX_RUNNING: '1' }, runtime: { runChat: () => new Promise(() => undefined) },
+    });
+    await service.askAsync({ ...base, idempotencyKey: 'a' });
+    await expect(service.askAsync({ ...base, question: 'other', idempotencyKey: 'b' })).rejects.toBeInstanceOf(FederationRateLimitedError);
+    expect(await service.getAskResult('principal-1', 'user-1', 'b')).toEqual({ status: 'failed', errorCode: 'rate_limited' });
+  });
+});

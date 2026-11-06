@@ -1,0 +1,33 @@
+import { agentsService } from '@/federation/agents.instance';
+import { loadAgentToolSettings } from '@/app/services/agent/agent-tool-settings.repository';
+import { agentDataPageIds } from '@/app/services/agent/agent-pages';
+import { ASK_PROTOCOL_VERSION } from '@/federation/agents.service';
+import { grantsService } from '@/federation/grants.instance';
+import { requireApiPrincipal } from '../../_lib/auth';
+import { federationErrorResponse } from '../../_lib/federation';
+import { apiData, apiError } from '../../_lib/responses';
+
+export const dynamic = 'force-dynamic';
+
+/** A paired Unit lists the agents this Unit exposes to it. */
+export async function GET(request: Request): Promise<Response> {
+  try {
+    const caller = await requireApiPrincipal('federation:agents:list', request);
+    if (caller.type !== 'service') return apiError('forbidden', 'Forbidden', 403);
+    // `unit` (identity & role, P3.5) rides on the agents list so existing
+    // pairings with federation.agents.list get it without a new scope.
+    const { agents, unit } = await agentsService.listAgentsWithUnit(caller.principal.id, caller.actingUser.id);
+    // `protocol.ask` (P4c) tells the home Unit it may use async asks.
+    // `granted_capabilities` (P4d) lets the home learn grants changed in place, without re-pairing.
+    const granted = await grantsService.grantedCapabilities(caller.principal.id);
+    // `pages`: ids of the data pages this Unit's agent has (enabled modules and
+    // tools), so the home can link to them on this Unit. Ids only, no settings.
+    const pages = await loadAgentToolSettings().then(settings => agentDataPageIds(settings)).catch(() => undefined);
+    return apiData({
+      agents, unit, protocol: { ask: ASK_PROTOCOL_VERSION }, granted_capabilities: granted,
+      ...(pages ? { pages } : {}),
+    });
+  } catch (error: unknown) {
+    return federationErrorResponse('GET /api/v1/federation/agents failed', error);
+  }
+}

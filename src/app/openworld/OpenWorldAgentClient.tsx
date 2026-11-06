@@ -11,7 +11,7 @@ import { ModelPicker, RateLimitPanel, TestChatPanel, TavilyKeyPanel } from '@/ap
 // page. This screen exists only so that account can self-issue and rotate
 // its own chat:write key for the openworld.com.br website's FAQ chat, plus
 // pick which model answers on its behalf and configure its rate limit. Same
-// pattern as /sales — see docs/domains/expose-agent-to-website.md.
+// pattern as /alleracweb — see docs/domains/expose-agent-to-website.md.
 const SCOPE_OPTIONS = [{ scope: 'chat:write', label: 'OpenWorld FAQ chat', provider: 'openworld' }];
 
 interface OpenWorldAgentClientProps {

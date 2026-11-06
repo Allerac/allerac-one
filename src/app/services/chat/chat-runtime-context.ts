@@ -1,6 +1,7 @@
 import pool from '@/app/clients/db';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
+import { resolveTimeZone } from '@/app/lib/timezone';
 import type { ChatProvider } from './chat-request-parser';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434';
@@ -86,6 +87,7 @@ export async function loadChatRuntimeContext(
     anthropicApiKey,
     openaiApiKey,
     userLocation: settings?.location || null,
+    timezone: resolveTimeZone(settings?.timezone ?? null),
     userInstructions,
     modelBaseUrl,
   };

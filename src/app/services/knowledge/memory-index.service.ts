@@ -8,6 +8,7 @@
  * so unchanged memories are never re-embedded.
  */
 
+import { notFederatedSummarySql } from '@/app/services/memory/federated-memory-filter';
 import { createHash } from 'crypto';
 import pool from '@/app/clients/db';
 import { EmbeddingService } from '@/app/services/rag/embedding.service';
@@ -41,6 +42,7 @@ export const STALE_MEMORY_CANDIDATES_SQL = `
     ON ksi.source_type = 'memory' AND ksi.source_id = cs.id
    AND ksi.user_id = cs.user_id AND ksi.chunk_index = 0
   WHERE btrim(coalesce(cs.summary, '')) <> ''
+    AND ${notFederatedSummarySql('cs')}
     AND ($1::uuid IS NULL OR cs.id > $1::uuid)
     AND (
       ksi.source_id IS NULL
@@ -59,11 +61,20 @@ export class MemoryIndexService {
 
   async indexMemory(userId: string, memoryId: string): Promise<MemoryIndexOutcome> {
     const memory = await pool.query(
-      `SELECT id, user_id, summary, key_topics, domain_slug
-       FROM conversation_summaries WHERE id = $1 AND user_id = $2`,
+      `SELECT cs.id, cs.user_id, cs.summary, cs.key_topics, cs.domain_slug,
+              NOT ${notFederatedSummarySql('cs')} AS federated
+       FROM conversation_summaries cs WHERE cs.id = $1 AND cs.user_id = $2`,
       [memoryId, userId],
     );
     const row = memory.rows[0];
+    if (row?.federated) {
+      // Never index memories of federated conversations; drop any stale row.
+      await pool.query(
+        `DELETE FROM knowledge_semantic_index WHERE user_id = $1 AND source_type = 'memory' AND source_id = $2`,
+        [userId, memoryId],
+      );
+      return 'missing';
+    }
     if (!row || !String(row.summary ?? '').trim()) return 'missing';
 
     const text = buildMemoryIndexText(row.summary, row.key_topics);

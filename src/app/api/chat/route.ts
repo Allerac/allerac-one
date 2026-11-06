@@ -12,6 +12,9 @@
  *   data: {"type":"error","message":"..."}
  */
 
+import { acquireConversationLock, getOrCreatePrimaryConversation, loadPrimaryPromptHistory, scheduleCompaction } from '@/app/services/chat/primary-conversation';
+import { makeSegmentSummarizer } from '@/app/services/chat/segment-summarizer';
+import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import { cookies } from 'next/headers';
 import {
   authenticationErrorResponse,
@@ -33,7 +36,9 @@ import {
   SseWriter,
 } from '@/app/services/chat/sse-writer';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
-import { PUBLIC_DOMAINS, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { hasActivePeers, listActivePeerLabels } from '@/federation/peer-presence';
+import { loadChatSoulIdentity } from '@/federation/unit-profile.repository';
 import { isShellAllowedFor } from '@/app/lib/shell-access';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
@@ -70,7 +75,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const {
     message,
-    conversationId: inputConversationId,
+    conversationId: requestedConversationId,
     model: modelId,
     provider,
     imageAttachments,
@@ -78,7 +83,9 @@ export async function POST(request: Request): Promise<Response> {
     defaultSkillName,
     domain: effectiveDomain,
     postContext,
+    surface,
   } = body;
+  let inputConversationId = requestedConversationId;
 
   try {
     await assertDomainAccess(user, effectiveDomain);
@@ -102,6 +109,26 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const userId = user.id;
+
+  // Phase 4b: in the agent chat only the primary conversation is writable;
+  // older conversations are a read-only archive. Other surfaces (domain
+  // panels, /code, /tickets, federation) are not affected by this rule.
+  if (surface === 'agent') {
+    try {
+      if (!inputConversationId) {
+        inputConversationId = await getOrCreatePrimaryConversation({ userId, domain: effectiveDomain });
+      } else {
+        const target = await chatService.getConversationForUser(inputConversationId, userId);
+        if (target && target.is_primary !== true) {
+          return Response.json({ error: 'This conversation is archived and read-only' }, { status: 409 });
+        }
+      }
+    } catch (error) {
+      console.error('[ChatRoute] Failed to resolve the primary conversation:', error);
+      return Response.json({ error: 'Failed to open the conversation' }, { status: 500 });
+    }
+  }
+
   const limitResult = acquireOperationLimit('chat', userId);
   if (!limitResult.allowed) {
     return operationLimitResponse(limitResult);
@@ -115,6 +142,7 @@ export async function POST(request: Request): Promise<Response> {
       const writer = new SseWriter(controller, request.signal);
       writer.keepalive();
       const safeEnqueue = (data: Uint8Array) => writer.write(data);
+      let releaseLock: (() => Promise<void>) | null = null;
 
       try {
         // Log domain entry — visible in System Monitor
@@ -144,10 +172,12 @@ export async function POST(request: Request): Promise<Response> {
           userLocation,
           userInstructions,
           modelBaseUrl,
+          timezone,
         } = runtimeContext;
 
         // 4. Create or find conversation
         let convId = inputConversationId ?? null;
+        let isPrimary = false;
         if (!convId) {
           const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
           convId = await chatService.createConversation(userId, title, effectiveDomain);
@@ -164,7 +194,10 @@ export async function POST(request: Request): Promise<Response> {
             writer.close();
             return;
           }
+          isPrimary = conversation.is_primary === true;
         }
+        // Phase 4a: serialize writes to the primary conversation across channels.
+        if (isPrimary) releaseLock = await acquireConversationLock(convId);
 
         const activeSkill = await resolveActiveChatSkill({
           conversationId: convId,
@@ -198,7 +231,8 @@ export async function POST(request: Request): Promise<Response> {
             userId,
             isAdmin: user.is_admin === true,
             query: message,
-            domainSlug: effectiveDomain,
+            // The chat agent has one memory: reads are not filtered by domain.
+            domainSlug: memoryReadDomain(effectiveDomain),
             publicDomain: PUBLIC_DOMAINS.includes(effectiveDomain),
           });
         } catch (e) {
@@ -216,25 +250,42 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
+        const federationOffered = canUseFederationTools({
+          isAdmin: user.is_admin === true,
+          domain: effectiveDomain,
+        }) && await hasActivePeers();
+
         const enrichedSystemMessage = buildChatSystemPrompt({
           user,
           locale,
           domain: effectiveDomain,
           userLocation,
+          timezone,
           tavilyConfigured: Boolean(tavilyApiKey),
           userInstructions,
           postContext,
           activeSkill,
           skillContent,
           relevantContext,
+          unitIdentity: await loadChatSoulIdentity(effectiveDomain, federationOffered, listActivePeerLabels),
         });
 
         const activeTools = await resolveChatTools(activeSkill?.id, effectiveDomain, {
           allowShell: isShellAllowedFor(user),
+          allowFederation: federationOffered,
         });
 
-        // Load conversation history and build messages array
-        const history = await chatService.loadMessages(convId, userId);
+        // Load conversation history and build messages array. Primary
+        // conversations use the bounded window (segments + recent messages);
+        // the just-saved user message is appended below, so drop it here.
+        let history: Array<{ role: string; content: string }>;
+        if (isPrimary) {
+          history = await loadPrimaryPromptHistory(convId);
+          const last = history[history.length - 1];
+          if (last?.role === 'user' && last.content === messageToSave) history.pop();
+        } else {
+          history = await chatService.loadMessages(convId, userId);
+        }
         const conversationMessages: Array<{
           role: string;
           content: string | any[];
@@ -286,6 +337,7 @@ export async function POST(request: Request): Promise<Response> {
           messages: conversationMessages,
           emit: (event) => safeEnqueue(encode(event)),
           keepalive: () => writer.keepalive(),
+          timeZone: timezone,
         });
 
         // 13. Save assistant message to DB
@@ -299,6 +351,19 @@ export async function POST(request: Request): Promise<Response> {
           } catch (e) {
             console.error('[ChatRoute] Skill usage tracking failed:', e);
           }
+        }
+
+        if (releaseLock) { await releaseLock(); releaseLock = null; }
+        if (isPrimary) {
+          scheduleCompaction(convId, makeSegmentSummarizer({
+            provider: resolvedModel.provider,
+            baseUrl: modelBaseUrl,
+            modelId: resolvedModel.modelId,
+            githubToken,
+            geminiToken: googleApiKey,
+            anthropicToken: anthropicApiKey,
+            openaiToken: openaiApiKey,
+          }));
         }
 
         // 14. Signal completion
@@ -317,6 +382,7 @@ export async function POST(request: Request): Promise<Response> {
           console.error('[ChatRoute] Failed to send error event (controller already closed):', closeError.message);
         }
       } finally {
+        if (releaseLock) await releaseLock().catch(() => undefined);
         limitResult.lease.release();
       }
     },

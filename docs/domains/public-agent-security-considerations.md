@@ -3,14 +3,14 @@
 This is a running list of risks specific to **anonymous, public-facing** agents (the pattern
 documented in [expose-agent-to-website.md](./expose-agent-to-website.md)) — an agent reached by
 website visitors who never log in, through a shared service account. It's meant to be reviewed
-each time a new public agent is built, not just for the `sales` domain.
+each time a new public agent is built, not just for the `alleracweb` domain.
 
 Two items from this list (denial-of-wallet via sustained abuse, and unbounded conversation length)
-have already been addressed for `sales` — see "Already mitigated" below. Everything else here is
+have already been addressed for `alleracweb` — see "Already mitigated" below. Everything else here is
 still open and worth a conscious decision (fix now, accept the risk, or track for later) before
 exposing a new public agent.
 
-## Already mitigated (as of the `sales` domain)
+## Already mitigated (as of the `alleracweb` domain)
 
 - **API key never reaches the browser** — injected server-side by the website's Cloudflare Worker.
 - **Per-IP rate limit** — 12 requests/minute via Workers KV, in the website's Worker.
@@ -53,9 +53,9 @@ browser*; a script hitting the Worker directly ignores it entirely. If per-IP/pe
 insufficient in practice, adding Cloudflare Turnstile (or similar) in front of the widget is the
 next layer.
 
-### 3. Lead/ticket spam (mitigated for `sales`)
+### 3. Lead/ticket spam (mitigated for `alleracweb`)
 
-`create_ticket` has been removed from `sales`, which is now text-only. If tool-based lead capture is
+`create_ticket` has been removed from `alleracweb`, which is now text-only. If tool-based lead capture is
 introduced in another public domain, nothing inherently stops a visitor or script from filing junk
 tickets. Prefer a validated website form, or add a dedicated per-visitor and per-day cap separate
 from chat message limits.
@@ -78,7 +78,7 @@ who signed a contract. Define how long public conversations are kept and how a d
 
 ### 6. File upload is a separate decision, not a natural extension
 
-If a future public agent is asked to support file/image upload (as `sales` was, and explicitly
+If a future public agent is asked to support file/image upload (as `alleracweb` was, and explicitly
 deferred — see the decision log for that discussion), treat it as a new feature with its own
 review, not a small addition:
 

@@ -16,6 +16,8 @@ tags:
   - name: System
   - name: Capabilities
   - name: API Keys
+  - name: Service Principals
+  - name: Federation
   - name: Conversations
   - name: Memories
   - name: Tickets
@@ -32,6 +34,25 @@ tags:
   - name: Benchmark
   - name: Crawler
 paths:
+  /.well-known/allerac:
+    get:
+      tags: [Federation]
+      summary: Public federation manifest
+      description: >-
+        Public, unauthenticated description of this Allerac Unit for other Units.
+        Returns 404 when ALLERAC_FEDERATION_MANIFEST=false. Not wrapped in the
+        `data` envelope.
+      operationId: getFederationManifest
+      security: []
+      responses:
+        "200":
+          description: Federation manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederationManifest"
+        "404":
+          description: Manifest disabled
   /api/v1/crawler/sources:
     put:
       tags: [Crawler]
@@ -220,6 +241,550 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/peers:
+    get:
+      tags: [Federation]
+      summary: List peers
+      description: Admin only (browser session).
+      operationId: listPeers
+      responses:
+        "200":
+          description: Peers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      peers:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Peer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Federation]
+      summary: Start pairing with another Unit
+      description: Admin only (browser session).
+      operationId: startPairing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, grants]
+              additionalProperties: false
+              properties:
+                url:
+                  type: string
+                grants:
+                  type: array
+                  items:
+                    type: string
+                requested:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "201":
+          description: Pending peer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Peer not accepting, already paired, or local URL missing
+        "502":
+          description: Peer unreachable or invalid response
+  /api/v1/peers/discover:
+    post:
+      tags: [Federation]
+      summary: Preview another Unit's manifest
+      description: Admin only (browser session). Creates nothing.
+      operationId: discoverPeer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+      responses:
+        "200":
+          description: Normalized origin and manifest
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      origin:
+                        type: string
+                      manifest:
+                        $ref: "#/components/schemas/FederationManifest"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          description: Peer unreachable or invalid manifest
+  /api/v1/peers/{id}:
+    delete:
+      tags: [Federation]
+      summary: Revoke or cancel a pairing
+      operationId: revokePeer
+      parameters:
+        - $ref: "#/components/parameters/PeerId"
+      responses:
+        "200":
+          description: Revoked peer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/peers/{id}/accept:
+    post:
+      tags: [Federation]
+      summary: Accept an inbound pairing request
+      operationId: acceptPeer
+      parameters:
+        - $ref: "#/components/parameters/PeerId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                grants:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Active peer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Not pending
+        "410":
+          description: Expired
+        "502":
+          description: Peer unreachable
+  /api/v1/peers/{id}/reject:
+    post:
+      tags: [Federation]
+      summary: Reject an inbound pairing request
+      operationId: rejectPeer
+      parameters:
+        - $ref: "#/components/parameters/PeerId"
+      responses:
+        "200":
+          description: Rejected peer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/federation/pairing:
+    post:
+      tags: [Federation]
+      summary: Receive a pairing request (Unit to Unit)
+      description: >-
+        Called by another Unit. Returns 404 unless this Unit accepts pairing.
+        Rate limited. Creates a pending request only; an admin must accept it.
+      operationId: receivePairingRequest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fromOrigin, fromRequestId, nonce, pairingSecret, requestedCapabilities]
+              additionalProperties: false
+              properties:
+                fromOrigin:
+                  type: string
+                fromRequestId:
+                  type: string
+                  format: uuid
+                nonce:
+                  type: string
+                pairingSecret:
+                  type: string
+                requestedCapabilities:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "202":
+          description: Pending request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                      nonce:
+                        type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          description: Pairing not accepted
+        "409":
+          description: Already paired or pending
+        "429":
+          description: Rate limited or too many pending requests
+  /api/v1/federation/pairing/{id}/complete:
+    post:
+      tags: [Federation]
+      summary: Complete a pairing (Unit to Unit)
+      description: Called by the responder after its admin accepted. Authenticated by the one-time pairing secret.
+      operationId: completePairing
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PeerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pairingSecret, nonce, key, capabilities]
+              additionalProperties: false
+              properties:
+                pairingSecret:
+                  type: string
+                nonce:
+                  type: string
+                key:
+                  type: string
+                capabilities:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Key and capabilities this Unit grants the responder
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                      capabilities:
+                        type: array
+                        items:
+                          type: string
+        "403":
+          description: Pairing could not be verified
+        "410":
+          description: Expired
+  /api/v1/federation/peer/revoke:
+    post:
+      tags: [Federation]
+      summary: Peer ends its pairing (Unit to Unit)
+      description: Requires a service key with `federation:peer:revoke`.
+      operationId: peerRevoke
+      responses:
+        "200":
+          description: Revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/federation/agents:
+    get:
+      tags: [Federation]
+      summary: List agents exposed to the calling peer (Unit to Unit)
+      description: Requires a peer service key with `federation:agents:list` and an active pairing. Only domains in `ALLERAC_FEDERATION_AGENTS` that the acting user can access are listed; public domains never are.
+      operationId: listFederationAgents
+      responses:
+        "200":
+          description: Exposed agents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [agents]
+                    properties:
+                      agents:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/FederationAgent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/federation/agents/{agent}/ask:
+    post:
+      tags: [Federation]
+      summary: Ask an exposed agent (Unit to Unit)
+      description: Requires a peer service key with `federation:agents:ask` and an active pairing. Runs a chat turn as the acting user with the restricted federated tool policy. Answers over 8000 characters are truncated.
+      operationId: askFederationAgent
+      parameters:
+        - name: agent
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+      responses:
+        "200":
+          description: Agent answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [answer, truncated]
+                    properties:
+                      answer:
+                        type: string
+                      truncated:
+                        type: boolean
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "504":
+          description: The agent did not answer in time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/peers/{id}/audit:
+    get:
+      tags: [Peers]
+      summary: Federation audit log for one peer
+      description: Admin only. Requires a browser session. Metadata only; no message content.
+      operationId: getPeerAudit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Recent audit entries, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [entries]
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/FederationAuditEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/service-principals:
+    get:
+      tags: [Service Principals]
+      summary: List service principals
+      description: Admin only. Requires a browser session; API and service keys are not accepted.
+      operationId: listServicePrincipals
+      responses:
+        "200":
+          description: Service principals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePrincipalListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Service Principals]
+      summary: Create service principal
+      description: Admin only. Creates a peer identity that acts as `actingUserId` (defaults to the calling admin).
+      operationId: createServicePrincipal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServicePrincipalRequest"
+      responses:
+        "201":
+          description: Created service principal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePrincipalResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Name already in use
+  /api/v1/service-principals/{id}:
+    get:
+      tags: [Service Principals]
+      summary: Get service principal
+      operationId: getServicePrincipal
+      parameters:
+        - $ref: "#/components/parameters/ServicePrincipalId"
+      responses:
+        "200":
+          description: Service principal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePrincipalResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Service Principals]
+      summary: Disable service principal
+      description: Disables the principal; all of its keys stop authenticating immediately.
+      operationId: disableServicePrincipal
+      parameters:
+        - $ref: "#/components/parameters/ServicePrincipalId"
+      responses:
+        "200":
+          description: Disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      disabled:
+                        type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/service-principals/{id}/keys:
+    post:
+      tags: [Service Principals]
+      summary: Create service key
+      description: >-
+        Admin only. Issues a key for the principal. Scopes must come from the service
+        allow-list (`profile:read`, `capabilities:read`, `federation:*`). The secret is
+        returned only once.
+      operationId: createServicePrincipalKey
+      parameters:
+        - $ref: "#/components/parameters/ServicePrincipalId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "201":
+          description: Created service key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateApiKeyResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Principal is disabled
   /api/v1/conversations:
     get:
       tags: [Conversations]
@@ -2236,6 +2801,18 @@ components:
       scheme: bearer
       description: Control API key using the `alr_live_` token format.
   parameters:
+    PeerId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    ServicePrincipalId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     ApiKeyId:
       name: id
       in: path
@@ -2355,6 +2932,62 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    FederationAgent:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Domain slug
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+    FederationAuditEntry:
+      type: object
+      required: [id, at, direction, capability, outcome]
+      properties:
+        id:
+          type: string
+        at:
+          type: string
+          format: date-time
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        peerId:
+          type: string
+          nullable: true
+        principalId:
+          type: string
+          nullable: true
+        userId:
+          type: string
+          nullable: true
+        capability:
+          type: string
+        target:
+          type: string
+          nullable: true
+        outcome:
+          type: string
+          enum: [ok, denied, error]
+        httpStatus:
+          type: integer
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        durationMs:
+          type: integer
+          nullable: true
+        requestBytes:
+          type: integer
+          nullable: true
+        responseBytes:
+          type: integer
+          nullable: true
     VersionResponse:
       type: object
       required: [data]
@@ -2375,10 +3008,197 @@ components:
       properties:
         data:
           type: object
-          required: [user]
+          required: [user, principal]
           properties:
             user:
-              $ref: "#/components/schemas/ApiUser"
+              description: Null when the caller is a service principal.
+              oneOf:
+                - $ref: "#/components/schemas/ApiUser"
+                - type: "null"
+            principal:
+              $ref: "#/components/schemas/ApiPrincipal"
+    ApiPrincipal:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [user, service]
+        id:
+          type: string
+          description: Service principal id (service callers only).
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [peer]
+    Peer:
+      type: object
+      properties:
+        id:
+          type: string
+        unitName:
+          type: string
+        displayName:
+          type: [string, "null"]
+        origin:
+          type: string
+        initiatedByUs:
+          type: boolean
+        status:
+          type: string
+          enum: [pending_outbound, pending_inbound, active, rejected, expired, revoked]
+        inboundCapabilities:
+          type: array
+          items:
+            type: string
+        outboundCapabilities:
+          type: array
+          items:
+            type: string
+        outboundKeyPrefix:
+          type: [string, "null"]
+        verificationCode:
+          type: [string, "null"]
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        decidedAt:
+          type: [string, "null"]
+          format: date-time
+        lastSeenAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    PeerResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            peer:
+              $ref: "#/components/schemas/Peer"
+    FederationManifest:
+      type: object
+      required: [allerac, protocolVersion, unit, software, pairing, capabilities, publicKey, endpoints]
+      additionalProperties: false
+      properties:
+        allerac:
+          type: string
+          enum: [federation]
+        protocolVersion:
+          type: string
+          example: "1"
+        unit:
+          type: object
+          required: [name, displayName, url]
+          properties:
+            name:
+              type: string
+              pattern: "^[a-z0-9][a-z0-9_-]{0,62}$"
+            displayName:
+              type: string
+            url:
+              type: [string, "null"]
+              format: uri
+        software:
+          type: object
+          required: [name, release]
+          properties:
+            name:
+              type: string
+              enum: [allerac-one]
+            release:
+              type: string
+        pairing:
+          type: object
+          required: [accepting]
+          properties:
+            accepting:
+              type: boolean
+        capabilities:
+          type: array
+          items:
+            type: object
+            required: [id, version]
+            properties:
+              id:
+                type: string
+                example: federation.agents.list
+              version:
+                type: string
+        publicKey:
+          description: Placeholder (null) until signing keys exist.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [alg, key]
+              properties:
+                alg:
+                  type: string
+                key:
+                  type: string
+        endpoints:
+          type: object
+          required: [api]
+          properties:
+            api:
+              type: string
+              enum: [/api/v1]
+    ServicePrincipal:
+      type: object
+      required: [id, kind, name, peerUrl, actingUserId, disabledAt, createdAt]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [peer]
+        name:
+          type: string
+        peerUrl:
+          type: [string, "null"]
+        actingUserId:
+          type: string
+        disabledAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ServicePrincipalResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            servicePrincipal:
+              $ref: "#/components/schemas/ServicePrincipal"
+    ServicePrincipalListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            servicePrincipals:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServicePrincipal"
+    CreateServicePrincipalRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        peerUrl:
+          type: [string, "null"]
+          format: uri
+        actingUserId:
+          type: string
+          format: uuid
     ApiUser:
       type: object
       required: [id, email, name, isAdmin, authMode]
@@ -2394,7 +3214,7 @@ components:
           type: boolean
         authMode:
           type: string
-          enum: [session, api_key]
+          enum: [session, api_key, service_key]
     CapabilitiesResponse:
       type: object
       required: [data]

@@ -39,7 +39,7 @@ export interface DomainOwner {
 export class DomainService {
   /**
    * The single non-admin service account granted access to this domain — used by
-   * public-facing "external agent" domains (sales, openworld) where exactly one
+   * public-facing "external agent" domains (alleracweb, openworld) where exactly one
    * dedicated bot account exists per domain (see docs/domains/expose-agent-to-website.md).
    * Settings keyed by user_id (model config, rate-limit usage) are only meaningful
    * against this account, not whichever admin happens to be viewing the page — see

@@ -18,22 +18,22 @@ check() {
 }
 
 # Module selection (mirrors resolveModuleSelection)
-check "unset = all modules" "health,music,email,social,openworld,sales" "$(allerac_enabled_modules "" "")"
+check "unset = all modules" "health,music,email,social,openworld,alleracweb" "$(allerac_enabled_modules "" "")"
 check "personal" "health,music,email,social" "$(allerac_enabled_modules personal "")"
 check "profile is trimmed and case-insensitive" "openworld" "$(allerac_enabled_modules " OpenWorld " "")"
 check "modules override profile" "music" "$(allerac_enabled_modules personal "music")"
-check "blank modules = unset" "sales" "$(allerac_enabled_modules sales "  ")"
+check "blank modules = unset" "alleracweb" "$(allerac_enabled_modules alleracweb "  ")"
 check "modules none" "" "$(allerac_enabled_modules personal none)"
-check "modules all" "health,music,email,social,openworld,sales" "$(allerac_enabled_modules "" all)"
+check "modules all" "health,music,email,social,openworld,alleracweb" "$(allerac_enabled_modules "" all)"
 check "unknown module ignored" "health" "$(allerac_enabled_modules "" "robot, Health")"
-check "unknown profile = all" "health,music,email,social,openworld,sales" "$(allerac_enabled_modules bogus "")"
+check "unknown profile = all" "health,music,email,social,openworld,alleracweb" "$(allerac_enabled_modules bogus "")"
 
 # Module -> Compose profiles
 check "personal -> health" "health" "$(allerac_module_compose_profiles personal "")"
 check "default all -> health" "health" "$(allerac_module_compose_profiles "" "")"
 check "openworld -> none" "" "$(allerac_module_compose_profiles openworld "")"
-check "sales -> none" "" "$(allerac_module_compose_profiles sales "")"
-check "list with health -> health" "health" "$(allerac_module_compose_profiles sales "music,health")"
+check "alleracweb -> none" "" "$(allerac_module_compose_profiles alleracweb "")"
+check "list with health -> health" "health" "$(allerac_module_compose_profiles alleracweb "music,health")"
 check "list without health -> none" "" "$(allerac_module_compose_profiles personal "music,email")"
 
 # Merge

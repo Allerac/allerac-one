@@ -46,7 +46,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
           package-manager-cache: false
 
@@ -55,6 +55,54 @@ jobs:
 
       - name: Run Jest
         run: npm test -- --ci --runInBand
+
+  db:
+    name: DB Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: allerac-ci
+          POSTGRES_DB: allerac_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d allerac_ci"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: allerac-ci
+      POSTGRES_DB: allerac_ci
+      DATABASE_URL: postgresql://postgres:allerac-ci@localhost:5432/allerac_ci
+      RUN_PG_TESTS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Apply schema and migrations
+        run: |
+          PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -q -f src/database/init.sql
+          MIGRATIONS_DIR=src/database/migrations sh src/database/run-migrations.sh
+
+      - name: Run SQL repository tests
+        run: npm run test:db -- --ci --runInBand
 
   typecheck:
     name: TypeScript (no new errors)
@@ -69,7 +117,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
           package-manager-cache: false
 
@@ -92,7 +140,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
           package-manager-cache: false
 
@@ -131,7 +179,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
           package-manager-cache: false
 
@@ -152,4 +200,6 @@ jobs:
           persist-credentials: false
 
       - name: Build docs
-        run: docker run --rm -v "$PWD:/docs" squidfunk/mkdocs-material:latest build --strict
+        run: |
+          docker build --pull -t allerac-docs-ci infra/docs
+          docker run --rm -v "$PWD:/docs" allerac-docs-ci build --strict

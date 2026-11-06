@@ -12,6 +12,7 @@ const user = {
 describe('buildChatSystemPrompt', () => {
   test('adds deterministic user context and instructions', () => {
     const prompt = buildChatSystemPrompt({
+      unitIdentity: undefined,
       user,
       locale: 'pt',
       domain: 'chat',
@@ -32,6 +33,7 @@ describe('buildChatSystemPrompt', () => {
 
   test('enriches skill, memory, RAG, and workspace paths', () => {
     const prompt = buildChatSystemPrompt({
+      unitIdentity: undefined,
       user,
       locale: 'en',
       domain: 'code',
@@ -58,9 +60,10 @@ describe('buildChatSystemPrompt', () => {
 
   test('excludes private account context and persistence guidance from public domains', () => {
     const prompt = buildChatSystemPrompt({
+      unitIdentity: undefined,
       user,
       locale: 'pt',
-      domain: 'sales',
+      domain: 'alleracweb',
       userLocation: 'PRIVATE_LOCATION_CANARY',
       tavilyConfigured: true,
       userInstructions: 'PRIVATE_INSTRUCTION_CANARY',
@@ -81,5 +84,19 @@ describe('buildChatSystemPrompt', () => {
     expect(prompt).not.toContain('use the search_web tool');
     expect(prompt).not.toContain('private AI assistant');
     expect(prompt).toContain('- Language: Portuguese');
+  });
+
+  it('renders the date and time in the given timezone, not UTC', () => {
+    const prompt = buildChatSystemPrompt({
+      user: { id: 'u', email: 'u@example.com', name: 'Ada', is_admin: false, created_at: new Date() },
+      locale: 'en',
+      domain: 'chat',
+      userLocation: null,
+      tavilyConfigured: false,
+      now: new Date('2026-11-01T23:30:00Z'),
+      timezone: 'Europe/Madrid',
+      unitIdentity: undefined,
+    });
+    expect(prompt).toContain('Current date & time: 2026-11-02 Monday, 00:30:00 (Europe/Madrid)');
   });
 });

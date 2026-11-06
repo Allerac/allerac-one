@@ -4,10 +4,15 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ConvItem } from '@/app/hooks/useConversations';
 import DomainChip from './DomainChip';
+import { sidebarRowClass } from './SidebarRow';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
+import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
+import { canUseInbox } from '@/federation/inbox-policy';
 
 interface Props {
   isDark: boolean;
+  /** Show the DomainChip switcher (ALLERAC_LEGACY_DOMAINS=true only). */
+  legacyDomains?: boolean;
   conversations: ConvItem[];
   currentConvId: string | null;
   collapsed: boolean;
@@ -42,6 +47,7 @@ export default function ConversationSidebar({
   isDark: d, conversations, currentConvId, collapsed, onToggle,
   onSelect, onNew, onDelete, onPin, onRename,
   domainId, userId, isAdmin, onToggleTheme, userInitials, userName, userEmail, onLogout,
+  legacyDomains = false,
 }: Props) {
   const [openMenuId, setOpenMenuId]   = useState<string | null>(null);
   const [renamingId, setRenamingId]   = useState<string | null>(null);
@@ -177,11 +183,7 @@ export default function ConversationSidebar({
           <>
             <button
               onClick={() => onSelect(c.id)}
-              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left min-w-0 ${
-                isActive
-                  ? d ? 'bg-gray-800 text-white' : 'bg-indigo-50 text-indigo-900'
-                  : d ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100'
-              }`}
+              className={sidebarRowClass(d, isActive)}
             >
               {c.pinned ? (
                 <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 flex-shrink-0 ${d ? 'text-gray-400' : 'text-gray-500'}`} viewBox="0 0 24 24" fill="currentColor">
@@ -258,7 +260,7 @@ export default function ConversationSidebar({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <DomainChip isDark={d} domainId={domainId} userId={userId} isAdmin={isAdmin} />
+        {legacyDomains && <DomainChip isDark={d} domainId={domainId} userId={userId} isAdmin={isAdmin} />}
       </div>
 
       {/* Action icons row */}
@@ -302,6 +304,7 @@ export default function ConversationSidebar({
 
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
+        {canUseInbox({ is_admin: isAdmin }, domainId) && <AgentsInboxSection isDark={d} domainId={domainId} />}
         {pinned.length > 0 && (
           <>
             <p className={`text-xs uppercase px-2 mb-2 ${d ? 'text-gray-500' : 'text-gray-400'}`}>Pinned</p>

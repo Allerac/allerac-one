@@ -26,7 +26,7 @@ export const ALLERAC_PROFILES = {
   all: '*',
   personal: ['health', 'music', 'email', 'social'],
   openworld: ['openworld'],
-  sales: ['sales'],
+  alleracweb: ['alleracweb'],
 } as const satisfies Record<string, '*' | readonly string[]>;
 
 export type AlleracProfile = keyof typeof ALLERAC_PROFILES;

@@ -1,6 +1,7 @@
-import { buildSoul } from '@/app/config/allerac-soul';
+import { buildSoul, type SoulIdentity } from '@/app/config/allerac-soul';
 import type { User } from '@/app/services/auth/auth.service';
 import type { Skill } from '@/app/services/skills/skills.service';
+import { localDateParts, resolveTimeZone } from '@/app/lib/timezone';
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: 'English',
@@ -24,24 +25,29 @@ export interface PromptBuilderInput {
   relevantContext?: string;
   now?: Date;
   timezone?: string;
+  /**
+   * Unit identity & role (federation P3.5), already filtered for the domain.
+   * Required key (value may be undefined) so no chat path can silently fall
+   * back to the generic "You are Allerac" opening by omitting it.
+   */
+  unitIdentity: SoulIdentity | undefined;
 }
 
 export function buildChatSystemPrompt(input: PromptBuilderInput): string {
   const now = input.now ?? new Date();
   const language = LANGUAGE_NAMES[input.locale] || 'English';
-  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const date = now.toISOString().split('T')[0];
-  const time = now.toTimeString().split(' ')[0];
-  const timezone = input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Date and time in the user's timezone (not UTC), so "today"/"yesterday" match the user's day.
+  const timezone = resolveTimeZone(input.timezone);
+  const { date, time, weekday } = localDateParts(now, timezone);
   const contextLines: string[] = [];
-  const isPublicDomain = input.domain === 'sales' || input.domain === 'openworld';
+  const isPublicDomain = input.domain === 'alleracweb' || input.domain === 'openworld';
 
   if (!isPublicDomain && input.user.name) contextLines.push(`- Name: ${input.user.name}`);
   contextLines.push(`- Language: ${language} — always reply in this language`);
-  contextLines.push(`- Current date & time: ${date} ${weekdays[now.getDay()]}, ${time} (${timezone})`);
+  contextLines.push(`- Current date & time: ${date} ${weekday}, ${time} (${timezone})`);
   if (!isPublicDomain && input.userLocation) contextLines.push(`- Location: ${input.userLocation}`);
 
-  let prompt = `${buildSoul(input.domain)}\n\n## User context\n${contextLines.join('\n')}`;
+  let prompt = `${buildSoul(input.domain, input.unitIdentity)}\n\n## User context\n${contextLines.join('\n')}`;
   if (!isPublicDomain) prompt += `\n\n## Memory, notes, and reminders
 - Durable memory is for stable facts, preferences, corrections, relationships, and decisions that should shape future conversations. Use create_memory.
 - Notes are user-authored information to keep for later reference. Requests such as "anote isso" or "crie uma nota" use save_note.
@@ -57,7 +63,7 @@ Never show the user which tool you called, its raw arguments, or its raw output 
 
   if (!isPublicDomain && input.userLocation) {
     prompt += '\n\nWhen the user asks about weather, temperature, or anything requiring real-time local information, use the search_web tool to find current data for their location.';
-  } else if (input.domain !== 'sales' && input.tavilyConfigured) {
+  } else if (input.domain !== 'alleracweb' && input.tavilyConfigured) {
     prompt += '\n\nWhen the user asks about current weather, news, prices, or any real-time information, use the search_web tool.';
   }
 

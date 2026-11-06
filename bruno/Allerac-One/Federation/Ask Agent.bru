@@ -1,0 +1,26 @@
+meta {
+  name: Ask Agent
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/federation/agents/health/ask
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{serviceKey}}
+}
+
+body:json {
+  {
+    "question": "How did I sleep last week?"
+  }
+}
+
+docs {
+  Unit-to-Unit call. `serviceKey` is a peer service key with
+  `federation:agents:ask` (set it as a local, untracked variable).
+}

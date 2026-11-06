@@ -86,7 +86,12 @@ services:
           cpus: ${DB_CPUS:-0}
 
   migrations:
-    image: postgres:16-alpine
+    image: allerac-migrations:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     container_name: ${ALLERAC_UNIT:-allerac}-migrations
     environment:
       - POSTGRES_HOST=db
@@ -346,7 +351,8 @@ services:
   # ============================================
 
   docs:
-    image: squidfunk/mkdocs-material:9.6.14
+    image: allerac-docs:ca-20261020
+    build: ./infra/docs
     container_name: ${ALLERAC_UNIT:-allerac}-docs
     restart: unless-stopped
     working_dir: /docs
@@ -365,7 +371,12 @@ services:
   # ============================================
 
   ollama:
-    image: ollama/ollama:latest
+    image: allerac-ollama:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: ollama/ollama@sha256:9d30908e41144b1f1da89b9d8e33c07e4aeb43ff41a8660241b1686e2cc330ad
     pull_policy: if_not_present
     container_name: ${ALLERAC_UNIT:-allerac}-ollama
     restart: unless-stopped
@@ -390,7 +401,12 @@ services:
       start_period: 30s
 
   ollama-setup:
-    image: ollama/ollama:latest
+    image: allerac-ollama-setup:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: ollama/ollama@sha256:9d30908e41144b1f1da89b9d8e33c07e4aeb43ff41a8660241b1686e2cc330ad
     pull_policy: if_not_present
     container_name: ${ALLERAC_UNIT:-allerac}-ollama-setup
     depends_on:
@@ -424,7 +440,12 @@ services:
   # ============================================
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: allerac-node-exporter:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: prom/node-exporter@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
     container_name: ${ALLERAC_UNIT:-allerac}-node-exporter
     restart: unless-stopped
     volumes:
@@ -440,7 +461,12 @@ services:
       - "${MONITORING_BIND:-127.0.0.1}:${NODE_EXPORTER_PORT:-9100}:9100"
 
   prometheus:
-    image: prom/prometheus:latest
+    image: allerac-prometheus:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
     container_name: ${ALLERAC_UNIT:-allerac}-prometheus
     restart: unless-stopped
     volumes:
@@ -461,7 +487,12 @@ services:
           memory: 256M
 
   loki:
-    image: grafana/loki:latest
+    image: allerac-loki:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: grafana/loki@sha256:efd47c67f9bac88ca29bcf8cb997d9ab29d1848bd0aff579282295542a745952
     container_name: ${ALLERAC_UNIT:-allerac}-loki
     restart: unless-stopped
     user: "0"
@@ -477,7 +508,12 @@ services:
           memory: 256M
 
   promtail:
-    image: grafana/promtail:latest
+    image: allerac-promtail:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: grafana/promtail@sha256:6cfa64ec432b24a912d640e2edb940eeae2666f61861a66c121d763dd7241381
     container_name: ${ALLERAC_UNIT:-allerac}-promtail
     restart: unless-stopped
     volumes:
@@ -497,7 +533,12 @@ services:
   # ============================================
 
   redis:
-    image: redis:7-alpine
+    image: allerac-redis:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     container_name: ${ALLERAC_UNIT:-allerac}-redis
     restart: unless-stopped
     volumes:
@@ -591,11 +632,17 @@ services:
   # ============================================
 
   n8n:
-    image: n8nio/n8n:latest
+    image: allerac-n8n:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: n8nio/n8n:latest
     pull_policy: if_not_present
     container_name: ${ALLERAC_UNIT:-allerac}-n8n
     restart: unless-stopped
     environment:
+      - NODE_OPTIONS=--use-openssl-ca
       - N8N_PROTOCOL=http
       - N8N_PORT=5678
       - N8N_SECURE_COOKIE=false
@@ -621,7 +668,12 @@ services:
   # ============================================
 
   portainer:
-    image: portainer/portainer-ce:latest
+    image: allerac-portainer:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: portainer/portainer-ce@sha256:3fa8750ac2b98ce56784ca292df1adc3ec38f0062fd572811ea4b2221beee310
     container_name: ${ALLERAC_UNIT:-allerac}-portainer
     restart: unless-stopped
     volumes:
@@ -652,7 +704,12 @@ services:
 
   # Local profile: Caddy reverse proxy for local HTTPS (e.g. https://home.allerac)
   caddy:
-    image: caddy:alpine
+    image: allerac-caddy:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: caddy:alpine
     container_name: ${ALLERAC_UNIT:-allerac}-caddy
     restart: unless-stopped
     ports:
@@ -672,7 +729,12 @@ services:
 
   # Cloud profile: Cloudflare Tunnel (no open ports needed)
   tunnel:
-    image: cloudflare/cloudflared:latest
+    image: allerac-tunnel:ca-20261020
+    build:
+      context: ./infra/security
+      dockerfile: Dockerfile.ca-bundle
+      args:
+        BASE_IMAGE: cloudflare/cloudflared:latest
     container_name: ${ALLERAC_UNIT:-allerac}-tunnel
     restart: always
     command: tunnel run

@@ -5,6 +5,9 @@
  * so it can be reused by both the web UI and the Telegram bot.
  */
 
+import { acquireConversationLock, isPrimaryConversation, loadPrimaryPromptHistory, scheduleCompaction } from './primary-conversation';
+import { makeSegmentSummarizer } from './segment-summarizer';
+import { EMPTY_REPLY_MESSAGE } from './empty-reply';
 import { LLMService } from '../llm/llm.service';
 import { ConversationMemoryService } from '../memory/conversation-memory.service';
 import { loadChatKnowledgeContext } from '../knowledge/chat-knowledge-context';
@@ -23,7 +26,9 @@ import { SCHEDULE_TASK_TOOL_DEFINITION } from '../../tools/jobs.tool.definitions
 import { buildInstructionTools } from '../../tools/instructions.tool';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '../../tools/instructions.tool.definitions';
 import { HealthTool } from '../../tools/health.tool';
+import { loadUserTimeZone } from '@/app/lib/user-timezone';
 import { buildSoul } from '@/app/config/allerac-soul';
+import { loadSoulIdentity } from '@/federation/unit-profile.repository';
 import pool from '@/app/clients/db';
 import { normalizeWorkspaceReferences, resolveShellCwd } from '@/app/lib/workspace-paths';
 import { instructionDistillerService } from '@/app/services/memory/instruction-distiller.service';
@@ -73,6 +78,36 @@ export async function handleChatMessage(
   conversationId: string | null,
   config: ChatHandlerConfig,
   imageAttachments?: ChatImageAttachment[]
+): Promise<ChatHandlerResult> {
+  if (!conversationId || !(await isPrimaryConversation(conversationId))) {
+    return handleChatTurn(message, conversationId, config, imageAttachments, false);
+  }
+  // Phase 4a: serialize writes to the primary conversation across channels.
+  const release = await acquireConversationLock(conversationId);
+  let result: ChatHandlerResult;
+  try {
+    result = await handleChatTurn(message, conversationId, config, imageAttachments, true);
+  } finally {
+    await release();
+  }
+  scheduleCompaction(conversationId, makeSegmentSummarizer({
+    provider: config.modelProvider,
+    baseUrl: config.modelBaseUrl,
+    modelId: config.selectedModel,
+    githubToken: config.githubToken,
+    geminiToken: config.geminiToken,
+    anthropicToken: config.anthropicToken,
+    openaiToken: config.openaiToken,
+  }));
+  return result;
+}
+
+async function handleChatTurn(
+  message: string,
+  conversationId: string | null,
+  config: ChatHandlerConfig,
+  imageAttachments: ChatImageAttachment[] | undefined,
+  isPrimary: boolean,
 ): Promise<ChatHandlerResult> {
   const { userId, githubToken, geminiToken, anthropicToken, openaiToken, tavilyApiKey, selectedModel, modelProvider, modelBaseUrl, systemMessage, botId, domainSlug, language } = config;
 
@@ -175,7 +210,7 @@ export async function handleChatMessage(
 
   // 4. Build system message with context
   const isCustomSoul = systemMessage && systemMessage !== 'You are a helpful AI assistant.';
-  let enrichedSystemMessage = buildSoul(domainSlug);
+  let enrichedSystemMessage = buildSoul(domainSlug, await loadSoulIdentity(domainSlug));
 
   // Inject current date and time
   const now = new Date();
@@ -231,7 +266,9 @@ export async function handleChatMessage(
   }
 
   // Load conversation history
-  const history = await chatService.loadMessages(convId);
+  const history = isPrimary
+    ? await loadPrimaryPromptHistory(convId)
+    : await chatService.loadMessages(convId);
   const conversationMessages: Array<{
     role: string;
     content: string | any[];
@@ -330,7 +367,7 @@ export async function handleChatMessage(
         let toolResult: any;
         if (toolName === 'get_today_info') {
           const { TodayTool } = await import('@/app/tools/today.tool');
-          toolResult = new TodayTool().execute();
+          toolResult = new TodayTool().execute(await loadUserTimeZone(userId));
         } else if (toolName === 'search_web' && tavilyApiKey) {
           const searchTool = new SearchWebTool(tavilyApiKey);
           toolResult = await searchTool.execute(toolArgs.query);
@@ -368,7 +405,7 @@ export async function handleChatMessage(
             const healthTool = new HealthTool();
             const healthUser = { id: u.id, email: u.email, name: u.name || u.email };
             if (toolName === 'get_health_summary') {
-              toolResult = await healthTool.getSummary(healthUser, toolArgs.period || 'week');
+              toolResult = await healthTool.getSummary(healthUser, toolArgs.period || 'week', await loadUserTimeZone(u.id));
             } else if (toolName === 'get_health_metrics') {
               toolResult = await healthTool.getMetrics(healthUser, toolArgs.start_date, toolArgs.end_date);
             } else if (toolName === 'get_daily_snapshot') {
@@ -424,8 +461,15 @@ export async function handleChatMessage(
     assistantMessage = data.choices[0].message;
   }
 
-  // 7. Save assistant response
-  await chatService.saveMessage(convId, 'assistant', assistantMessage.content);
+  // 7. Save assistant response. Never save or send a blank reply (same
+  // fallback as the web chat pipeline).
+  const replyText = typeof assistantMessage.content === 'string' && assistantMessage.content.trim()
+    ? assistantMessage.content
+    : EMPTY_REPLY_MESSAGE;
+  if (replyText === EMPTY_REPLY_MESSAGE) {
+    console.warn(`[ChatHandler] Empty reply from model for conversation ${convId}`);
+  }
+  await chatService.saveMessage(convId, 'assistant', replyText);
 
   // Track skill usage completion
   if (activeSkill) {
@@ -443,7 +487,7 @@ export async function handleChatMessage(
 
   return {
     conversationId: convId,
-    response: assistantMessage.content,
+    response: replyText,
   };
 }
 

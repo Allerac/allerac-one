@@ -1,0 +1,20 @@
+meta {
+  name: List Agents
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/federation/agents
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{serviceKey}}
+}
+
+docs {
+  Unit-to-Unit call. `serviceKey` is a peer service key with
+  `federation:agents:list` (set it as a local, untracked variable).
+}

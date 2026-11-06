@@ -38,11 +38,68 @@ You have access to a real Linux shell via \`execute_shell\`. Use it instead of e
 - **The executor is sandboxed.** Servers you start are NOT accessible from the user's browser. After creating a project, tell the user the file path and how to run it locally.`;
 
 /**
+ * Unit identity & role (federation P3.5), already resolved by the caller.
+ * Callers pass it only when it applies to the domain (public domains need the
+ * admin opt-in), so buildSoul stays synchronous and DB-free.
+ */
+export interface SoulIdentity {
+  displayName: string;
+  role?: string | null;
+  description?: string | null;
+  /** Short description of the current domain's agent, when set by the admin. */
+  agentDescription?: string | null;
+  /** Owner-written agent instructions (unit_profile.instructions); local only. */
+  instructions?: string | null;
+  /**
+   * Display labels of active paired Units (e.g. "Santos (santos)"). Only set
+   * when federation tools are offered (admin, private domains); never rendered
+   * in public domains.
+   */
+  pairedUnits?: string[];
+}
+
+const ALLERAC_OPENING = 'You are Allerac, a private AI assistant.';
+const PUBLIC_OPENING = 'You are Allerac, an AI assistant speaking with a visitor on a public website.';
+
+function pairedUnitsLine(identity: SoulIdentity): string {
+  const units = (identity.pairedUnits ?? []).filter(Boolean).slice(0, 10);
+  if (units.length === 0) return '';
+  return ` Paired Allerac Units you can contact: ${units.join(', ')}. When the user mentions one of them by name, it means that Unit: use list_peer_agents to see its role and agents, and ask_peer_agent to consult it.`;
+}
+
+function identityLines(identity: SoulIdentity): string {
+  const lines: string[] = [];
+  if (identity.role) lines.push(`Role: you take care of ${identity.role}.`);
+  if (identity.description) lines.push(identity.description);
+  if (identity.agentDescription) lines.push(`In this conversation: ${identity.agentDescription}`);
+  lines.push(identity.role
+    ? `When asked who you are, say you are ${identity.displayName} and that you take care of ${identity.role}.`
+    : `When asked who you are, say you are ${identity.displayName}.`);
+  return lines.join(' ');
+}
+
+/** Owner instructions come after the base guidance; the user's own learned rules are added later and win. */
+function instructionsSection(identity: SoulIdentity): string {
+  const text = identity.instructions?.trim();
+  return text ? `\n\n## Agent instructions (set by the Unit owner)\n${text}` : '';
+}
+
+/**
  * Returns the Soul for a given domain.
  * The code domain gets shell instructions; all others get the lean base.
+ * With an identity, the opening line names this Unit instead of "Allerac".
  */
-export function buildSoul(domain?: string | null): string {
-  if (domain === 'sales' || domain === 'openworld') return PUBLIC_AGENT_SOUL;
-  if (domain === 'code') return `${ALLERAC_SOUL}\n\n${ALLERAC_CODE_ADDENDUM}`;
-  return ALLERAC_SOUL;
+export function buildSoul(domain?: string | null, identity?: SoulIdentity | null): string {
+  if (domain === 'alleracweb' || domain === 'openworld') {
+    return identity
+      ? PUBLIC_AGENT_SOUL.replace(PUBLIC_OPENING, `You are ${identity.displayName}, an Allerac unit speaking with a visitor on a public website. ${identityLines(identity)}`)
+        + instructionsSection(identity)
+      : PUBLIC_AGENT_SOUL;
+  }
+  const base = identity
+    ? ALLERAC_SOUL.replace(ALLERAC_OPENING, `You are ${identity.displayName}, an Allerac unit: a private AI assistant. ${identityLines(identity)}${pairedUnitsLine(identity)}`)
+      + instructionsSection(identity)
+    : ALLERAC_SOUL;
+  if (domain === 'code') return `${base}\n\n${ALLERAC_CODE_ADDENDUM}`;
+  return base;
 }

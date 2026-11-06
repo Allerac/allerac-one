@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import { Conversation } from '../../types';
 import SidebarContent from './SidebarContent';
+import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
+import { canUseInbox } from '@/federation/inbox-policy';
 import { AlleracLogo } from '../ui/AlleracLogo';
 import { updateLanguage } from '@/app/actions/user';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
@@ -33,11 +35,15 @@ interface SidebarMobileProps {
   onOpenInstagramPost?: () => void;
   instagramConnected?: boolean;
   isAdmin?: boolean;
+  /** Domain used for the federated Agents inbox section (defaults to 'chat'). */
+  inboxDomainId?: string;
   onNewConversation?: () => void;
   userName?: string;
   userEmail?: string;
   onLogout?: () => void;
   onToggleTheme?: () => void;
+  /** Agent chat (phase 4b): no conversation list; old chats live in the Archive drawer. */
+  hideConversations?: boolean;
 }
 
 export default function SidebarMobile({
@@ -56,11 +62,13 @@ export default function SidebarMobile({
   onOpenInstagramPost,
   instagramConnected,
   isAdmin,
+  inboxDomainId = 'chat',
   onNewConversation,
   userName,
   userEmail,
   onLogout,
   onToggleTheme,
+  hideConversations = false,
 }: SidebarMobileProps) {
   const d = isDarkMode;
   const router = useRouter();
@@ -132,7 +140,7 @@ export default function SidebarMobile({
           <span>My Allerac</span>
         </button>
         {isAdmin && (
-          <button onClick={() => router.push('/')} className={btn} title="Hub">
+          <button onClick={() => router.push('/hub')} className={btn} title="Hub">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
@@ -142,8 +150,12 @@ export default function SidebarMobile({
       </div>
 
       <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+        {canUseInbox({ is_admin: isAdmin }, inboxDomainId) && (
+          <AgentsInboxSection isDark={d} domainId={inboxDomainId} onNavigate={onClose} />
+        )}
         <SidebarContent
-          conversations={conversations}
+          conversations={hideConversations ? [] : conversations}
+          hideConversations={hideConversations}
           currentConversationId={currentConversationId}
           loadConversation={loadConversation}
           deleteConversation={deleteConversation}

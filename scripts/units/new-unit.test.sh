@@ -27,11 +27,11 @@ run() {
 }
 val() { grep -E "^$2=" "$1" | tail -n 1 | cut -d= -f2-; }
 
-refuses "a name starting with allerac" allerac-web --profile sales --hostname a.example.com
-refuses "an invalid name" "Open World" --profile sales --hostname a.example.com
+refuses "a name starting with allerac" allerac-web --profile alleracweb --hostname a.example.com
+refuses "an invalid name" "Open World" --profile alleracweb --hostname a.example.com
 refuses "an unknown profile" web --profile shop --hostname a.example.com
-refuses "a bad hostname" web --profile sales --hostname "not a host"
-refuses "a used port offset" web --profile sales --hostname a.example.com --port-offset 0
+refuses "a bad hostname" web --profile alleracweb --hostname "not a host"
+refuses "a used port offset" web --profile alleracweb --hostname a.example.com --port-offset 0
 
 run openworld --profile openworld --hostname openworld.allerac.ai --dry-run > "$TMP/dry.txt"
 check "dry run creates nothing" "no" "$([ -e "$TMP/units/openworld" ] && echo yes || echo no)"
@@ -52,8 +52,8 @@ check "registration closed" "false" "$(val "$ENV1" ALLOW_REGISTRATION)"
 
 refuses "a Unit name already in use" openworld --profile openworld --hostname x.example.com --dir "$TMP/other"
 
-run alleracweb2 --profile sales --hostname alleracweb.allerac.ai >/dev/null 2>&1 && fail "names starting with allerac are reserved" || ok "names starting with allerac are reserved"
-run web --profile sales --hostname alleracweb.allerac.ai --with-ollama > /dev/null
+run alleracweb2 --profile alleracweb --hostname alleracweb.allerac.ai >/dev/null 2>&1 && fail "names starting with allerac are reserved" || ok "names starting with allerac are reserved"
+run web --profile alleracweb --hostname alleracweb.allerac.ai --with-ollama > /dev/null
 ENV2="$TMP/units/web/.env"
 check "second Unit takes the next offset" "8082" "$(val "$ENV2" APP_PORT)"
 check "--with-ollama keeps Ollama" "docker-compose.yml:docker-compose.public.yml" "$(val "$ENV2" COMPOSE_FILE)"

@@ -301,7 +301,7 @@ describe('Control API v1 conversations', () => {
   it('rejects caller-controlled skill and prompt context for public domains', async () => {
     mockChatService.getConversationForUser.mockResolvedValueOnce({
       ...conversation,
-      domain_slug: 'sales',
+      domain_slug: 'alleracweb',
     });
 
     const response = await sendMessage(

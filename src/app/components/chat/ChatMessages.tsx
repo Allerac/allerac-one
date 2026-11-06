@@ -1,9 +1,8 @@
 'use client';
 
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import Link from 'next/link';
+import { isSafeRelativeHref } from '@/lib/legacy-domains';
+import MarkdownContent from './MarkdownContent';
 import { Message, Model, MessageContentPart } from '../../types';
 import CorrectAndMemorize from '../memory/CorrectAndMemorize';
 import { AlleracIcon } from '../ui/AlleracIcon';
@@ -21,6 +20,8 @@ interface ChatMessagesProps {
   githubToken: string;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   domainSlug?: string | null;
+  /** Phase 4b: message briefly highlighted after a search jump. */
+  highlightMessageId?: string | null;
 }
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -102,47 +103,6 @@ function extractThinking(content: string): { thinking: string; isComplete: boole
   return null;
 }
 
-function CodeBlock({ code, language, isDarkMode }: { code: string; language: string; isDarkMode: boolean }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <div className={`relative group my-3 rounded-xl overflow-hidden border ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-      <div className={`flex items-center justify-between px-4 py-2 text-xs font-mono ${isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
-        <span>{language}</span>
-        <button onClick={copy} className={`flex items-center gap-1.5 transition-colors ${isDarkMode ? 'hover:text-gray-200' : 'hover:text-gray-700'}`}>
-          {copied ? (
-            <>
-              <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="text-green-500">Copied</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy
-            </>
-          )}
-        </button>
-      </div>
-      <SyntaxHighlighter
-        language={language}
-        style={isDarkMode ? oneDark : oneLight}
-        customStyle={{ margin: 0, borderRadius: 0, fontSize: '0.8rem', lineHeight: '1.6' }}
-        showLineNumbers={code.split('\n').length > 5}
-        wrapLongLines
-      >
-        {code}
-      </SyntaxHighlighter>
-    </div>
-  );
-}
 
 export default function ChatMessages({
   messages,
@@ -155,6 +115,7 @@ export default function ChatMessages({
   githubToken,
   messagesEndRef,
   domainSlug,
+  highlightMessageId = null,
 }: ChatMessagesProps) {
   // Controla qual mensagem tem o menu aberto (índice)
   const [openMenuIdx, setOpenMenuIdx] = useState<number | null>(null);
@@ -249,8 +210,18 @@ export default function ChatMessages({
   return (
     <div data-name="chat-messages-wrapper" className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       <div className="space-y-6">
-        {messages.map((message, index) => (
-          <div key={index} className={`${message.role === 'user' ? 'flex justify-end' : ''}`}>
+        {messages.map((message, index) => message.topicMarker ? (
+          <div key={message.id ?? index} data-name="topic-marker" className={`flex items-center gap-3 text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            <div className={`flex-1 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`} />
+            <span>New topic</span>
+            <div className={`flex-1 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`} />
+          </div>
+        ) : (
+          <div
+            key={message.id ?? index}
+            data-message-id={message.id}
+            className={`${message.role === 'user' ? 'flex justify-end' : ''} ${message.id && message.id === highlightMessageId ? 'rounded-lg ring-2 ring-brand-500/60 ring-offset-2 transition-shadow' : ''}`}
+          >
             {/* User message - simple bubble on right */}
             {message.role === 'user' ? (
               <div className="max-w-[80%]">
@@ -428,37 +399,7 @@ export default function ChatMessages({
                         </div>
                       )}
                       <div className={`text-sm leading-relaxed prose prose-sm max-w-none ${isDarkMode ? 'prose-invert prose-headings:text-gray-100 prose-p:text-gray-100 prose-li:text-gray-100 prose-strong:text-gray-100 prose-code:text-gray-100 prose-pre:bg-gray-900 prose-pre:text-gray-100' : 'text-gray-900 prose-headings:text-gray-900 prose-p:text-gray-900 prose-li:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-pre:bg-gray-100 prose-pre:text-gray-900'} prose-a:text-brand-600 prose-a:no-underline hover:prose-a:underline prose-a:font-medium prose-hr:hidden prose-p:my-2 prose-headings:my-3`}>
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            a: ({ node, ...props }) => (
-                              <a
-                                {...props}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-brand-600 hover:text-brand-800 hover:underline font-medium transition-colors"
-                              />
-                            ),
-                            hr: () => null,
-                            code({ node, className, children, ...props }: any) {
-                              const match = /language-(\w+)/.exec(className || '');
-                              const isBlock = !!match;
-                              const code = String(children).replace(/\n$/, '');
-                              if (!isBlock) {
-                                return (
-                                  <code className={`px-1.5 py-0.5 rounded text-xs font-mono ${isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-800'}`} {...props}>
-                                    {children}
-                                  </code>
-                                );
-                              }
-                              return (
-                                <CodeBlock code={code} language={match[1]} isDarkMode={isDarkMode} />
-                              );
-                            },
-                          }}
-                        >
-                          {displayContent}
-                        </ReactMarkdown>
+                        <MarkdownContent content={displayContent} isDarkMode={isDarkMode} />
                       </div>
 
                       {/* Workspace link — shown when AI created files in /workspace/projects */}
@@ -548,6 +489,20 @@ export default function ChatMessages({
                               >
                                 <span>Revisar e Postar no Instagram</span>
                               </button>
+                            </div>
+                          );
+                        }
+                        if (action.type === 'page_link') {
+                          if (!isSafeRelativeHref(action.href)) return null;
+                          return (
+                            <div key={idx} className="mt-2">
+                              <Link
+                                href={action.href}
+                                data-testid="page-link"
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${isDarkMode ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}
+                              >
+                                {action.label} →
+                              </Link>
                             </div>
                           );
                         }

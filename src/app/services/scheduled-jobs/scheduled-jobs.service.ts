@@ -4,6 +4,7 @@ import { handleChatMessage } from '@/app/services/chat/chat-handler';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { buildSoul } from '@/app/config/allerac-soul';
+import { loadSoulIdentity } from '@/federation/unit-profile.repository';
 import { resolveJobModel, type JobModelProvider } from './job-model';
 
 interface DBScheduledJob {
@@ -226,7 +227,7 @@ export class ScheduledJobsService {
         hour12: false,
       }).format(now).replace(/(\d+)\/(\d+)\/(\d+),/, '$3-$1-$2');
 
-      let systemMessage = buildSoul('jobs');
+      let systemMessage = buildSoul('jobs', await loadSoulIdentity('jobs'));
       systemMessage += `\n\n## Context\n- Current date & time: ${today} (${timezone})`;
       if (userResult.rows[0]?.name) {
         systemMessage += `\n- User: ${userResult.rows[0].name}`;

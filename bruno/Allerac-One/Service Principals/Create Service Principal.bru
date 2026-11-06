@@ -1,0 +1,30 @@
+meta {
+  name: Create Service Principal
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/service-principals
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Cookie: session_token={{sessionToken}}
+}
+
+body:json {
+  {
+    "name": "openworld",
+    "peerUrl": "https://openworld.example"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body?.data?.servicePrincipal?.id) {
+    bru.setEnvVar("servicePrincipalId", body.data.servicePrincipal.id);
+  }
+}

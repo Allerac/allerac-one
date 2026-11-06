@@ -1,8 +1,11 @@
-FROM node:20-alpine AS base
+FROM node:22.23.4-alpine3.24 AS base
+RUN apk add --no-cache 'ca-certificates>=20261020-r0'
 
 # Static documentation site served by the app at /docs (src/app/docs).
 # Same mkdocs-material version as the `docs` compose service.
 FROM squidfunk/mkdocs-material:9.6.14 AS docs
+RUN apk add --no-cache 'ca-certificates>=20261020-r0' \
+    && python -m pip install --no-cache-dir --upgrade 'pip>=26.2.2' 'certifi>=2026.10.19'
 WORKDIR /docs
 COPY mkdocs.yml mkdocs.app.yml ./
 COPY docs ./docs

@@ -1,3 +1,4 @@
+import { memoryReadDomain } from '@/app/services/memory/memory-scope';
 import pool from '@/app/clients/db';
 import { assertDomainAccess } from '@/app/lib/domain-access-check';
 import type { User } from '@/app/services/auth/auth.service';
@@ -15,6 +16,8 @@ interface MemoryToolContext {
   user: User;
   conversationId: string;
   callerDomain: string;
+  /** Request from a paired Unit: recall stays scoped to the caller domain. */
+  federated?: boolean;
 }
 
 // createManualMemory never calls the LLM, so no credentials are needed here.
@@ -133,10 +136,11 @@ async function recallMemories(
   return searchMemories(user, query, domainSlug, limit);
 }
 
-export function buildMemoryTools({ user, callerDomain }: MemoryToolContext) {
+export function buildMemoryTools({ user, callerDomain, federated }: MemoryToolContext) {
   return {
     recall_memory: async (args: { query: string; domain_slug?: string; limit?: number }) => {
-      const domainSlug = args.domain_slug?.trim() || callerDomain;
+      // The chat agent recalls across domains (domain_slug is only a tag); legacy domains stay scoped.
+      const domainSlug = args.domain_slug?.trim() || memoryReadDomain(callerDomain, { federated }) || undefined;
       return recallMemories(user, args.query, domainSlug, clampLimit(args.limit, 5, 20));
     },
 

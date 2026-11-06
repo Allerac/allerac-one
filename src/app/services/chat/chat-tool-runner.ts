@@ -2,6 +2,7 @@ import path from 'path';
 import * as instagramActions from '@/app/actions/instagram';
 import type { User } from '@/app/services/auth/auth.service';
 import { HealthTool } from '@/app/tools/health.tool';
+import { loadUserTimeZone } from '@/app/lib/user-timezone';
 import { MusicTool } from '@/app/tools/music.tool';
 import { InstagramTool } from '@/app/tools/instagram.tool';
 import { buildEmailTools } from '@/app/tools/email.tool';
@@ -33,7 +34,13 @@ import {
   SCHEDULE_TASK_TOOL_NAME,
   LEARN_INSTRUCTION_TOOL_NAME,
   isToolForbiddenInDomain,
+  isToolForbiddenByPolicy,
+  canUseFederationTools,
+  FEDERATION_TOOL_NAMES,
+  type ChatToolPolicy,
 } from './chat-tool-registry';
+import { buildFederationTools } from '@/app/tools/federation.tool';
+import { federationClient } from '@/federation/federation-client.instance';
 
 export interface ChatToolRunnerContext {
   user: User;
@@ -44,6 +51,9 @@ export interface ChatToolRunnerContext {
   conversationId?: string;
   domain?: string;
   emit: (event: object) => void;
+  toolPolicy?: ChatToolPolicy;
+  /** IANA timezone for "today". Loaded from the user's settings when omitted. */
+  timeZone?: string;
 }
 
 export async function executeChatTool(
@@ -64,6 +74,23 @@ export async function executeChatTool(
   if (isToolForbiddenInDomain(toolName, domain)) {
     return { error: `Tool ${toolName} is not available in this domain.` };
   }
+  // Requests from a paired Unit run with the restricted federated policy.
+  if (isToolForbiddenByPolicy(toolName, context.toolPolicy)) {
+    return { error: `Tool ${toolName} is not available for federated requests.` };
+  }
+
+  if (FEDERATION_TOOL_NAMES.includes(toolName)) {
+    if (!canUseFederationTools({ isAdmin: user.is_admin === true, domain, policy: context.toolPolicy })) {
+      return { error: `Tool ${toolName} is not available.` };
+    }
+    const { toolConversationRepository } = await import('@/federation/tool-conversations.repository');
+    const federation = buildFederationTools(federationClient, userId, {
+      conversationId: conversationId ?? null, conversations: toolConversationRepository,
+    });
+    return toolName === 'list_peer_agents'
+      ? federation.listPeerAgents(toolArgs)
+      : federation.askPeerAgent(toolArgs);
+  }
 
   if (toolName === 'update_social_form' || toolName === 'update_instagram_form') {
     const { platform, caption, tags, price, is_product, image_url, tiktok_title } = toolArgs;
@@ -81,7 +108,7 @@ export async function executeChatTool(
 
   if (toolName === 'get_today_info') {
     const { TodayTool } = await import('@/app/tools/today.tool');
-    return new TodayTool().execute();
+    return new TodayTool().execute(context.timeZone ?? await loadUserTimeZone(userId));
   }
 
   if (toolName === 'search_web' && tavilyApiKey) {
@@ -149,7 +176,7 @@ export async function executeChatTool(
     const healthTool = new HealthTool();
     const healthUser = { id: userId, email: user.email, name: user.name || user.email };
     if (toolName === 'get_health_summary') {
-      return healthTool.getSummary(healthUser, toolArgs.period || 'week');
+      return healthTool.getSummary(healthUser, toolArgs.period || 'week', context.timeZone ?? await loadUserTimeZone(userId));
     }
     if (toolName === 'get_health_metrics') {
       return healthTool.getMetrics(healthUser, toolArgs.start_date, toolArgs.end_date);
@@ -244,6 +271,7 @@ export async function executeChatTool(
       user,
       conversationId: conversationId || '',
       callerDomain: domain || 'chat',
+      federated: context.toolPolicy === 'federated',
     });
     const handler = handlers[toolName as keyof typeof handlers] as (args: any) => Promise<any>;
     return handler(toolArgs);

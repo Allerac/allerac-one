@@ -1,6 +1,6 @@
 import type { ControlApiKey } from '@/app/services/api-keys/api-key.service';
 
-// Scopes available to restricted, domain-only accounts (e.g. /bridge, /sales)
+// Scopes available to restricted, domain-only accounts (e.g. /bridge, /alleracweb)
 // that can't reach the full admin-driven scope picker (ControlApiAccessTab,
 // admin-only) to self-issue their own key. This is also the server-side
 // backstop in case that admin UI gate is ever bypassed.

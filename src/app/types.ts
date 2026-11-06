@@ -18,15 +18,25 @@ export type MessageAction =
   | {
       type: 'agent_run';
       agentRunId: string;
+    }
+  | {
+      /** Link to a module data page (e.g. the health dashboard). Relative URL only. */
+      type: 'page_link';
+      href: string;
+      label: string;
     };
 
 export interface Message {
+  /** DB id when loaded from history (used for paging, search jumps and dedupe). */
+  id?: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string | MessageContentPart[];
   timestamp: Date;
   tool_call_id?: string;
   responseTime?: number; // ms — only set on completed assistant messages
   actions?: MessageAction[];
+  /** Phase 4a: a "New topic" divider; context restarts after it. */
+  topicMarker?: boolean;
 }
 
 export interface Conversation {

@@ -1,33 +1,20 @@
-import HubClient from './hub/HubClient';
-import { requireAdmin } from '@/app/lib/domain-access';
-import { getUserAccessibleDomains } from '@/app/actions/domains';
-import pool from '@/app/clients/db';
-import { isGrampeadorEnabled } from '@/app/actions/clippy';
+import { redirect } from 'next/navigation';
+import { requireAuthenticatedUser } from '@/app/lib/domain-access';
+import { homePathFor } from '@/app/lib/home-path';
+import { AuthService } from '@/app/services/auth/auth.service';
 
+const authService = new AuthService();
+
+/**
+ * Home: signed-in users land on the agents screen (the old hub lives at /hub).
+ * Non-admins without chat access, e.g. the bot account of a public Unit
+ * (openworld, alleracweb), go straight to their first domain, the same target as
+ * after login, instead of bouncing through /agents.
+ */
 export default async function RootPage() {
-  const user = await requireAdmin();
-
-  let completedHubTour = false;
-  let allowedDomains: string[] = [];
-  try {
-    const [tourRes, domains] = await Promise.all([
-      pool.query('SELECT completed_onboarding_tour FROM users WHERE id = $1', [user.id]),
-      getUserAccessibleDomains(),
-    ]);
-    completedHubTour = tourRes.rows[0]?.completed_onboarding_tour ?? false;
-    allowedDomains = domains;
-  } catch (error) {
-    console.error('[RootPage] Error fetching data:', error);
+  const user = await requireAuthenticatedUser();
+  if (!user.is_admin && !(await authService.canAccessDomain(user.id, false, 'chat'))) {
+    redirect(homePathFor(false, await authService.getFirstDomainSlug(user.id)));
   }
-
-  return (
-    <HubClient
-      userName={user.email.split('@')[0]}
-      userEmail={user.email}
-      userId={String(user.id)}
-      completedHubTour={completedHubTour}
-      allowedDomains={allowedDomains}
-      grampeadorBubblesEnabled={await isGrampeadorEnabled()}
-    />
-  );
+  redirect('/agents');
 }

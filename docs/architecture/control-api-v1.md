@@ -230,6 +230,7 @@ Suggested first scopes:
 | `email:read` / `email:write` | Read/send through owned email accounts |
 | `finance:read` / `finance:write` | Read market data and manage watchlist |
 | `music:read` / `music:write` | Read recommendations/history/playlists and manage Spotify playlists |
+| `federation:manifest:read`, `federation:agents:list`, `federation:agents:ask`, `federation:runs:create`, `federation:runs:read` | Peer Unit access via [service principals](../api/control-api-v1/service-principals.md) |
 
 Admin and system-level scopes should wait until there is a concrete use case.
 

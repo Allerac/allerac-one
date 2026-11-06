@@ -162,7 +162,7 @@ if [ "$DO_UP" = true ]; then
     STARTED=true
     if [ "$DO_BUILD" = true ]; then
         info "Building ${CORE[*]}..."
-        dc build executor app agent-worker
+        dc build --pull executor app agent-worker migrations
     fi
     info "Starting ${CORE[*]} (no Ollama, monitoring, n8n or Portainer)..."
     dc up -d --no-build "${CORE[@]}" || bad "docker compose up failed"

@@ -1,0 +1,15 @@
+meta {
+  name: Disable Service Principal
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/service-principals/{{servicePrincipalId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: session_token={{sessionToken}}
+}
