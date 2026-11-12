@@ -11,6 +11,7 @@ import { AlleracLogo } from '../ui/AlleracLogo';
 import { updateLanguage } from '@/app/actions/user';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
 import { MODELS } from '@/app/services/llm/models';
+import UnitConnectionsLinks from './UnitConnectionsLinks';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -166,12 +167,13 @@ export default function SidebarDesktop({
           </svg>
           {!isSidebarCollapsed && <span>My Allerac</span>}
         </button>
+        <UnitConnectionsLinks collapsed={isSidebarCollapsed} className={`${actionBtn} ${isSidebarCollapsed ? 'justify-center' : ''}`} />
         {showNotesConnectors && onOpenNotesConnectors && (
           <button onClick={onOpenNotesConnectors} className={`${actionBtn} ${isSidebarCollapsed ? 'justify-center' : ''}`} title="External connections">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-4 4a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l4-4a4 4 0 015.656 5.656l-1.5 1.5" />
             </svg>
-            {!isSidebarCollapsed && <span>Connections</span>}
+            {!isSidebarCollapsed && <span>Document connections</span>}
           </button>
         )}
         {isAdmin && (

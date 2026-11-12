@@ -1,0 +1,11 @@
+# Local pilot only. Interactive CLI processes run on the Windows host.
+# docker compose -f docker-compose.yml -f docker-compose.terminal.yml up -d app
+services:
+  app:
+    environment:
+      CLAUDE_TERMINAL_URL: http://host.docker.internal:3015
+      CLAUDE_TERMINAL_SECRET: ${CLAUDE_TERMINAL_SECRET:?Configure the local bridge secret}
+      CLAUDE_TERMINAL_USER_ID: ${CLAUDE_TERMINAL_USER_ID:?Configure the authorized user ID}
+      CODEX_TERMINAL_URL: ${CODEX_TERMINAL_URL:-}
+      CODEX_TERMINAL_SECRET: ${CODEX_TERMINAL_SECRET:-}
+      CODEX_TERMINAL_USER_ID: ${CODEX_TERMINAL_USER_ID:-}

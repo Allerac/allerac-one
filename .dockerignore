@@ -4,6 +4,14 @@ pipelines/
 
 # Dependencies
 node_modules/
+**/node_modules/
+.tools/
+.android-sdk/
+android-platform-tools/
+platform-tools-latest-windows.zip
+clients/**/build/
+clients/**/.gradle/
+backups/
 
 # Build output
 .next/
