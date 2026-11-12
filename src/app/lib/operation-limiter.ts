@@ -5,7 +5,8 @@ export type ExpensiveOperation =
   | 'image-edit'
   | 'model-download'
   | 'federation-pairing'
-  | 'federation-ask';
+  | 'federation-ask'
+  | 'terminal-unlock';
 
 interface OperationLimit {
   requests: number;
@@ -109,6 +110,14 @@ function getLimit(operation: ExpensiveOperation): OperationLimit {
         requests: positiveInteger('RATE_LIMIT_FEDERATION_ASK_REQUESTS', 20),
         windowMs: positiveInteger('RATE_LIMIT_FEDERATION_ASK_WINDOW_SECONDS', 600) * 1_000,
         concurrency: positiveInteger('CONCURRENCY_LIMIT_FEDERATION_ASK', 1),
+        scope: 'user',
+      };
+    // Password re-entry before unit terminal access; bounds online guessing.
+    case 'terminal-unlock':
+      return {
+        requests: positiveInteger('RATE_LIMIT_TERMINAL_UNLOCK_REQUESTS', 5),
+        windowMs: positiveInteger('RATE_LIMIT_TERMINAL_UNLOCK_WINDOW_SECONDS', 600) * 1_000,
+        concurrency: positiveInteger('CONCURRENCY_LIMIT_TERMINAL_UNLOCK', 1),
         scope: 'user',
       };
   }

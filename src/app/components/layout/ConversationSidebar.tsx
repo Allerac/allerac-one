@@ -8,6 +8,7 @@ import { sidebarRowClass } from './SidebarRow';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
 import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
 import { canUseInbox } from '@/federation/inbox-policy';
+import UnitConnectionsLinks from './UnitConnectionsLinks';
 
 interface Props {
   isDark: boolean;
@@ -105,6 +106,7 @@ export default function ConversationSidebar({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
         </button>
+        <UnitConnectionsLinks collapsed className={`p-2 rounded-lg text-sm ${d ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-500 hover:bg-gray-100'}`} />
         {isAdmin && (
           <button
             onClick={() => router.push('/')}
@@ -302,6 +304,9 @@ export default function ConversationSidebar({
         </button>
       </div>
 
+      <div className={`px-2 py-1 border-b ${d ? 'border-gray-800' : 'border-gray-200'}`}>
+        <UnitConnectionsLinks className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${d ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-500 hover:bg-gray-100'}`} />
+      </div>
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {canUseInbox({ is_admin: isAdmin }, domainId) && <AgentsInboxSection isDark={d} domainId={domainId} />}
