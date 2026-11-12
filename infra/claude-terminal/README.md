@@ -1,12 +1,16 @@
 # Local Claude Code and Codex terminal pilot
 
-> **Local, single-user pilot for a Windows host.** Never enable this on a
-> public or internet-exposed unit. Enabling it gives the configured Allerac
-> user an interactive shell on the host, with the full permissions of the
-> Windows account that runs the bridge. It is off unless the terminal
-> environment variables below are set.
+> **Local, single-user pilot for a Windows or Linux host.** Never enable this
+> on a host or unit that is public or internet-exposed. Enabling it gives the
+> configured Allerac user an interactive shell on the host, with the full
+> permissions of the account that runs the bridge. On a host that also runs
+> public units, the terminal gives shell access to that whole host, including
+> those units' files, containers it can reach and anything else that account
+> can read. It is off unless the terminal environment variables below are set
+> and the bridge is started.
 
-Runs the unmodified Claude Code executable in a Windows pseudoterminal. The
+Runs the unmodified Claude Code executable in a host pseudoterminal (ConPTY on
+Windows, a Unix PTY on Linux, both through `node-pty`). The
 browser talks only to authenticated Allerac routes; those routes proxy to this
 bridge with a server-side secret. Anthropic credentials stay with Claude Code.
 Only the configured local user ID can access the terminal, including when other
@@ -23,7 +27,8 @@ Create `.tools/codex-terminal.json` with an independent random `secret` and the
 authorized Allerac `userId`. Set `CODEX_TERMINAL_URL` (for Docker Desktop:
 `http://host.docker.internal:3016`), `CODEX_TERMINAL_SECRET` and
 `CODEX_TERMINAL_USER_ID` in the local `.env`. Start
-`scripts/start-codex-terminal.ps1`, then recreate the app with the terminal
+`scripts/start-codex-terminal.ps1` (Windows) or the `allerac-terminal@codex`
+user service (Linux, see below), then recreate the app with the terminal
 compose override. The default binding is loopback, as for the Claude bridge.
 
 Open `/terminal?provider=codex` or choose **OpenAI · Codex** in the terminal's
@@ -104,19 +109,103 @@ without a password (for example Google sign-in) must sign in again and confirm
 within 15 minutes of that sign-in. **Disconnect API** never needs
 confirmation, so access can always be revoked.
 
-### Terminal installation
+### Terminal installation (Windows)
 
 1. Install Claude Code and sign in using its native flow. Check `claude auth status`.
 2. Run `npm install --prefix infra/claude-terminal` on the host.
 3. Create the ignored `.tools/claude-terminal.json` with `userId` (the Allerac UUID)
    and `secret` (at least 32 random characters). Do not commit this file.
 4. Start `scripts/start-claude-terminal.ps1`. Default binding is loopback. For
-   Docker Desktop the host gateway may need `-ListenHost 0.0.0.0`; use only on
-   the local test machine, with Windows firewall restricting network access.
+   Docker Desktop the host gateway may need
+   `-ListenHost 0.0.0.0 -AllowWildcardHost`; use only on the local test
+   machine, with Windows firewall restricting network access. Without
+   `-AllowWildcardHost` the bridge refuses wildcard addresses.
 5. Set `CLAUDE_TERMINAL_SECRET` and `CLAUDE_TERMINAL_USER_ID` in the local compose
    environment to match. Rebuild the app and start it using
    `docker compose -f docker-compose.yml -f docker-compose.terminal.yml up -d --build app`.
 6. Sign in as the configured Allerac user and open `/connections` or `/terminal`.
+
+### Terminal installation (Linux)
+
+The bridge runs directly on the Linux host (not in a container) as the user
+whose shell the terminal should provide. Use a dedicated, unprivileged account
+where possible. Never do this on a host that serves a public unit.
+
+1. Install Claude Code (or Codex) for that user and sign in with its native
+   flow. Check `claude auth status` / `codex login status`.
+2. Install build tools, then the bridge dependencies. `node-pty` ships no Linux
+   prebuilt binary, so `npm install` compiles it with `node-gyp` and needs
+   `python3`, `make` and a C++ compiler (Debian/Ubuntu:
+   `sudo apt install python3 make g++`):
+   `npm install --prefix infra/claude-terminal`.
+3. Choose the listen address. A container cannot reach the host's loopback on
+   Linux, so bind to the Docker bridge gateway, which is what
+   `host.docker.internal` maps to through `host-gateway` in
+   `docker-compose.terminal.yml`. Find it with
+   `ip -4 addr show docker0` (usually `172.17.0.1`). Wildcard addresses
+   (`0.0.0.0`, `::`, or an empty value) are refused unless
+   `UNIT_TERMINAL_ALLOW_WILDCARD_HOST=true` is set; do not set it on a server.
+   The bridge logs a warning whenever it listens on a non-loopback address.
+4. Restrict the port with the host firewall so only local containers reach it.
+   Docker containers reach the gateway address through the host's INPUT chain,
+   so a default-deny firewall needs an explicit allow for the Docker subnets.
+   With ufw (adjust the subnet to your compose networks, see
+   `docker network inspect <project>_default`):
+
+   ```sh
+   sudo ufw allow from 172.16.0.0/12 to 172.17.0.1 port 3015 proto tcp
+   sudo ufw deny 3015/tcp
+   # Codex bridge: the same two rules for port 3016.
+   ```
+
+   With nftables (assuming an `inet filter` table with an `input` chain; adapt
+   to your ruleset and make it persistent):
+
+   ```sh
+   sudo nft add rule inet filter input ip saddr 172.16.0.0/12 ip daddr 172.17.0.1 tcp dport { 3015, 3016 } accept
+   sudo nft add rule inet filter input tcp dport { 3015, 3016 } drop
+   ```
+
+   Then confirm from another machine that the port is closed (for example
+   `nc -zv <public-ip> 3015` must fail) and from the app container that it is
+   reachable. Never forward the port in a router, tunnel or reverse proxy.
+5. Create the environment file outside the repository, owner-only:
+
+   ```sh
+   install -dm700 ~/.config/allerac/terminal
+   install -m600 /dev/null ~/.config/allerac/terminal/claude.env
+   ```
+
+   Set `ALLERAC_TERMINAL_BRIDGE_DIR` (absolute path to this directory), `PATH`
+   (must include `node`), `CLAUDE_TERMINAL_SECRET` (at least 32 random
+   characters, for example `openssl rand -hex 32`), `CLAUDE_TERMINAL_USER_ID`
+   (the Allerac user UUID), `CLAUDE_TERMINAL_CWD` (the working directory the
+   CLI starts in), `CLAUDE_TERMINAL_HOST` (the gateway address) and optionally
+   `CLAUDE_TERMINAL_EXECUTABLE` (absolute path; otherwise `claude` is looked up
+   on `PATH`). Use `CODEX_TERMINAL_*` in `codex.env`. Do not set
+   `UNIT_TERMINAL_PROVIDER` there; the service instance name selects it.
+6. Install the example user unit [`allerac-terminal@.service`](allerac-terminal@.service)
+   and start it (it does nothing until you do):
+
+   ```sh
+   install -Dm644 infra/claude-terminal/allerac-terminal@.service ~/.config/systemd/user/allerac-terminal@.service
+   systemctl --user daemon-reload
+   systemctl --user start allerac-terminal@claude
+   journalctl --user -u allerac-terminal@claude -n 20
+   ```
+
+   `systemctl --user enable` starts it at login; a headless server also needs
+   `loginctl enable-linger <user>` for that. Stop it with
+   `systemctl --user disable --now allerac-terminal@claude`. The unit uses
+   `NoNewPrivileges=true`, so `sudo` does not work inside the terminal.
+   For a quick manual test, run `node server.mjs` with the same variables
+   exported instead.
+7. Set the same `CLAUDE_TERMINAL_SECRET` and `CLAUDE_TERMINAL_USER_ID` for the
+   app (and `CLAUDE_TERMINAL_URL` if the bridge is not on
+   `http://host.docker.internal:3015`), then recreate it with
+   `docker compose -f docker-compose.yml -f docker-compose.terminal.yml up -d --build app`.
+   To turn the feature off again, stop the service and recreate the app without
+   the override file.
 
 The bridge does not start Claude until **Open / reconnect** is selected.
 Reopening the page attaches to the same running process; only one browser tab

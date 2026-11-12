@@ -833,7 +833,7 @@
     },
     "card": {
       "title": "{provider} on this unit",
-      "description": "Interactive session on the Windows host. Sign-in and approvals are handled by the original {cli}.",
+      "description": "Interactive session on the unit host. Sign-in and approvals are handled by the original {cli}.",
       "codexSubscription": "Connected with ChatGPT · subscription",
       "codexApiLogin": "Signed in with an API key — sign in with ChatGPT in Codex to use your subscription.",
       "claudeConnected": "Connected · {account} · {plan}",

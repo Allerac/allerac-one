@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBridge, parseCodexLoginStatus } from './server.mjs';
+import { createBridge, parseCodexLoginStatus, resolveListenHost, resolveExecutable } from './server.mjs';
 
 test('bridge authenticates every operation and preserves one interactive session', async () => {
   let data, exit, spawned = 0, killed = 0;
@@ -76,4 +76,30 @@ test('a separate Codex bridge launches the configured CLI without inheriting API
     const response = await fetch(`http://127.0.0.1:${server.address().port}/start`, { method: 'POST', headers: { Authorization: `Bearer ${'s'.repeat(40)}`, 'X-Terminal-Owner': 'owner' }, body: JSON.stringify({ cols: 100, rows: 30 }) });
     assert.equal(response.status, 200); assert.equal(called, true);
   } finally { await new Promise(resolve => server.close(resolve)); }
+});
+
+test('listen host defaults to loopback and refuses wildcard addresses without explicit opt-in', () => {
+  assert.deepEqual(resolveListenHost(undefined, { env: {} }), { host: '127.0.0.1', warning: null });
+  for (const host of ['127.0.0.1', '127.0.1.1', 'localhost', '::1']) assert.equal(resolveListenHost(host, { env: {} }).warning, null);
+  for (const host of ['0.0.0.0', '::', '[::]', '', '  ']) {
+    assert.throws(() => resolveListenHost(host, { env: {} }), /Refusing to listen on all interfaces/);
+    assert.throws(() => resolveListenHost(host, { env: { UNIT_TERMINAL_ALLOW_WILDCARD_HOST: '1' } }), /Refusing/);
+    const allowed = resolveListenHost(host, { env: { UNIT_TERMINAL_ALLOW_WILDCARD_HOST: 'true' } });
+    assert.match(allowed.warning, /all interfaces/);
+  }
+  assert.equal(resolveListenHost('', { env: { UNIT_TERMINAL_ALLOW_WILDCARD_HOST: 'true' } }).host, '0.0.0.0');
+  const gateway = resolveListenHost('172.17.0.1', { env: {} });
+  assert.equal(gateway.host, '172.17.0.1');
+  assert.match(gateway.warning, /non-loopback address 172\.17\.0\.1/);
+});
+
+test('executables resolve on PATH on Linux and Windows, and explicit paths are kept', () => {
+  const files = new Set(['/home/user/.local/bin/claude', 'C:\\Tools\\codex.CMD']);
+  const exists = file => files.has(file);
+  assert.equal(resolveExecutable('claude', { platform: 'linux', env: { PATH: '/usr/bin:/home/user/.local/bin' }, exists }), '/home/user/.local/bin/claude');
+  assert.equal(resolveExecutable('codex', { platform: 'linux', env: { PATH: '/usr/bin' }, exists }), null);
+  assert.equal(resolveExecutable('/opt/claude/bin/claude', { platform: 'linux', env: {}, exists }), '/opt/claude/bin/claude');
+  assert.equal(resolveExecutable('codex', { platform: 'win32', env: { Path: 'C:\\Windows;C:\\Tools', PATHEXT: '.EXE;.CMD' }, exists }), 'C:\\Tools\\codex.CMD');
+  assert.equal(resolveExecutable('C:\\Program Files\\claude.exe', { platform: 'win32', env: {}, exists }), 'C:\\Program Files\\claude.exe');
+  assert.equal(resolveExecutable('', { platform: 'linux', env: {} }), null);
 });

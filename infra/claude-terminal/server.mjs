@@ -1,4 +1,6 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import { timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -12,6 +14,44 @@ export function parseCodexLoginStatus(text) {
   if (/^Logged in using ChatGPT\s*$/m.test(text)) return { loggedIn: true, authMethod: 'chatgpt' };
   if (/^Logged in using (?:an )?API key\b/im.test(text)) return { loggedIn: true, authMethod: 'api' };
   return { loggedIn: false, authMethod: null };
+}
+
+const WILDCARD_HOSTS = new Set(['', '0.0.0.0', '::', '[::]', '::0', '0:0:0:0:0:0:0:0']);
+
+/**
+ * Validates the bridge listen address. Unset means loopback. Wildcard
+ * addresses (all interfaces) are refused unless
+ * UNIT_TERMINAL_ALLOW_WILDCARD_HOST=true is set explicitly. On Linux, bind to
+ * the Docker bridge gateway (for example 172.17.0.1) instead, with a firewall
+ * rule that keeps it unreachable from outside the host.
+ */
+export function resolveListenHost(value, { env = process.env } = {}) {
+  if (value === undefined) return { host: '127.0.0.1', warning: null };
+  const host = String(value).trim();
+  if (WILDCARD_HOSTS.has(host)) {
+    if (env.UNIT_TERMINAL_ALLOW_WILDCARD_HOST !== 'true') throw new Error('Refusing to listen on all interfaces. Bind to loopback or the Docker gateway address, or set UNIT_TERMINAL_ALLOW_WILDCARD_HOST=true on an isolated test machine.');
+    return { host: host === '' ? '0.0.0.0' : host, warning: `Listening on all interfaces (${host || 'empty'}). Restrict access with a firewall.` };
+  }
+  const loopback = host === 'localhost' || host === '::1' || host === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(host);
+  return { host, warning: loopback ? null : `Listening on non-loopback address ${host}. Make sure a firewall keeps it unreachable from outside this host.` };
+}
+
+/**
+ * Resolves a bare command name (for example `claude` or `codex`) on PATH.
+ * Values containing a path separator are returned unchanged.
+ */
+export function resolveExecutable(command, { env = process.env, platform = process.platform, exists = file => { try { if (!fs.statSync(file).isFile()) return false; if (platform !== 'win32') fs.accessSync(file, fs.constants.X_OK); return true; } catch { return false; } } } = {}) {
+  if (!command) return null;
+  const pathFor = platform === 'win32' ? path.win32 : path.posix;
+  if (command.includes('/') || (platform === 'win32' && command.includes('\\'))) return command;
+  const extensions = platform === 'win32' ? ['', ...(env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
+  for (const directory of (env.PATH || env.Path || '').split(pathFor.delimiter).filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidate = pathFor.join(directory, command + extension);
+      if (exists(candidate)) return candidate;
+    }
+  }
+  return null;
 }
 
 export function createBridge({ secret, ownerId, executable, cwd, spawn, status, apiConnection, args = ['--permission-mode', 'default'], label = 'Claude Code', idleMs = 30 * 60_000 }) {
@@ -58,7 +98,7 @@ export function createBridge({ secret, ownerId, executable, cwd, spawn, status, 
         if (!session?.running) {
           const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' };
           // The pilot starts with the user's native subscription login, never an inherited API key.
-          for (const key of Object.keys(env)) if (key.startsWith('CLAUDE_TERMINAL_') || key.startsWith('CODEX_TERMINAL_') || ['UNIT_TERMINAL_PROVIDER', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN', 'CODEX_THREAD_ID', 'CODEX_INTERNAL_ORIGINATOR_OVERRIDE'].includes(key)) delete env[key];
+          for (const key of Object.keys(env)) if (key.startsWith('CLAUDE_TERMINAL_') || key.startsWith('CODEX_TERMINAL_') || key.startsWith('UNIT_TERMINAL_') || ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN', 'CODEX_THREAD_ID', 'CODEX_INTERNAL_ORIGINATOR_OVERRIDE'].includes(key)) delete env[key];
           const child = spawn(executable, args, { name: 'xterm-256color', cols: body.cols, rows: body.rows, cwd, env });
           const next = { id: randomUUID(), pty: child, output: '', base: 0, end: 0, running: true, touched: Date.now(), exitCode: null };
           session = next;
@@ -86,7 +126,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const provider = process.env.UNIT_TERMINAL_PROVIDER || 'claude';
   if (!['claude', 'codex'].includes(provider)) throw new Error('Unknown terminal provider');
   const prefix = provider === 'codex' ? 'CODEX_TERMINAL' : 'CLAUDE_TERMINAL';
-  const executable = process.env[`${prefix}_EXECUTABLE`];
+  // Defaults to the provider's command on PATH (absolute paths are used as given).
+  const executable = resolveExecutable(process.env[`${prefix}_EXECUTABLE`] || provider);
+  if (!executable) throw new Error(`${provider} executable not found. Set ${prefix}_EXECUTABLE to its absolute path.`);
+  const { host, warning } = resolveListenHost(process.env[`${prefix}_HOST`]);
+  if (warning) console.warn(`[unit-terminal] ${warning}`);
   const codexArgs = ['--no-daemon', '--no-alt-screen', '--sandbox', 'workspace-write', '--ask-for-approval', 'on-request', '-c', 'forced_login_method="chatgpt"', '-c', 'model_provider="openai"', '-c', 'tui.disable_paste_burst=true'];
   const cwd = process.env[`${prefix}_CWD`];
   // Kept outside the CLI working directory so the CLI's project tools do not see it by default.
@@ -119,6 +163,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       }
     },
   });
-  server.listen(Number(process.env[`${prefix}_PORT`] || (provider === 'codex' ? 3016 : 3015)), process.env[`${prefix}_HOST`] || '127.0.0.1', () => console.log(`${provider} terminal bridge ready`));
+  server.listen(Number(process.env[`${prefix}_PORT`] || (provider === 'codex' ? 3016 : 3015)), host, () => console.log(`${provider} terminal bridge ready on ${host}`));
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)));
 }

@@ -833,7 +833,7 @@
     },
     "card": {
       "title": "{provider} a la unit",
-      "description": "Sessió interactiva a l'amfitrió Windows. L'inici de sessió i les aprovacions els gestiona el {cli} original.",
+      "description": "Sessió interactiva a l'amfitrió de la unit. L'inici de sessió i les aprovacions els gestiona el {cli} original.",
       "codexSubscription": "Connectat amb ChatGPT · subscripció",
       "codexApiLogin": "Sessió amb clau d'API — inicieu sessió amb ChatGPT al Codex per fer servir la subscripció.",
       "claudeConnected": "Connectat · {account} · {plan}",
