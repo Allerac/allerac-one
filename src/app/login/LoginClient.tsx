@@ -4,13 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as authActions from '@/app/actions/auth';
 import SetupWizard from '@/app/components/setup/SetupWizard';
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { prehashPassword } from '@/app/lib/password-prehash';
 
 type Mode = 'login' | 'register' | 'migration' | 'forgot';
 
@@ -57,7 +51,7 @@ export default function LoginClient() {
     setLoading(true);
     setError('');
     try {
-      const hashed = await hashPassword(password);
+      const hashed = await prehashPassword(password);
       const result = await authActions.login(email, hashed);
       if (result.success) {
         const redirectTo = await authActions.getLoginRedirect();
@@ -85,7 +79,7 @@ export default function LoginClient() {
     setLoading(true);
     setError('');
     try {
-      const hashed = await hashPassword(password);
+      const hashed = await prehashPassword(password);
       const result = await authActions.register(email, hashed, name || undefined);
       if (result.success) {
         const redirectTo = await authActions.getLoginRedirect();
@@ -127,7 +121,7 @@ export default function LoginClient() {
     setLoading(true);
     setError('');
     try {
-      const hashed = await hashPassword(password);
+      const hashed = await prehashPassword(password);
       const result = await authActions.migratePassword(migrationEmail, hashed);
       if (result.success) {
         const redirectTo = await authActions.getLoginRedirect();

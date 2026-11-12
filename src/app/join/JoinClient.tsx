@@ -3,15 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { registerWithInvite } from '@/app/actions/auth';
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
+import { prehashPassword } from '@/app/lib/password-prehash';
 
 interface Props {
   token: string;
@@ -122,7 +114,7 @@ export default function JoinClient({ token, email, domainSlug, error }: Props) {
 
     setLoading(true);
     try {
-      const hashed = await hashPassword(password);
+      const hashed = await prehashPassword(password);
       const result = await registerWithInvite(token, email, hashed, name || undefined);
       if (result.success) {
         setSubmitted(true);

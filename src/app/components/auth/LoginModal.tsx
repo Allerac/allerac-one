@@ -4,14 +4,7 @@ import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import * as authActions from '@/app/actions/auth';
 import * as userActions from '@/app/actions/user';
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { prehashPassword } from '@/app/lib/password-prehash';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -95,7 +88,7 @@ export default function LoginModal({
 
     try {
       let result;
-      const hashedPassword = await hashPassword(password);
+      const hashedPassword = await prehashPassword(password);
       if (activeTab === 'login') {
         result = await authActions.login(email, hashedPassword);
       } else {
@@ -149,7 +142,7 @@ export default function LoginModal({
     setIsLoading(true);
 
     try {
-      const hashedPassword = await hashPassword(password);
+      const hashedPassword = await prehashPassword(password);
       const result = await authActions.migratePassword(migrationEmail, hashedPassword);
 
       if (result.success) {

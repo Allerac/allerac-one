@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import * as authActions from '@/app/actions/auth';
 import * as setupActions from '@/app/actions/setup';
+import { prehashPassword } from '@/app/lib/password-prehash';
 
 interface SetupWizardProps {
   onComplete: (user: { id: string; email: string; name: string | null }) => void;
@@ -98,7 +99,9 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
 
     setIsLoading(true);
     try {
-      const result = await authActions.register(email, password, name || undefined);
+      // Same pre-hash as the login form, otherwise the stored hash never matches.
+      const hashed = await prehashPassword(password);
+      const result = await authActions.register(email, hashed, name || undefined);
       if (result.success) {
         setUserId(result.user.id);
         setCurrentStep(2);
