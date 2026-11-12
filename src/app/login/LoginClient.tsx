@@ -4,20 +4,30 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as authActions from '@/app/actions/auth';
 import SetupWizard from '@/app/components/setup/SetupWizard';
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { prehashPassword } from '@/app/lib/password-prehash';
+import { useInsecureContext } from '@/app/lib/use-insecure-context';
 
 type Mode = 'login' | 'register' | 'migration' | 'forgot';
 
-export default function LoginClient() {
+interface LoginClientProps {
+  /**
+   * The first admin was created by the setup wizard and the wizard has not
+   * finished yet (see login/page.tsx): keep showing it.
+   */
+  resumeSetup?: boolean;
+}
+
+export default function LoginClient({ resumeSetup = false }: LoginClientProps) {
   const router = useRouter();
-  const [showSetupWizard, setShowSetupWizard] = useState(false);
-  const [checking, setChecking] = useState(true);
+  // Only ever switched on. Server actions in the wizard (register, locale)
+  // refresh this route; a later checkFirstRun() reports a user, but the wizard
+  // must stay until the admin finishes it.
+  const [showSetupWizard, setShowSetupWizard] = useState(resumeSetup);
+  // Captured on mount: when the page is (re)loaded with the account already
+  // created, the wizard resumes after the account step.
+  const [resumeAfterAccount] = useState(resumeSetup);
+  const [checking, setChecking] = useState(!resumeSetup);
+  const insecureContext = useInsecureContext();
   const [mode, setMode] = useState<Mode>('login');
   const [registrationOpen, setRegistrationOpen] = useState(false);
 
@@ -40,16 +50,21 @@ export default function LoginClient() {
   const googleError = urlError.startsWith('google_') && !googleRegistrationClosed;
 
   useEffect(() => {
-    authActions.checkFirstRun().then(result => {
-      if (result.isFirstRun) setShowSetupWizard(true);
-      setRegistrationOpen(result.registrationOpen);
-      setChecking(false);
-    });
+    authActions.checkFirstRun()
+      .then(result => {
+        if (result.isFirstRun) setShowSetupWizard(true);
+        setRegistrationOpen(result.registrationOpen);
+      })
+      .catch(() => { /* fall back to the plain login form */ })
+      .finally(() => setChecking(false));
   }, []);
 
+  // A refresh after register() can turn resumeSetup on while mounted.
+  const wizardVisible = showSetupWizard || resumeSetup;
+
   useEffect(() => {
-    if (!checking && !showSetupWizard) emailRef.current?.focus();
-  }, [checking, showSetupWizard]);
+    if (!checking && !wizardVisible) emailRef.current?.focus();
+  }, [checking, wizardVisible]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +72,7 @@ export default function LoginClient() {
     setLoading(true);
     setError('');
     try {
-      const hashed = await hashPassword(password);
+      const hashed = await prehashPassword(password);
       const result = await authActions.login(email, hashed);
       if (result.success) {
         const redirectTo = await authActions.getLoginRedirect();
@@ -85,7 +100,7 @@ export default function LoginClient() {
     setLoading(true);
     setError('');
     try {
-      const hashed = await hashPassword(password);
+      const hashed = await prehashPassword(password);
       const result = await authActions.register(email, hashed, name || undefined);
       if (result.success) {
         const redirectTo = await authActions.getLoginRedirect();
@@ -127,7 +142,7 @@ export default function LoginClient() {
     setLoading(true);
     setError('');
     try {
-      const hashed = await hashPassword(password);
+      const hashed = await prehashPassword(password);
       const result = await authActions.migratePassword(migrationEmail, hashed);
       if (result.success) {
         const redirectTo = await authActions.getLoginRedirect();
@@ -143,7 +158,14 @@ export default function LoginClient() {
   };
 
   if (checking) return null;
-  if (showSetupWizard) return <SetupWizard onComplete={() => router.push('/')} />;
+  if (wizardVisible) {
+    return (
+      <SetupWizard
+        accountCreated={resumeAfterAccount}
+        onComplete={() => router.push('/')}
+      />
+    );
+  }
 
   const isLogin = mode === 'login';
   const isRegister = mode === 'register';
@@ -158,9 +180,10 @@ export default function LoginClient() {
     <div style={{
       background: 'linear-gradient(135deg, #6366f1 0%, #4c1d95 60%, #1e1b4b 100%)',
       height: '100dvh',
+      overflowY: 'auto',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      padding: '12px',
+      boxSizing: 'border-box',
       fontFamily: 'Arial, sans-serif',
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
@@ -171,7 +194,10 @@ export default function LoginClient() {
         border: '2px solid',
         borderColor: '#ffffff #808080 #808080 #ffffff',
         boxShadow: '4px 4px 0 #000',
-        width: '340px',
+        width: '100%',
+        maxWidth: '340px',
+        // Centers when it fits, scrolls from the top when it does not.
+        margin: 'auto',
       }}>
         {/* Title bar */}
         <div style={{
@@ -246,6 +272,12 @@ export default function LoginClient() {
               </Field>
             )}
           </div>
+
+          {insecureContext && (
+            <div role="alert" style={{ fontSize: '10px', color: '#804000', background: '#fff8dc', border: '1px solid #c08000', padding: '6px 8px', marginBottom: '8px', lineHeight: 1.5 }}>
+              This page was opened over HTTP. Sign-in only works over a secure connection: open it with https:// instead.
+            </div>
+          )}
 
           {noAccess && !error && (
             <div style={{ fontSize: '10px', color: '#804000', background: '#fff8dc', border: '1px solid #c08000', padding: '6px 8px', marginBottom: '8px', lineHeight: 1.5 }}>

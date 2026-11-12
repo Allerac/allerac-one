@@ -220,6 +220,8 @@ export async function markSetupComplete(): Promise<void> {
     maxAge: 60 * 60 * 24 * 365 * 10, // 10 years
     path: '/',
   });
+  // The wizard is done: let /login redirect signed-in admins again.
+  cookieStore.delete('setup_in_progress');
 }
 
 /**

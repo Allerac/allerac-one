@@ -3,13 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { resetPassword } from '@/app/actions/auth';
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { prehashPassword } from '@/app/lib/password-prehash';
 
 export default function ResetPasswordClient() {
   const router = useRouter();
@@ -40,7 +34,7 @@ export default function ResetPasswordClient() {
     setLoading(true);
     setError('');
     try {
-      const hashed = await hashPassword(password);
+      const hashed = await prehashPassword(password);
       const result = await resetPassword(token, hashed);
       if (result.success) {
         setSuccess(true);

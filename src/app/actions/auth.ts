@@ -10,11 +10,30 @@ import path from 'path';
 import { requireCurrentUser } from '@/app/lib/auth-session';
 import { validateInviteToken } from '@/app/actions/invites';
 import { isOpenRegistrationEnabled } from '@/app/lib/registration-policy';
+import { isPrehashedPassword } from '@/app/lib/password-prehash';
 
 const authService = new AuthService();
 const sysSettings = new SystemSettingsService();
 
 const SESSION_COOKIE_NAME = 'session_token';
+// Set when the first admin is created by the setup wizard and cleared by
+// markSetupComplete(). While present, /login keeps rendering the wizard for
+// that admin instead of redirecting away mid-setup (see login/page.tsx).
+const SETUP_IN_PROGRESS_COOKIE = 'setup_in_progress';
+
+/**
+ * Every password-bearing action receives the client pre-hash produced by
+ * prehashPassword() (see src/app/lib/password-prehash.ts). Anything else means
+ * a form skipped the shared helper; storing it would create a credential the
+ * login form can never match, so refuse it loudly instead.
+ */
+const PASSWORD_FORMAT_ERROR = 'Unsupported password format. Please reload the page and try again.';
+
+function rejectsPasswordFormat(action: string, value: string): boolean {
+  if (isPrehashedPassword(value)) return false;
+  console.warn(`[auth] ${action}: rejected a password that was not pre-hashed by the client`);
+  return true;
+}
 
 /**
  * Register a new user
@@ -32,6 +51,9 @@ export async function register(
   if (!password || password.length < 8) {
     return { success: false, error: 'Password must be at least 8 characters' };
   }
+  if (rejectsPasswordFormat('register', password)) {
+    return { success: false, error: PASSWORD_FORMAT_ERROR };
+  }
 
   const result = await authService.register(email, password, name);
 
@@ -48,6 +70,18 @@ export async function register(
     expires: result.session.expiresAt,
     path: '/',
   });
+
+  // Only the first real user is created as admin by register(); that is the
+  // setup wizard's account creation step.
+  if (result.user.is_admin) {
+    cookieStore.set(SETUP_IN_PROGRESS_COOKIE, '1', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24,
+      path: '/',
+    });
+  }
 
   return { success: true, user: result.user };
 }
@@ -70,6 +104,9 @@ export async function registerWithInvite(
   }
   if (!password || password.length < 8) {
     return { success: false, error: 'Password must be at least 8 characters' };
+  }
+  if (rejectsPasswordFormat('registerWithInvite', password)) {
+    return { success: false, error: PASSWORD_FORMAT_ERROR };
   }
 
   // Validate token before attempting registration
@@ -124,6 +161,9 @@ export async function login(
   if (!email || !password) {
     return { success: false, error: 'Email and password are required' };
   }
+  if (rejectsPasswordFormat('login', password)) {
+    return { success: false, error: PASSWORD_FORMAT_ERROR };
+  }
 
   const result = await authService.login(email, password);
 
@@ -154,6 +194,9 @@ export async function migratePassword(
 ): Promise<{ success: true; user: User } | { success: false; error: string }> {
   if (!email || !hashedPassword) {
     return { success: false, error: 'Email and password are required' };
+  }
+  if (rejectsPasswordFormat('migratePassword', hashedPassword)) {
+    return { success: false, error: PASSWORD_FORMAT_ERROR };
   }
 
   const result = await authService.migratePassword(email, hashedPassword);
@@ -351,6 +394,9 @@ export async function resetPassword(
   token: string,
   newPasswordHash: string
 ): Promise<{ success: boolean; error?: string }> {
+  if (rejectsPasswordFormat('resetPassword', newPasswordHash)) {
+    return { success: false, error: PASSWORD_FORMAT_ERROR };
+  }
   try {
     const pool = (await import('@/app/clients/db')).default;
 
