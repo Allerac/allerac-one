@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 export default function UnitConnectionsLinks({ collapsed = false, className }: { collapsed?: boolean; className: string }) {
+  const t = useTranslations('terminal.nav');
   const [terminal, setTerminal] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
@@ -11,7 +13,7 @@ export default function UnitConnectionsLinks({ collapsed = false, className }: {
     return () => controller.abort();
   }, []);
   return <>
-    <Link href="/connections" className={className} title="Conexões"><span aria-hidden="true">↗</span>{!collapsed && <span>Conexões</span>}</Link>
-    {terminal && <Link href="/terminal" className={className} title="Terminal da unit"><span aria-hidden="true">&gt;_</span>{!collapsed && <span>Terminal</span>}</Link>}
+    <Link href="/connections" className={className} title={t('connections')}><span aria-hidden="true">↗</span>{!collapsed && <span>{t('connections')}</span>}</Link>
+    {terminal && <Link href="/terminal" className={className} title={t('unitTerminal')}><span aria-hidden="true">&gt;_</span>{!collapsed && <span>{t('terminal')}</span>}</Link>}
   </>;
 }

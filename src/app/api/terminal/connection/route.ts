@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { requireCurrentUser, authenticationErrorResponse, ForbiddenError } from '@/app/lib/auth-session';
 import { assertTerminalAccess, terminalConfiguration } from '@/app/lib/claude-terminal';
+import { requireTerminalUnlock, terminalReauthResponse } from '@/app/lib/terminal-unlock';
 import { isTerminalProvider } from '@/app/terminal/providers';
 import { apiKeyService } from '@/app/services/api-keys/api-key.service';
 import { terminalApiKeyName, terminalApiPolicy } from '@/app/services/terminal/terminal-api-policy';
@@ -9,18 +10,21 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const metadata = z.object({ connected: z.boolean(), keyId: z.string().uuid().nullable(), scopes: z.array(z.string()), expiresAt: z.string().nullable() });
 const connectSchema = z.object({ scopes: z.array(z.string()).max(40).optional() }).strict();
+const failure = (code: string, error: string, status: number) => Response.json({ error, code }, { status, headers: { 'Cache-Control': 'no-store' } });
 const disconnected = { connected: false, keyId: null, scopes: [], expiresAt: null };
 
 async function handle(request: Request) {
   try {
     const user = await requireCurrentUser();
     const provider = new URL(request.url).searchParams.get('provider');
-    if (!isTerminalProvider(provider)) return Response.json({ error: 'Provedor inválido.' }, { status: 400 });
+    if (!isTerminalProvider(provider)) return failure('unknown_provider', 'Unknown terminal provider', 400);
     assertTerminalAccess(user, provider);
     if (request.method !== 'GET') {
       const origin = request.headers.get('origin');
       if (!origin || new URL(origin).host !== request.headers.get('host')) throw new ForbiddenError('Invalid origin');
     }
+    // Granting API access needs a recent re-authentication; revoking it never does.
+    if (request.method === 'POST') await requireTerminalUnlock(user);
     const config = terminalConfiguration(provider);
     const bridge = async (method: string, body?: object) => {
       const response = await fetch(new URL('/api-connection', config.url!), { method, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(10_000), headers: { Authorization: `Bearer ${config.secret}`, 'X-Terminal-Owner': user.id, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
@@ -49,27 +53,27 @@ async function handle(request: Request) {
     if (reader) while (true) {
       const part = await reader.read(); if (part.done) break;
       size += part.value.byteLength;
-      if (size > 8192) { await reader.cancel(); return Response.json({ error: 'Configuração muito grande.' }, { status: 413 }); }
+      if (size > 8192) { await reader.cancel(); return failure('request_too_large', 'Request too large', 413); }
       chunks.push(part.value);
     }
     let body;
     try { body = connectSchema.safeParse(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); }
-    catch { return Response.json({ error: 'Configuração inválida.' }, { status: 400 }); }
-    if (!body.success) return Response.json({ error: 'Configuração inválida.' }, { status: 400 });
+    catch { return failure('invalid_request', 'Invalid request', 400); }
+    if (!body.success) return failure('invalid_request', 'Invalid request', 400);
     const scopes = [...new Set([...policy.baseScopes, ...(body.data.scopes || [])])];
-    if (scopes.some(scope => !policy.allowedScopes.includes(scope))) return Response.json({ error: 'Acesso não autorizado para este usuário.' }, { status: 403 });
+    if (scopes.some(scope => !policy.allowedScopes.includes(scope))) return failure('scope_not_allowed', 'Access not allowed for this user', 403);
     const created = await apiKeyService.create({ userId: user.id, name, scopes, expiresAt: new Date(Date.now() + 30 * 86400_000) });
     let connection;
     try { connection = await bridge('POST', { keyId: created.apiKey.id, token: created.secret, scopes, expiresAt: created.apiKey.expiresAt!.toISOString() }); }
     catch {
       await apiKeyService.revoke({ userId: user.id, keyId: created.apiKey.id });
-      return Response.json({ error: 'Não foi possível instalar a conexão no terminal. A chave criada foi revogada.' }, { status: 503 });
+      return failure('install_failed', 'Unable to install the connection on the terminal. The new key was revoked.', 503);
     }
     // Rotate only keys belonging to this user's managed connection for this provider.
     await Promise.all(keys.map(key => apiKeyService.revoke({ userId: user.id, keyId: key.id })));
     return Response.json({ connection }, { status: 201, headers: noStore });
   } catch (error) {
-    return authenticationErrorResponse(error) || Response.json({ error: 'Não foi possível acessar a conexão da API. Verifique a ponte local.' }, { status: 503 });
+    return terminalReauthResponse(error) || authenticationErrorResponse(error) || failure('connection_unavailable', 'Unable to reach the API connection. Check the local bridge.', 503);
   }
 }
 

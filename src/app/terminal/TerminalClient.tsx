@@ -3,13 +3,18 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { Terminal } from '@xterm/xterm';
 import { createTerminalInputQueue } from './terminal-input';
 import { TERMINAL_LABELS, type TerminalProvider } from './providers';
+import { needsTerminalUnlock, readTerminalResponse, terminalErrorMessage } from './terminal-request';
+import TerminalUnlockForm from './TerminalUnlockForm';
 import '@xterm/xterm/css/xterm.css';
 
 export default function TerminalClient({ provider, available }: { provider: TerminalProvider; available: TerminalProvider[] }) {
   const router = useRouter();
+  const t = useTranslations('terminal.page');
+  const tErrors = useTranslations('terminal.errors');
   const container = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
   const session = useRef<string | null>(null);
@@ -21,13 +26,30 @@ export default function TerminalClient({ provider, available }: { provider: Term
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const [generation, setGeneration] = useState(0);
+  const [locked, setLocked] = useState<boolean | null>(null);
+  // Translate a failure; a reauth failure also shows the unlock prompt.
+  const fail = useCallback((e: unknown, fallbackKey = 'generic') => {
+    if (needsTerminalUnlock(e)) setLocked(true);
+    setError(terminalErrorMessage(e, tErrors, fallbackKey));
+  }, [tErrors]);
+  // The xterm instance and output poller must not restart when translations change identity.
+  const failRef = useRef(fail);
+  const tRef = useRef(t);
+  useEffect(() => { failRef.current = fail; tRef.current = t; }, [fail, t]);
 
   const post = useCallback(async (operation: string, body: object) => {
     const response = await fetch(`/api/terminal/${operation}?provider=${provider}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Falha na conexão');
-    return result;
+    return readTerminalResponse<{ id: string }>(response);
   }, [provider]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/terminal/unlock', { cache: 'no-store', signal: controller.signal })
+      .then(response => readTerminalResponse<{ unlocked: boolean }>(response))
+      .then(result => setLocked(!result.unlocked))
+      .catch(() => { if (!controller.signal.aborted) setLocked(true); });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -44,19 +66,19 @@ export default function TerminalClient({ provider, available }: { provider: Term
       const queue = createTerminalInputQueue({
         send: async (id, data) => { await post('input', { id, data }); },
         onActivity: () => { lastInput.current = performance.now(); wakeOutput.current?.(); },
-        onError: error => { session.current = null; setConnected(false); setError(error instanceof Error ? error.message : 'Falha ao enviar. Reconecte ao terminal.'); },
+        onError: error => { session.current = null; setConnected(false); failRef.current(error, 'sendFailed'); },
       });
       inputQueue.current = queue;
       const input = term.onData(data => {
         const id = session.current;
         if (id) queue.push(id, data);
       });
-      const resize = term.onResize(({ cols, rows }) => { if (session.current) void post('resize', { id: session.current, cols, rows }).catch(e => setError(e.message)); });
+      const resize = term.onResize(({ cols, rows }) => { if (session.current) void post('resize', { id: session.current, cols, rows }).catch(e => failRef.current(e)); });
       const observer = new ResizeObserver(() => fit.fit());
       observer.observe(container.current);
       setReady(true);
       cleanup = () => { queue.dispose(); inputQueue.current = null; observer.disconnect(); input.dispose(); resize.dispose(); term.dispose(); terminal.current = null; };
-    })().catch(e => setError(e.message));
+    })().catch(e => failRef.current(e));
     return () => { disposed = true; cleanup(); };
   }, [post]);
 
@@ -75,16 +97,15 @@ export default function TerminalClient({ provider, available }: { provider: Term
       let delay = 250;
       try {
         const response = await fetch(`/api/terminal/output?cursor=${cursor}&provider=${provider}`, { cache: 'no-store', signal: controller.signal });
-        const result = await response.json();
+        const result = await readTerminalResponse<{ id: string; truncated: boolean; data: string; cursor: number; running: boolean }>(response);
         if (cancelled) return;
-        if (!response.ok) throw new Error(result.error || 'Falha na conexão');
-        if (result.id !== session.current) throw new Error('A sessão mudou. Reconecte ao terminal.');
-        if (result.truncated) throw new Error('O histórico do terminal excedeu o limite. Encerre a sessão e abra uma nova.');
+        if (result.id !== session.current) { cancelled = true; setConnected(false); setError(tRef.current('sessionChanged')); return; }
+        if (result.truncated) { cancelled = true; setConnected(false); setError(tRef.current('historyTruncated')); return; }
         terminal.current?.write(result.data);
         cursor = result.cursor;
-        if (!result.running) { setConnected(false); session.current = null; setError('Sessão encerrada. Você pode abrir uma nova.'); return; }
+        if (!result.running) { setConnected(false); session.current = null; setError(tRef.current('sessionEnded')); return; }
         delay = result.data || performance.now() - lastInput.current < 750 ? 16 : 250;
-      } catch (e) { if (!cancelled) { cancelled = true; setConnected(false); setError(e instanceof Error ? e.message : 'Falha na conexão'); } }
+      } catch (e) { if (!cancelled) { cancelled = true; setConnected(false); failRef.current(e); } }
       finally {
         polling = false;
         if (!cancelled && session.current) timer = setTimeout(poll, urgent ? 0 : delay);
@@ -110,31 +131,32 @@ export default function TerminalClient({ provider, available }: { provider: Term
       inputQueue.current?.reset();
       terminal.current.reset();
       setGeneration(value => value + 1); setConnected(true); terminal.current.focus();
-    } catch (e) { setError(e instanceof Error ? e.message : 'Falha ao iniciar'); }
+    } catch (e) { fail(e, 'startFailed'); }
     finally { setBusy(false); }
   }
 
   async function stop() {
     setBusy(true);
     try { inputQueue.current?.reset(); await post('stop', { id: session.current }); setConnected(false); session.current = null; }
-    catch (e) { setError(e instanceof Error ? e.message : 'Falha ao encerrar'); }
+    catch (e) { fail(e, 'stopFailed'); }
     finally { setBusy(false); }
   }
 
   return <main className="flex h-dvh flex-col bg-slate-950 text-slate-100">
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
-      <div><h1 className="text-lg font-semibold">Terminal da unit</h1><p className="text-sm text-slate-400">{TERMINAL_LABELS[provider]} · sessão local · {connected ? 'Conectado' : 'Desconectado'}</p></div>
-      <nav className="flex items-center gap-3 text-sm"><Link href="/connections" className="text-slate-300 hover:underline">Conexões</Link><Link href="/" className="text-slate-300 hover:underline">Voltar</Link>
-        <label className="sr-only" htmlFor="terminal-provider">Provedor do terminal</label>
+      <div><h1 className="text-lg font-semibold">{t('title')}</h1><p className="text-sm text-slate-400">{TERMINAL_LABELS[provider]} · {t('localSession')} · {connected ? t('connected') : t('disconnected')}</p></div>
+      <nav className="flex items-center gap-3 text-sm"><Link href="/connections" className="text-slate-300 hover:underline">{t('connections')}</Link><Link href="/" className="text-slate-300 hover:underline">{t('back')}</Link>
+        <label className="sr-only" htmlFor="terminal-provider">{t('provider')}</label>
         <select id="terminal-provider" value={provider} disabled={busy} onChange={event => router.push(`/terminal?provider=${event.target.value}`)} className="max-w-48 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2">
           {available.map(value => <option key={value} value={value}>{TERMINAL_LABELS[value]}</option>)}
         </select>
-        <button disabled={busy || !ready || connected} onClick={start} className="rounded-lg bg-indigo-600 px-4 py-2 disabled:opacity-40">{busy ? 'Aguarde…' : 'Abrir / reconectar'}</button>
-        <button disabled={busy || !session.current} onClick={stop} className="rounded-lg border border-slate-600 px-4 py-2 disabled:opacity-40">Encerrar sessão</button>
+        <button disabled={busy || !ready || connected || locked !== false} onClick={start} className="rounded-lg bg-indigo-600 px-4 py-2 disabled:opacity-40">{busy ? t('wait') : t('open')}</button>
+        <button disabled={busy || !session.current} onClick={stop} className="rounded-lg border border-slate-600 px-4 py-2 disabled:opacity-40">{t('stop')}</button>
       </nav>
     </header>
-    <p className="px-5 py-2 text-xs text-slate-400">As aprovações aparecem no próprio terminal. Trocar de provedor mantém a outra sessão aberta. Fechar esta página mantém a sessão por até 30 minutos sem interação. Use Ctrl+C para interromper uma tarefa.</p>
+    {locked && <TerminalUnlockForm onUnlocked={() => { setLocked(false); setError(''); }} />}
+    <p className="px-5 py-2 text-xs text-slate-400">{t('help')}</p>
     {error && <p role="alert" className="bg-amber-950 px-5 py-2 text-sm text-amber-200">{error}</p>}
-    <div ref={container} className="min-h-0 flex-1 overflow-hidden p-3" aria-label={`Terminal interativo · ${TERMINAL_LABELS[provider]}`} />
+    <div ref={container} className="min-h-0 flex-1 overflow-hidden p-3" aria-label={t('terminalLabel', { provider: TERMINAL_LABELS[provider] })} />
   </main>;
 }

@@ -44,6 +44,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEm
   const { isDark, toggleDark } = useTheme();
   const locale = useLocale();
   const t = useTranslations('userSettings');
+  const tNav = useTranslations('terminal.nav');
   const [langPending, startLangTransition] = useTransition();
   const [time, setTime]               = useState('');
   const [startOpen, setStartOpen]     = useState(false);
@@ -220,7 +221,7 @@ export default function AlleracTaskbar({ domainKey, domainIcon, userName, userEm
                 {ALLERAC_DOMAINS.filter(d => allowedDomains.includes(d.key)).map(d => (
                   <StartMenuItem key={d.key} icon={d.icon} label={d.name} onClick={() => navigate(domainNavPath(d.key, d.path, legacyDomains))} />
                 ))}
-                <StartMenuItem icon="↗" label="Conexões" onClick={() => navigate('/connections')} />
+                <StartMenuItem icon="↗" label={tNav('connections')} onClick={() => navigate('/connections')} />
                 <StartMenuItem icon="⌨️" label="CLI" onClick={() => navigate('/cli')} />
                 {isAdmin && (
                   <>
