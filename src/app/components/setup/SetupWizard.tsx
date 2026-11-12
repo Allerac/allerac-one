@@ -5,9 +5,15 @@ import { useTranslations } from 'next-intl';
 import * as authActions from '@/app/actions/auth';
 import * as setupActions from '@/app/actions/setup';
 import { prehashPassword } from '@/app/lib/password-prehash';
+import { useInsecureContext } from '@/app/lib/use-insecure-context';
 
 interface SetupWizardProps {
-  onComplete: (user: { id: string; email: string; name: string | null }) => void;
+  onComplete: () => void;
+  /**
+   * The admin account already exists and this browser is signed in as it
+   * (e.g. the page was reloaded mid-setup): start at the language step.
+   */
+  accountCreated?: boolean;
 }
 
 interface OllamaModel {
@@ -25,11 +31,11 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-export default function SetupWizard({ onComplete }: SetupWizardProps) {
+export default function SetupWizard({ onComplete, accountCreated = false }: SetupWizardProps) {
   const t = useTranslations('setup');
   const tLogin = useTranslations('login');
 
-  const [currentStep, setCurrentStep] = useState<Step>(1);
+  const [currentStep, setCurrentStep] = useState<Step>(accountCreated ? 2 : 1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,7 +44,10 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
-  const [userId, setUserId] = useState<string | null>(null);
+  // Once the account exists, step 1 must not run again (it would fail with
+  // "Email already registered"), so the wizard only moves forward from here.
+  const [hasAccount, setHasAccount] = useState(accountCreated);
+  const insecureContext = useInsecureContext();
 
   // Step 2: Language
   const [selectedLanguage, setSelectedLanguage] = useState('en');
@@ -103,7 +112,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       const hashed = await prehashPassword(password);
       const result = await authActions.register(email, hashed, name || undefined);
       if (result.success) {
-        setUserId(result.user.id);
+        setHasAccount(true);
         setCurrentStep(2);
       } else {
         setError(result.error);
@@ -116,12 +125,15 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   };
 
   const handleStep2Submit = async () => {
+    setError('');
     setIsLoading(true);
     try {
+      // Sets the locale cookie; the route refresh that follows re-renders the
+      // wizard in the new language without losing its state.
       await setupActions.saveLocale(selectedLanguage);
       setCurrentStep(3);
-      // Refresh to apply new locale
-      // We could do a soft refresh here, but for now just continue
+    } catch {
+      setError(tLogin('unexpectedError'));
     } finally {
       setIsLoading(false);
     }
@@ -158,20 +170,43 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   };
 
   const handleStep3Submit = async () => {
-    if (userId && selectedModel) {
-      await setupActions.saveDefaultModel(selectedModel);
+    setError('');
+    setIsLoading(true);
+    try {
+      if (hasAccount && selectedModel) {
+        const result = await setupActions.saveDefaultModel(selectedModel);
+        if (!result.success) {
+          setError(tLogin('unexpectedError'));
+          return;
+        }
+      }
+      setCurrentStep(4);
+    } catch {
+      setError(tLogin('unexpectedError'));
+    } finally {
+      setIsLoading(false);
     }
-    await setupActions.markSetupComplete();
-    setCurrentStep(4);
   };
 
-  const handleFinish = () => {
-    onComplete({
-      id: userId!,
-      email,
-      name: name || null,
-    });
+  const handleFinish = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      // Clears the "setup in progress" marker, so it must be the last step:
+      // afterwards /login redirects the signed-in admin to the hub.
+      await setupActions.markSetupComplete();
+      onComplete();
+    } catch {
+      setError(tLogin('unexpectedError'));
+      setIsLoading(false);
+    }
   };
+
+  const errorBanner = error ? (
+    <div role="alert" className="p-3 rounded-lg bg-red-900/50 text-red-300 border border-red-700 text-sm">
+      {error}
+    </div>
+  ) : null;
 
   const steps = [
     { number: 1, title: t('step1Title') },
@@ -181,338 +216,355 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-brand-900 to-brand-900 flex items-center justify-center p-4">
-      <div className="bg-gray-800/90 backdrop-blur-lg rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
-        {/* Header */}
-        <div className="p-8 text-center border-b border-gray-700">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center mx-auto mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white">{t('title')}</h1>
-          <p className="text-gray-400 mt-1">{t('subtitle')}</p>
-        </div>
-
-        {/* Progress Steps */}
-        <div className="px-8 py-4 border-b border-gray-700">
-          <div className="flex justify-between">
-            {steps.map((step, index) => (
-              <div key={step.number} className="flex items-center">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                    currentStep >= step.number
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-gray-700 text-gray-400'
-                  }`}
-                >
-                  {currentStep > step.number ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    step.number
-                  )}
-                </div>
-                {index < steps.length - 1 && (
-                  <div
-                    className={`w-12 md:w-24 h-1 mx-2 rounded ${
-                      currentStep > step.number ? 'bg-brand-600' : 'bg-gray-700'
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Step Content */}
-        <div className="p-8">
-          {/* Step 1: Create Account */}
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-semibold text-white">{t('step1Title')}</h2>
-                <p className="text-gray-400 text-sm mt-1">{t('step1Description')}</p>
-              </div>
-
-              {error && (
-                <div className="p-3 rounded-lg bg-red-900/50 text-red-300 border border-red-700 text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  {t('adminName')}
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={tLogin('yourName')}
-                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  {t('adminEmail')} *
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@example.com"
-                  required
-                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  {t('adminPassword')} *
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={tLogin('atLeast8Chars')}
-                  required
-                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  {tLogin('confirmPassword')} *
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder={tLogin('confirmYourPassword')}
-                  required
-                  className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-
-              <button
-                onClick={handleStep1Submit}
-                disabled={isLoading}
-                className="w-full py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-              >
-                {isLoading ? t('creating') : t('next')}
-              </button>
+    // The outer layer scrolls so every step's buttons stay reachable on small
+    // screens (and with the mobile keyboard open); the card centers only when
+    // it fits.
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-gradient-to-br from-gray-900 via-brand-900 to-brand-900">
+      <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
+        <div className="bg-gray-800/90 backdrop-blur-lg rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700 my-2 sm:my-0">
+          {/* Header */}
+          <div className="p-5 sm:p-8 text-center border-b border-gray-700">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
             </div>
-          )}
+            <h1 className="text-2xl font-bold text-white">{t('title')}</h1>
+            <p className="text-gray-400 mt-1">{t('subtitle')}</p>
+          </div>
 
-          {/* Step 2: Choose Language */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-semibold text-white">{t('step2Title')}</h2>
-                <p className="text-gray-400 text-sm mt-1">{t('step2Description')}</p>
-              </div>
-
-              <div className="space-y-3">
-                {[
-                  { code: 'en', label: t('languageEnglish'), flag: '🇺🇸' },
-                  { code: 'es', label: t('languageSpanish'), flag: '🇪🇸' },
-                  { code: 'pt', label: t('languagePortuguese'), flag: '🇧🇷' },
-                  { code: 'ca', label: t('languageCatalan'), flag: '🟡' },
-                ].map((lang) => (
-                  <button
-                    key={lang.code}
-                    onClick={() => setSelectedLanguage(lang.code)}
-                    className={`w-full p-4 rounded-lg border flex items-center gap-4 transition-colors ${
-                      selectedLanguage === lang.code
-                        ? 'border-brand-500 bg-brand-500/20 text-white'
-                        : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+          {/* Progress Steps */}
+          <div className="px-4 sm:px-8 py-4 border-b border-gray-700">
+            <div className="flex justify-between">
+              {steps.map((step, index) => (
+                <div key={step.number} className="flex items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                      currentStep >= step.number
+                        ? 'bg-brand-600 text-white'
+                        : 'bg-gray-700 text-gray-400'
                     }`}
                   >
-                    <span className="text-2xl">{lang.flag}</span>
-                    <span className="font-medium">{lang.label}</span>
-                    {selectedLanguage === lang.code && (
-                      <svg className="w-5 h-5 ml-auto text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {currentStep > step.number ? (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
+                    ) : (
+                      step.number
                     )}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setCurrentStep(1)}
-                  className="flex-1 py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors"
-                >
-                  {t('back')}
-                </button>
-                <button
-                  onClick={handleStep2Submit}
-                  disabled={isLoading}
-                  className="flex-1 py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600"
-                >
-                  {t('next')}
-                </button>
-              </div>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div
+                      className={`w-6 sm:w-12 md:w-24 h-1 mx-1 sm:mx-2 rounded ${
+                        currentStep > step.number ? 'bg-brand-600' : 'bg-gray-700'
+                      }`}
+                    />
+                  )}
+                </div>
+              ))}
             </div>
-          )}
+          </div>
 
-          {/* Step 3: Configure AI Model */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-semibold text-white">{t('step3Title')}</h2>
-                <p className="text-gray-400 text-sm mt-1">{t('step3Description')}</p>
+          {/* Step Content */}
+          <div className="p-5 sm:p-8">
+            {/* Step 1: Create Account */}
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <div className="text-center mb-6">
+                  <h2 className="text-xl font-semibold text-white">{t('step1Title')}</h2>
+                  <p className="text-gray-400 text-sm mt-1">{t('step1Description')}</p>
+                </div>
+
+                {insecureContext && (
+                  <div role="alert" className="p-3 rounded-lg bg-yellow-900/50 text-yellow-200 border border-yellow-700 text-sm">
+                    This page was opened over HTTP. Sign-in only works over a secure connection: open it with https:// before creating the account.
+                  </div>
+                )}
+
+                {errorBanner}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    {t('adminName')}
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={tLogin('yourName')}
+                    className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    {t('adminEmail')} *
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@example.com"
+                    required
+                    className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    {t('adminPassword')} *
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={tLogin('atLeast8Chars')}
+                    required
+                    className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    {tLogin('confirmPassword')} *
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder={tLogin('confirmYourPassword')}
+                    required
+                    className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <button
+                  onClick={handleStep1Submit}
+                  disabled={isLoading}
+                  className="w-full py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? t('creating') : t('next')}
+                </button>
               </div>
+            )}
 
-              {isCheckingConnection ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-500 mx-auto"></div>
-                  <p className="text-gray-400 mt-4">{t('checkingConnection')}</p>
+            {/* Step 2: Choose Language */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <div className="text-center mb-6">
+                  <h2 className="text-xl font-semibold text-white">{t('step2Title')}</h2>
+                  <p className="text-gray-400 text-sm mt-1">{t('step2Description')}</p>
                 </div>
-              ) : !ollamaConnected ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </div>
-                  <p className="text-yellow-400 font-medium">{t('ollamaNotConnected')}</p>
-                  <p className="text-gray-400 text-sm mt-2">{t('downloadingModel')}</p>
-                  <button
-                    onClick={checkOllamaConnection}
-                    className="mt-4 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors"
-                  >
-                    Retry Connection
-                  </button>
-                </div>
-              ) : models.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-400">{t('noModelsFound')}</p>
-                </div>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      {t('selectModel')}
-                    </label>
-                    <div className="space-y-2">
-                      {models.map((model) => (
-                        <button
-                          key={model.name}
-                          onClick={() => {
-                            setSelectedModel(model.name);
-                            setTestResult(null);
-                          }}
-                          className={`w-full p-4 rounded-lg border flex items-center justify-between transition-colors ${
-                            selectedModel === model.name
-                              ? 'border-brand-500 bg-brand-500/20 text-white'
-                              : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                          }`}
-                        >
-                          <span className="font-medium">{model.name}</span>
-                          <span className="text-sm text-gray-400">
-                            {t('modelSize', { size: formatBytes(model.size) })}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
 
-                  <div>
+                <div className="space-y-3">
+                  {[
+                    { code: 'en', label: t('languageEnglish'), flag: '🇺🇸' },
+                    { code: 'es', label: t('languageSpanish'), flag: '🇪🇸' },
+                    { code: 'pt', label: t('languagePortuguese'), flag: '🇧🇷' },
+                    { code: 'ca', label: t('languageCatalan'), flag: '🟡' },
+                  ].map((lang) => (
                     <button
-                      onClick={handleTestConnection}
-                      disabled={isTesting || !selectedModel}
-                      className="w-full py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors disabled:bg-gray-800 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      key={lang.code}
+                      onClick={() => setSelectedLanguage(lang.code)}
+                      className={`w-full p-4 rounded-lg border flex items-center gap-4 transition-colors ${
+                        selectedLanguage === lang.code
+                          ? 'border-brand-500 bg-brand-500/20 text-white'
+                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                      }`}
                     >
-                      {isTesting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          {t('testing')}
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                          {t('testConnection')}
-                        </>
+                      <span className="text-2xl">{lang.flag}</span>
+                      <span className="font-medium">{lang.label}</span>
+                      {selectedLanguage === lang.code && (
+                        <svg className="w-5 h-5 ml-auto text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
                       )}
                     </button>
+                  ))}
+                </div>
 
-                    {testResult && (
-                      <div
-                        className={`mt-3 p-3 rounded-lg text-sm ${
-                          testResult.success
-                            ? 'bg-green-900/50 text-green-300 border border-green-700'
-                            : 'bg-red-900/50 text-red-300 border border-red-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {testResult.success ? (
-                            <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          )}
-                          <span>{testResult.message}</span>
-                        </div>
-                        {testResult.responseTime && (
-                          <p className="mt-1 text-gray-400">
-                            {t('responseTime', { time: testResult.responseTime })}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                {errorBanner}
+
+                <div className="flex gap-3">
+                  {!hasAccount && (
+                    <button
+                      onClick={() => setCurrentStep(1)}
+                      className="flex-1 py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                    >
+                      {t('back')}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleStep2Submit}
+                    disabled={isLoading}
+                    className="flex-1 py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600"
+                  >
+                    {t('next')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Configure AI Model */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <div className="text-center mb-6">
+                  <h2 className="text-xl font-semibold text-white">{t('step3Title')}</h2>
+                  <p className="text-gray-400 text-sm mt-1">{t('step3Description')}</p>
+                </div>
+
+                {isCheckingConnection ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-500 mx-auto"></div>
+                    <p className="text-gray-400 mt-4">{t('checkingConnection')}</p>
                   </div>
-                </>
-              )}
+                ) : !ollamaConnected ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <p className="text-yellow-400 font-medium">{t('ollamaNotConnected')}</p>
+                    <p className="text-gray-400 text-sm mt-2">{t('downloadingModel')}</p>
+                    <button
+                      onClick={checkOllamaConnection}
+                      className="mt-4 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors"
+                    >
+                      Retry Connection
+                    </button>
+                  </div>
+                ) : models.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-400">{t('noModelsFound')}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        {t('selectModel')}
+                      </label>
+                      <div className="space-y-2">
+                        {models.map((model) => (
+                          <button
+                            key={model.name}
+                            onClick={() => {
+                              setSelectedModel(model.name);
+                              setTestResult(null);
+                            }}
+                            className={`w-full p-4 rounded-lg border flex items-center justify-between transition-colors ${
+                              selectedModel === model.name
+                                ? 'border-brand-500 bg-brand-500/20 text-white'
+                                : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                            }`}
+                          >
+                            <span className="font-medium">{model.name}</span>
+                            <span className="text-sm text-gray-400">
+                              {t('modelSize', { size: formatBytes(model.size) })}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-              <div className="flex gap-3">
+                    <div>
+                      <button
+                        onClick={handleTestConnection}
+                        disabled={isTesting || !selectedModel}
+                        className="w-full py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors disabled:bg-gray-800 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {isTesting ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            {t('testing')}
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            {t('testConnection')}
+                          </>
+                        )}
+                      </button>
+
+                      {testResult && (
+                        <div
+                          className={`mt-3 p-3 rounded-lg text-sm ${
+                            testResult.success
+                              ? 'bg-green-900/50 text-green-300 border border-green-700'
+                              : 'bg-red-900/50 text-red-300 border border-red-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {testResult.success ? (
+                              <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            )}
+                            <span>{testResult.message}</span>
+                          </div>
+                          {testResult.responseTime && (
+                            <p className="mt-1 text-gray-400">
+                              {t('responseTime', { time: testResult.responseTime })}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {errorBanner}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setError(''); setCurrentStep(2); }}
+                    className="flex-1 py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                  >
+                    {t('back')}
+                  </button>
+                  <button
+                    onClick={handleStep3Submit}
+                    disabled={isLoading}
+                    className="flex-1 py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600"
+                  >
+                    {t('next')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Complete */}
+            {currentStep === 4 && (
+              <div className="space-y-6 text-center">
+                <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
+                  <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+
+                <div>
+                  <h2 className="text-2xl font-bold text-white">{t('allSet')}</h2>
+                  <p className="text-gray-400 mt-2">{t('startChatting')}</p>
+                </div>
+
+                {errorBanner}
+
                 <button
-                  onClick={() => setCurrentStep(2)}
-                  className="flex-1 py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                  onClick={handleFinish}
+                  disabled={isLoading}
+                  className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-brand-500 to-brand-700 hover:from-brand-600 hover:to-brand-800 text-white transition-all transform hover:scale-105"
                 >
-                  {t('back')}
-                </button>
-                <button
-                  onClick={handleStep3Submit}
-                  className="flex-1 py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors"
-                >
-                  {t('next')}
+                  {t('finish')}
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* Step 4: Complete */}
-          {currentStep === 4 && (
-            <div className="space-y-6 text-center">
-              <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
-                <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-
-              <div>
-                <h2 className="text-2xl font-bold text-white">{t('allSet')}</h2>
-                <p className="text-gray-400 mt-2">{t('startChatting')}</p>
-              </div>
-
-              <button
-                onClick={handleFinish}
-                className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-brand-500 to-brand-700 hover:from-brand-600 hover:to-brand-800 text-white transition-all transform hover:scale-105"
-              >
-                {t('finish')}
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

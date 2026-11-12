@@ -16,6 +16,10 @@ const authService = new AuthService();
 const sysSettings = new SystemSettingsService();
 
 const SESSION_COOKIE_NAME = 'session_token';
+// Set when the first admin is created by the setup wizard and cleared by
+// markSetupComplete(). While present, /login keeps rendering the wizard for
+// that admin instead of redirecting away mid-setup (see login/page.tsx).
+const SETUP_IN_PROGRESS_COOKIE = 'setup_in_progress';
 
 /**
  * Every password-bearing action receives the client pre-hash produced by
@@ -66,6 +70,18 @@ export async function register(
     expires: result.session.expiresAt,
     path: '/',
   });
+
+  // Only the first real user is created as admin by register(); that is the
+  // setup wizard's account creation step.
+  if (result.user.is_admin) {
+    cookieStore.set(SETUP_IN_PROGRESS_COOKIE, '1', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24,
+      path: '/',
+    });
+  }
 
   return { success: true, user: result.user };
 }
