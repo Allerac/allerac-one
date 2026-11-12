@@ -182,8 +182,6 @@ src/app/components/settings/InstagramSettings.tsx	react/no-unescaped-entities	er
 src/app/components/settings/StravaSettings.tsx	react-hooks/exhaustive-deps	warning	1
 src/app/components/settings/TelegramBotSettings.tsx	react-hooks/immutability	error	1
 src/app/components/settings/TokenConfiguration.tsx	react/no-unescaped-entities	error	2
-src/app/components/setup/SetupWizard.tsx	@typescript-eslint/no-explicit-any	error	1
-src/app/components/setup/SetupWizard.tsx	@typescript-eslint/no-unused-vars	warning	2
 src/app/components/skills/SkillsLibrary.tsx	react-hooks/exhaustive-deps	warning	1
 src/app/components/social/SocialPostStudio.tsx	@next/next/no-img-element	warning	4
 src/app/components/social/SocialPostStudio.tsx	@typescript-eslint/no-explicit-any	error	2
