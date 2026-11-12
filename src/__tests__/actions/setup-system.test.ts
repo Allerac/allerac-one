@@ -39,7 +39,7 @@ describe('Setup and system action authorization', () => {
     await saveDefaultModel('qwen2.5:3b');
 
     expect(mockQuery).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO user_settings'),
+      expect.stringContaining('INSERT INTO user_settings (user_id, selected_model)'),
       ['user-a', 'qwen2.5:3b']
     );
   });

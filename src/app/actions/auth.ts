@@ -337,7 +337,7 @@ export async function requestPasswordReset(
 
     const appUrl = process.env.APP_URL ?? 'http://localhost:8080';
     const resetUrl = `${appUrl}/reset-password?token=${token}`;
-    const fromEmail = settings.resend_from_email ?? 'noreply@allerac.ai';
+    const fromEmail = settings.resend_from_email || 'noreply@allerac.ai';
 
     // Inline logo as base64 so it renders in Outlook and offline clients
     let logoSrc = '';
