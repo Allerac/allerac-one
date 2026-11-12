@@ -3,8 +3,7 @@ import { timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import path from 'node:path';
-import { createApiConnectionStore, mcpLaunchArguments } from './api-connection.mjs';
+import { apiConnectionFile, createApiConnectionStore, mcpLaunchArguments } from './api-connection.mjs';
 
 const exec = promisify(execFile);
 const LIMIT = 2 * 1024 * 1024;
@@ -90,7 +89,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const executable = process.env[`${prefix}_EXECUTABLE`];
   const codexArgs = ['--no-daemon', '--no-alt-screen', '--sandbox', 'workspace-write', '--ask-for-approval', 'on-request', '-c', 'forced_login_method="chatgpt"', '-c', 'model_provider="openai"', '-c', 'tui.disable_paste_burst=true'];
   const cwd = process.env[`${prefix}_CWD`];
-  const connectionFile = path.resolve(cwd, '.tools', `allerac-api-${provider}.json`);
+  // Kept outside the CLI working directory so the CLI's project tools do not see it by default.
+  const connectionFile = apiConnectionFile(provider, { cwd });
   const apiConnection = createApiConnectionStore({ file: connectionFile, apiUrl: process.env.ALLERAC_TERMINAL_API_URL || 'http://localhost:8080' });
   const mcpArgs = mcpLaunchArguments(provider, { node: process.execPath, script: fileURLToPath(new URL('./allerac-mcp.mjs', import.meta.url)), file: connectionFile });
   const server = createBridge({

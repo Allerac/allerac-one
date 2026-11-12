@@ -1,5 +1,11 @@
 # Local Claude Code and Codex terminal pilot
 
+> **Local, single-user pilot for a Windows host.** Never enable this on a
+> public or internet-exposed unit. Enabling it gives the configured Allerac
+> user an interactive shell on the host, with the full permissions of the
+> Windows account that runs the bridge. It is off unless the terminal
+> environment variables below are set.
+
 Runs the unmodified Claude Code executable in a Windows pseudoterminal. The
 browser talks only to authenticated Allerac routes; those routes proxy to this
 bridge with a server-side secret. Anthropic credentials stay with Claude Code.
@@ -44,8 +50,8 @@ terminal paste sequences remain handled by the native CLI.
 
 ### Allerac API tools
 
-Each terminal has an **API da Allerac no terminal** connection in `/connections`.
-**Conectar API** creates a 30-day personal API key for the signed-in terminal
+Each terminal has an **Allerac API in the terminal** connection in `/connections`.
+**Connect API** creates a 30-day personal API key for the signed-in terminal
 owner and installs it on that provider's local bridge. The browser receives
 only metadata. Identity, capability and accessible-domain reads are included;
 additional read/write groups are opt-in and offered only for domains the user
@@ -54,11 +60,22 @@ can access. Other users, including admins, cannot configure this connection.
 The bridge registers an `allerac_unit` MCP server with each new native session.
 Its tools are `allerac_help`, `allerac_status`, and `allerac_request`. No global
 Claude/Codex configuration is modified. Command arguments contain only the MCP
-server command and connection-file path, never the API token. The token is
-stored in the ignored `.tools/allerac-api-{provider}.json` on the host, with
-owner-only file mode where supported. Treat this local file as a credential;
-the host user and their terminal tools can read it. It is excluded from Git
-and Docker build contexts. The bridge credential is never given to MCP.
+server command and connection-file path, never the API token.
+
+The token is stored outside the CLI working directory, in a per-user config
+directory with owner-only file mode where supported:
+
+- Windows: `%APPDATA%\allerac\terminal\allerac-api-{provider}.json`
+- Other platforms: `$XDG_CONFIG_HOME/allerac/terminal/` (default
+  `~/.config/allerac/terminal/`)
+
+Set `ALLERAC_TERMINAL_STATE_DIR` to use another directory; the bridge refuses
+a directory inside the CLI working directory. Treat this file as a credential:
+it is not in the CLI's project folder, but the host user (and therefore any
+tool the CLI runs as that user) can still read it. The bridge credential is
+never given to MCP. If you used an earlier build that wrote
+`.tools/allerac-api-{provider}.json`, delete that file and select **Connect
+API** again; reconnecting rotates and revokes the previous key.
 
 Requests use only the bridge-configured origin (`ALLERAC_TERMINAL_API_URL`,
 default `http://localhost:8080`) under `/api/v1`, without following redirects.
@@ -67,12 +84,25 @@ The MCP process rereads its connection file on every tool call, so rotation
 and disconnection apply to sessions already using the tool. Removing a key
 through the regular API-key controls also stops its API access.
 
-**Desconectar API** revokes managed keys before clearing the host file, so
+**Disconnect API** revokes managed keys before clearing the host file, so
 revocation works even when the bridge is offline. Reconnecting rotates the
 key; failed installation revokes the new key. The application never stores
 recoverable tokens in its database (the existing API-key service stores hashes).
 After upgrading the bridge for the first time, open a new terminal session to
 load the MCP server. Future connect/disconnect changes do not require restart.
+
+### Password confirmation
+
+Opening, typing into, resizing, reading or ending a terminal session, and
+connecting the API (**Connect API** / **Update access**), require the user to
+confirm their password in the page. The confirmation is held server-side for
+the current sign-in session only, expires after 15 minutes without terminal
+activity (8 hours at most), and is cleared by signing out or restarting the
+app. Attempts are rate limited (`RATE_LIMIT_TERMINAL_UNLOCK_REQUESTS`, default
+5 per `RATE_LIMIT_TERMINAL_UNLOCK_WINDOW_SECONDS`, default 600). Accounts
+without a password (for example Google sign-in) must sign in again and confirm
+within 15 minutes of that sign-in. **Disconnect API** never needs
+confirmation, so access can always be revoked.
 
 ### Terminal installation
 
@@ -88,10 +118,10 @@ load the MCP server. Future connect/disconnect changes do not require restart.
    `docker compose -f docker-compose.yml -f docker-compose.terminal.yml up -d --build app`.
 6. Sign in as the configured Allerac user and open `/connections` or `/terminal`.
 
-The bridge does not start Claude until **Abrir / reconectar** is selected.
+The bridge does not start Claude until **Open / reconnect** is selected.
 Reopening the page attaches to the same running process; only one browser tab
 should control it at a time. Browser disconnection leaves the process alive for
-up to 30 minutes without bridge activity. **Encerrar sessão** kills the process;
+up to 30 minutes without bridge activity. **End session** kills the process;
 Ctrl+C is passed through to Claude Code. Bridge restart ends the live session.
 Output is kept only in bounded process memory, not in Allerac's chat database.
 The web client batches keystrokes over an 8 ms window and while a request is in
