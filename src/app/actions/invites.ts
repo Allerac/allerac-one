@@ -73,7 +73,7 @@ async function sendInviteEmail(
 ) {
   const appUrl = process.env.APP_URL ?? 'http://localhost:8080';
   const joinUrl = `${appUrl}/join?token=${token}`;
-  const fromEmail = settings.resend_from_email ?? 'noreply@allerac.ai';
+  const fromEmail = settings.resend_from_email || 'noreply@allerac.ai';
 
   let logoSrc = '';
   try {

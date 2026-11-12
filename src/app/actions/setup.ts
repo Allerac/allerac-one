@@ -192,12 +192,12 @@ export async function saveDefaultModel(model: string): Promise<{ success: boolea
   try {
     const user = await requireCurrentUser();
 
-    // Check if user_settings table exists and has default_model column
+    // user_settings has no default_model column; the chat default is selected_model.
     await pool.query(
-      `INSERT INTO user_settings (user_id, default_model)
+      `INSERT INTO user_settings (user_id, selected_model)
        VALUES ($1, $2)
        ON CONFLICT (user_id)
-       DO UPDATE SET default_model = $2`,
+       DO UPDATE SET selected_model = $2`,
       [user.id, model]
     );
 
@@ -222,6 +222,7 @@ export async function markSetupComplete(): Promise<void> {
   });
   // The wizard is done: let /login redirect signed-in admins again.
   cookieStore.delete('setup_in_progress');
+  cookieStore.delete('setup_steps');
 }
 
 /**

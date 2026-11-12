@@ -1,137 +1,142 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as authActions from '@/app/actions/auth';
 import * as setupActions from '@/app/actions/setup';
+import * as setupConfig from '@/app/actions/setup-config';
+import type { SetupStatus } from '@/app/actions/setup-config';
 import { prehashPassword } from '@/app/lib/password-prehash';
 import { useInsecureContext } from '@/app/lib/use-insecure-context';
+import { SETUP_STEPS, firstIncompleteStep, type SetupStepId } from '@/app/lib/setup-steps';
+import {
+  EmailStep,
+  ErrorBanner,
+  GoogleStep,
+  LlmStep,
+  SearchStep,
+  StepHeader,
+  TelegramStep,
+} from './SetupConfigSteps';
 
 interface SetupWizardProps {
   onComplete: () => void;
   /**
    * The admin account already exists and this browser is signed in as it
-   * (e.g. the page was reloaded mid-setup): start at the language step.
+   * (e.g. the page was reloaded mid-setup): resume at the first step that is
+   * not done yet.
    */
   accountCreated?: boolean;
 }
 
-interface OllamaModel {
-  name: string;
-  size: number;
-}
+type WizardStep = 'account' | SetupStepId | 'done';
+const ORDER: readonly WizardStep[] = ['account', ...SETUP_STEPS, 'done'];
 
-type Step = 1 | 2 | 3 | 4;
+const LANGUAGES = [
+  { code: 'en', labelKey: 'languageEnglish', flag: '🇺🇸' },
+  { code: 'es', labelKey: 'languageSpanish', flag: '🇪🇸' },
+  { code: 'pt', labelKey: 'languagePortuguese', flag: '🇧🇷' },
+  { code: 'ca', labelKey: 'languageCatalan', flag: '🟡' },
+] as const;
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
+const inputClass = 'w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500';
+const primaryButton = 'w-full py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed';
 
 export default function SetupWizard({ onComplete, accountCreated = false }: SetupWizardProps) {
   const t = useTranslations('setup');
   const tLogin = useTranslations('login');
 
-  const [currentStep, setCurrentStep] = useState<Step>(accountCreated ? 2 : 1);
+  // With an existing account the step is only known once the status loads.
+  const [currentStep, setCurrentStep] = useState<WizardStep | null>(accountCreated ? null : 'account');
+  const [status, setStatus] = useState<SetupStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // Status could not be loaded (shown with a retry button).
+  const [statusFailed, setStatusFailed] = useState(false);
+  const insecureContext = useInsecureContext();
 
-  // Step 1: Account
+  // Step: account. Once it exists it is never shown again (registering twice
+  // would fail with "Email already registered").
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
-  // Once the account exists, step 1 must not run again (it would fail with
-  // "Email already registered"), so the wizard only moves forward from here.
-  const [hasAccount, setHasAccount] = useState(accountCreated);
-  const insecureContext = useInsecureContext();
 
-  // Step 2: Language
+  // Step: language
   const [selectedLanguage, setSelectedLanguage] = useState('en');
 
-  // Step 3: AI Model
-  const [models, setModels] = useState<OllamaModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState('');
-  const [isCheckingConnection, setIsCheckingConnection] = useState(true);
-  const [ollamaConnected, setOllamaConnected] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; responseTime?: number } | null>(null);
-  const [isTesting, setIsTesting] = useState(false);
-
-  // Check Ollama connection on mount
-  useEffect(() => {
-    checkOllamaConnection();
-  }, []);
-
-  const checkOllamaConnection = async () => {
-    setIsCheckingConnection(true);
+  const loadStatus = async (): Promise<void> => {
     try {
-      const result = await setupActions.getOllamaModels();
-      if (result.success) {
-        setOllamaConnected(true);
-        setModels(result.models);
-        if (result.models.length > 0) {
-          setSelectedModel(result.models[0].name);
-        }
-      } else {
-        setOllamaConnected(false);
-      }
-    } catch (error) {
-      setOllamaConnected(false);
-    } finally {
-      setIsCheckingConnection(false);
+      setStatus(await setupConfig.getSetupStatus());
+      setStatusFailed(false);
+    } catch {
+      setStatusFailed(true);
     }
   };
 
-  const validateStep1 = (): string | null => {
-    if (!email || !email.includes('@')) {
-      return tLogin('validEmail');
-    }
-    if (password.length < 8) {
-      return tLogin('passwordLength');
-    }
-    if (password !== confirmPassword) {
-      return tLogin('passwordsNoMatch');
-    }
+  // Resume after a reload: jump to the first step that is not done.
+  useEffect(() => {
+    if (!accountCreated) return;
+    let cancelled = false;
+    setupConfig.getSetupStatus()
+      .then((next) => {
+        if (cancelled) return;
+        setStatus(next);
+        setCurrentStep(firstIncompleteStep(next.doneSteps) ?? 'done');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatusFailed(true);
+        setCurrentStep('language');
+      });
+    return () => { cancelled = true; };
+  }, [accountCreated]);
+
+  const goTo = (step: WizardStep) => {
+    setError('');
+    setCurrentStep(step);
+  };
+
+  const stepAfter = (step: WizardStep): WizardStep => ORDER[Math.min(ORDER.indexOf(step) + 1, ORDER.length - 1)];
+  // Never go back to the account step.
+  const backFrom = (step: WizardStep) => {
+    const previous = ORDER[ORDER.indexOf(step) - 1];
+    return previous && previous !== 'account' ? () => goTo(previous) : undefined;
+  };
+
+  // Saved or skipped on the server: refresh the status, then move on.
+  const handleStepDone = async (step: SetupStepId) => {
+    await loadStatus();
+    goTo(stepAfter(step));
+  };
+
+  const validateAccount = (): string | null => {
+    if (!email || !email.includes('@')) return tLogin('validEmail');
+    if (password.length < 8) return tLogin('passwordLength');
+    if (password !== confirmPassword) return tLogin('passwordsNoMatch');
     return null;
   };
 
-  const handleStep1Submit = async () => {
+  const handleAccountSubmit = async () => {
     setError('');
-    const validationError = validateStep1();
+    const validationError = validateAccount();
     if (validationError) {
       setError(validationError);
       return;
     }
-
     setIsLoading(true);
     try {
       // Same pre-hash as the login form, otherwise the stored hash never matches.
       const hashed = await prehashPassword(password);
       const result = await authActions.register(email, hashed, name || undefined);
       if (result.success) {
-        setHasAccount(true);
-        setCurrentStep(2);
+        setPassword('');
+        setConfirmPassword('');
+        await loadStatus();
+        goTo('language');
       } else {
         setError(result.error);
       }
-    } catch (err) {
-      setError(tLogin('unexpectedError'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleStep2Submit = async () => {
-    setError('');
-    setIsLoading(true);
-    try {
-      // Sets the locale cookie; the route refresh that follows re-renders the
-      // wizard in the new language without losing its state.
-      await setupActions.saveLocale(selectedLanguage);
-      setCurrentStep(3);
     } catch {
       setError(tLogin('unexpectedError'));
     } finally {
@@ -139,48 +144,20 @@ export default function SetupWizard({ onComplete, accountCreated = false }: Setu
     }
   };
 
-  const handleTestConnection = async () => {
-    if (!selectedModel) return;
-
-    setIsTesting(true);
-    setTestResult(null);
-
-    try {
-      const result = await setupActions.testOllamaConnection(selectedModel);
-      if (result.success) {
-        setTestResult({
-          success: true,
-          message: t('connectionSuccess'),
-          responseTime: result.responseTime,
-        });
-      } else {
-        setTestResult({
-          success: false,
-          message: `${t('connectionFailed')}: ${result.error}`,
-        });
-      }
-    } catch (error: any) {
-      setTestResult({
-        success: false,
-        message: `${t('connectionFailed')}: ${error.message}`,
-      });
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
-  const handleStep3Submit = async () => {
+  const handleLanguageSubmit = async () => {
     setError('');
     setIsLoading(true);
     try {
-      if (hasAccount && selectedModel) {
-        const result = await setupActions.saveDefaultModel(selectedModel);
-        if (!result.success) {
-          setError(tLogin('unexpectedError'));
-          return;
-        }
+      // Sets the locale cookie; the route refresh that follows re-renders the
+      // wizard in the new language without losing its state.
+      await setupActions.saveLocale(selectedLanguage);
+      const result = await setupConfig.completeSetupStep('language');
+      if (!result.success) {
+        setError(result.error);
+        return;
       }
-      setCurrentStep(4);
+      await loadStatus();
+      goTo('llm');
     } catch {
       setError(tLogin('unexpectedError'));
     } finally {
@@ -202,18 +179,126 @@ export default function SetupWizard({ onComplete, accountCreated = false }: Setu
     }
   };
 
-  const errorBanner = error ? (
-    <div role="alert" className="p-3 rounded-lg bg-red-900/50 text-red-300 border border-red-700 text-sm">
-      {error}
-    </div>
-  ) : null;
+  const stepNumber = currentStep ? ORDER.indexOf(currentStep) + 1 : 0;
+  const progress = currentStep ? Math.round((ORDER.indexOf(currentStep) / (ORDER.length - 1)) * 100) : 0;
 
-  const steps = [
-    { number: 1, title: t('step1Title') },
-    { number: 2, title: t('step2Title') },
-    { number: 3, title: t('step3Title') },
-    { number: 4, title: t('step4Title') },
-  ];
+  const renderStep = () => {
+    if (currentStep === null) {
+      return (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-500 mx-auto" />
+          <ErrorBanner message={error} />
+        </div>
+      );
+    }
+
+    if (currentStep === 'account') {
+      return (
+        <div className="space-y-5">
+          <StepHeader title={t('step1Title')} description={t('step1Description')} />
+          {insecureContext && (
+            <div role="alert" className="p-3 rounded-lg bg-yellow-900/50 text-yellow-200 border border-yellow-700 text-sm">
+              {t('insecureContext')}
+            </div>
+          )}
+          <ErrorBanner message={error} />
+          <label className="block">
+            <span className="block text-sm font-medium text-gray-300 mb-1">{t('adminName')}</span>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={tLogin('yourName')} className={inputClass} />
+          </label>
+          <label className="block">
+            <span className="block text-sm font-medium text-gray-300 mb-1">{t('adminEmail')} *</span>
+            <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@example.com" required className={inputClass} />
+          </label>
+          <label className="block">
+            <span className="block text-sm font-medium text-gray-300 mb-1">{t('adminPassword')} *</span>
+            <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tLogin('atLeast8Chars')} required className={inputClass} />
+          </label>
+          <label className="block">
+            <span className="block text-sm font-medium text-gray-300 mb-1">{tLogin('confirmPassword')} *</span>
+            <input type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={tLogin('confirmYourPassword')} required className={inputClass} />
+          </label>
+          <button type="button" onClick={handleAccountSubmit} disabled={isLoading} className={primaryButton}>
+            {isLoading ? t('creating') : t('next')}
+          </button>
+        </div>
+      );
+    }
+
+    if (currentStep === 'language') {
+      return (
+        <div className="space-y-5">
+          <StepHeader title={t('step2Title')} description={t('step2Description')} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => setSelectedLanguage(lang.code)}
+                className={`w-full p-3 rounded-lg border flex items-center gap-3 transition-colors ${
+                  selectedLanguage === lang.code
+                    ? 'border-brand-500 bg-brand-500/20 text-white'
+                    : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
+                }`}
+              >
+                <span className="text-2xl">{lang.flag}</span>
+                <span className="font-medium">{t(lang.labelKey)}</span>
+              </button>
+            ))}
+          </div>
+          <ErrorBanner message={error} />
+          <button type="button" onClick={handleLanguageSubmit} disabled={isLoading} className={primaryButton}>
+            {t('next')}
+          </button>
+        </div>
+      );
+    }
+
+    if (currentStep === 'done') {
+      return (
+        <div className="space-y-6 text-center">
+          <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
+            <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-white">{t('allSet')}</h2>
+            <p className="text-gray-400 mt-2">{t('startChatting')}</p>
+          </div>
+          <ErrorBanner message={error} />
+          <button
+            type="button"
+            onClick={handleFinish}
+            disabled={isLoading}
+            className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-brand-500 to-brand-700 hover:from-brand-600 hover:to-brand-800 text-white transition-all disabled:opacity-60"
+          >
+            {t('finish')}
+          </button>
+        </div>
+      );
+    }
+
+    if (!status) {
+      return (
+        <div className="space-y-4 text-center py-4">
+          {statusFailed && <ErrorBanner message={tLogin('unexpectedError')} />}
+          <button type="button" onClick={() => { void loadStatus(); }} className={primaryButton}>
+            {t('retryConnection')}
+          </button>
+        </div>
+      );
+    }
+
+    const props = { status, onBack: backFrom(currentStep), onDone: handleStepDone };
+    switch (currentStep) {
+      case 'llm': return <LlmStep {...props} />;
+      case 'google': return <GoogleStep {...props} />;
+      case 'email': return <EmailStep {...props} />;
+      case 'search': return <SearchStep {...props} />;
+      case 'telegram': return <TelegramStep {...props} />;
+    }
+  };
 
   return (
     // The outer layer scrolls so every step's buttons stay reachable on small
@@ -222,349 +307,28 @@ export default function SetupWizard({ onComplete, accountCreated = false }: Setu
     <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-gradient-to-br from-gray-900 via-brand-900 to-brand-900">
       <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4">
         <div className="bg-gray-800/90 backdrop-blur-lg rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700 my-2 sm:my-0">
-          {/* Header */}
           <div className="p-5 sm:p-8 text-center border-b border-gray-700">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center mx-auto mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
             <h1 className="text-2xl font-bold text-white">{t('title')}</h1>
             <p className="text-gray-400 mt-1">{t('subtitle')}</p>
           </div>
 
-          {/* Progress Steps */}
-          <div className="px-4 sm:px-8 py-4 border-b border-gray-700">
-            <div className="flex justify-between">
-              {steps.map((step, index) => (
-                <div key={step.number} className="flex items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                      currentStep >= step.number
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-gray-700 text-gray-400'
-                    }`}
-                  >
-                    {currentStep > step.number ? (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      step.number
-                    )}
-                  </div>
-                  {index < steps.length - 1 && (
-                    <div
-                      className={`w-6 sm:w-12 md:w-24 h-1 mx-1 sm:mx-2 rounded ${
-                        currentStep > step.number ? 'bg-brand-600' : 'bg-gray-700'
-                      }`}
-                    />
-                  )}
-                </div>
-              ))}
+          {/* Progress: a bar fits any screen width, unlike one bubble per step. */}
+          <div className="px-5 sm:px-8 py-3 border-b border-gray-700">
+            <div className="flex justify-between text-xs text-gray-400 mb-2">
+              <span>{stepNumber > 0 ? t('stepCounter', { current: stepNumber, total: ORDER.length }) : '\u00a0'}</span>
+            </div>
+            <div
+              className="h-1.5 rounded bg-gray-700 overflow-hidden"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress}
+            >
+              <div className="h-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
             </div>
           </div>
 
-          {/* Step Content */}
-          <div className="p-5 sm:p-8">
-            {/* Step 1: Create Account */}
-            {currentStep === 1 && (
-              <div className="space-y-6">
-                <div className="text-center mb-6">
-                  <h2 className="text-xl font-semibold text-white">{t('step1Title')}</h2>
-                  <p className="text-gray-400 text-sm mt-1">{t('step1Description')}</p>
-                </div>
-
-                {insecureContext && (
-                  <div role="alert" className="p-3 rounded-lg bg-yellow-900/50 text-yellow-200 border border-yellow-700 text-sm">
-                    This page was opened over HTTP. Sign-in only works over a secure connection: open it with https:// before creating the account.
-                  </div>
-                )}
-
-                {errorBanner}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    {t('adminName')}
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={tLogin('yourName')}
-                    className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    {t('adminEmail')} *
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@example.com"
-                    required
-                    className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    {t('adminPassword')} *
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={tLogin('atLeast8Chars')}
-                    required
-                    className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    {tLogin('confirmPassword')} *
-                  </label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder={tLogin('confirmYourPassword')}
-                    required
-                    className="w-full px-4 py-2 rounded-lg border bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-
-                <button
-                  onClick={handleStep1Submit}
-                  disabled={isLoading}
-                  className="w-full py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? t('creating') : t('next')}
-                </button>
-              </div>
-            )}
-
-            {/* Step 2: Choose Language */}
-            {currentStep === 2 && (
-              <div className="space-y-6">
-                <div className="text-center mb-6">
-                  <h2 className="text-xl font-semibold text-white">{t('step2Title')}</h2>
-                  <p className="text-gray-400 text-sm mt-1">{t('step2Description')}</p>
-                </div>
-
-                <div className="space-y-3">
-                  {[
-                    { code: 'en', label: t('languageEnglish'), flag: '🇺🇸' },
-                    { code: 'es', label: t('languageSpanish'), flag: '🇪🇸' },
-                    { code: 'pt', label: t('languagePortuguese'), flag: '🇧🇷' },
-                    { code: 'ca', label: t('languageCatalan'), flag: '🟡' },
-                  ].map((lang) => (
-                    <button
-                      key={lang.code}
-                      onClick={() => setSelectedLanguage(lang.code)}
-                      className={`w-full p-4 rounded-lg border flex items-center gap-4 transition-colors ${
-                        selectedLanguage === lang.code
-                          ? 'border-brand-500 bg-brand-500/20 text-white'
-                          : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                      }`}
-                    >
-                      <span className="text-2xl">{lang.flag}</span>
-                      <span className="font-medium">{lang.label}</span>
-                      {selectedLanguage === lang.code && (
-                        <svg className="w-5 h-5 ml-auto text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
-                </div>
-
-                {errorBanner}
-
-                <div className="flex gap-3">
-                  {!hasAccount && (
-                    <button
-                      onClick={() => setCurrentStep(1)}
-                      className="flex-1 py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors"
-                    >
-                      {t('back')}
-                    </button>
-                  )}
-                  <button
-                    onClick={handleStep2Submit}
-                    disabled={isLoading}
-                    className="flex-1 py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600"
-                  >
-                    {t('next')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Configure AI Model */}
-            {currentStep === 3 && (
-              <div className="space-y-6">
-                <div className="text-center mb-6">
-                  <h2 className="text-xl font-semibold text-white">{t('step3Title')}</h2>
-                  <p className="text-gray-400 text-sm mt-1">{t('step3Description')}</p>
-                </div>
-
-                {isCheckingConnection ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-500 mx-auto"></div>
-                    <p className="text-gray-400 mt-4">{t('checkingConnection')}</p>
-                  </div>
-                ) : !ollamaConnected ? (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                    </div>
-                    <p className="text-yellow-400 font-medium">{t('ollamaNotConnected')}</p>
-                    <p className="text-gray-400 text-sm mt-2">{t('downloadingModel')}</p>
-                    <button
-                      onClick={checkOllamaConnection}
-                      className="mt-4 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors"
-                    >
-                      Retry Connection
-                    </button>
-                  </div>
-                ) : models.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-400">{t('noModelsFound')}</p>
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        {t('selectModel')}
-                      </label>
-                      <div className="space-y-2">
-                        {models.map((model) => (
-                          <button
-                            key={model.name}
-                            onClick={() => {
-                              setSelectedModel(model.name);
-                              setTestResult(null);
-                            }}
-                            className={`w-full p-4 rounded-lg border flex items-center justify-between transition-colors ${
-                              selectedModel === model.name
-                                ? 'border-brand-500 bg-brand-500/20 text-white'
-                                : 'border-gray-600 bg-gray-700/50 text-gray-300 hover:border-gray-500'
-                            }`}
-                          >
-                            <span className="font-medium">{model.name}</span>
-                            <span className="text-sm text-gray-400">
-                              {t('modelSize', { size: formatBytes(model.size) })}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <button
-                        onClick={handleTestConnection}
-                        disabled={isTesting || !selectedModel}
-                        className="w-full py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors disabled:bg-gray-800 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {isTesting ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            {t('testing')}
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            {t('testConnection')}
-                          </>
-                        )}
-                      </button>
-
-                      {testResult && (
-                        <div
-                          className={`mt-3 p-3 rounded-lg text-sm ${
-                            testResult.success
-                              ? 'bg-green-900/50 text-green-300 border border-green-700'
-                              : 'bg-red-900/50 text-red-300 border border-red-700'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {testResult.success ? (
-                              <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            ) : (
-                              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            )}
-                            <span>{testResult.message}</span>
-                          </div>
-                          {testResult.responseTime && (
-                            <p className="mt-1 text-gray-400">
-                              {t('responseTime', { time: testResult.responseTime })}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {errorBanner}
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => { setError(''); setCurrentStep(2); }}
-                    className="flex-1 py-3 px-4 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-colors"
-                  >
-                    {t('back')}
-                  </button>
-                  <button
-                    onClick={handleStep3Submit}
-                    disabled={isLoading}
-                    className="flex-1 py-3 px-4 rounded-lg font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors disabled:bg-gray-600"
-                  >
-                    {t('next')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Complete */}
-            {currentStep === 4 && (
-              <div className="space-y-6 text-center">
-                <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
-                  <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-
-                <div>
-                  <h2 className="text-2xl font-bold text-white">{t('allSet')}</h2>
-                  <p className="text-gray-400 mt-2">{t('startChatting')}</p>
-                </div>
-
-                {errorBanner}
-
-                <button
-                  onClick={handleFinish}
-                  disabled={isLoading}
-                  className="w-full py-3 px-4 rounded-lg font-medium bg-gradient-to-r from-brand-500 to-brand-700 hover:from-brand-600 hover:to-brand-800 text-white transition-all transform hover:scale-105"
-                >
-                  {t('finish')}
-                </button>
-              </div>
-            )}
-          </div>
+          <div className="p-5 sm:p-8">{renderStep()}</div>
         </div>
       </div>
     </div>
