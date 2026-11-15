@@ -11,6 +11,7 @@ import { AlleracLogo } from '../ui/AlleracLogo';
 import { updateLanguage } from '@/app/actions/user';
 import UserCreditBalance from '@/app/components/credits/UserCreditBalance';
 import { MODELS } from '@/app/services/llm/models';
+import UnitConnectionsLinks from './UnitConnectionsLinks';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -139,6 +140,7 @@ export default function SidebarMobile({
           </svg>
           <span>My Allerac</span>
         </button>
+        <UnitConnectionsLinks className={btn} />
         {isAdmin && (
           <button onClick={() => router.push('/hub')} className={btn} title="Hub">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

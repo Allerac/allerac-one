@@ -1,0 +1,46 @@
+# Example systemd *user* unit for the Allerac unit terminal bridge on Linux.
+# Local, single-user pilot only. Never enable it on a host that serves a
+# public unit: the terminal is a shell on this whole host as this user.
+#
+# Nothing runs unless you install and enable it yourself:
+#   install -Dm644 infra/claude-terminal/allerac-terminal@.service \
+#     ~/.config/systemd/user/allerac-terminal@.service
+#   install -dm700 ~/.config/allerac/terminal
+#   install -m600 /dev/null ~/.config/allerac/terminal/claude.env   # then edit it
+#   systemctl --user daemon-reload
+#   systemctl --user start allerac-terminal@claude    # or @codex
+#   systemctl --user enable allerac-terminal@claude   # optional: start at login
+# Stop and disable with: systemctl --user disable --now allerac-terminal@claude
+#
+# The instance name is the provider (claude or codex). The environment file
+# lives outside the repository with mode 600 and contains, for example:
+#   ALLERAC_TERMINAL_BRIDGE_DIR=/home/USER/allerac-one/infra/claude-terminal
+#   PATH=/home/USER/.local/bin:/usr/local/bin:/usr/bin:/bin
+#   CLAUDE_TERMINAL_SECRET=<at least 32 random characters>
+#   CLAUDE_TERMINAL_USER_ID=<Allerac user UUID>
+#   CLAUDE_TERMINAL_EXECUTABLE=/home/USER/.local/bin/claude
+#   CLAUDE_TERMINAL_CWD=/home/USER/allerac-workspace
+#   CLAUDE_TERMINAL_HOST=172.17.0.1
+# (Use CODEX_TERMINAL_* in codex.env.) See README.md for the firewall rules.
+
+[Unit]
+Description=Allerac unit terminal bridge (%i, local pilot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=UNIT_TERMINAL_PROVIDER=%i
+EnvironmentFile=%h/.config/allerac/terminal/%i.env
+WorkingDirectory=%h
+ExecStart=/usr/bin/env node ${ALLERAC_TERMINAL_BRIDGE_DIR}/server.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+# Hardening that keeps an interactive PTY shell usable. NoNewPrivileges also
+# means sudo and other setuid programs do not work inside the terminal.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

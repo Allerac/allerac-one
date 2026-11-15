@@ -709,5 +709,134 @@
       "config": "Configuración",
       "executions": "Ejecuciones"
     }
+  },
+  "terminal": {
+    "nav": {
+      "connections": "Conexiones",
+      "unitTerminal": "Terminal de la unit",
+      "terminal": "Terminal"
+    },
+    "page": {
+      "title": "Terminal de la unit",
+      "localSession": "sesión local",
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "connections": "Conexiones",
+      "back": "Volver",
+      "provider": "Proveedor del terminal",
+      "wait": "Espere…",
+      "open": "Abrir / reconectar",
+      "stop": "Terminar sesión",
+      "help": "Las aprobaciones aparecen en el propio terminal. Cambiar de proveedor mantiene la otra sesión abierta. Cerrar esta página mantiene la sesión hasta 30 minutos sin interacción. Use Ctrl+C para interrumpir una tarea.",
+      "terminalLabel": "Terminal interactivo · {provider}",
+      "sessionChanged": "La sesión cambió. Vuelva a conectarse al terminal.",
+      "historyTruncated": "El historial del terminal superó el límite. Termine la sesión y abra una nueva.",
+      "sessionEnded": "Sesión terminada. Puede abrir una nueva."
+    },
+    "unlock": {
+      "title": "Confirme su contraseña",
+      "description": "Por seguridad, confirme su contraseña para usar el terminal o cambiar su acceso a la API. La confirmación caduca tras 15 minutos sin actividad en el terminal.",
+      "passwordLabel": "Contraseña",
+      "confirm": "Confirmar",
+      "confirming": "Confirmando…"
+    },
+    "card": {
+      "title": "{provider} en la unit",
+      "description": "Sesión interactiva en el host de la unit. El inicio de sesión y las aprobaciones los gestiona el {cli} original.",
+      "codexSubscription": "Conectado con ChatGPT · suscripción",
+      "codexApiLogin": "Sesión con clave de API — inicie sesión con ChatGPT en Codex para usar la suscripción.",
+      "claudeConnected": "Conectado · {account} · {plan}",
+      "claudeAccount": "Cuenta de Claude",
+      "planUnknown": "plan no informado",
+      "notSignedIn": "Sin sesión — abra el terminal para iniciar sesión en su cuenta.",
+      "checking": "Comprobando…",
+      "openTerminal": "Abrir terminal",
+      "checkConnection": "Comprobar conexión",
+      "ownerOnly": "Disponible solo para su usuario en esta unit. Gestione el inicio y cierre de sesión en el propio terminal.",
+      "unavailable": "No disponible para su usuario en esta unit."
+    },
+    "api": {
+      "title": "API de Allerac en el terminal",
+      "description": "Habilita herramientas para que el agente consulte y opere su Allerac. La clave se genera automáticamente, es válida durante 30 días y puede revocarse aquí.",
+      "statusConnected": "API conectada",
+      "statusDisconnected": "API no conectada",
+      "statusChecking": "Comprobando API…",
+      "validUntil": "Válida hasta {date}",
+      "baseScopes": "Siempre incluye lectura de su identidad, áreas y servicios disponibles.",
+      "update": "Actualizar accesos",
+      "connect": "Conectar API",
+      "disconnect": "Desconectar API",
+      "check": "Comprobar API",
+      "revoked": "Acceso a la API revocado.",
+      "connectedMessage": "Herramienta de Allerac conectada. Abra una nueva sesión del terminal para cargarla por primera vez.",
+      "scopes": {
+        "notes-read": "Consultar notas",
+        "notes-write": "Crear y modificar notas",
+        "tickets-read": "Consultar tareas",
+        "tickets-write": "Crear y modificar tareas",
+        "jobs-read": "Consultar programaciones",
+        "jobs-write": "Crear y modificar programaciones (pueden consumir API y enviar notificaciones)",
+        "memory": "Consultar memorias y documentos",
+        "health": "Consultar salud y Garmin"
+      }
+    },
+    "errors": {
+      "generic": "Error de conexión.",
+      "sendFailed": "Error al enviar. Vuelva a conectarse al terminal.",
+      "startFailed": "Error al iniciar la sesión.",
+      "stopFailed": "Error al terminar la sesión.",
+      "checkFailed": "Error al comprobar la conexión.",
+      "connectionFailed": "Error de conexión.",
+      "bridgeUnavailable": "Puente local no disponible.",
+      "reauth_required": "Confirme su contraseña para continuar.",
+      "invalid_password": "Contraseña incorrecta.",
+      "signin_required": "Esta cuenta no tiene contraseña. Cierre sesión, vuelva a entrar e inténtelo en menos de 15 minutos.",
+      "rate_limited": "Demasiados intentos. Inténtelo de nuevo en unos minutos.",
+      "unlock_unavailable": "No se pudo confirmar su identidad ahora.",
+      "invalid_request": "Solicitud no válida.",
+      "unknown_provider": "Proveedor de terminal desconocido.",
+      "unknown_operation": "Operación de terminal desconocida.",
+      "request_too_large": "Solicitud demasiado grande.",
+      "terminal_unavailable": "No se pudo acceder al terminal en esta unit. Compruebe el puente local.",
+      "connection_unavailable": "No se pudo acceder a la conexión de la API. Compruebe el puente local.",
+      "scope_not_allowed": "Acceso no autorizado para este usuario.",
+      "install_failed": "No se pudo instalar la conexión en el terminal. La clave creada se revocó."
+    }
+  },
+  "connections": {
+    "title": "Conexiones",
+    "subtitle": "Cuentas y servicios que habilitan herramientas en su Allerac.",
+    "back": "Volver a Allerac",
+    "keysCheckFailed": "No se pudieron comprobar las claves de API.",
+    "keySaved": "Clave guardada.",
+    "keySaveFailed": "No se pudo guardar la clave.",
+    "providers": {
+      "anthropic": "Claude en el chat y las automatizaciones. Facturación por API, separada de la suscripción.",
+      "openai": "Modelos de OpenAI por API. Facturación separada de la suscripción a ChatGPT.",
+      "google": "Modelos y generación de contenido con una clave de Google AI.",
+      "github": "Modelos disponibles con su token de GitHub.",
+      "tavily": "Búsqueda web para las herramientas de Allerac."
+    },
+    "configuredForYou": "Configurado para su uso",
+    "notConfigured": "No configurado",
+    "apiKeyLabel": "Clave de API de {name}",
+    "apiKeyPlaceholder": "Pegue su clave de API",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "configureKey": "Configurar mi clave",
+    "personalKeyNote": "Clave personal; la unit también puede proporcionar una clave compartida.",
+    "stravaDescription": "Actividades e historial de entrenamientos · su cuenta.",
+    "garminDescription": "Salud y actividades · su cuenta.",
+    "requiresHealth": "Requiere acceso al área Salud.",
+    "documentsDescription": "Importar y sincronizar documentos autorizados · su cuenta.",
+    "requiresNotes": "Requiere acceso al área Notas.",
+    "manageConnection": "Gestionar conexión",
+    "status": {
+      "checking": "Comprobando…",
+      "checkFailed": "Error al comprobar",
+      "requiresUnitSetup": "Requiere configuración de la unit",
+      "connected": "Conectado",
+      "notConnected": "No conectado"
+    }
   }
 }

@@ -11,6 +11,7 @@ jest.mock('@/app/components/layout/SidebarContent', () => {
   MockSidebarContent.displayName = 'MockSidebarContent';
   return MockSidebarContent;
 });
+jest.mock('@/app/components/layout/UnitConnectionsLinks', () => () => null);
 jest.mock('@/app/components/inbox/AgentsInboxSection', () => {
   const MockAgentsInboxSection = ({ domainId }: { domainId: string }) => (
     <div data-testid="agents-inbox">{domainId}</div>

@@ -278,6 +278,34 @@ export class AuthService {
   }
 
   /**
+   * Re-check the signed-in user's password (SHA-256 pre-hashed by the client,
+   * exactly as for login) without creating a new session. Used to confirm the
+   * user is present before sensitive operations.
+   */
+  async verifyUserPassword(userId: string, password: string): Promise<'valid' | 'invalid' | 'no_password'> {
+    const result = await pool.query(
+      'SELECT password_hash, password_hash_version FROM users WHERE id = $1 AND is_active = true',
+      [userId]
+    );
+    const row = result.rows[0];
+    if (!row) return 'invalid';
+    if (!row.password_hash || row.password_hash_version === 1) return 'no_password';
+    return (await this.verifyPassword(password, row.password_hash)) ? 'valid' : 'invalid';
+  }
+
+  /**
+   * When the session identified by `token` was created, or null if it is not
+   * a live session of `userId`.
+   */
+  async getSessionCreatedAt(token: string, userId: string): Promise<Date | null> {
+    const result = await pool.query(
+      'SELECT created_at FROM user_sessions WHERE token = $1 AND user_id = $2 AND expires_at > NOW()',
+      [token, userId]
+    );
+    return result.rows[0]?.created_at ? new Date(result.rows[0].created_at) : null;
+  }
+
+  /**
    * Logout by deleting the session
    */
   async logout(token: string): Promise<{ success: boolean }> {
