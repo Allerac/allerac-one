@@ -18,6 +18,14 @@ interface ApiKeyFieldProps {
   onChange: (v: string) => void;
   isDarkMode: boolean;
   inputType?: 'password' | 'email' | 'text';
+  /** Masked hint for the stored value, shown as the placeholder. */
+  storedHint?: string | null;
+  /** Tests the stored value server-side when the input is empty. */
+  onTestStored?: () => Promise<{ valid: boolean; error?: string }>;
+  /** Marks the stored value for removal. */
+  onClear?: () => void;
+  /** The stored value will be removed on save. */
+  clearPending?: boolean;
 }
 
 export default function ApiKeyField({
@@ -32,21 +40,34 @@ export default function ApiKeyField({
   onChange,
   isDarkMode,
   inputType = 'password',
+  storedHint,
+  onTestStored,
+  onClear,
+  clearPending = false,
 }: ApiKeyFieldProps) {
   const [status, setStatus] = useState<Status>(hasStoredValue ? 'configured' : 'idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const canTest = !!provider && value.trim().length > 0;
+  const hasTypedValue = value.trim().length > 0;
+  const canTestStored = !hasTypedValue && hasStoredValue && !clearPending && !!onTestStored;
+  const canTest = (!!provider && hasTypedValue) || canTestStored;
 
   const displayedStatus = status === 'configured' || status === 'idle'
-    ? hasStoredValue ? 'configured' : 'idle'
+    ? hasStoredValue && !clearPending ? 'configured' : 'idle'
     : status;
 
   async function handleTest() {
-    if (!provider || !value.trim()) return;
+    if (!canTest) return;
     setStatus('testing');
     setErrorMsg(null);
-    const result = await validateApiKey(provider, value.trim());
+    let result: { valid: boolean; error?: string };
+    try {
+      result = hasTypedValue && provider
+        ? await validateApiKey(provider, value.trim())
+        : await onTestStored!();
+    } catch {
+      result = { valid: false, error: 'Test failed' };
+    }
     if (result.valid) {
       setStatus('valid');
     } else {
@@ -84,7 +105,13 @@ export default function ApiKeyField({
           type={inputType}
           value={value}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder={placeholder ?? (hasStoredValue ? '••••••••' : '')}
+          placeholder={
+            clearPending
+              ? 'Will be removed on save'
+              : hasStoredValue && storedHint !== undefined
+                ? (storedHint ?? '••••••••')
+                : placeholder ?? (hasStoredValue ? '••••••••' : '')
+          }
           className={inputBase}
         />
         {canTest && (
@@ -104,6 +131,19 @@ export default function ApiKeyField({
                 Testing
               </span>
             ) : 'Test'}
+          </button>
+        )}
+        {onClear && hasStoredValue && !hasTypedValue && !clearPending && (
+          <button
+            type="button"
+            onClick={() => { onClear(); setStatus('idle'); setErrorMsg(null); }}
+            className={`shrink-0 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
+              isDarkMode
+                ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Remove
           </button>
         )}
       </div>
