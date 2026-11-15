@@ -2,7 +2,8 @@
  * Provider-neutral embedding facade.
  *
  * Semantic feature code depends on this service rather than a provider-specific
- * API. The default provider is the local Ollama deployment.
+ * API. The default provider is the local Ollama deployment; EMBEDDING_PROVIDER=openai
+ * selects OpenAI (see docs/operations/embeddings.md).
  */
 
 import type {
@@ -14,13 +15,50 @@ import {
   OllamaEmbeddingProvider,
   type OllamaEmbeddingProviderConfig,
 } from './ollama-embedding.provider';
+import {
+  OpenAIEmbeddingProvider,
+  type OpenAIEmbeddingProviderConfig,
+} from './openai-embedding.provider';
 import { assertEmbeddingRuntimeState } from './embedding-runtime.service';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 import { embeddingScheduler } from './embedding-scheduler';
 
 const DEFAULT_MODEL = 'embeddinggemma';
 const DEFAULT_DIMENSIONS = 768;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_KEEP_ALIVE = '10m';
+const DEFAULT_OPENAI_MODEL = 'text-embedding-3-small';
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const DEFAULT_OPENAI_BATCH_SIZE = 96;
+
+export type EmbeddingProviderName = 'ollama' | 'openai';
+
+/** Provider chosen by EMBEDDING_PROVIDER. Anything other than "openai" keeps Ollama. */
+export function configuredEmbeddingProvider(): EmbeddingProviderName {
+  const value = (process.env.EMBEDDING_PROVIDER ?? '').trim().toLowerCase();
+  if (value === 'openai') return 'openai';
+  if (value && value !== 'ollama') {
+    console.warn(`[RAG] Unknown EMBEDDING_PROVIDER "${value}", using ollama`);
+  }
+  return 'ollama';
+}
+
+/** Vector size shared by every provider; it must match the pgvector columns. */
+export function configuredEmbeddingDimensions(): number {
+  return positiveInteger(process.env.EMBEDDING_DIMENSIONS, DEFAULT_DIMENSIONS);
+}
+
+/** Model name the configured provider will use, without creating a provider. */
+export function configuredEmbeddingModel(): string {
+  return configuredEmbeddingProvider() === 'openai'
+    ? process.env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_MODEL
+    : process.env.EMBEDDING_MODEL || DEFAULT_MODEL;
+}
+
+export async function resolveOpenAIEmbeddingKey(): Promise<string | null> {
+  const stored = await new SystemSettingsService().get('openai_api_key').catch(() => null);
+  return stored?.trim() || process.env.OPENAI_API_KEY?.trim() || null;
+}
 
 export interface EmbeddingResult {
   embedding: number[];
@@ -30,6 +68,7 @@ export interface EmbeddingResult {
 export interface EmbeddingServiceConfig {
   provider?: EmbeddingProvider;
   ollama?: Partial<OllamaEmbeddingProviderConfig>;
+  openai?: Partial<OpenAIEmbeddingProviderConfig>;
 }
 
 function positiveInteger(value: string | undefined, fallback: number): number {
@@ -37,7 +76,36 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function createDefaultProvider(
+function createOpenAIProvider(
+  overrides: Partial<OpenAIEmbeddingProviderConfig> = {},
+): EmbeddingProvider {
+  const model = overrides.model
+    ?? (process.env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_MODEL);
+  const dimensions = overrides.dimensions ?? configuredEmbeddingDimensions();
+  return new OpenAIEmbeddingProvider({
+    baseUrl: overrides.baseUrl
+      ?? (process.env.OPENAI_EMBEDDING_BASE_URL || DEFAULT_OPENAI_BASE_URL),
+    model,
+    dimensions,
+    timeoutMs: overrides.timeoutMs
+      ?? positiveInteger(process.env.EMBEDDING_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
+    version: overrides.version
+      ?? (process.env.OPENAI_EMBEDDING_VERSION || `openai:${model}:${dimensions}:v1`),
+    batchSize: overrides.batchSize
+      ?? positiveInteger(process.env.OPENAI_EMBEDDING_BATCH_SIZE, DEFAULT_OPENAI_BATCH_SIZE),
+    resolveApiKey: overrides.resolveApiKey ?? resolveOpenAIEmbeddingKey,
+  });
+}
+
+function createDefaultProvider(config: EmbeddingServiceConfig): EmbeddingProvider {
+  if (config.ollama && !config.openai) return createOllamaProvider(config.ollama);
+  if (config.openai || configuredEmbeddingProvider() === 'openai') {
+    return createOpenAIProvider(config.openai);
+  }
+  return createOllamaProvider(config.ollama);
+}
+
+function createOllamaProvider(
   overrides: Partial<OllamaEmbeddingProviderConfig> = {},
 ): EmbeddingProvider {
   const model = overrides.model
@@ -75,7 +143,7 @@ export class EmbeddingService {
   constructor(config: EmbeddingServiceConfig | string = {}) {
     const resolvedConfig = typeof config === 'string' ? {} : config;
     this.provider = resolvedConfig.provider
-      ?? createDefaultProvider(resolvedConfig.ollama);
+      ?? createDefaultProvider(resolvedConfig);
     this.validateRuntime = !resolvedConfig.provider;
   }
 

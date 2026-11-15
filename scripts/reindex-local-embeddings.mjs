@@ -1,49 +1,25 @@
 #!/usr/bin/env node
 
 import pg from 'pg';
+import {
+  createEmbedder,
+  embeddingConfig,
+  resolveOpenAIKey,
+  sameSpace,
+  spaceOf,
+} from './embedding-config.mjs';
 
 const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const baseUrl = (
-  process.env.EMBEDDING_BASE_URL
-  || process.env.OLLAMA_BASE_URL
-  || 'http://127.0.0.1:11434'
-).replace(/\/$/, '');
-const model = process.env.EMBEDDING_MODEL || 'embeddinggemma';
-const dimensions = Number(process.env.EMBEDDING_DIMENSIONS || 768);
-const version = process.env.EMBEDDING_VERSION || `ollama:${model}:v1`;
+const config = embeddingConfig();
 const batchSize = Number(process.env.EMBEDDING_REINDEX_BATCH_SIZE || 32);
 const pauseMs = Number(process.env.EMBEDDING_REINDEX_PAUSE_MS || 250);
+let embed;
 
 async function yieldToInteractiveWork() {
   if (pauseMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, pauseMs));
   }
-}
-
-async function embed(texts) {
-  const response = await fetch(`${baseUrl}/api/embed`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      input: texts,
-      keep_alive: process.env.EMBEDDING_KEEP_ALIVE || '10m',
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`Ollama HTTP ${response.status}: ${await response.text()}`);
-  }
-  const body = await response.json();
-  if (!Array.isArray(body.embeddings) || body.embeddings.length !== texts.length) {
-    throw new Error('Ollama returned an unexpected embedding count');
-  }
-  for (const vector of body.embeddings) {
-    if (vector.length !== dimensions) {
-      throw new Error(`Expected ${dimensions} dimensions, received ${vector.length}`);
-    }
-  }
-  return body.embeddings;
 }
 
 async function assertRuntimeState() {
@@ -52,19 +28,10 @@ async function assertRuntimeState() {
   );
   const state = result.rows[0];
   if (!state) throw new Error('embedding_runtime_state is missing; run migration 103 first');
-  if (
-    state.provider !== 'ollama'
-    || state.model !== model
-    || Number(state.dimensions) !== dimensions
-    || state.version !== version
-  ) {
+  if (!sameSpace(state, config)) {
     throw new Error(
-      `Runtime state mismatch: database=${JSON.stringify(state)}, configured=${JSON.stringify({
-        provider: 'ollama',
-        model,
-        dimensions,
-        version,
-      })}`,
+      `Runtime state mismatch: database=${JSON.stringify(state)}, configured=${JSON.stringify(spaceOf(config))}. `
+      + 'Run scripts/switch-embedding-space.mjs first.',
     );
   }
 }
@@ -146,14 +113,15 @@ async function reindexSpotifyTracks() {
 
 try {
   await assertRuntimeState();
+  embed = createEmbedder(
+    config,
+    config.provider === 'openai' ? await resolveOpenAIKey(pool) : null,
+  );
   const documentChunks = await reindexDocumentChunks();
   const spotifyTracks = await reindexSpotifyTracks();
   console.log(JSON.stringify({
     ok: true,
-    provider: 'ollama',
-    model,
-    dimensions,
-    version,
+    ...spaceOf(config),
     documentChunks,
     spotifyTracks,
   }));

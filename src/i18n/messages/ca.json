@@ -381,6 +381,7 @@
     "llmTestRequired": "Prova la connexió per continuar.",
     "embeddingNoteOllama": "La memòria i la cerca de documents fan servir {model} ({dimensions} dimensions) a Ollama.",
     "embeddingNoteCloud": "{provider} no canvia els embeddings: la memòria i la cerca de documents continuen fent servir {model} ({dimensions} dimensions) a Ollama quan està disponible.",
+    "embeddingNoteOpenAI": "La memòria i la cerca de documents fan servir {model} ({dimensions} dimensions) a OpenAI, amb la clau d'OpenAI de la configuració.",
     "googleTitle": "Google",
     "googleDescription": "Opcional. Una clau d'API de Google AI (Gemini) activa els models Gemini i les eines de Google. L'inici de sessió amb Google es configura al servidor.",
     "googleApiKey": "Clau d'API de Google AI",
