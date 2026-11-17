@@ -597,6 +597,7 @@
     "llmTestRequired": "Test the connection to continue.",
     "embeddingNoteOllama": "Memory and document search use {model} ({dimensions} dimensions) on Ollama.",
     "embeddingNoteCloud": "{provider} does not change embeddings: memory and document search keep using {model} ({dimensions} dimensions) on Ollama when it is available.",
+    "embeddingNoteOpenAI": "Memory and document search use {model} ({dimensions} dimensions) on OpenAI, with the OpenAI key from Settings.",
     "googleTitle": "Google",
     "googleDescription": "Optional. A Google AI (Gemini) API key enables Gemini models and Google-powered tools. Google sign-in is configured on the server.",
     "googleApiKey": "Google AI API key",

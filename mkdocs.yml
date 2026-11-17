@@ -147,6 +147,7 @@ nav:
           - Prod Azure: deploy/prod-azure.md
       - Database Backup and Restore: database-backup-restore.md
       - Multiple Units on One Host: operations/multi-unit.md
+      - Embedding Providers: operations/embeddings.md
       - Federation Manual Checklist: operations/federation-pairing-checklist.md
       - Containers: containers/containers.md
       - Infrastructure: infrastructure/infrastructure.md

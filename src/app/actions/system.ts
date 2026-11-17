@@ -6,7 +6,7 @@ import pool from '@/app/clients/db';
 import { safeDecrypt } from '@/app/services/crypto/encryption.service';
 import { GITHUB_MODELS } from '@/app/constants/models';
 import { requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
-import { EmbeddingService } from '@/app/services/rag/embedding.service';
+import { EmbeddingService, resolveOpenAIEmbeddingKey } from '@/app/services/rag/embedding.service';
 import { assertEmbeddingRuntimeState } from '@/app/services/rag/embedding-runtime.service';
 import { embeddingScheduler } from '@/app/services/rag/embedding-scheduler';
 
@@ -270,6 +270,20 @@ export async function getEmbeddingHealth(): Promise<EmbeddingHealthInfo> {
   try {
     await assertEmbeddingRuntimeState(metadata, true);
     runtimeCompatible = true;
+
+    if (metadata.provider === 'openai') {
+      // A configured key is the readiness signal; no paid request is made here.
+      modelInstalled = Boolean(await resolveOpenAIEmbeddingKey());
+      if (!modelInstalled) throw new Error('OpenAI embeddings need an OpenAI API key');
+      return {
+        healthy: true,
+        ...metadata,
+        runtimeCompatible,
+        modelInstalled,
+        latencyMs: Date.now() - startedAt,
+        queue: embeddingScheduler.getStats(),
+      };
+    }
 
     const baseUrl = (
       process.env.EMBEDDING_BASE_URL
