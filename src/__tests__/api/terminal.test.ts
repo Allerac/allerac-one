@@ -3,12 +3,18 @@ import { GET, POST } from '@/app/api/terminal/[operation]/route';
 import { requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { canUseTerminal } from '@/app/lib/unit-terminal';
 import pool from '@/app/clients/db';
+import { requireTerminalUnlock, TerminalReauthRequiredError } from '@/app/lib/terminal-unlock';
 
 jest.mock('@/app/lib/auth-session', () => {
   const actual = jest.requireActual('@/app/lib/auth-errors');
   return { ...actual, requireCurrentUser: jest.fn(), authenticationErrorResponse: (error: unknown) => error instanceof actual.UnauthorizedError ? Response.json({ error: 'Unauthorized' }, { status: 401 }) : error instanceof actual.ForbiddenError ? Response.json({ error: 'Forbidden' }, { status: 403 }) : null };
 });
 jest.mock('@/app/clients/db', () => ({ __esModule: true, default: { query: jest.fn() } }));
+
+jest.mock('@/app/lib/terminal-unlock', () => {
+  const actual = jest.requireActual('@/app/lib/terminal-unlock');
+  return { ...actual, requireTerminalUnlock: jest.fn() };
+});
 
 const sessionId = '22222222-2222-4222-8222-222222222222';
 const member = { id: 'member', email: 'member@example.com', is_admin: false };
@@ -28,6 +34,7 @@ beforeEach(() => {
   granted = new Set(['member']);
   query.mockImplementation(async (sql: string, params: unknown[]) => String(sql).includes('user_terminal_access') ? { rowCount: granted.has(params[0] as string) ? 1 : 0, rows: [] } : { rowCount: 1, rows: [] });
   mockUser.mockResolvedValue(member as Awaited<ReturnType<typeof requireCurrentUser>>);
+  jest.mocked(requireTerminalUnlock).mockResolvedValue(undefined);
   global.fetch = jest.fn().mockResolvedValue(Response.json({ ok: true }));
 });
 afterEach(() => { jest.resetAllMocks(); process.env = { ...originalEnv }; global.fetch = originalFetch; });
@@ -110,4 +117,24 @@ test('records an observed CLI exit once and never input or output', async () => 
   await POST(request('input', undefined, JSON.stringify({ id: sessionId, data: 'typed secret' })), context('input'));
   expect(inserts()).toEqual([['claude', ended.id, null, 'exited', 2]]);
   expect(JSON.stringify(query.mock.calls)).not.toMatch(/secret/);
+});
+
+test('session control and output require a recent re-authentication; discovery and status do not', async () => {
+  jest.mocked(requireTerminalUnlock).mockRejectedValue(new TerminalReauthRequiredError());
+  for (const operation of ['start', 'input', 'resize', 'stop']) {
+    const response = await POST(request(operation, undefined, JSON.stringify({ id: 'session', data: 'x', cols: 80, rows: 24 })), context(operation));
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'reauth_required' });
+  }
+  expect((await GET(new Request('http://localhost/api/terminal/output?cursor=0'), context('output'))).status).toBe(403);
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect((await GET(new Request('http://localhost/api/terminal/access'), context('access'))).status).toBe(200);
+  expect((await GET(new Request('http://localhost/api/terminal/status'), context('status'))).status).toBe(200);
+});
+
+test('errors are English and carry a code the client translates', async () => {
+  const response = await GET(new Request('http://localhost/api/terminal/status?provider=nope'), context('status'));
+  expect(await response.json()).toEqual({ error: 'Unknown terminal provider', code: 'unknown_provider' });
+  jest.mocked(global.fetch).mockRejectedValue(new Error('offline'));
+  expect(await (await GET(new Request('http://localhost/api/terminal/status'), context('status'))).json()).toMatchObject({ code: 'terminal_unavailable' });
 });

@@ -1,11 +1,9 @@
 import http from 'node:http';
-import os from 'node:os';
 import { timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import path from 'node:path';
-import { createApiConnectionStore, mcpLaunchArguments } from './api-connection.mjs';
+import { apiConnectionFile, createApiConnectionStore, mcpLaunchArguments } from './api-connection.mjs';
 
 const exec = promisify(execFile);
 const LIMIT = 2 * 1024 * 1024;
@@ -128,8 +126,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const prefix = provider === 'codex' ? 'CODEX_TERMINAL' : 'CLAUDE_TERMINAL';
   const executable = process.env.UNIT_TERMINAL_EXECUTABLE || provider;
   const cwd = process.env.UNIT_TERMINAL_CWD || '/workspace';
-  // Lives on the provider's home volume, never in the shared workspace.
-  const connectionFile = process.env.UNIT_TERMINAL_CONNECTION_FILE || path.join(os.homedir(), '.allerac', 'allerac-api.json');
+  // On the provider's home volume (~/.config/allerac/terminal), never in the shared workspace.
+  const connectionFile = apiConnectionFile(provider, { cwd });
   const apiConnection = createApiConnectionStore({ file: connectionFile, apiUrl: process.env.ALLERAC_TERMINAL_API_URL || 'http://app:8080' });
   const mcpArgs = mcpLaunchArguments(provider, { node: process.execPath, script: fileURLToPath(new URL('./allerac-mcp.mjs', import.meta.url)), file: connectionFile });
   const server = createBridge({

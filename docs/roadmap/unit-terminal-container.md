@@ -201,7 +201,7 @@ On `/connections`, an **admin-only** card "API da Allerac no terminal da unit":
    Automatic renewal is out of scope.
 
 The connection file moves from `.tools/allerac-api-{provider}.json` in the repo to
-`/home/terminal/.allerac/allerac-api.json` on the provider's home volume, mode
+`/home/terminal/.config/allerac/terminal/allerac-api-<provider>.json` on the provider's home volume, mode
 `0600`. MCP launch arguments still contain only the file path, never the token.
 Non-admin users with terminal access can use the MCP tools but cannot see or change
 their configuration.

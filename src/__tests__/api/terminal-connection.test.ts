@@ -4,6 +4,7 @@ import { requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { apiKeyService } from '@/app/services/api-keys/api-key.service';
 import { terminalApiPolicy } from '@/app/services/terminal/terminal-api-policy';
 import { ensureTerminalServiceAccount, findTerminalServiceAccount, syncTerminalServiceAccountDomains } from '@/app/services/terminal/terminal-service-account';
+import { requireTerminalUnlock, TerminalReauthRequiredError } from '@/app/lib/terminal-unlock';
 
 jest.mock('@/app/lib/auth-session', () => {
   const errors = jest.requireActual('@/app/lib/auth-errors');
@@ -12,6 +13,11 @@ jest.mock('@/app/lib/auth-session', () => {
 jest.mock('@/app/services/api-keys/api-key.service', () => ({ apiKeyService: { list: jest.fn(), create: jest.fn(), revoke: jest.fn() } }));
 jest.mock('@/app/services/terminal/terminal-api-policy', () => ({ terminalApiKeyName: (provider: string) => `Terminal API · ${provider}`, terminalApiPolicy: jest.fn() }));
 jest.mock('@/app/services/terminal/terminal-service-account', () => ({ ensureTerminalServiceAccount: jest.fn(), findTerminalServiceAccount: jest.fn(), syncTerminalServiceAccountDomains: jest.fn() }));
+
+jest.mock('@/app/lib/terminal-unlock', () => {
+  const actual = jest.requireActual('@/app/lib/terminal-unlock');
+  return { ...actual, requireTerminalUnlock: jest.fn() };
+});
 
 const keyId = '11111111-1111-4111-8111-111111111111';
 const token = `alr_live_${'a'.repeat(64)}`;
@@ -32,6 +38,7 @@ beforeEach(() => {
   jest.mocked(apiKeyService.list).mockResolvedValue([]);
   jest.mocked(apiKeyService.revoke).mockResolvedValue(true);
   jest.mocked(apiKeyService.create).mockResolvedValue({ apiKey: { id: keyId, expiresAt: new Date(metadata.expiresAt) }, secret: token } as Awaited<ReturnType<typeof apiKeyService.create>>);
+  jest.mocked(requireTerminalUnlock).mockResolvedValue(undefined);
   global.fetch = jest.fn().mockImplementation(async () => Response.json({ ...metadata, token }));
 });
 afterEach(() => { jest.resetAllMocks(); global.fetch = originalFetch; process.env = { ...originalEnv }; });
@@ -86,4 +93,15 @@ test('reports a revoked or missing key as disconnected and does not create the a
 test('an unconfigured provider is not available', async () => {
   delete process.env.CODEX_TERMINAL_SECRET;
   expect((await GET(request('GET'))).status).toBe(404);
+});
+
+test('granting API access requires a recent re-authentication, revoking does not', async () => {
+  jest.mocked(requireTerminalUnlock).mockRejectedValue(new TerminalReauthRequiredError());
+  const response = await POST(request('POST', {}));
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({ code: 'reauth_required' });
+  expect(apiKeyService.create).not.toHaveBeenCalled();
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect((await DELETE(request('DELETE'))).status).toBe(200);
+  expect((await GET(request('GET'))).status).toBe(200);
 });

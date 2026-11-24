@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createApiConnectionStore, mcpLaunchArguments } from './api-connection.mjs';
+import { apiConnectionFile, createApiConnectionStore, mcpLaunchArguments, terminalStateDirectory } from './api-connection.mjs';
 import { createAlleracMcp, apiRequestUrl } from './allerac-mcp.mjs';
 
 const token = `alr_live_${'a'.repeat(64)}`;
@@ -26,7 +26,7 @@ test('credentials persist locally, metadata never exposes the token, and disconn
     assert.equal(store.metadata().connected, false);
     assert.throws(() => store.install({ ...payload(), token: 'invalid' }));
     fs.writeFileSync(file, `{"token":"${token}"`);
-    assert.throws(() => store.metadata(), error => !error.message.includes(token) && error.message.includes('Conexão local inválida'));
+    assert.throws(() => store.metadata(), error => !error.message.includes(token) && error.message.includes('Invalid local connection'));
   } finally { for (const name of fs.readdirSync(directory)) fs.unlinkSync(path.join(directory, name)); fs.rmdirSync(directory); }
 });
 
@@ -72,4 +72,24 @@ test('real MCP discovery and tool calls use the managed key, propagate denials, 
     assert.equal((await client.callTool({ name: 'allerac_status', arguments: {} })).isError, true);
     assert.equal(requests.length, 2);
   } finally { await client.close(); await server.close(); if (fs.existsSync(file)) fs.unlinkSync(file); fs.rmdirSync(directory); }
+});
+
+test('the managed token defaults to a per-user config directory outside the CLI working directory', () => {
+  assert.equal(apiConnectionFile('claude', { platform: 'win32', env: { APPDATA: 'C:\\Users\\me\\AppData\\Roaming' }, home: 'C:\\Users\\me', cwd: 'C:\\src\\allerac-one' }), 'C:\\Users\\me\\AppData\\Roaming\\allerac\\terminal\\allerac-api-claude.json');
+  assert.equal(apiConnectionFile('codex', { platform: 'linux', env: {}, home: '/home/me', cwd: '/src/allerac-one' }), '/home/me/.config/allerac/terminal/allerac-api-codex.json');
+  assert.equal(terminalStateDirectory({ platform: 'linux', env: { XDG_CONFIG_HOME: '/cfg' }, home: '/home/me' }), '/cfg/allerac/terminal');
+  assert.equal(terminalStateDirectory({ platform: 'linux', env: { ALLERAC_TERMINAL_STATE_DIR: '/secure/state' }, home: '/home/me', cwd: '/src/allerac-one' }), '/secure/state');
+  for (const inside of ['/src/allerac-one', '/src/allerac-one/.tools']) assert.throws(() => terminalStateDirectory({ platform: 'linux', env: { ALLERAC_TERMINAL_STATE_DIR: inside }, home: '/home/me', cwd: '/src/allerac-one' }), /outside the CLI working directory/);
+  assert.throws(() => terminalStateDirectory({ platform: 'win32', env: { ALLERAC_TERMINAL_STATE_DIR: 'C:\\src\\allerac-one\\.tools' }, home: 'C:\\Users\\me', cwd: 'C:\\src\\allerac-one' }));
+  assert.throws(() => apiConnectionFile('../evil', { platform: 'linux', env: {}, home: '/home/me' }));
+});
+
+test('connection files and their directory are owner-only where POSIX modes apply', { skip: process.platform === 'win32' }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'allerac-state-'));
+  const file = path.join(root, 'nested', 'allerac-api-claude.json');
+  try {
+    createApiConnectionStore({ file, apiUrl: 'http://localhost:8080' }).install(payload());
+    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(path.dirname(file)).mode & 0o077, 0);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

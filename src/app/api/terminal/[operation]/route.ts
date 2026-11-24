@@ -1,5 +1,6 @@
 import { authenticationErrorResponse, ForbiddenError, requireCurrentUser } from '@/app/lib/auth-session';
 import { assertTerminalAccess, terminalConfiguration } from '@/app/lib/unit-terminal';
+import { requireTerminalUnlock, terminalReauthResponse } from '@/app/lib/terminal-unlock';
 import { isTerminalProvider, type TerminalProvider } from '@/app/terminal/providers';
 import { recordObservedEnd, recordTerminalEvent } from '@/app/services/terminal/terminal-session-events';
 
@@ -7,6 +8,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const reads = new Set(['access', 'status', 'output']);
 const writes = new Set(['start', 'input', 'resize', 'stop']);
+// Operations that control or reveal a terminal session need a recent re-authentication.
+const unlocked = new Set(['output', ...writes]);
+const failure = (code: string, error: string, status: number) => Response.json({ error, code }, { status, headers: { 'Cache-Control': 'no-store' } });
 
 function parse(text: string | undefined): Record<string, unknown> | null {
   try { const value = JSON.parse(text || ''); return value && typeof value === 'object' ? value : null; } catch { return null; }
@@ -29,7 +33,7 @@ async function proxy(request: Request, context: { params: Promise<{ operation: s
   try {
     const user = await requireCurrentUser();
     const provider = new URL(request.url).searchParams.get('provider') || 'claude';
-    if (!isTerminalProvider(provider)) return Response.json({ error: 'Unknown terminal provider' }, { status: 400 });
+    if (!isTerminalProvider(provider)) return failure('unknown_provider', 'Unknown terminal provider', 400);
     // Checked on every request: revoking access takes effect on the next poll or keystroke.
     await assertTerminalAccess(user, provider);
     const config = terminalConfiguration(provider);
@@ -38,8 +42,9 @@ async function proxy(request: Request, context: { params: Promise<{ operation: s
       if (!origin || new URL(origin).host !== request.headers.get('host')) throw new ForbiddenError('Invalid origin');
     }
     const { operation } = await context.params;
-    if (!(request.method === 'GET' ? reads : writes).has(operation)) return Response.json({ error: 'Unknown terminal operation' }, { status: 404 });
+    if (!(request.method === 'GET' ? reads : writes).has(operation)) return failure('unknown_operation', 'Unknown terminal operation', 404);
     if (operation === 'access') return Response.json({ enabled: true }, { headers: { 'Cache-Control': 'no-store' } });
+    if (unlocked.has(operation)) await requireTerminalUnlock(user);
     let body: string | undefined;
     if (request.method === 'POST') {
       const reader = request.body?.getReader();
@@ -50,7 +55,7 @@ async function proxy(request: Request, context: { params: Promise<{ operation: s
           const part = await reader.read();
           if (part.done) break;
           size += part.value.byteLength;
-          if (size > 32_768) { await reader.cancel(); return Response.json({ error: 'Request too large' }, { status: 413 }); }
+          if (size > 32_768) { await reader.cancel(); return failure('request_too_large', 'Request too large', 413); }
           chunks.push(part.value);
         }
       }
@@ -66,7 +71,7 @@ async function proxy(request: Request, context: { params: Promise<{ operation: s
     if (response.ok && operation !== 'input' && operation !== 'resize') await recordLifecycle(operation, provider, user.id, body, text);
     return new Response(text, { status: response.status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
   } catch (error) {
-    return authenticationErrorResponse(error) || Response.json({ error: 'Não foi possível acessar o terminal nesta unit. Verifique o serviço de terminal.' }, { status: 503 });
+    return terminalReauthResponse(error) || authenticationErrorResponse(error) || failure('terminal_unavailable', 'Unable to reach the terminal on this unit. Check the terminal service.', 503);
   }
 }
 

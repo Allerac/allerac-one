@@ -23,6 +23,11 @@ Design and decisions: [docs/roadmap/unit-terminal-container.md](../../docs/roadm
   on every request, so revocation applies on the next poll or keystroke. The
   services trust only their bearer secret and reject browser (`Origin`)
   requests.
+- **Recent sign-in**: reading output and controlling a session (and granting
+  API access) also need a password confirmation bound to the browser session
+  (`/api/terminal/unlock`, admins included). It lapses after 15 minutes without
+  terminal activity or 8 hours at most, and on sign-out or app restart.
+  Accounts without a password unlock only within 15 minutes of signing in.
 - **Logins** are the CLIs' own, made once inside the container and kept in the
   provider's home volume (`terminal_claude_home`, `terminal_codex_home`). All
   users with access share them, and anyone with access can log out or change
@@ -80,7 +85,7 @@ revokes the keys before clearing the file, so revocation works even when the
 terminal is down. Reconnecting rotates (renews) the key; a failed installation
 revokes the new key.
 
-The token is stored in `/home/terminal/.allerac/allerac-api.json` (mode 0600)
+The token is stored in `/home/terminal/.config/allerac/terminal/allerac-api-<provider>.json` (mode 0600)
 on the provider's home volume, not in the shared workspace. Treat the home
 volumes as secrets in backups. Command arguments contain only the MCP command
 and the file path. Requests go only to `ALLERAC_TERMINAL_API_URL`

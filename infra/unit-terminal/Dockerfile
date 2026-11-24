@@ -30,7 +30,7 @@ RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "@openai/c
 # initial ownership.
 RUN groupadd -g 10001 terminal \
     && useradd -u 10001 -g terminal -d /home/terminal -s /bin/bash -m terminal \
-    && mkdir -p /workspace /home/terminal/.allerac /home/terminal/.codex \
+    && mkdir -p /workspace /home/terminal/.config/allerac/terminal /home/terminal/.codex \
     && chown -R terminal:terminal /workspace /home/terminal
 
 WORKDIR /app

@@ -5,29 +5,29 @@ import { pathToFileURL } from 'node:url';
 import { connectionMetadata, readApiConnection } from './api-connection.mjs';
 
 const routes = [
-  { scope: 'profile:read', method: 'GET', path: '/me', description: 'Identidade e preferências do usuário autenticado.' },
-  { scope: 'capabilities:read', method: 'GET', path: '/capabilities', description: 'Serviços disponíveis; não contém credenciais.' },
-  { scope: 'domains:read', method: 'GET', path: '/domains', description: 'Áreas acessíveis ao usuário.' },
-  { scope: 'notes:read', method: 'GET', path: '/notes?limit=20', description: 'Listar notas.' },
-  { scope: 'notes:read', method: 'GET', path: '/notes/search?q=texto', description: 'Buscar notas.' },
-  { scope: 'notes:write', method: 'POST', path: '/notes', description: 'Criar nota: body {title?, content, tags?}. PATCH/DELETE /notes/{id} para alterar/remover.' },
-  { scope: 'tickets:read', method: 'GET', path: '/tickets', description: 'Listar tarefas/tickets.' },
-  { scope: 'tickets:write', method: 'POST', path: '/tickets', description: 'Criar ticket: body {title, description?, type: task|bug|improvement|question}.' },
-  { scope: 'jobs:read', method: 'GET', path: '/jobs', description: 'Listar automações agendadas.' },
-  { scope: 'jobs:write', method: 'POST', path: '/jobs', description: 'Criar agendamento: body {name, cronExpr, prompt, channels, enabled?}. Pode consumir API e enviar notificações; confirmar com usuário.' },
-  { scope: 'memory:read', method: 'GET', path: '/memories', description: 'Listar memórias.' },
-  { scope: 'documents:read', method: 'GET', path: '/documents', description: 'Listar documentos.' },
-  { scope: 'health:read', method: 'GET', path: '/health/summary', description: 'Resumo dos dados de saúde.' },
-  { scope: 'health:proxy:read', method: 'GET', path: '/health/proxy/status', description: 'Estado da conexão Garmin para consultas em tempo real.' },
+  { scope: 'profile:read', method: 'GET', path: '/me', description: 'Identity and preferences of the authenticated user.' },
+  { scope: 'capabilities:read', method: 'GET', path: '/capabilities', description: 'Available services; contains no credentials.' },
+  { scope: 'domains:read', method: 'GET', path: '/domains', description: 'Areas the user can access.' },
+  { scope: 'notes:read', method: 'GET', path: '/notes?limit=20', description: 'List notes.' },
+  { scope: 'notes:read', method: 'GET', path: '/notes/search?q=text', description: 'Search notes.' },
+  { scope: 'notes:write', method: 'POST', path: '/notes', description: 'Create a note: body {title?, content, tags?}. PATCH/DELETE /notes/{id} to edit/remove.' },
+  { scope: 'tickets:read', method: 'GET', path: '/tickets', description: 'List tasks/tickets.' },
+  { scope: 'tickets:write', method: 'POST', path: '/tickets', description: 'Create a ticket: body {title, description?, type: task|bug|improvement|question}.' },
+  { scope: 'jobs:read', method: 'GET', path: '/jobs', description: 'List scheduled automations.' },
+  { scope: 'jobs:write', method: 'POST', path: '/jobs', description: 'Create a schedule: body {name, cronExpr, prompt, channels, enabled?}. May use API credits and send notifications; confirm with the user.' },
+  { scope: 'memory:read', method: 'GET', path: '/memories', description: 'List memories.' },
+  { scope: 'documents:read', method: 'GET', path: '/documents', description: 'List documents.' },
+  { scope: 'health:read', method: 'GET', path: '/health/summary', description: 'Health data summary.' },
+  { scope: 'health:proxy:read', method: 'GET', path: '/health/proxy/status', description: 'Garmin connection status for real-time queries.' },
 ];
 
 export function apiRequestUrl(origin, relative) {
-  if (typeof relative !== 'string' || !relative.startsWith('/') || relative.startsWith('//') || relative.includes('#')) throw new Error('Use um caminho relativo da API, por exemplo /me.');
+  if (typeof relative !== 'string' || !relative.startsWith('/') || relative.startsWith('//') || relative.includes('#')) throw new Error('Use a relative API path, for example /me.');
   const decoded = decodeURIComponent(relative.split('?')[0]);
-  if (decoded.includes('\\') || decoded.split('/').some(segment => segment === '.' || segment === '..')) throw new Error('Caminho inválido.');
+  if (decoded.includes('\\') || decoded.split('/').some(segment => segment === '.' || segment === '..')) throw new Error('Invalid path.');
   const base = new URL(origin);
   const target = new URL(`/api/v1${relative}`, base);
-  if (target.origin !== base.origin || !target.pathname.startsWith('/api/v1/')) throw new Error('O acesso é limitado à API desta Allerac.');
+  if (target.origin !== base.origin || !target.pathname.startsWith('/api/v1/')) throw new Error('Access is limited to this Allerac API.');
   return target;
 }
 
@@ -38,18 +38,18 @@ async function responseText(response) {
   while (true) {
     const { done, value } = await reader.read(); if (done) break;
     size += value.byteLength;
-    if (size > 1024 * 1024) { await reader.cancel(); throw new Error('Resposta muito grande. Use filtros ou paginação.'); }
+    if (size > 1024 * 1024) { await reader.cancel(); throw new Error('Response too large. Use filters or pagination.'); }
     chunks.push(value);
   }
   return Buffer.concat(chunks).toString('utf8');
 }
 
 export function createAlleracMcp({ file, fetchImpl = fetch }) {
-  const server = new McpServer({ name: 'allerac-unit', version: '1.0.0' }, { instructions: 'Ferramentas da API da Allerac desta unit. Consulte allerac_help para conhecer permissões e rotas. A autorização é a do usuário conectado em Conexões; não procure nem exiba chaves de API. Confirme ações de escrita com o usuário.' });
+  const server = new McpServer({ name: 'allerac-unit', version: '1.0.0' }, { instructions: 'Allerac API tools for this unit. Call allerac_help to learn the granted permissions and routes. Authorization is that of the user connected under Connections; do not look for or display API keys. Confirm write actions with the user.' });
   const result = (value, isError = false) => ({ content: [{ type: 'text', text: JSON.stringify(value) }], isError });
   const active = () => {
     const value = readApiConnection(file);
-    if (!value || Date.parse(value.expiresAt) <= Date.now()) throw new Error('Conexão da API desativada ou expirada. Abra Conexões na Allerac e conecte a API ao terminal.');
+    if (!value || Date.parse(value.expiresAt) <= Date.now()) throw new Error('API connection disabled or expired. Open Connections in Allerac and connect the API to the terminal.');
     return value;
   };
   const call = async (method, relative, body) => {
@@ -65,15 +65,15 @@ export function createAlleracMcp({ file, fetchImpl = fetch }) {
   };
   const safely = handler => async args => {
     try { return await handler(args); }
-    catch (error) { return result({ error: error.message === 'fetch failed' ? 'API indisponível nesta unit.' : error.message }, true); }
+    catch (error) { return result({ error: error.message === 'fetch failed' ? 'API unavailable on this unit.' : error.message }, true); }
   };
-  server.registerTool('allerac_help', { description: 'Descobrir os acessos autorizados e exemplos de rotas da API da Allerac.', inputSchema: {}, annotations: { readOnlyHint: true } }, safely(async () => {
+  server.registerTool('allerac_help', { description: 'Discover the granted access and example Allerac API routes.', inputSchema: {}, annotations: { readOnlyHint: true } }, safely(async () => {
     const value = readApiConnection(file);
-    return result({ connection: connectionMetadata(value), endpoints: routes.filter(route => value?.scopes.includes(route.scope)), usage: 'Use allerac_request com method, path relativo (por exemplo /notes?limit=10), e body JSON opcional. A API valida permissões e acesso aos dados em cada chamada.' });
+    return result({ connection: connectionMetadata(value), endpoints: routes.filter(route => value?.scopes.includes(route.scope)), usage: 'Use allerac_request with method, a relative path (for example /notes?limit=10) and an optional JSON body. The API checks permissions and data access on every call.' });
   }));
-  server.registerTool('allerac_status', { description: 'Verificar a conexão com a Allerac e consultar a identidade autenticada via GET /me.', inputSchema: {}, annotations: { readOnlyHint: true } }, safely(async () => { const response = await call('GET', '/me'); return result(response, !response.ok); }));
+  server.registerTool('allerac_status', { description: 'Check the Allerac connection and read the authenticated identity via GET /me.', inputSchema: {}, annotations: { readOnlyHint: true } }, safely(async () => { const response = await call('GET', '/me'); return result(response, !response.ok); }));
   server.registerTool('allerac_request', {
-    description: 'Chamar a API da Allerac desta unit com os acessos autorizados. Consulte allerac_help para rotas. Não aceita URLs externas nem cabeçalhos de autenticação. Confirme alterações com o usuário.',
+    description: 'Call this unit\'s Allerac API with the granted access. See allerac_help for routes. External URLs and authentication headers are not accepted. Confirm changes with the user.',
     inputSchema: { method: z.enum(['GET', 'POST', 'PATCH', 'DELETE']).default('GET'), path: z.string().min(1).max(2048), body: z.unknown().optional() },
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
   }, safely(async ({ method, path, body }) => { const response = await call(method, path, body); return result(response, !response.ok); }));
