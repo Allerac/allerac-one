@@ -118,6 +118,7 @@ export default function AdminClient({
 
   // Role toggle state
   const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
+  const [terminalChangingId, setTerminalChangingId] = useState<string | null>(null);
 
   // Active toggle state
   const [activeChangingId, setActiveChangingId] = useState<string | null>(null);
@@ -273,6 +274,14 @@ export default function AdminClient({
     setActiveChangingId(userId);
     const result = await adminActions.toggleUserActive(userId, isActive);
     setActiveChangingId(null);
+    if (result.success) refreshUsers();
+    else setUserActionError(result.error);
+  };
+
+  const handleTerminalAccess = async (userId: string, enabled: boolean) => {
+    setTerminalChangingId(userId);
+    const result = await adminActions.updateUserTerminalAccess(userId, enabled);
+    setTerminalChangingId(null);
     if (result.success) refreshUsers();
     else setUserActionError(result.error);
   };
@@ -1594,6 +1603,27 @@ export default function AdminClient({
                     </button>
                     {domainError && <p className="text-xs text-red-400">{domainError}</p>}
                   </div>
+                </div>
+              )}
+
+              {/* Unit terminal */}
+              {!selectedUser.is_admin && (
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${textMuted}`}>Unit terminal</p>
+                  <p className={`text-xs mb-2 ${textMuted}`}>
+                    Shared Claude Code / Codex sessions of this Unit: the user sees and types in the same session as everyone with access, with the Unit&apos;s CLI logins and workspace.
+                  </p>
+                  <button
+                    onClick={() => handleTerminalAccess(selectedUser.id, !selectedUser.terminal_access)}
+                    disabled={terminalChangingId === selectedUser.id}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      selectedUser.terminal_access
+                        ? d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : d ? 'bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/60' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                    }`}
+                  >
+                    {terminalChangingId === selectedUser.id ? '...' : selectedUser.terminal_access ? 'Revoke terminal access' : 'Grant terminal access'}
+                  </button>
                 </div>
               )}
 

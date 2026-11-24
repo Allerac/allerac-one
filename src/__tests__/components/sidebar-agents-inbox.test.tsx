@@ -6,6 +6,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), refre
 jest.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (k: string) => k }));
 jest.mock('@/app/actions/user', () => ({ updateLanguage: jest.fn() }));
 jest.mock('@/app/components/credits/UserCreditBalance', () => () => null);
+jest.mock('@/app/components/layout/UnitConnectionsLinks', () => () => null);
 jest.mock('@/app/components/layout/SidebarContent', () => {
   const MockSidebarContent = () => <div data-testid="conversation-list" />;
   MockSidebarContent.displayName = 'MockSidebarContent';

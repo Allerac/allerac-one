@@ -40,15 +40,15 @@ export default function TerminalApiConnection({ provider }: { provider: Terminal
   }
 
   return <div className="mt-5 border-t border-slate-500/30 pt-4">
-    <h3 className="text-sm font-semibold">API da Allerac no terminal</h3>
-    <p className="my-2 text-xs opacity-70">Habilita ferramentas para o agente consultar e operar sua Allerac. A chave é gerada automaticamente, vale por 30 dias e pode ser revogada aqui.</p>
+    <h3 className="text-sm font-semibold">API da Allerac no terminal da unit</h3>
+    <p className="my-2 text-xs opacity-70">Habilita ferramentas para o agente consultar e operar esta Allerac. Elas agem como a conta de serviço do terminal, com os acessos escolhidos aqui, para todos que usam a sessão. A chave é gerada automaticamente, vale por 7 dias e pode ser revogada ou renovada aqui. Todo o conteúdo que o agente lê pode tentar instruí-lo, então conceda só o necessário.</p>
     <p className="mb-2 text-sm">{connection ? connection.connected ? 'API conectada' : 'API não conectada' : 'Verificando API…'}</p>
     {connection?.connected && connection.expiresAt && <p className="mb-2 text-xs opacity-60">Válida até {new Date(connection.expiresAt).toLocaleDateString()}</p>}
-    <p className="mb-2 text-xs opacity-70">Sempre inclui leitura da sua identidade, áreas e serviços disponíveis.</p>
+    <p className="mb-2 text-xs opacity-70">Sempre inclui leitura da identidade, áreas e serviços da conta de serviço.</p>
     <div className="mb-3 space-y-2">{options.map(option => <label key={option.id} className="flex items-start gap-2 text-xs"><input type="checkbox" disabled={busy} checked={selected.includes(option.id)} onChange={event => setSelected(current => event.target.checked ? [...current, option.id] : current.filter(id => id !== option.id))} /><span>{option.label}</span></label>)}</div>
     {error && <p role="alert" className="mb-2 text-xs text-amber-500">{error}</p>}
     {message && <p role="status" className="mb-2 text-xs text-indigo-400">{message}</p>}
-    <div className="flex flex-wrap gap-3"><button disabled={busy || !connection} onClick={() => void change(false)} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs text-white disabled:opacity-40">{connection?.connected ? 'Atualizar acessos' : 'Conectar API'}</button>
+    <div className="flex flex-wrap gap-3"><button disabled={busy || !connection} onClick={() => void change(false)} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs text-white disabled:opacity-40">{connection?.connected ? 'Atualizar acessos / renovar' : 'Conectar API'}</button>
       <button disabled={busy} onClick={() => void change(true)} className="text-xs underline disabled:opacity-40">Desconectar API</button>
       <button disabled={busy} onClick={() => void load()} className="text-xs underline disabled:opacity-40">Verificar API</button></div>
   </div>;

@@ -20,7 +20,7 @@ export function createApiConnectionStore({ file, apiUrl }) {
   return {
     metadata: () => connectionMetadata(readApiConnection(file)),
     install(input) {
-      if (!/^alr_live_[a-f0-9]{64}$/.test(input.token) || !/^[a-f0-9-]{36}$/.test(input.keyId) || !Array.isArray(input.scopes) || !input.scopes.every(scope => typeof scope === 'string') || !(Date.parse(input.expiresAt) > Date.now()) || Date.parse(input.expiresAt) > Date.now() + 31 * 86400_000) throw new Error('Invalid API connection');
+      if (!/^alr_live_[a-f0-9]{64}$/.test(input.token) || !/^[a-f0-9-]{36}$/.test(input.keyId) || !Array.isArray(input.scopes) || !input.scopes.every(scope => typeof scope === 'string') || !(Date.parse(input.expiresAt) > Date.now()) || Date.parse(input.expiresAt) > Date.now() + 8 * 86400_000) throw new Error('Invalid API connection');
       const previousKeyId = readApiConnection(file)?.keyId || null;
       const value = { keyId: input.keyId, token: input.token, scopes: input.scopes, expiresAt: input.expiresAt, apiUrl: base.origin };
       fs.mkdirSync(path.dirname(file), { recursive: true });

@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import { terminalApiPolicy } from '@/app/services/terminal/terminal-api-policy';
+import { terminalApiPolicy, terminalScopeDomains } from '@/app/services/terminal/terminal-api-policy';
 import { AuthService, type User } from '@/app/services/auth/auth.service';
 
 jest.mock('@/app/services/auth/auth.service', () => ({ AuthService: jest.fn() }));
@@ -13,4 +13,11 @@ test('self-service grants only identity by default and exposes options for acces
   expect(policy.allowedScopes).not.toContain('jobs:write');
   expect(policy.allowedScopes).not.toContain('email:write');
   expect(policy.options.map(option => option.id)).toEqual(['notes-read', 'notes-write']);
+});
+
+test('service account domains follow only fully granted scope groups', () => {
+  expect(terminalScopeDomains(['profile:read'])).toEqual([]);
+  expect(terminalScopeDomains(['notes:read', 'tickets:read', 'tickets:write'])).toEqual(['notes', 'tickets']);
+  expect(terminalScopeDomains(['health:read'])).toEqual([]);
+  expect(terminalScopeDomains(['health:read', 'health:proxy:read'])).toEqual(['health']);
 });
