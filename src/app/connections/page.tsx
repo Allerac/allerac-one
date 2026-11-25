@@ -1,14 +1,15 @@
 import { requireAuthenticatedUser } from '@/app/lib/domain-access';
 import { AuthService } from '@/app/services/auth/auth.service';
-import { canUseTerminal } from '@/app/lib/claude-terminal';
+import { availableTerminalProviders } from '@/app/lib/unit-terminal';
 import ConnectionsClient from './ConnectionsClient';
 
 export default async function ConnectionsPage() {
   const user = await requireAuthenticatedUser();
   const auth = new AuthService();
-  const [health, notes] = await Promise.all([
+  const [health, notes, terminals] = await Promise.all([
     auth.canAccessDomain(user.id, user.is_admin, 'health'),
     auth.canAccessDomain(user.id, user.is_admin, 'notes'),
+    availableTerminalProviders(user),
   ]);
-  return <ConnectionsClient userId={user.id} health={health} notes={notes} terminal={canUseTerminal(user, 'claude')} codexTerminal={canUseTerminal(user, 'codex')} />;
+  return <ConnectionsClient userId={user.id} health={health} notes={notes} terminal={terminals.includes('claude')} codexTerminal={terminals.includes('codex')} isAdmin={user.is_admin} />;
 }

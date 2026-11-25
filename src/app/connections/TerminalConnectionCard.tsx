@@ -9,7 +9,7 @@ import TerminalApiConnection from './TerminalApiConnection';
 
 type Status = { loggedIn: boolean; authMethod?: string | null; email: string | null; plan: string | null };
 
-export default function TerminalConnectionCard({ provider, enabled, className }: { provider: TerminalProvider; enabled: boolean; className: string }) {
+export default function TerminalConnectionCard({ provider, enabled, isAdmin, className }: { provider: TerminalProvider; enabled: boolean; isAdmin: boolean; className: string }) {
   const t = useTranslations('terminal.card');
   const tErrors = useTranslations('terminal.errors');
   const [status, setStatus] = useState<Status | null>(null);
@@ -37,8 +37,8 @@ export default function TerminalConnectionCard({ provider, enabled, className }:
       <p className="mb-3 text-sm">{error || (status ? status.loggedIn ? connectedLabel : t('notSignedIn') : t('checking'))}</p>
       <Link href={`/terminal?provider=${provider}`} className="inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">{t('openTerminal')}</Link>
       <button onClick={() => void refresh()} className="ml-3 text-sm underline">{t('checkConnection')}</button>
-      <p className="mt-3 text-xs opacity-60">{t('ownerOnly')}</p>
-      <TerminalApiConnection provider={provider} />
+      <p className="mt-3 text-xs opacity-60">{t('shared')}</p>
+      {isAdmin ? <TerminalApiConnection provider={provider} /> : <p className="mt-3 text-xs opacity-60">{t('adminManagesApi')}</p>}
     </> : <p className="text-sm opacity-60">{t('unavailable')}</p>}
   </section>;
 }

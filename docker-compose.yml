@@ -16,6 +16,9 @@
 #                                 (docs/operations/modules-and-profiles.md)
 #   COMPOSE_PROFILES=automation - n8n workflow automation (see docs/roadmap/n8n-workflow-integration.md;
 #                                 needs N8N_ENCRYPTION_KEY, checked by update.sh)
+#   COMPOSE_PROFILES=terminal   - shared Claude Code / Codex terminal containers
+#                                 (docs/roadmap/unit-terminal-container.md; needs
+#                                 CLAUDE_TERMINAL_SECRET and CODEX_TERMINAL_SECRET, checked by update.sh)
 #
 # Required environment variables:
 #   ENCRYPTION_KEY                   - AES key for token encryption
@@ -57,6 +60,39 @@
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.public.yml
 
 name: ${ALLERAC_UNIT:-allerac}
+
+# Shared settings of the Unit terminal services (profile "terminal").
+x-unit-terminal: &unit-terminal
+  build:
+    context: ./infra/unit-terminal
+    dockerfile: Dockerfile
+  # Each service sets its own image tag: compose builds them in parallel and a
+  # shared tag makes the second export fail with "already exists".
+  restart: unless-stopped
+  user: "10001:10001"
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  # No ports, and no seat on the Unit's default network: each provider sits on its
+  # own network shared only with the app, so the CLI reaches app:8080 (the Allerac
+  # MCP) and the internet, never db/redis/ollama/portainer/webhook or the other bridge.
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.UNIT_TERMINAL_PORT)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+    interval: 10s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+  deploy:
+    resources:
+      limits:
+        memory: ${TERMINAL_MEM_LIMIT:-2G}
+        pids: 512
+  profiles:
+    - terminal
 
 services:
   # ============================================
@@ -166,6 +202,42 @@ services:
           memory: 256M
           pids: 512
 
+  # Unit terminal (profile "terminal"): interactive Claude Code / Codex sessions
+  # shared by users granted terminal access by an admin. Each provider has its
+  # own login volume; both share the terminal workspace. Not enforced with
+  # ${VAR:?} because Compose interpolates services whose profile is off;
+  # update.sh checks the secrets when the profile is on.
+  # See docs/roadmap/unit-terminal-container.md.
+  terminal-claude:
+    <<: *unit-terminal
+    container_name: ${ALLERAC_UNIT:-allerac}-terminal-claude
+    image: ${ALLERAC_UNIT:-allerac}-terminal-claude:local
+    networks:
+      - terminal_claude
+    environment:
+      - UNIT_TERMINAL_PROVIDER=claude
+      - UNIT_TERMINAL_PORT=3015
+      - CLAUDE_TERMINAL_SECRET=${CLAUDE_TERMINAL_SECRET:-}
+    volumes:
+      - terminal_claude_home:/home/terminal
+      - ${TERMINAL_WORKSPACE:-terminal_workspace}:/workspace
+
+  terminal-codex:
+    <<: *unit-terminal
+    container_name: ${ALLERAC_UNIT:-allerac}-terminal-codex
+    image: ${ALLERAC_UNIT:-allerac}-terminal-codex:local
+    networks:
+      - terminal_codex
+    environment:
+      - UNIT_TERMINAL_PROVIDER=codex
+      - UNIT_TERMINAL_PORT=3016
+      - CODEX_TERMINAL_SECRET=${CODEX_TERMINAL_SECRET:-}
+      # workspace-write | read-only | danger-full-access (the container is then the only sandbox)
+      - CODEX_TERMINAL_SANDBOX=${CODEX_TERMINAL_SANDBOX:-workspace-write}
+    volumes:
+      - terminal_codex_home:/home/terminal
+      - ${TERMINAL_WORKSPACE:-terminal_workspace}:/workspace
+
   # Personal "health" module (Garmin + Strava sync). Only started with the
   # health profile. install.sh/update.sh/allerac.sh add it from ALLERAC_PROFILE
   # (personal/all); plain `docker compose up` needs COMPOSE_PROFILES=health.
@@ -210,6 +282,11 @@ services:
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
     container_name: ${ALLERAC_UNIT:-allerac}-app
     restart: unless-stopped
+    # The terminal networks hold only the app and one terminal provider each.
+    networks:
+      - default
+      - terminal_claude
+      - terminal_codex
     # Per-Unit env file (a second Unit sets ALLERAC_ENV_FILE=.env.<unit> in it).
     env_file: ${ALLERAC_ENV_FILE:-.env}
     environment:
@@ -242,6 +319,11 @@ services:
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - EXECUTOR_URL=http://executor:3001
       - EXECUTOR_SECRET=${EXECUTOR_SECRET:?EXECUTOR_SECRET is required}
+      # Unit terminal (profile "terminal"): a provider is enabled when its secret is set.
+      - CLAUDE_TERMINAL_URL=${CLAUDE_TERMINAL_URL:-http://terminal-claude:3015}
+      - CLAUDE_TERMINAL_SECRET=${CLAUDE_TERMINAL_SECRET:-}
+      - CODEX_TERMINAL_URL=${CODEX_TERMINAL_URL:-http://terminal-codex:3016}
+      - CODEX_TERMINAL_SECRET=${CODEX_TERMINAL_SECRET:-}
       - HEALTH_WORKER_URL=${HEALTH_WORKER_URL:-http://health-worker:8001}
       - HEALTH_WORKER_SECRET=${HEALTH_WORKER_SECRET:-}
       - INSTAGRAM_APP_ID=${INSTAGRAM_APP_ID:-}
@@ -804,3 +886,19 @@ volumes:
     name: ${ALLERAC_UNIT:-allerac}_portainer_data
   n8n_data:
     name: ${ALLERAC_UNIT:-allerac}_n8n_data
+  # Unit terminal: CLI logins and the Allerac API connection (credentials —
+  # back up as secrets), and the shared terminal workspace.
+  terminal_claude_home:
+    name: ${ALLERAC_UNIT:-allerac}_terminal_claude_home
+  terminal_codex_home:
+    name: ${ALLERAC_UNIT:-allerac}_terminal_codex_home
+  terminal_workspace:
+    name: ${ALLERAC_UNIT:-allerac}_terminal_workspace
+
+networks:
+  default:
+  # One network per terminal provider, shared only with the app (see x-unit-terminal).
+  terminal_claude:
+    name: ${ALLERAC_UNIT:-allerac}_terminal_claude
+  terminal_codex:
+    name: ${ALLERAC_UNIT:-allerac}_terminal_codex

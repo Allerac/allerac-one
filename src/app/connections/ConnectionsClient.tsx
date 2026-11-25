@@ -10,6 +10,7 @@ import StravaSettings from '@/app/components/settings/StravaSettings';
 import NotesConnectorsModal from '@/app/notes/NotesConnectorsModal';
 import { listGoogleDriveConnections, listOneNoteConnections } from '@/app/actions/notes-connectors';
 import TerminalConnectionCard from './TerminalConnectionCard';
+import TerminalSessionHistory from './TerminalSessionHistory';
 
 const providers = [
   { id: 'anthropic', name: 'Anthropic API', field: 'anthropicConfigured' },
@@ -21,7 +22,7 @@ const providers = [
 
 type DocumentStatus = 'checking' | 'checkFailed' | 'requiresUnitSetup' | 'connected' | 'notConnected';
 type ProviderStatus = Awaited<ReturnType<typeof loadProviderConfigurationStatus>>;
-export default function ConnectionsClient({ userId, health, notes, terminal, codexTerminal }: { userId: string; health: boolean; notes: boolean; terminal: boolean; codexTerminal: boolean }) {
+export default function ConnectionsClient({ userId, health, notes, terminal, codexTerminal, isAdmin }: { userId: string; health: boolean; notes: boolean; terminal: boolean; codexTerminal: boolean; isAdmin: boolean }) {
   const t = useTranslations('connections');
   const { isDark } = useTheme();
   const [status, setStatus] = useState<ProviderStatus | null>(null);
@@ -58,8 +59,9 @@ export default function ConnectionsClient({ userId, health, notes, terminal, cod
       <header className="mb-7 flex items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{t('title')}</h1><p className="mt-2 text-sm opacity-70">{t('subtitle')}</p></div><Link href="/" className="text-sm text-indigo-400 hover:underline">{t('back')}</Link></header>
       {message && <p role="status" className="mb-4 rounded-lg border border-indigo-500 p-3 text-sm">{message}</p>}
       <div className="grid gap-4 md:grid-cols-2">
-        <TerminalConnectionCard provider="claude" enabled={terminal} className={card} />
-        <TerminalConnectionCard provider="codex" enabled={codexTerminal} className={card} />
+        <TerminalConnectionCard provider="claude" enabled={terminal} isAdmin={isAdmin} className={card} />
+        <TerminalConnectionCard provider="codex" enabled={codexTerminal} isAdmin={isAdmin} className={card} />
+        {isAdmin && (terminal || codexTerminal) && <TerminalSessionHistory className={`${card} md:col-span-2`} />}
         {providers.map(provider => <section className={card} key={provider.id}><h2 className="font-semibold">{provider.name}</h2><p className="my-2 text-sm opacity-70">{t(`providers.${provider.id}`)}</p><p className="mb-3 text-sm">{status ? status[provider.field] ? t('configuredForYou') : t('notConfigured') : t('status.checking')}</p>
           {editing === provider.id ? <form onSubmit={event => { event.preventDefault(); void save(provider.id); }} className="flex flex-wrap gap-2"><input type="password" value={key} onChange={event => setKey(event.target.value)} autoComplete="off" aria-label={t('apiKeyLabel', { name: provider.name })} placeholder={t('apiKeyPlaceholder')} className="min-w-0 flex-1 rounded-lg border border-slate-500 bg-transparent px-3 py-2 text-sm" required /><button disabled={saving} className={button}>{t('save')}</button><button type="button" disabled={saving} onClick={() => { setEditing(''); setKey(''); }} className="text-sm underline">{t('cancel')}</button></form> : <button className={button} onClick={() => { setEditing(provider.id); setKey(''); }}>{t('configureKey')}</button>}
           <p className="mt-3 text-xs opacity-60">{t('personalKeyNote')}</p>

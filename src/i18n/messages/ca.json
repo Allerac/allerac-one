@@ -810,7 +810,6 @@
     },
     "page": {
       "title": "Terminal de la unit",
-      "localSession": "sessió local",
       "connected": "Connectat",
       "disconnected": "Desconnectat",
       "connections": "Connexions",
@@ -819,11 +818,14 @@
       "wait": "Espereu…",
       "open": "Obrir / reconnectar",
       "stop": "Tancar la sessió",
-      "help": "Les aprovacions apareixen al mateix terminal. Canviar de proveïdor manté l'altra sessió oberta. Tancar aquesta pàgina manté la sessió fins a 30 minuts sense interacció. Feu servir Ctrl+C per interrompre una tasca.",
+      "help": "Tothom amb accés al terminal d'aquesta unit veu i escriu en aquesta mateixa sessió. Les aprovacions apareixen al mateix terminal. Canviar de proveïdor manté l'altra sessió oberta. Sense ningú connectat, la sessió resta oberta fins a 30 minuts. Fes servir Ctrl+C per interrompre una tasca.",
       "terminalLabel": "Terminal interactiu · {provider}",
       "sessionChanged": "La sessió ha canviat. Torneu a connectar-vos al terminal.",
       "historyTruncated": "L'historial del terminal ha superat el límit. Tanqueu la sessió i obriu-ne una de nova.",
-      "sessionEnded": "Sessió tancada. En podeu obrir una de nova."
+      "sessionEnded": "Sessió tancada. En podeu obrir una de nova.",
+      "sharedSession": "sessió compartida de la unit",
+      "loginHintClaude": "Claude Code no ha iniciat sessió en aquesta unit. Obre la sessió: Claude Code mostra un enllaç d'inici de sessió (o escriu <code>/login</code>). Obre l'enllaç al navegador i enganxa el codi aquí.",
+      "loginHintCodex": "Codex no ha iniciat sessió en aquesta unit. Obre la sessió i inicia sessió amb ChatGPT amb el codi de dispositiu. Si la pantalla no ho ofereix, executa al servidor: <code>docker exec -it UNIT-terminal-codex codex login --device-auth</code>"
     },
     "unlock": {
       "title": "Confirmeu la contrasenya",
@@ -834,7 +836,7 @@
     },
     "card": {
       "title": "{provider} a la unit",
-      "description": "Sessió interactiva a l'amfitrió de la unit. L'inici de sessió i les aprovacions els gestiona el {cli} original.",
+      "description": "Sessió interactiva compartida en un contenidor d'aquesta unit. L'inici de sessió i les aprovacions els controla el {cli} original.",
       "codexSubscription": "Connectat amb ChatGPT · subscripció",
       "codexApiLogin": "Sessió amb clau d'API — inicieu sessió amb ChatGPT al Codex per fer servir la subscripció.",
       "claudeConnected": "Connectat · {account} · {plan}",
@@ -844,18 +846,19 @@
       "checking": "Comprovant…",
       "openTerminal": "Obrir el terminal",
       "checkConnection": "Comprovar la connexió",
-      "ownerOnly": "Disponible només per al vostre usuari en aquesta unit. Gestioneu l'inici i el tancament de sessió al mateix terminal.",
-      "unavailable": "No disponible per al vostre usuari en aquesta unit."
+      "unavailable": "No disponible per al teu usuari en aquesta unit. Demana accés al terminal a un administrador.",
+      "shared": "Compartit per tothom amb accés al terminal en aquesta unit: mateixa sessió, mateix inici de sessió i mateix workspace. Iniciar o tancar sessió al terminal val per a tothom.",
+      "adminManagesApi": "Les eines de l'API d'Allerac en aquest terminal les configura un administrador."
     },
     "api": {
-      "title": "API d'Allerac al terminal",
-      "description": "Habilita eines perquè l'agent consulti i operi la vostra Allerac. La clau es genera automàticament, és vàlida durant 30 dies i es pot revocar aquí.",
+      "title": "API d'Allerac al terminal de la unit",
+      "description": "Habilita eines perquè l'agent consulti i operi aquesta Allerac. Actuen com el compte de servei del terminal, amb els accessos triats aquí, per a tothom que fa servir la sessió. La clau es genera automàticament, val 7 dies i es pot revocar o renovar aquí. Qualsevol contingut que l'agent llegeixi pot intentar instruir-lo, així que concedeix només el necessari.",
       "statusConnected": "API connectada",
       "statusDisconnected": "API no connectada",
       "statusChecking": "Comprovant l'API…",
       "validUntil": "Vàlida fins al {date}",
-      "baseScopes": "Sempre inclou la lectura de la vostra identitat, àrees i serveis disponibles.",
-      "update": "Actualitzar accessos",
+      "baseScopes": "Sempre inclou lectura de la identitat, àrees i serveis del compte de servei.",
+      "update": "Actualitzar accessos / renovar",
       "connect": "Connectar l'API",
       "disconnect": "Desconnectar l'API",
       "check": "Comprovar l'API",
@@ -879,7 +882,7 @@
       "stopFailed": "Error en tancar la sessió.",
       "checkFailed": "Error en comprovar la connexió.",
       "connectionFailed": "Error de connexió.",
-      "bridgeUnavailable": "Pont local no disponible.",
+      "bridgeUnavailable": "Servei de terminal no disponible.",
       "reauth_required": "Confirmeu la contrasenya per continuar.",
       "invalid_password": "Contrasenya incorrecta.",
       "signin_required": "Aquest compte no té contrasenya. Tanqueu la sessió, torneu a entrar i proveu-ho abans de 15 minuts.",
@@ -889,10 +892,11 @@
       "unknown_provider": "Proveïdor de terminal desconegut.",
       "unknown_operation": "Operació de terminal desconeguda.",
       "request_too_large": "Sol·licitud massa gran.",
-      "terminal_unavailable": "No s'ha pogut accedir al terminal en aquesta unit. Comproveu el pont local.",
-      "connection_unavailable": "No s'ha pogut accedir a la connexió de l'API. Comproveu el pont local.",
-      "scope_not_allowed": "Accés no autoritzat per a aquest usuari.",
-      "install_failed": "No s'ha pogut instal·lar la connexió al terminal. La clau creada s'ha revocat."
+      "terminal_unavailable": "No s'ha pogut accedir al terminal en aquesta unit. Revisa el servei de terminal.",
+      "connection_unavailable": "No s'ha pogut accedir a la connexió de l'API. Revisa el servei de terminal.",
+      "scope_not_allowed": "Accés no autoritzat en aquesta unit.",
+      "install_failed": "No s'ha pogut instal·lar la connexió al terminal. La clau creada s'ha revocat.",
+      "not_configured": "Terminal no configurat en aquesta unit."
     }
   },
   "connections": {

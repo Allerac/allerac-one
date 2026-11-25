@@ -810,7 +810,6 @@
     },
     "page": {
       "title": "Unit terminal",
-      "localSession": "local session",
       "connected": "Connected",
       "disconnected": "Disconnected",
       "connections": "Connections",
@@ -819,11 +818,14 @@
       "wait": "Please wait…",
       "open": "Open / reconnect",
       "stop": "End session",
-      "help": "Approvals appear in the terminal itself. Switching providers keeps the other session open. Closing this page keeps the session for up to 30 minutes without interaction. Use Ctrl+C to interrupt a task.",
+      "help": "Everyone with terminal access on this unit sees and types in this same session. Approvals appear in the terminal itself. Switching providers keeps the other session open. With nobody connected, the session stays open for up to 30 minutes. Use Ctrl+C to interrupt a task.",
       "terminalLabel": "Interactive terminal · {provider}",
       "sessionChanged": "The session changed. Reconnect to the terminal.",
       "historyTruncated": "The terminal history exceeded the limit. End the session and open a new one.",
-      "sessionEnded": "Session ended. You can open a new one."
+      "sessionEnded": "Session ended. You can open a new one.",
+      "sharedSession": "shared unit session",
+      "loginHintClaude": "Claude Code is not signed in on this unit. Open the session: Claude Code shows a login link (or type <code>/login</code>). Open the link in your browser and paste the code here.",
+      "loginHintCodex": "Codex is not signed in on this unit. Open the session and sign in with ChatGPT using the device code. If the screen does not offer it, run on the server: <code>docker exec -it UNIT-terminal-codex codex login --device-auth</code>"
     },
     "unlock": {
       "title": "Confirm your password",
@@ -834,7 +836,7 @@
     },
     "card": {
       "title": "{provider} on this unit",
-      "description": "Interactive session on the unit host. Sign-in and approvals are handled by the original {cli}.",
+      "description": "Shared interactive session in a container of this unit. Sign-in and approvals are handled by the original {cli}.",
       "codexSubscription": "Connected with ChatGPT · subscription",
       "codexApiLogin": "Signed in with an API key — sign in with ChatGPT in Codex to use your subscription.",
       "claudeConnected": "Connected · {account} · {plan}",
@@ -844,18 +846,19 @@
       "checking": "Checking…",
       "openTerminal": "Open terminal",
       "checkConnection": "Check connection",
-      "ownerOnly": "Available only to your user on this unit. Manage sign-in and sign-out in the terminal itself.",
-      "unavailable": "Not available to your user on this unit."
+      "unavailable": "Not available to your user on this unit. Ask an administrator for terminal access.",
+      "shared": "Shared by everyone with terminal access on this unit: same session, same sign-in and same workspace. Signing in or out in the terminal applies to everyone.",
+      "adminManagesApi": "The Allerac API tools in this terminal are configured by an administrator."
     },
     "api": {
-      "title": "Allerac API in the terminal",
-      "description": "Enables tools for the agent to query and operate your Allerac. The key is generated automatically, is valid for 30 days and can be revoked here.",
+      "title": "Allerac API in the unit terminal",
+      "description": "Enables tools for the agent to query and operate this Allerac. They act as the terminal service account, with the access chosen here, for everyone using the session. The key is generated automatically, is valid for 7 days and can be revoked or renewed here. Any content the agent reads may try to instruct it, so grant only what is needed.",
       "statusConnected": "API connected",
       "statusDisconnected": "API not connected",
       "statusChecking": "Checking API…",
       "validUntil": "Valid until {date}",
-      "baseScopes": "Always includes read access to your identity, areas and available services.",
-      "update": "Update access",
+      "baseScopes": "Always includes read access to the service account's identity, areas and services.",
+      "update": "Update access / renew",
       "connect": "Connect API",
       "disconnect": "Disconnect API",
       "check": "Check API",
@@ -879,7 +882,7 @@
       "stopFailed": "Failed to end the session.",
       "checkFailed": "Failed to check the connection.",
       "connectionFailed": "Connection failed.",
-      "bridgeUnavailable": "Local bridge unavailable.",
+      "bridgeUnavailable": "Terminal service unavailable.",
       "reauth_required": "Confirm your password to continue.",
       "invalid_password": "Incorrect password.",
       "signin_required": "This account has no password. Sign out and sign in again, then try within 15 minutes.",
@@ -889,10 +892,11 @@
       "unknown_provider": "Unknown terminal provider.",
       "unknown_operation": "Unknown terminal operation.",
       "request_too_large": "Request too large.",
-      "terminal_unavailable": "Unable to reach the terminal on this unit. Check the local bridge.",
-      "connection_unavailable": "Unable to reach the API connection. Check the local bridge.",
-      "scope_not_allowed": "Access not allowed for this user.",
-      "install_failed": "Unable to install the connection on the terminal. The new key was revoked."
+      "terminal_unavailable": "Unable to reach the terminal on this unit. Check the terminal service.",
+      "connection_unavailable": "Unable to reach the API connection. Check the terminal service.",
+      "scope_not_allowed": "Access not allowed on this unit.",
+      "install_failed": "Unable to install the connection on the terminal. The new key was revoked.",
+      "not_configured": "Terminal is not configured on this unit."
     }
   },
   "connections": {

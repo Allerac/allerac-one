@@ -16,6 +16,7 @@ def check(item):
     result = dict(store=store, host=host, passed=False)
     try:
         ctx = ssl.create_default_context(cafile=bundle)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         with socket.create_connection((host, 443), timeout=15) as raw:
             with ctx.wrap_socket(raw, server_hostname=host):
                 result.update(accepted=True, passed=host == CONTROL)

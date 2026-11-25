@@ -23,3 +23,8 @@ export async function terminalApiPolicy(user: User) {
 }
 
 export function terminalApiKeyName(provider: string) { return `Terminal API · ${provider}`; }
+
+/** Domains the key owner needs so the API's route-level domain checks allow the granted scope groups. */
+export function terminalScopeDomains(scopes: readonly string[]): string[] {
+  return [...new Set(groups.filter(group => group.scopes.every(scope => scopes.includes(scope))).map(group => group.domain))];
+}

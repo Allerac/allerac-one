@@ -75,6 +75,7 @@ export interface AdminUser {
   credit_blocked: boolean;
   credit_plan_slug: string | null;
   credit_plan_name: string | null;
+  terminal_access: boolean;
 }
 
 export interface AdminDomain {
@@ -95,12 +96,14 @@ export async function listUsers(): Promise<AdminUser[]> {
            COALESCE(ca.blocked, false) AS credit_blocked,
            cp.slug AS credit_plan_slug,
            cp.name AS credit_plan_name,
-           COALESCE(array_agg(d.slug ORDER BY d.slug) FILTER (WHERE d.slug IS NOT NULL), '{}') AS domains
+           COALESCE(array_agg(d.slug ORDER BY d.slug) FILTER (WHERE d.slug IS NOT NULL), '{}') AS domains,
+           EXISTS (SELECT 1 FROM user_terminal_access ta WHERE ta.user_id = u.id) AS terminal_access
     FROM users u
     LEFT JOIN credit_accounts ca ON ca.user_id = u.id
     LEFT JOIN credit_plans cp ON cp.id = ca.plan_id
     LEFT JOIN user_domain_access uda ON u.id = uda.user_id
     LEFT JOIN domains d ON uda.domain_id = d.id
+    WHERE u.is_service_account = false
     GROUP BY u.id, ca.balance_microusd, ca.reserved_microusd, ca.unlimited, ca.blocked, cp.slug, cp.name
     ORDER BY u.created_at ASC
   `);
@@ -267,6 +270,27 @@ export async function updateUserDomains(
   }
 }
 
+/** Grants or revokes the shared Unit terminal. Admins have it implicitly. */
+export async function updateUserTerminalAccess(
+  userId: string,
+  enabled: boolean
+): Promise<{ success: true } | { success: false; error: string }> {
+  const currentUser = await assertAdmin();
+  if (!isUuid(userId) || typeof enabled !== 'boolean') return { success: false, error: 'Invalid user ID' };
+  if (enabled) {
+    const user = await pool.query('SELECT 1 FROM users WHERE id = $1 AND is_service_account = false', [userId]);
+    if (user.rowCount === 0) return { success: false, error: 'User not found' };
+    await pool.query(
+      `INSERT INTO user_terminal_access (user_id, granted_by) VALUES ($1, $2)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [userId, currentUser.id]
+    );
+  } else {
+    await pool.query('DELETE FROM user_terminal_access WHERE user_id = $1', [userId]);
+  }
+  return { success: true };
+}
+
 export async function toggleUserActive(
   userId: string,
   isActive: boolean
@@ -287,7 +311,8 @@ export async function updateUserRole(
   if (!isUuid(userId)) return { success: false, error: 'Invalid user ID' };
   if (currentUser.id === userId) return { success: false, error: 'Cannot change your own role' };
 
-  await pool.query('UPDATE users SET is_admin = $1 WHERE id = $2', [makeAdmin, userId]);
+  const updated = await pool.query('UPDATE users SET is_admin = $1 WHERE id = $2 AND is_service_account = false', [makeAdmin, userId]);
+  if (updated.rowCount === 0) return { success: false, error: 'User not found' };
   try {
     await creditService.assignPlan(userId, makeAdmin ? 'pro' : 'free', currentUser.id);
     return { success: true };
@@ -313,7 +338,7 @@ export async function resetUserPassword(
 
   const result = await pool.query(
     `UPDATE users SET password_hash = $1, password_hash_version = 2
-     WHERE id = $2 AND is_admin = false`,
+     WHERE id = $2 AND is_admin = false AND is_service_account = false`,
     [bcryptHash, userId]
   );
 

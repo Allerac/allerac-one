@@ -2,7 +2,7 @@
 export const TERMINAL_ERROR_CODES = [
   'reauth_required', 'invalid_password', 'signin_required', 'rate_limited', 'unlock_unavailable', 'invalid_request',
   'unknown_provider', 'unknown_operation', 'request_too_large', 'terminal_unavailable', 'connection_unavailable',
-  'scope_not_allowed', 'install_failed',
+  'scope_not_allowed', 'install_failed', 'not_configured',
 ] as const;
 export type TerminalErrorCode = typeof TERMINAL_ERROR_CODES[number];
 
@@ -26,7 +26,7 @@ export const needsTerminalUnlock = (error: unknown) => error instanceof Terminal
 
 /**
  * Turn an error into a user-facing message: known codes are translated, other
- * server messages (already English, e.g. from the local bridge) are shown as is.
+ * server messages (already English, e.g. from the terminal service) are shown as is.
  */
 export function terminalErrorMessage(error: unknown, translate: (key: string) => string, fallbackKey = 'generic'): string {
   if (error instanceof TerminalRequestError) return error.code ? translate(error.code) : error.message || translate(fallbackKey);

@@ -1,13 +1,12 @@
 import { z } from 'zod';
 import { authenticationErrorResponse, ForbiddenError, requireCurrentUser } from '@/app/lib/auth-session';
-import { canUseTerminal } from '@/app/lib/claude-terminal';
+import { availableTerminalProviders } from '@/app/lib/unit-terminal';
 import { acquireOperationLimit } from '@/app/lib/operation-limiter';
 import { isPrehashedPassword } from '@/app/lib/password-prehash';
 import {
   checkTerminalUnlock, currentSessionToken, grantTerminalUnlock, revokeTerminalUnlock, TERMINAL_RECENT_SIGN_IN_MS,
 } from '@/app/lib/terminal-unlock';
 import { AuthService } from '@/app/services/auth/auth.service';
-import { TERMINAL_PROVIDERS } from '@/app/terminal/providers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +19,7 @@ const failure = (code: string, error: string, status: number, headers: Record<st
 async function handle(request: Request) {
   try {
     const user = await requireCurrentUser();
-    if (!TERMINAL_PROVIDERS.some(provider => canUseTerminal(user, provider))) throw new ForbiddenError('Terminal access is not enabled for this user');
+    if ((await availableTerminalProviders(user)).length === 0) throw new ForbiddenError('Terminal access is not enabled for this user');
     const token = await currentSessionToken();
     if (!token) return failure('reauth_required', 'Recent sign-in required', 401);
     if (request.method === 'GET') {

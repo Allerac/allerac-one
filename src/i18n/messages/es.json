@@ -719,7 +719,6 @@
     },
     "page": {
       "title": "Terminal de la unit",
-      "localSession": "sesión local",
       "connected": "Conectado",
       "disconnected": "Desconectado",
       "connections": "Conexiones",
@@ -728,11 +727,14 @@
       "wait": "Espere…",
       "open": "Abrir / reconectar",
       "stop": "Terminar sesión",
-      "help": "Las aprobaciones aparecen en el propio terminal. Cambiar de proveedor mantiene la otra sesión abierta. Cerrar esta página mantiene la sesión hasta 30 minutos sin interacción. Use Ctrl+C para interrumpir una tarea.",
+      "help": "Todos con acceso al terminal de esta unit ven y escriben en esta misma sesión. Las aprobaciones aparecen en el propio terminal. Cambiar de proveedor mantiene la otra sesión abierta. Sin nadie conectado, la sesión sigue abierta hasta 30 minutos. Usa Ctrl+C para interrumpir una tarea.",
       "terminalLabel": "Terminal interactivo · {provider}",
       "sessionChanged": "La sesión cambió. Vuelva a conectarse al terminal.",
       "historyTruncated": "El historial del terminal superó el límite. Termine la sesión y abra una nueva.",
-      "sessionEnded": "Sesión terminada. Puede abrir una nueva."
+      "sessionEnded": "Sesión terminada. Puede abrir una nueva.",
+      "sharedSession": "sesión compartida de la unit",
+      "loginHintClaude": "Claude Code no ha iniciado sesión en esta unit. Abre la sesión: Claude Code muestra un enlace de inicio de sesión (o escribe <code>/login</code>). Abre el enlace en tu navegador y pega el código aquí.",
+      "loginHintCodex": "Codex no ha iniciado sesión en esta unit. Abre la sesión e inicia sesión con ChatGPT mediante el código de dispositivo. Si la pantalla no lo ofrece, ejecuta en el servidor: <code>docker exec -it UNIT-terminal-codex codex login --device-auth</code>"
     },
     "unlock": {
       "title": "Confirme su contraseña",
@@ -743,7 +745,7 @@
     },
     "card": {
       "title": "{provider} en la unit",
-      "description": "Sesión interactiva en el host de la unit. El inicio de sesión y las aprobaciones los gestiona el {cli} original.",
+      "description": "Sesión interactiva compartida en un contenedor de esta unit. El inicio de sesión y las aprobaciones los controla el {cli} original.",
       "codexSubscription": "Conectado con ChatGPT · suscripción",
       "codexApiLogin": "Sesión con clave de API — inicie sesión con ChatGPT en Codex para usar la suscripción.",
       "claudeConnected": "Conectado · {account} · {plan}",
@@ -753,18 +755,19 @@
       "checking": "Comprobando…",
       "openTerminal": "Abrir terminal",
       "checkConnection": "Comprobar conexión",
-      "ownerOnly": "Disponible solo para su usuario en esta unit. Gestione el inicio y cierre de sesión en el propio terminal.",
-      "unavailable": "No disponible para su usuario en esta unit."
+      "unavailable": "No disponible para tu usuario en esta unit. Pide acceso al terminal a un administrador.",
+      "shared": "Compartido por todos con acceso al terminal en esta unit: misma sesión, mismo inicio de sesión y mismo workspace. Iniciar o cerrar sesión en el terminal vale para todos.",
+      "adminManagesApi": "Las herramientas de la API de Allerac en este terminal las configura un administrador."
     },
     "api": {
-      "title": "API de Allerac en el terminal",
-      "description": "Habilita herramientas para que el agente consulte y opere su Allerac. La clave se genera automáticamente, es válida durante 30 días y puede revocarse aquí.",
+      "title": "API de Allerac en el terminal de la unit",
+      "description": "Habilita herramientas para que el agente consulte y opere esta Allerac. Actúan como la cuenta de servicio del terminal, con los accesos elegidos aquí, para todos los que usan la sesión. La clave se genera automáticamente, vale 7 días y puede revocarse o renovarse aquí. Cualquier contenido que el agente lea puede intentar instruirlo, así que concede solo lo necesario.",
       "statusConnected": "API conectada",
       "statusDisconnected": "API no conectada",
       "statusChecking": "Comprobando API…",
       "validUntil": "Válida hasta {date}",
-      "baseScopes": "Siempre incluye lectura de su identidad, áreas y servicios disponibles.",
-      "update": "Actualizar accesos",
+      "baseScopes": "Siempre incluye lectura de la identidad, áreas y servicios de la cuenta de servicio.",
+      "update": "Actualizar accesos / renovar",
       "connect": "Conectar API",
       "disconnect": "Desconectar API",
       "check": "Comprobar API",
@@ -788,7 +791,7 @@
       "stopFailed": "Error al terminar la sesión.",
       "checkFailed": "Error al comprobar la conexión.",
       "connectionFailed": "Error de conexión.",
-      "bridgeUnavailable": "Puente local no disponible.",
+      "bridgeUnavailable": "Servicio de terminal no disponible.",
       "reauth_required": "Confirme su contraseña para continuar.",
       "invalid_password": "Contraseña incorrecta.",
       "signin_required": "Esta cuenta no tiene contraseña. Cierre sesión, vuelva a entrar e inténtelo en menos de 15 minutos.",
@@ -798,10 +801,11 @@
       "unknown_provider": "Proveedor de terminal desconocido.",
       "unknown_operation": "Operación de terminal desconocida.",
       "request_too_large": "Solicitud demasiado grande.",
-      "terminal_unavailable": "No se pudo acceder al terminal en esta unit. Compruebe el puente local.",
-      "connection_unavailable": "No se pudo acceder a la conexión de la API. Compruebe el puente local.",
-      "scope_not_allowed": "Acceso no autorizado para este usuario.",
-      "install_failed": "No se pudo instalar la conexión en el terminal. La clave creada se revocó."
+      "terminal_unavailable": "No se pudo acceder al terminal en esta unit. Revisa el servicio de terminal.",
+      "connection_unavailable": "No se pudo acceder a la conexión de la API. Revisa el servicio de terminal.",
+      "scope_not_allowed": "Acceso no autorizado en esta unit.",
+      "install_failed": "No se pudo instalar la conexión en el terminal. La clave creada se revocó.",
+      "not_configured": "Terminal no configurado en esta unit."
     }
   },
   "connections": {

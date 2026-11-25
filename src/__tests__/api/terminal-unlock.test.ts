@@ -3,6 +3,7 @@ import { GET, POST, DELETE } from '@/app/api/terminal/unlock/route';
 import { requireCurrentUser, UnauthorizedError } from '@/app/lib/auth-session';
 import { checkTerminalUnlock, revokeTerminalUnlock } from '@/app/lib/terminal-unlock';
 import { AuthService } from '@/app/services/auth/auth.service';
+import pool from '@/app/clients/db';
 
 jest.mock('next/headers', () => ({ cookies: jest.fn(async () => ({ get: (name: string) => (name === 'session_token' ? { value: 'session-token' } : undefined) })) }));
 jest.mock('@/app/lib/auth-session', () => {
@@ -10,6 +11,7 @@ jest.mock('@/app/lib/auth-session', () => {
   return { ...errors, requireCurrentUser: jest.fn(), authenticationErrorResponse: (error: unknown) => error instanceof errors.UnauthorizedError ? Response.json({}, { status: 401 }) : error instanceof errors.ForbiddenError ? Response.json({}, { status: 403 }) : null };
 });
 jest.mock('@/app/services/auth/auth.service', () => ({ AuthService: jest.fn() }));
+jest.mock('@/app/clients/db', () => ({ __esModule: true, default: { query: jest.fn() } }));
 
 const prehash = 'a'.repeat(64);
 const verifyUserPassword = jest.fn();
@@ -18,7 +20,9 @@ const originalEnv = { ...process.env };
 const request = (method: string, body?: unknown, origin = 'http://localhost:8080') => new Request('http://localhost:8080/api/terminal/unlock', { method, headers: { host: 'localhost:8080', origin }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
 
 beforeEach(() => {
-  process.env.CLAUDE_TERMINAL_URL = 'http://host.docker.internal:3015'; process.env.CLAUDE_TERMINAL_SECRET = 's'.repeat(40); process.env.CLAUDE_TERMINAL_USER_ID = 'owner';
+  process.env.CLAUDE_TERMINAL_SECRET = 's'.repeat(40);
+  // Only 'owner' was granted the terminal by an admin.
+  jest.mocked(pool.query).mockImplementation((async (_sql: string, params: unknown[]) => ({ rowCount: params[0] === 'owner' ? 1 : 0, rows: [] })) as never);
   jest.mocked(requireCurrentUser).mockResolvedValue({ id: 'owner', is_admin: false } as Awaited<ReturnType<typeof requireCurrentUser>>);
   jest.mocked(AuthService).mockImplementation(() => ({ verifyUserPassword, getSessionCreatedAt }) as unknown as AuthService);
   verifyUserPassword.mockResolvedValue('valid');
@@ -70,10 +74,14 @@ test('accounts without a password unlock only from a fresh sign-in', async () =>
   expect((await POST(request('POST', {}))).status).toBe(200);
 });
 
-test('requires a signed-in terminal user; admins do not bypass this', async () => {
-  jest.mocked(requireCurrentUser).mockResolvedValue({ id: 'admin', is_admin: true } as Awaited<ReturnType<typeof requireCurrentUser>>);
+test('requires terminal access; admins have it but still confirm their password', async () => {
+  jest.mocked(requireCurrentUser).mockResolvedValue({ id: 'other', is_admin: false } as Awaited<ReturnType<typeof requireCurrentUser>>);
   expect((await POST(request('POST', { password: prehash }))).status).toBe(403);
   jest.mocked(requireCurrentUser).mockRejectedValue(new UnauthorizedError());
   expect((await POST(request('POST', { password: prehash }))).status).toBe(401);
   expect(verifyUserPassword).not.toHaveBeenCalled();
+  jest.mocked(requireCurrentUser).mockResolvedValue({ id: 'admin', is_admin: true } as Awaited<ReturnType<typeof requireCurrentUser>>);
+  verifyUserPassword.mockResolvedValue('invalid');
+  expect((await POST(request('POST', { password: prehash }))).status).toBe(403);
+  expect(verifyUserPassword).toHaveBeenCalledWith('admin', prehash);
 });

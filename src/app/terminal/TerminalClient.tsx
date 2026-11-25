@@ -26,6 +26,15 @@ export default function TerminalClient({ provider, available }: { provider: Term
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const [generation, setGeneration] = useState(0);
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`/api/terminal/status?provider=${provider}`, { cache: 'no-store', signal: controller.signal })
+      .then(async response => { const data = await response.json(); if (response.ok) setLoggedIn(data.loggedIn === true); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [provider, connected]);
   const [locked, setLocked] = useState<boolean | null>(null);
   // Translate a failure; a reauth failure also shows the unlock prompt.
   const fail = useCallback((e: unknown, fallbackKey = 'generic') => {
@@ -63,6 +72,21 @@ export default function TerminalClient({ provider, available }: { provider: Term
       term.open(container.current);
       fit.fit();
       terminal.current = term;
+      // xterm turns Ctrl+V into ^V on Windows/Linux, so the browser never fires the paste
+      // event. Hand clipboard shortcuts back to the browser; xterm's paste listener does the rest.
+      term.attachCustomKeyEventHandler(event => {
+        if (event.type !== 'keydown') return true;
+        const key = event.key.toLowerCase();
+        if ((event.ctrlKey && !event.altKey && key === 'v') || (event.shiftKey && key === 'insert')) return false;
+        // Ctrl+C copies only when text is selected; otherwise it still interrupts (^C).
+        if (event.ctrlKey && key === 'c' && term.hasSelection()) {
+          event.preventDefault();
+          void navigator.clipboard?.writeText(term.getSelection()).catch(() => {});
+          if (!event.shiftKey) term.clearSelection();
+          return false;
+        }
+        return true;
+      });
       const queue = createTerminalInputQueue({
         send: async (id, data) => { await post('input', { id, data }); },
         onActivity: () => { lastInput.current = performance.now(); wakeOutput.current?.(); },
@@ -144,7 +168,7 @@ export default function TerminalClient({ provider, available }: { provider: Term
 
   return <main className="flex h-dvh flex-col bg-slate-950 text-slate-100">
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
-      <div><h1 className="text-lg font-semibold">{t('title')}</h1><p className="text-sm text-slate-400">{TERMINAL_LABELS[provider]} · {t('localSession')} · {connected ? t('connected') : t('disconnected')}</p></div>
+      <div><h1 className="text-lg font-semibold">{t('title')}</h1><p className="text-sm text-slate-400">{TERMINAL_LABELS[provider]} · {t('sharedSession')} · {connected ? t('connected') : t('disconnected')}</p></div>
       <nav className="flex items-center gap-3 text-sm"><Link href="/connections" className="text-slate-300 hover:underline">{t('connections')}</Link><Link href="/" className="text-slate-300 hover:underline">{t('back')}</Link>
         <label className="sr-only" htmlFor="terminal-provider">{t('provider')}</label>
         <select id="terminal-provider" value={provider} disabled={busy} onChange={event => router.push(`/terminal?provider=${event.target.value}`)} className="max-w-48 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2">
@@ -156,6 +180,7 @@ export default function TerminalClient({ provider, available }: { provider: Term
     </header>
     {locked && <TerminalUnlockForm onUnlocked={() => { setLocked(false); setError(''); }} />}
     <p className="px-5 py-2 text-xs text-slate-400">{t('help')}</p>
+    {loggedIn === false && <p role="status" className="bg-indigo-950 px-5 py-2 text-sm text-indigo-200">{t.rich(provider === 'codex' ? 'loginHintCodex' : 'loginHintClaude', { code: chunks => <code>{chunks}</code> })}</p>}
     {error && <p role="alert" className="bg-amber-950 px-5 py-2 text-sm text-amber-200">{error}</p>}
     <div ref={container} className="min-h-0 flex-1 overflow-hidden p-3" aria-label={t('terminalLabel', { provider: TERMINAL_LABELS[provider] })} />
   </main>;

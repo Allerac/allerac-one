@@ -30,7 +30,7 @@ export interface Session {
 export class AuthService {
   private async isFirstRealUser(): Promise<boolean> {
     const result = await pool.query(
-      'SELECT COUNT(*) FROM users WHERE email <> $1',
+      'SELECT COUNT(*) FROM users WHERE email <> $1 AND is_service_account = false',
       [BOOTSTRAP_USER_EMAIL]
     );
     return parseInt(result.rows[0].count, 10) === 0;
@@ -262,7 +262,8 @@ export class AuthService {
         `SELECT u.id, u.email, u.name, u.is_admin, u.created_at
          FROM user_sessions s
          JOIN users u ON s.user_id = u.id
-         WHERE s.token = $1 AND s.expires_at > NOW() AND u.is_active = true`,
+         WHERE s.token = $1 AND s.expires_at > NOW() AND u.is_active = true
+           AND u.is_service_account = false`,
         [token]
       );
 

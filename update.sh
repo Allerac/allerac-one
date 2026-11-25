@@ -369,6 +369,16 @@ if [[ ",${EFFECTIVE_PROFILES}," == *",automation,"* ]] \
     fail_update "configuration check" "N8N_ENCRYPTION_KEY is required when the automation profile is enabled (generate one with: openssl rand -hex 32)."
 fi
 
+# The Unit terminal services refuse to start without a strong secret; at least
+# one provider must be configured when the terminal profile is on.
+if [[ ",${EFFECTIVE_PROFILES}," == *",terminal,"* ]]; then
+    TERMINAL_CLAUDE_SECRET="${CLAUDE_TERMINAL_SECRET:-$(unit_env_value CLAUDE_TERMINAL_SECRET)}"
+    TERMINAL_CODEX_SECRET="${CODEX_TERMINAL_SECRET:-$(unit_env_value CODEX_TERMINAL_SECRET)}"
+    if [ "${#TERMINAL_CLAUDE_SECRET}" -lt 32 ] || [ "${#TERMINAL_CODEX_SECRET}" -lt 32 ]; then
+        fail_update "configuration check" "CLAUDE_TERMINAL_SECRET and CODEX_TERMINAL_SECRET (>= 32 chars) are required when the terminal profile is enabled (generate each with: openssl rand -hex 32)."
+    fi
+fi
+
 # Step 5: Run database migrations
 echo -e "${YELLOW}[5/9]${NC} Running database migrations..."
 MIGRATIONS_STARTED=true
