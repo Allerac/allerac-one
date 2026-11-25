@@ -27,6 +27,7 @@ export default function TerminalClient({ provider, available }: { provider: Term
   const [ready, setReady] = useState(false);
   const [generation, setGeneration] = useState(0);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  const [pasteText, setPasteText] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -166,6 +167,16 @@ export default function TerminalClient({ provider, available }: { provider: Term
     finally { setBusy(false); }
   }
 
+  // Touch browsers cannot paste into xterm's hidden textarea; a native field can.
+  function sendText(enter: boolean) {
+    const id = session.current;
+    if (!id || !terminal.current || (!pasteText && !enter)) return;
+    if (pasteText) terminal.current.paste(pasteText);
+    if (enter) inputQueue.current?.push(id, '\r');
+    setPasteText('');
+    terminal.current.focus();
+  }
+
   return <main className="flex h-dvh flex-col bg-slate-950 text-slate-100">
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
       <div><h1 className="text-lg font-semibold">{t('title')}</h1><p className="text-sm text-slate-400">{TERMINAL_LABELS[provider]} · {t('sharedSession')} · {connected ? t('connected') : t('disconnected')}</p></div>
@@ -182,6 +193,11 @@ export default function TerminalClient({ provider, available }: { provider: Term
     <p className="px-5 py-2 text-xs text-slate-400">{t('help')}</p>
     {loggedIn === false && <p role="status" className="bg-indigo-950 px-5 py-2 text-sm text-indigo-200">{t.rich(provider === 'codex' ? 'loginHintCodex' : 'loginHintClaude', { code: chunks => <code>{chunks}</code> })}</p>}
     {error && <p role="alert" className="bg-amber-950 px-5 py-2 text-sm text-amber-200">{error}</p>}
+    {connected && <form onSubmit={event => { event.preventDefault(); sendText(true); }} className="flex gap-2 border-b border-slate-800 px-5 py-2">
+      <input value={pasteText} onChange={event => setPasteText(event.target.value)} aria-label={t('pasteLabel')} placeholder={t('pastePlaceholder')} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm" />
+      <button type="button" disabled={!pasteText} onClick={() => sendText(false)} className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm disabled:opacity-40">{t('pasteSend')}</button>
+      <button type="submit" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm">{t('pasteSendEnter')}</button>
+    </form>}
     <div ref={container} className="min-h-0 flex-1 overflow-hidden p-3" aria-label={t('terminalLabel', { provider: TERMINAL_LABELS[provider] })} />
   </main>;
 }

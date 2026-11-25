@@ -734,7 +734,11 @@
       "sessionEnded": "Sesión terminada. Puede abrir una nueva.",
       "sharedSession": "sesión compartida de la unit",
       "loginHintClaude": "Claude Code no ha iniciado sesión en esta unit. Abre la sesión: Claude Code muestra un enlace de inicio de sesión (o escribe <code>/login</code>). Abre el enlace en tu navegador y pega el código aquí.",
-      "loginHintCodex": "Codex no ha iniciado sesión en esta unit. Abre la sesión e inicia sesión con ChatGPT mediante el código de dispositivo. Si la pantalla no lo ofrece, ejecuta en el servidor: <code>docker exec -it UNIT-terminal-codex codex login --device-auth</code>"
+      "loginHintCodex": "Codex no ha iniciado sesión en esta unit. Abre la sesión e inicia sesión con ChatGPT mediante el código de dispositivo. Si la pantalla no lo ofrece, ejecuta en el servidor: <code>docker exec -it UNIT-terminal-codex codex login --device-auth</code>",
+      "pasteLabel": "Texto para enviar al terminal",
+      "pastePlaceholder": "Pega aquí (p. ej., código de inicio de sesión)",
+      "pasteSend": "Enviar",
+      "pasteSendEnter": "Enviar + Enter"
     },
     "unlock": {
       "title": "Confirme su contraseña",

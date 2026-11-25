@@ -825,7 +825,11 @@
       "sessionEnded": "Sessão encerrada. Você pode abrir uma nova.",
       "sharedSession": "sessão compartilhada da unit",
       "loginHintClaude": "Claude Code sem login nesta unit. Abra a sessão: o Claude Code mostra um link de login (ou digite <code>/login</code>). Abra o link no seu navegador e cole o código aqui.",
-      "loginHintCodex": "Codex sem login nesta unit. Abra a sessão e entre com ChatGPT pelo código de dispositivo. Se a tela não oferecer essa opção, rode no servidor: <code>docker exec -it UNIT-terminal-codex codex login --device-auth</code>"
+      "loginHintCodex": "Codex sem login nesta unit. Abra a sessão e entre com ChatGPT pelo código de dispositivo. Se a tela não oferecer essa opção, rode no servidor: <code>docker exec -it UNIT-terminal-codex codex login --device-auth</code>",
+      "pasteLabel": "Texto para enviar ao terminal",
+      "pastePlaceholder": "Cole aqui (ex.: código de login)",
+      "pasteSend": "Enviar",
+      "pasteSendEnter": "Enviar + Enter"
     },
     "unlock": {
       "title": "Confirme sua senha",
