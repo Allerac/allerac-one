@@ -16,6 +16,8 @@
 # - host-level monitoring (promtail reads the Docker socket, node-exporter
 #   mounts the host root) and its prometheus/loki are moved behind the
 #   `monitoring` profile; the docs server behind `docs`.
+# - the app is kept only on the Unit's default network (no Unit terminal
+#   networks; do not enable the `terminal` profile on a lean Unit).
 #
 # The base docker-compose.yml is untouched, so a normal (full) install keeps
 # every service without setting anything. See docs/operations/multi-unit.md.
@@ -50,6 +52,9 @@ services:
     depends_on: !override
       migrations:
         condition: service_completed_successfully
+    # No Unit terminal in a lean Unit: keep the app off the terminal networks.
+    networks: !override
+      - default
 
   agent-worker:
     environment: *no-executor-env
