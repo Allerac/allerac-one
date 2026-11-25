@@ -14,15 +14,19 @@ import type {
   ApiKeyAuditEntry,
 } from '@/app/actions/admin';
 import type { CreditPlan, OperationPricing } from '@/app/services/credits/credit.service';
-import type { SystemSettings } from '@/app/services/system/system-settings.service';
+import type {
+  PublicSystemSettings,
+  SecretSystemSettingKey,
+} from '@/app/services/system/system-settings.service';
 import ApiKeyField from '@/app/components/settings/ApiKeyField';
+import type { ApiKeyProvider } from '@/app/actions/api-keys';
 import type { AdminIntegration } from './integrations';
 
 interface AdminClientProps {
   initialUsers: AdminUser[];
   initialDomains: AdminDomain[];
   initialAllDomains: AdminDomain[];
-  initialSystemSettings: SystemSettings;
+  initialSystemSettings: PublicSystemSettings;
   initialInstagramAccounts: InstagramAccountEntry[];
   initialConnectedAdmins: Array<{ id: string; email: string; username: string }>;
   initialTikTokAccounts: TikTokAccountEntry[];
@@ -62,7 +66,10 @@ export default function AdminClient({
   const [domainTogglingId, setDomainTogglingId] = useState<string | null>(null);
 
   // System settings state
-  const [sysSettings, setSysSettings] = useState<SystemSettings>(initialSystemSettings);
+  const [sysSettings, setSysSettings] = useState<PublicSystemSettings>(initialSystemSettings);
+  const [secretDrafts, setSecretDrafts] = useState<Partial<Record<SecretSystemSettingKey, string>>>({});
+  const [pendingClears, setPendingClears] = useState<SecretSystemSettingKey[]>([]);
+  const [fromEmailDraft, setFromEmailDraft] = useState<string>(initialSystemSettings.resend_from_email ?? '');
   const [sysSettingsPending, setSysSettingsPending] = useState(false);
   const [sysSettingsMsg, setSysSettingsMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -310,10 +317,34 @@ export default function AdminClient({
   const handleSaveSystemSettings = async () => {
     setSysSettingsPending(true);
     setSysSettingsMsg(null);
-    const result = await adminActions.saveSystemSettings(sysSettings);
+    const result = await adminActions.saveSystemSettings({
+      values: { ...secretDrafts, resend_from_email: fromEmailDraft },
+      clear: pendingClears.filter(key => !secretDrafts[key]?.trim()),
+    });
     setSysSettingsPending(false);
-    setSysSettingsMsg(result.success ? { ok: true, text: 'Saved.' } : { ok: false, text: result.error });
+    if (result.success) {
+      setSysSettings(result.settings);
+      setSecretDrafts({});
+      setPendingClears([]);
+      setFromEmailDraft(result.settings.resend_from_email ?? '');
+      setSysSettingsMsg({ ok: true, text: 'Saved.' });
+    } else {
+      setSysSettingsMsg({ ok: false, text: result.error });
+    }
   };
+
+  const secretFieldProps = (key: SecretSystemSettingKey, provider?: ApiKeyProvider) => ({
+    hasStoredValue: sysSettings[key].configured,
+    storedHint: sysSettings[key].hint,
+    value: secretDrafts[key] ?? '',
+    onChange: (v: string) => {
+      setSecretDrafts(prev => ({ ...prev, [key]: v }));
+      if (v) setPendingClears(prev => prev.filter(k => k !== key));
+    },
+    onClear: () => setPendingClears(prev => (prev.includes(key) ? prev : [...prev, key])),
+    clearPending: pendingClears.includes(key),
+    onTestStored: provider ? () => adminActions.testStoredSystemKey(provider) : undefined,
+  });
 
   const refreshIgAccounts = async () => {
     const updated = await adminActions.listInstagramAccounts();
@@ -862,9 +893,7 @@ export default function AdminClient({
                   description="(GPT-4o, Ministral, embeddings)"
                   placeholder="ghp_... or similar"
                   provider="github"
-                  hasStoredValue={!!sysSettings.github_token}
-                  value={sysSettings.github_token ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, github_token: v }))}
+                  {...secretFieldProps('github_token', 'github')}
                   isDarkMode={isDarkMode}
                   helpText="Used for GitHub API and legacy GitHub-hosted chat models. Embeddings run locally."
                 />
@@ -873,9 +902,7 @@ export default function AdminClient({
                   description="(Claude models)"
                   placeholder="sk-ant-..."
                   provider="anthropic"
-                  hasStoredValue={!!sysSettings.anthropic_api_key}
-                  value={sysSettings.anthropic_api_key ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, anthropic_api_key: v }))}
+                  {...secretFieldProps('anthropic_api_key', 'anthropic')}
                   isDarkMode={isDarkMode}
                   helpText="Default key for Claude (Haiku, Sonnet, Opus)."
                 />
@@ -884,9 +911,7 @@ export default function AdminClient({
                   description="(Gemini models)"
                   placeholder="AIza..."
                   provider="google"
-                  hasStoredValue={!!sysSettings.google_api_key}
-                  value={sysSettings.google_api_key ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, google_api_key: v }))}
+                  {...secretFieldProps('google_api_key', 'google')}
                   isDarkMode={isDarkMode}
                   helpText="Default key for Gemini chat and Gemini Image editing."
                 />
@@ -895,9 +920,7 @@ export default function AdminClient({
                   description="(speech / TTS)"
                   placeholder="sk-..."
                   provider="openai"
-                  hasStoredValue={!!sysSettings.openai_api_key}
-                  value={sysSettings.openai_api_key ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, openai_api_key: v }))}
+                  {...secretFieldProps('openai_api_key', 'openai')}
                   isDarkMode={isDarkMode}
                   helpText="Default key for cloud text-to-speech."
                 />
@@ -913,9 +936,7 @@ export default function AdminClient({
                   description="(tickets agent — create branches & PRs)"
                   placeholder="ghp_..."
                   provider="github-repo"
-                  hasStoredValue={!!sysSettings.github_repo_token}
-                  value={sysSettings.github_repo_token ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, github_repo_token: v }))}
+                  {...secretFieldProps('github_repo_token', 'github-repo')}
                   isDarkMode={isDarkMode}
                   helpText="Personal Access Token with 'repo' scope. Used by ticket agents to create branches and pull requests."
                 />
@@ -931,9 +952,7 @@ export default function AdminClient({
                   description="(web search)"
                   placeholder="tvly-..."
                   provider="tavily"
-                  hasStoredValue={!!sysSettings.tavily_api_key}
-                  value={sysSettings.tavily_api_key ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, tavily_api_key: v }))}
+                  {...secretFieldProps('tavily_api_key', 'tavily')}
                   isDarkMode={isDarkMode}
                   helpText="Default key for web search tool."
                 />
@@ -941,9 +960,7 @@ export default function AdminClient({
                   label="Resend API Key"
                   description="(email sending)"
                   placeholder="re_..."
-                  hasStoredValue={!!sysSettings.resend_api_key}
-                  value={sysSettings.resend_api_key ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, resend_api_key: v }))}
+                  {...secretFieldProps('resend_api_key')}
                   isDarkMode={isDarkMode}
                   helpText="Used to send transactional emails."
                 />
@@ -952,8 +969,8 @@ export default function AdminClient({
                   description="(sender address)"
                   placeholder="noreply@yourdomain.com"
                   hasStoredValue={!!sysSettings.resend_from_email}
-                  value={sysSettings.resend_from_email ?? ''}
-                  onChange={v => setSysSettings(prev => ({ ...prev, resend_from_email: v }))}
+                  value={fromEmailDraft}
+                  onChange={setFromEmailDraft}
                   isDarkMode={isDarkMode}
                   inputType="email"
                   helpText="The sender address for outgoing emails."

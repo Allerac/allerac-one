@@ -3,6 +3,7 @@ import pool from '@/app/clients/db';
 import { requireCurrentAdmin, requireCurrentUser } from '@/app/lib/auth-session';
 import { saveDefaultModel } from '@/app/actions/setup';
 import { getDatabaseInfo, getEmbeddingHealth, pullOllamaModel } from '@/app/actions/system';
+import { SystemSettingsService } from '@/app/services/system/system-settings.service';
 
 jest.mock('@/app/lib/auth-session', () => ({
   requireCurrentAdmin: jest.fn(),
@@ -92,5 +93,40 @@ describe('Setup and system action authorization', () => {
       model: 'embeddinggemma',
       dimensions: 768,
     }));
+  });
+
+  it('reports OpenAI embedding health from the configured key without calling the API', async () => {
+    const previous = process.env.EMBEDDING_PROVIDER;
+    process.env.EMBEDDING_PROVIDER = 'openai';
+    try {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{
+          provider: 'openai',
+          model: 'text-embedding-3-small',
+          dimensions: 768,
+          version: 'openai:text-embedding-3-small:768:v1',
+        }],
+      } as never);
+      const get = jest.spyOn(SystemSettingsService.prototype, 'get').mockResolvedValue('sk-configured');
+      global.fetch = jest.fn();
+
+      const health = await getEmbeddingHealth();
+
+      expect(get).toHaveBeenCalledWith('openai_api_key');
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(health).toEqual(expect.objectContaining({
+        healthy: true,
+        provider: 'openai',
+        model: 'text-embedding-3-small',
+        dimensions: 768,
+        runtimeCompatible: true,
+        modelInstalled: true,
+      }));
+      expect(JSON.stringify(health)).not.toContain('sk-configured');
+    } finally {
+      if (previous === undefined) delete process.env.EMBEDDING_PROVIDER;
+      else process.env.EMBEDDING_PROVIDER = previous;
+      jest.restoreAllMocks();
+    }
   });
 });

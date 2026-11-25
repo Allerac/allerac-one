@@ -15,6 +15,12 @@ import { cookies } from 'next/headers';
 import pool from '@/app/clients/db';
 import { requireCurrentAdmin } from '@/app/lib/auth-session';
 import { SystemSettingsService } from '@/app/services/system/system-settings.service';
+import {
+  configuredEmbeddingDimensions,
+  configuredEmbeddingModel,
+  configuredEmbeddingProvider,
+  type EmbeddingProviderName,
+} from '@/app/services/rag/embedding.service';
 import { UserSettingsService } from '@/app/services/user/user-settings.service';
 import { TelegramBotConfigService } from '@/app/services/telegram/telegram-bot-config.service';
 import {
@@ -42,11 +48,10 @@ function ollamaBaseUrl(): string {
 }
 
 function embeddingInfo() {
-  const dimensions = Number(process.env.EMBEDDING_DIMENSIONS);
   return {
-    provider: 'ollama' as const,
-    model: process.env.EMBEDDING_MODEL || 'embeddinggemma',
-    dimensions: Number.isInteger(dimensions) && dimensions > 0 ? dimensions : 768,
+    provider: configuredEmbeddingProvider(),
+    model: configuredEmbeddingModel(),
+    dimensions: configuredEmbeddingDimensions(),
   };
 }
 
@@ -80,7 +85,7 @@ export interface SetupStatus {
     keys: { openai: boolean; anthropic: boolean };
     ollamaBaseUrl: string;
   };
-  embedding: { provider: 'ollama'; model: string; dimensions: number };
+  embedding: { provider: EmbeddingProviderName; model: string; dimensions: number };
   googleConfigured: boolean;
   email: { apiKeyConfigured: boolean; fromEmail: string | null };
   searchConfigured: boolean;

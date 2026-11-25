@@ -3,8 +3,17 @@
 import crypto from 'crypto';
 import pool from '@/app/clients/db';
 import { AuthService } from '@/app/services/auth/auth.service';
-import { SystemSettingsService } from '@/app/services/system/system-settings.service';
-import type { SystemSettings } from '@/app/services/system/system-settings.service';
+import {
+  SystemSettingsService,
+  isSystemSettingKey,
+  toPublicSystemSettings,
+  SECRET_SYSTEM_SETTING_KEYS,
+} from '@/app/services/system/system-settings.service';
+import type {
+  PublicSystemSettings,
+  SystemSettingKey,
+} from '@/app/services/system/system-settings.service';
+import { validateApiKey, type ApiKeyProvider } from '@/app/actions/api-keys';
 import { requireCurrentAdmin } from '@/app/lib/auth-session';
 import {
   CreditService,
@@ -449,21 +458,84 @@ export async function setUserUnlimitedCredits(
 
 // ─── System Settings ──────────────────────────────────────────────────────────
 
-export async function getSystemSettings(): Promise<SystemSettings> {
+export async function getSystemSettings(): Promise<PublicSystemSettings> {
   await assertAdmin();
-  return systemSettingsService.loadAll();
+  return toPublicSystemSettings(await systemSettingsService.loadAll());
+}
+
+export interface SystemSettingsUpdate {
+  /**
+   * New values. A blank value for a secret leaves the stored value unchanged;
+   * a blank sender address clears it.
+   */
+  values?: Partial<Record<SystemSettingKey, string>>;
+  /** Settings to remove. */
+  clear?: SystemSettingKey[];
+}
+
+const SECRET_KEY_SET = new Set<string>(SECRET_SYSTEM_SETTING_KEYS);
+const MAX_SYSTEM_SETTING_LENGTH = 10_000;
+
+function normalizeSystemSettingsUpdate(
+  update: SystemSettingsUpdate,
+): Partial<Record<SystemSettingKey, string>> | null {
+  if (!update || typeof update !== 'object') return null;
+  const changes: Partial<Record<SystemSettingKey, string>> = {};
+
+  const clear = update.clear ?? [];
+  if (!Array.isArray(clear)) return null;
+  for (const key of clear) {
+    if (typeof key !== 'string' || !isSystemSettingKey(key)) return null;
+    changes[key] = '';
+  }
+
+  const values = update.values ?? {};
+  if (typeof values !== 'object' || Array.isArray(values)) return null;
+  for (const [key, value] of Object.entries(values)) {
+    if (!isSystemSettingKey(key)) return null;
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || value.length > MAX_SYSTEM_SETTING_LENGTH) return null;
+    const trimmed = value.trim();
+    if (!trimmed && SECRET_KEY_SET.has(key)) continue;
+    changes[key] = trimmed;
+  }
+  return changes;
 }
 
 export async function saveSystemSettings(
-  settings: Partial<SystemSettings>
-): Promise<{ success: true } | { success: false; error: string }> {
+  update: SystemSettingsUpdate,
+): Promise<{ success: true; settings: PublicSystemSettings } | { success: false; error: string }> {
   const admin = await assertAdmin();
+  const changes = normalizeSystemSettingsUpdate(update);
+  if (!changes) return { success: false, error: 'Invalid settings' };
   try {
-    await systemSettingsService.saveAll(settings, admin.id);
-    return { success: true };
+    await systemSettingsService.saveAll(changes, admin.id);
+    return { success: true, settings: toPublicSystemSettings(await systemSettingsService.loadAll()) };
   } catch {
     return { success: false, error: 'Failed to save settings' };
   }
+}
+
+const STORED_KEY_BY_PROVIDER: Record<ApiKeyProvider, SystemSettingKey> = {
+  github: 'github_token',
+  'github-repo': 'github_repo_token',
+  anthropic: 'anthropic_api_key',
+  google: 'google_api_key',
+  openai: 'openai_api_key',
+  tavily: 'tavily_api_key',
+};
+
+/** Checks the stored system key for a provider without sending it to the client. */
+export async function testStoredSystemKey(
+  provider: ApiKeyProvider,
+): Promise<{ valid: boolean; error?: string }> {
+  await assertAdmin();
+  if (!Object.prototype.hasOwnProperty.call(STORED_KEY_BY_PROVIDER, provider)) {
+    return { valid: false, error: 'Unknown provider' };
+  }
+  const stored = await systemSettingsService.get(STORED_KEY_BY_PROVIDER[provider]);
+  if (!stored) return { valid: false, error: 'No key stored' };
+  return validateApiKey(provider, stored);
 }
 
 export interface ApiKeyAuditEntry {

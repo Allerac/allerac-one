@@ -25,6 +25,53 @@ export interface SystemSettings {
   resend_from_email: string | null;
 }
 
+/** Keys whose values are credentials and must never be sent to a browser. */
+export const SECRET_SYSTEM_SETTING_KEYS = [
+  'github_token',
+  'github_repo_token',
+  'tavily_api_key',
+  'anthropic_api_key',
+  'google_api_key',
+  'openai_api_key',
+  'resend_api_key',
+] as const satisfies readonly SystemSettingKey[];
+export type SecretSystemSettingKey = typeof SECRET_SYSTEM_SETTING_KEYS[number];
+
+export function isSystemSettingKey(key: string): key is SystemSettingKey {
+  return KEY_SET.has(key);
+}
+
+export interface SecretSettingStatus {
+  configured: boolean;
+  /** Masked trailing characters, only for values long enough to keep the rest hidden. */
+  hint: string | null;
+}
+
+/** Client-safe view of the system settings: secrets are reduced to a status. */
+export type PublicSystemSettings = Record<SecretSystemSettingKey, SecretSettingStatus> & {
+  resend_from_email: string | null;
+};
+
+const HINT_MIN_LENGTH = 20;
+const HINT_SUFFIX_LENGTH = 4;
+
+export function secretSettingStatus(value: string | null | undefined): SecretSettingStatus {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return { configured: false, hint: null };
+  return {
+    configured: true,
+    hint: trimmed.length >= HINT_MIN_LENGTH ? `••••${trimmed.slice(-HINT_SUFFIX_LENGTH)}` : null,
+  };
+}
+
+export function toPublicSystemSettings(settings: SystemSettings): PublicSystemSettings {
+  const result = { resend_from_email: settings.resend_from_email ?? null } as PublicSystemSettings;
+  for (const key of SECRET_SYSTEM_SETTING_KEYS) {
+    result[key] = secretSettingStatus(settings[key]);
+  }
+  return result;
+}
+
 export class SystemSettingsService {
   async loadAll(): Promise<SystemSettings> {
     const result = await pool.query(`SELECT key, value_encrypted FROM system_settings WHERE key = ANY($1)`, [KEYS]);

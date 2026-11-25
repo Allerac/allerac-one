@@ -291,7 +291,9 @@ export function LlmStep({ status, onBack, onDone }: StepProps) {
       )}
 
       <p className="text-xs text-gray-400">
-        {provider === 'ollama'
+        {status.embedding.provider === 'openai'
+          ? t('embeddingNoteOpenAI', { model: status.embedding.model, dimensions: status.embedding.dimensions })
+          : provider === 'ollama'
           ? t('embeddingNoteOllama', { model: status.embedding.model, dimensions: status.embedding.dimensions })
           : t('embeddingNoteCloud', { provider: providerName, model: status.embedding.model, dimensions: status.embedding.dimensions })}
       </p>
