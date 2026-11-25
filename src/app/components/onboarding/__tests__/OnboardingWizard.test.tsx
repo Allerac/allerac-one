@@ -1,10 +1,12 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import OnboardingWizard from '../OnboardingWizard';
+import { saveUserSettings, saveSelectedModel } from '@/app/actions/user';
 
 // Mock server actions
 jest.mock('@/app/actions/user', () => ({
   saveUserSettings: jest.fn().mockResolvedValue(undefined),
+  saveSelectedModel: jest.fn().mockResolvedValue(undefined),
   updateLanguage: jest.fn().mockResolvedValue(undefined),
   completeOnboarding: jest.fn().mockResolvedValue(undefined),
 }));
@@ -79,11 +81,132 @@ describe('OnboardingWizard', () => {
   });
 
   describe('Step 2: Connect AI', () => {
+    const ANTHROPIC_KEY = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789';
+    const OPENAI_KEY = 'sk-proj-abcdefghijklmnopqrstuvwxyz0123456789';
+
+    const goToStep2 = () => {
+      fireEvent.click(screen.getByRole('button', { name: /let's go|vamos|continue/i }));
+    };
+
     it('should have step indicator showing step 1 initially', () => {
       render(<OnboardingWizard {...defaultProps} />);
 
       const stepIndicator = screen.getByText(/Step 1 of 4/);
       expect(stepIndicator).toBeInTheDocument();
+    });
+
+    it('should offer Anthropic and OpenAI providers', () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      goToStep2();
+
+      expect(screen.getByRole('button', { name: /anthropic/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /openai/i })).toBeInTheDocument();
+    });
+
+    it('should save an Anthropic key as the anthropic setting', async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      goToStep2();
+
+      fireEvent.click(screen.getByRole('button', { name: /anthropic/i }));
+      fireEvent.change(screen.getByPlaceholderText(/sk-ant-/i), { target: { value: ANTHROPIC_KEY } });
+
+      await waitFor(() => {
+        expect(saveUserSettings).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, ANTHROPIC_KEY);
+      });
+    });
+
+    it('should save an OpenAI key as the openai setting', async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      goToStep2();
+
+      fireEvent.click(screen.getByRole('button', { name: /openai/i }));
+      fireEvent.change(screen.getByPlaceholderText(/^sk-\.\.\.$/), { target: { value: OPENAI_KEY } });
+
+      await waitFor(() => {
+        expect(saveUserSettings).toHaveBeenCalledWith(
+          undefined, undefined, undefined, undefined, undefined, undefined, undefined, OPENAI_KEY,
+        );
+      });
+    });
+
+    it('should not save an Anthropic key pasted into the OpenAI field', async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      goToStep2();
+
+      fireEvent.click(screen.getByRole('button', { name: /openai/i }));
+      fireEvent.change(screen.getByPlaceholderText(/^sk-\.\.\.$/), { target: { value: ANTHROPIC_KEY } });
+
+      await new Promise(r => setTimeout(r, 0));
+      expect(saveUserSettings).not.toHaveBeenCalled();
+    });
+
+    describe('default model dropdown', () => {
+      const finishWizard = () => {
+        fireEvent.click(screen.getByRole('button', { name: /^next/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^skip$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /start chatting/i }));
+      };
+
+      it('should be hidden until a provider is configured', () => {
+        render(<OnboardingWizard {...defaultProps} />);
+        goToStep2();
+
+        expect(screen.queryByLabelText(/default chat model/i)).not.toBeInTheDocument();
+      });
+
+      it('should list only the configured provider models and preselect a Pro one', async () => {
+        render(<OnboardingWizard {...defaultProps} />);
+        goToStep2();
+
+        fireEvent.click(screen.getByRole('button', { name: /anthropic/i }));
+        fireEvent.change(screen.getByPlaceholderText(/sk-ant-/i), { target: { value: ANTHROPIC_KEY } });
+
+        const select = await screen.findByLabelText(/default chat model/i) as HTMLSelectElement;
+        const values = Array.from(select.options).map(o => o.value);
+        expect(values).toEqual(['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7']);
+        expect(select.value).toBe('claude-sonnet-4-6');
+      });
+
+      it('should include only installed Ollama models', () => {
+        render(
+          <OnboardingWizard {...defaultProps} ollamaConnected ollamaModels={['qwen2.5:3b', 'gemma4:latest']} />,
+        );
+        goToStep2();
+
+        const select = screen.getByLabelText(/default chat model/i) as HTMLSelectElement;
+        expect(Array.from(select.options).map(o => o.value)).toEqual(['qwen2.5:3b', 'gemma4']);
+      });
+
+      it('should save the chosen model when finishing', async () => {
+        const onComplete = jest.fn();
+        render(<OnboardingWizard {...defaultProps} onComplete={onComplete} />);
+        goToStep2();
+
+        fireEvent.click(screen.getByRole('button', { name: /openai/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^sk-\.\.\.$/), { target: { value: OPENAI_KEY } });
+        const select = await screen.findByLabelText(/default chat model/i);
+        fireEvent.change(select, { target: { value: 'gpt-5.6-luna' } });
+
+        finishWizard();
+
+        await waitFor(() => {
+          expect(saveSelectedModel).toHaveBeenCalledWith('gpt-5.6-luna');
+          expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ selectedModel: 'gpt-5.6-luna' }));
+        });
+        expect(localStorage.getItem('selected_model')).toBe('gpt-5.6-luna');
+      });
+
+      it('should not touch the model when nothing is configured', async () => {
+        render(<OnboardingWizard {...defaultProps} />);
+        goToStep2();
+
+        finishWizard();
+
+        await waitFor(() => {
+          expect(defaultProps.onComplete).toHaveBeenCalled();
+        });
+        expect(saveSelectedModel).not.toHaveBeenCalled();
+      });
     });
   });
 

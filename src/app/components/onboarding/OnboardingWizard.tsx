@@ -5,6 +5,8 @@ import { useTranslations, useLocale } from 'next-intl';
 import { AlleracIcon } from '../ui/AlleracIcon';
 import * as userActions from '@/app/actions/user';
 import * as chatActions from '@/app/actions/chat';
+import { MODELS } from '@/app/services/llm/models';
+import type { Model } from '@/app/types';
 
 interface Props {
   userId: string;
@@ -12,11 +14,39 @@ interface Props {
   isDarkMode: boolean;
   systemMessage: string;
   ollamaConnected: boolean;
-  onComplete: (updates: { googleApiKey?: string; githubToken?: string; systemMessage?: string }) => void;
+  /** Names of models installed in Ollama (e.g. "qwen2.5:3b"). */
+  ollamaModels?: string[];
+  onComplete: (updates: {
+    googleApiKey?: string;
+    githubToken?: string;
+    anthropicApiKey?: string;
+    openaiApiKey?: string;
+    systemMessage?: string;
+    selectedModel?: string;
+  }) => void;
 }
 
+type ModelProvider = Model['provider'];
+
+const PROVIDER_ORDER: ModelProvider[] = ['anthropic', 'openai', 'gemini', 'github', 'ollama'];
+const PROVIDER_LABELS: Record<ModelProvider, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  gemini: 'Google Gemini',
+  github: 'GitHub Models',
+  ollama: 'Ollama',
+};
+
+const stripLatestTag = (name: string) => name.replace(/:latest$/, '');
+
 type Step = 1 | 2 | 3 | 4;
-type AltProvider = 'github' | 'ollama' | null;
+type AltProvider = 'github' | 'anthropic' | 'openai' | 'ollama' | null;
+
+const MIN_KEY_LENGTH = 20;
+const isAnthropicKey = (value: string) => value.startsWith('sk-ant-') && value.length > MIN_KEY_LENGTH;
+// OpenAI keys start with "sk-" (incl. "sk-proj-"); exclude Anthropic's "sk-ant-" prefix.
+const isOpenaiKey = (value: string) =>
+  value.startsWith('sk-') && !value.startsWith('sk-ant-') && value.length > MIN_KEY_LENGTH;
 
 export default function OnboardingWizard({
   userId,
@@ -24,6 +54,7 @@ export default function OnboardingWizard({
   isDarkMode,
   systemMessage,
   ollamaConnected,
+  ollamaModels = [],
   onComplete,
 }: Props) {
   const t = useTranslations('onboarding');
@@ -37,7 +68,12 @@ export default function OnboardingWizard({
   const [googleKeySaved, setGoogleKeySaved] = useState(false);
   const [githubToken, setGithubToken] = useState('');
   const [githubTokenSaved, setGithubTokenSaved] = useState(false);
+  const [anthropicKey, setAnthropicKey] = useState('');
+  const [anthropicKeySaved, setAnthropicKeySaved] = useState(false);
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [openaiKeySaved, setOpenaiKeySaved] = useState(false);
   const [altProvider, setAltProvider] = useState<AltProvider>(null);
+  const [chosenModel, setChosenModel] = useState('');
 
   // Step 3 state
   const [location, setLocation] = useState('');
@@ -71,6 +107,39 @@ export default function OnboardingWizard({
     }
   };
 
+  const handleAnthropicKeyChange = async (value: string) => {
+    const trimmed = value.trim();
+    setAnthropicKey(value);
+    setAnthropicKeySaved(false);
+    if (isAnthropicKey(trimmed)) {
+      setIsSaving(true);
+      await userActions.saveUserSettings(undefined, undefined, undefined, undefined, trimmed);
+      setAnthropicKeySaved(true);
+      setIsSaving(false);
+    }
+  };
+
+  const handleOpenaiKeyChange = async (value: string) => {
+    const trimmed = value.trim();
+    setOpenaiKey(value);
+    setOpenaiKeySaved(false);
+    if (isOpenaiKey(trimmed)) {
+      setIsSaving(true);
+      await userActions.saveUserSettings(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        trimmed,
+      );
+      setOpenaiKeySaved(true);
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveAboutMe = async () => {
     setIsSaving(true);
     if (location.trim()) {
@@ -91,14 +160,43 @@ export default function OnboardingWizard({
     setStep(4);
   };
 
+  // Models the user can actually use with what they've configured so far.
+  const configuredProviders = new Set<ModelProvider>();
+  if (googleKeySaved) configuredProviders.add('gemini');
+  if (githubTokenSaved) configuredProviders.add('github');
+  if (anthropicKeySaved) configuredProviders.add('anthropic');
+  if (openaiKeySaved) configuredProviders.add('openai');
+  const installedOllama = new Set(ollamaModels.map(stripLatestTag));
+  const availableModels = MODELS
+    .filter(m => (m.provider === 'ollama'
+      ? ollamaConnected && installedOllama.has(m.id)
+      : configuredProviders.has(m.provider)))
+    .sort((a, b) => PROVIDER_ORDER.indexOf(a.provider) - PROVIDER_ORDER.indexOf(b.provider));
+  // Keep the user's pick while it stays available; otherwise suggest a "Pro" model.
+  const selectedModel = availableModels.some(m => m.id === chosenModel)
+    ? chosenModel
+    : (availableModels.find(m => m.category === 'Pro') ?? availableModels[0])?.id ?? '';
+  const selectedModelName = MODELS.find(m => m.id === selectedModel)?.name;
+
   const handleFinish = async () => {
     setIsSaving(true);
+    if (selectedModel) {
+      try {
+        localStorage.setItem('selected_model', selectedModel);
+      } catch {
+        // Storage unavailable (private mode etc.) — the DB value below still applies.
+      }
+      await userActions.saveSelectedModel(selectedModel);
+    }
     await userActions.completeOnboarding();
     setIsSaving(false);
     onComplete({
       googleApiKey: googleKeySaved ? googleKey : undefined,
       githubToken: githubTokenSaved ? githubToken : undefined,
+      anthropicApiKey: anthropicKeySaved ? anthropicKey.trim() : undefined,
+      openaiApiKey: openaiKeySaved ? openaiKey.trim() : undefined,
       systemMessage: aboutMeSaved ? aboutMe : undefined,
+      selectedModel: selectedModel || undefined,
     });
   };
 
@@ -107,7 +205,8 @@ export default function OnboardingWizard({
     onComplete({});
   };
 
-  const anyProviderConfigured = googleKeySaved || githubTokenSaved || ollamaConnected;
+  const anyProviderConfigured =
+    googleKeySaved || githubTokenSaved || anthropicKeySaved || openaiKeySaved || ollamaConnected;
 
   const card = `relative w-full max-w-lg mx-4 rounded-2xl shadow-2xl p-8 ${isDarkMode ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-900'}`;
   const primaryBtn = `px-5 py-2.5 rounded-lg font-medium transition-all bg-brand-900 hover:bg-brand-800 text-white disabled:opacity-50 disabled:cursor-not-allowed`;
@@ -119,6 +218,50 @@ export default function OnboardingWizard({
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
     </svg>
+  );
+
+  const providerBtn = (provider: Exclude<AltProvider, null>, label: string) => (
+    <button
+      onClick={() => setAltProvider(altProvider === provider ? null : provider)}
+      className={`px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${altProvider === provider ? 'border-brand-500 text-brand-600 bg-brand-50' : isDarkMode ? 'border-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+    >
+      {label}
+    </button>
+  );
+
+  const keyField = (opts: {
+    label: string;
+    placeholder: string;
+    value: string;
+    saved: boolean;
+    onChange: (value: string) => void;
+    link?: { href: string; text: string };
+  }) => (
+    <div className="mb-4">
+      <label className={labelCls}>{opts.label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          value={opts.value}
+          onChange={e => opts.onChange(e.target.value)}
+          placeholder={opts.placeholder}
+          className={inputCls + (opts.saved ? ' border-green-500' : '')}
+        />
+        {opts.saved && <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-500 text-xs font-medium">{checkIcon}{t('keySaved')}</div>}
+      </div>
+      {opts.link && (
+        <a
+          href={opts.link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`inline-block mt-1.5 text-xs underline-offset-2 hover:underline ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}
+        >
+          {opts.link.text} ↗
+        </a>
+      )}
+    </div>
   );
 
   // Step dots — shared header
@@ -218,17 +361,53 @@ export default function OnboardingWizard({
               {t('orDivider')}
               <div className={`flex-1 h-px ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
             </div>
-            <div className="flex gap-2 mb-4">
-              <button onClick={() => setAltProvider(altProvider === 'github' ? null : 'github')} className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${altProvider === 'github' ? 'border-brand-500 text-brand-600 bg-brand-50' : isDarkMode ? 'border-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>{t('haveGithubToken')}</button>
-              <button onClick={() => setAltProvider(altProvider === 'ollama' ? null : 'ollama')} className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${altProvider === 'ollama' ? 'border-brand-500 text-brand-600 bg-brand-50' : isDarkMode ? 'border-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>{t('useOllama')}</button>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {providerBtn('anthropic', t('haveAnthropicKey'))}
+              {providerBtn('openai', t('haveOpenaiKey'))}
+              {providerBtn('github', t('haveGithubToken'))}
+              {providerBtn('ollama', t('useOllama'))}
             </div>
-            {altProvider === 'github' && (
+            {altProvider === 'anthropic' && keyField({
+              label: t('anthropicKeyLabel'),
+              placeholder: t('anthropicKeyPlaceholder'),
+              value: anthropicKey,
+              saved: anthropicKeySaved,
+              onChange: handleAnthropicKeyChange,
+              link: { href: 'https://console.anthropic.com/settings/keys', text: t('getAnthropicKey') },
+            })}
+            {altProvider === 'openai' && keyField({
+              label: t('openaiKeyLabel'),
+              placeholder: t('openaiKeyPlaceholder'),
+              value: openaiKey,
+              saved: openaiKeySaved,
+              onChange: handleOpenaiKeyChange,
+              link: { href: 'https://platform.openai.com/api-keys', text: t('getOpenaiKey') },
+            })}
+            {altProvider === 'github' && keyField({
+              label: t('githubTokenLabel'),
+              placeholder: t('githubTokenPlaceholder'),
+              value: githubToken,
+              saved: githubTokenSaved,
+              onChange: handleGithubTokenChange,
+            })}
+            {availableModels.length > 0 && (
               <div className="mb-4">
-                <label className={labelCls}>{t('githubTokenLabel')}</label>
-                <div className="relative">
-                  <input type="text" value={githubToken} onChange={e => handleGithubTokenChange(e.target.value)} placeholder={t('githubTokenPlaceholder')} className={inputCls + (githubTokenSaved ? ' border-green-500' : '')} />
-                  {githubTokenSaved && <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-500 text-xs font-medium">{checkIcon}{t('keySaved')}</div>}
-                </div>
+                <label htmlFor="onboarding-default-model" className={labelCls}>{t('defaultModelLabel')}</label>
+                <select
+                  id="onboarding-default-model"
+                  value={selectedModel}
+                  onChange={e => setChosenModel(e.target.value)}
+                  className={inputCls}
+                >
+                  {PROVIDER_ORDER.filter(p => availableModels.some(m => m.provider === p)).map(p => (
+                    <optgroup key={p} label={PROVIDER_LABELS[p]}>
+                      {availableModels.filter(m => m.provider === p).map(m => (
+                        <option key={m.id} value={m.id}>{m.icon} {m.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <p className={`mt-1.5 text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{t('defaultModelHint')}</p>
               </div>
             )}
             {altProvider === 'ollama' && (
@@ -307,7 +486,10 @@ export default function OnboardingWizard({
                 <ul className="space-y-1.5">
                   {googleKeySaved && <li className="flex items-center gap-2 text-sm text-green-500">{checkIcon}{t('step4Gemini')}</li>}
                   {githubTokenSaved && <li className="flex items-center gap-2 text-sm text-green-500">{checkIcon}{t('step4Github')}</li>}
+                  {anthropicKeySaved && <li className="flex items-center gap-2 text-sm text-green-500">{checkIcon}{t('step4Anthropic')}</li>}
+                  {openaiKeySaved && <li className="flex items-center gap-2 text-sm text-green-500">{checkIcon}{t('step4OpenAI')}</li>}
                   {ollamaConnected && <li className="flex items-center gap-2 text-sm text-green-500">{checkIcon}{t('step4Ollama')}</li>}
+                  {selectedModelName && <li className="flex items-center gap-2 text-sm text-green-500">{checkIcon}{t('step4DefaultModel', { model: selectedModelName })}</li>}
                   {aboutMeSaved && <li className="flex items-center gap-2 text-sm text-green-500">{checkIcon}{t('step4AboutMe')}</li>}
                 </ul>
               </div>

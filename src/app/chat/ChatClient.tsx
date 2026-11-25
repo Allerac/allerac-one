@@ -1859,9 +1859,13 @@ const savedModel = localStorage.getItem('selected_model');
           isDarkMode={isDarkMode}
           systemMessage={systemMessage}
           ollamaConnected={ollamaConnected}
+          ollamaModels={ollamaModels.map(m => m.name)}
           onComplete={(updates) => {
             if (updates.googleApiKey) setGoogleApiKey(updates.googleApiKey);
             if (updates.githubToken) setGithubToken(updates.githubToken);
+            if (updates.anthropicApiKey) setAnthropicApiKey(updates.anthropicApiKey);
+            if (updates.openaiApiKey) setOpenaiApiKey(updates.openaiApiKey);
+            if (updates.selectedModel) setSelectedModel(updates.selectedModel);
             if (updates.systemMessage) setSystemMessage(updates.systemMessage);
             setShowOnboarding(false);
           }}
