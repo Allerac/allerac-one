@@ -633,7 +633,7 @@
     "openStudio": "Open Google AI Studio",
     "pasteKeyLabel": "Paste your key here:",
     "keyPlaceholder": "AIza...",
-    "keySaved": "Key saved!",
+    "keySaved": "Key verified and saved",
     "orDivider": "or",
     "haveGithubToken": "I have a GitHub token",
     "useOllama": "Use local Ollama",
@@ -674,7 +674,13 @@
     "step4Tip1": "Ask anything — weather, code, ideas",
     "step4Tip2": "Add documents to your knowledge base",
     "step4Tip3": "Create skills for recurring tasks",
-    "startChatting": "Start chatting"
+    "startChatting": "Start chatting",
+    "testKey": "Test connection",
+    "testingKey": "Testing the key with the provider…",
+    "keyInvalid": "The provider rejected this key. Check it and try again.",
+    "keyTestFailed": "Could not reach the provider to test the key. Try again.",
+    "showKey": "Show",
+    "hideKey": "Hide"
   },
   "hubTour": {
     "step1Title": "Welcome to Allerac",
@@ -913,7 +919,32 @@
       "connection_unavailable": "Unable to reach the API connection. Check the terminal service.",
       "scope_not_allowed": "Access not allowed on this unit.",
       "install_failed": "Unable to install the connection on the terminal. The new key was revoked.",
-      "not_configured": "Terminal is not configured on this unit."
+      "not_configured": "Terminal is not configured on this unit.",
+      "history_unavailable": "Unable to load the terminal history."
+    },
+    "adminAccess": {
+      "title": "Unit terminal",
+      "description": "Shared Claude Code / Codex sessions of this unit, with the unit's CLI logins and workspace. Every user needs this grant, administrators included.",
+      "sharedWarning": "Everyone granted access shares the same terminal session: they see its scrollback and anything pasted into it, type in it, and use the CLI accounts signed in on this unit. Grant it only to people you trust with all of that.",
+      "grant": "Grant terminal access",
+      "revoke": "Revoke terminal access"
+    },
+    "history": {
+      "title": "Terminal history",
+      "description": "Who started, joined or ended sessions and how they ended. Typed input and output are not recorded. Last 90 days.",
+      "refresh": "Refresh",
+      "loading": "Loading…",
+      "empty": "No sessions recorded.",
+      "system": "system",
+      "exitCode": "(code {code})",
+      "session": "session {id}",
+      "events": {
+        "started": "Started the session",
+        "reconnected": "Joined the session",
+        "stopped": "Ended the session",
+        "exited": "CLI exited",
+        "idle_timeout": "Ended after inactivity"
+      }
     }
   },
   "connections": {

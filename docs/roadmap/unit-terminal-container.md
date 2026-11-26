@@ -30,13 +30,14 @@ that Unit's terminal, its CLI logins and its workspace, and nothing outside it.
 | # | Topic | Decision |
 |---|---|---|
 | 1 | Host bridge | **Retired.** Remove `scripts/start-claude-terminal.ps1`, `scripts/start-codex-terminal.ps1`, `docker-compose.terminal.yml` and the `*_TERMINAL_USER_ID` single-owner model. `server.mjs` becomes the in-container process. |
-| 2 | Access | Dedicated permission **`user_terminal_access`**, granted per user by an admin (Admin → user → *Unit terminal*). Admins have access implicitly. Not a domain: domains are chat agents (listed by `/api/domains`, the Control API, skills and the Unit landing). |
+| 2 | Access | Dedicated permission **`user_terminal_access`**, granted per user by an admin (Admin → user → *Unit terminal*). Admins need an explicit grant too (an admin can grant it to themselves). Not a domain: domains are chat agents (listed by `/api/domains`, the Control API, skills and the Unit landing). |
 | 3 | CLI login | Interactive only. Logged in once inside the container through the CLI's own flow, persisted in a per-provider volume of the Unit. |
 | 4 | `allerac_unit` MCP identity | A **Unit service account** with scopes chosen by an admin, replacing the per-user "Conectar API" key. |
 | 5 | Workspace | Dedicated named volume of the Unit, mounted at `/workspace`. |
 | 6 | Audit | Record **session lifecycle history only** (who started, reconnected, stopped; how it ended). No input content, no per-keystroke events, no output. |
 | 7 | Providers | Claude Code **and** Codex. |
 | 8 | Idle timeout | 30 minutes without any attached tab (unchanged). |
+| 9 | Where it runs | **Private Units only.** The scripts refuse the `terminal` profile unless the Unit sets `UNIT_PUBLIC=false`; a lean Unit (`docker-compose.public.yml`) is always public (`scripts/lib/unit-terminal-guard.sh`). |
 
 ## Architecture
 
@@ -115,8 +116,8 @@ These volumes hold credentials. They must be covered by the backup documentation
 
 - Table `user_terminal_access` (migration `157_unit_terminal.sql`). Admins
   grant/revoke it in the user modal of the admin area
-  (`updateUserTerminalAccess`); admins have it implicitly; service accounts
-  never.
+  (`updateUserTerminalAccess`); admins need an explicit grant too (they can
+  grant it to themselves); service accounts never.
 - A domain was considered and rejected: domains are chat agents and a
   `terminal` row would leak into `/api/domains`, `domainService.listAccessible`,
   skills and the public Unit landing.
@@ -280,7 +281,7 @@ scheduled cleanup job).
 
 - Bridge: rejects missing/invalid secret and any `Origin`; no longer needs an owner;
   `created` flag; ended-session reason/exit code; connection file path and mode.
-- Route: 403 without `terminal`; admin implicit access; access re-checked per request;
+- Route: 403 without `terminal`; admins need an explicit grant; access re-checked per request;
   `X-Terminal-User` forwarded; events recorded idempotently.
 - Service account: cannot log in; key scopes ⊆ admin selection; domain access mirrors
   selection; disconnect revokes before clearing.
@@ -297,3 +298,7 @@ scheduled cleanup job).
   as the sandbox.
 - CLI update policy: pinned versions in the image (rebuild to upgrade) vs. allowing
   the CLIs' self-update into the home volume.
+- Egress: the terminal networks keep internet access (the CLIs need it), so host
+  ports published on all interfaces are reachable through the gateway. An egress
+  proxy with a provider allowlist would close that; until then see "Network reach"
+  in `infra/unit-terminal/README.md`.

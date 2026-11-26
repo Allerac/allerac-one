@@ -48,7 +48,9 @@ test('several users granted terminal access share it; others are refused', async
   expect((await GET(new Request('http://localhost/api/terminal/status'), context('status'))).status).toBe(403);
   expect(global.fetch).not.toHaveBeenCalled();
 });
-test('admins have terminal access implicitly', async () => {
+test('admins need an explicit grant like everyone else', async () => {
+  expect(await canUseTerminal({ id: 'admin', is_admin: true }, 'codex')).toBe(false);
+  granted.add('admin');
   expect(await canUseTerminal({ id: 'admin', is_admin: true }, 'codex')).toBe(true);
 });
 test('access is re-checked on every request, so revocation applies to the next poll', async () => {

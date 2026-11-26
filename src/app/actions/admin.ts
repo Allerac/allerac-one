@@ -270,7 +270,7 @@ export async function updateUserDomains(
   }
 }
 
-/** Grants or revokes the shared Unit terminal. Admins have it implicitly. */
+/** Grants or revokes the shared Unit terminal. Admins need an explicit grant too. */
 export async function updateUserTerminalAccess(
   userId: string,
   enabled: boolean

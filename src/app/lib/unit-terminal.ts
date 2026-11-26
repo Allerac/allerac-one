@@ -20,9 +20,11 @@ export function isTerminalConfigured(provider: TerminalProvider): boolean {
   return Boolean(config.url && config.secret && config.secret.length >= 32);
 }
 
-/** Admins implicitly; other users only when an admin granted the terminal. Service accounts never. */
+/**
+ * Only users an admin explicitly granted the terminal (admins included: being an
+ * admin does not open the shared session by itself). Service accounts never.
+ */
 export async function hasTerminalPermission(user: Pick<User, 'id' | 'is_admin'>): Promise<boolean> {
-  if (user.is_admin) return true;
   const result = await pool.query(
     `SELECT 1
      FROM user_terminal_access a

@@ -426,7 +426,7 @@
     "openStudio": "Obrir Google AI Studio",
     "pasteKeyLabel": "Enganxa la teva clau aquí:",
     "keyPlaceholder": "AIza...",
-    "keySaved": "Clau desada!",
+    "keySaved": "Clau verificada i desada",
     "orDivider": "o",
     "haveGithubToken": "Tinc un token de GitHub",
     "useOllama": "Usar Ollama local",
@@ -467,7 +467,13 @@
     "step4Tip1": "Pregunta qualsevol cosa — temps, codi, idees",
     "step4Tip2": "Afegeix documents a la teva base de coneixement",
     "step4Tip3": "Crea habilitats per a tasques recurrents",
-    "startChatting": "Començar a xatejar"
+    "startChatting": "Començar a xatejar",
+    "testKey": "Prova la connexió",
+    "testingKey": "Provant la clau amb el proveïdor…",
+    "keyInvalid": "El proveïdor ha rebutjat aquesta clau. Revisa-la i torna-ho a provar.",
+    "keyTestFailed": "No s'ha pogut contactar amb el proveïdor per provar la clau. Torna-ho a provar.",
+    "showKey": "Mostra",
+    "hideKey": "Amaga"
   },
   "hubTour": {
     "step1Title": "Benvingut a Allerac",
@@ -913,7 +919,32 @@
       "connection_unavailable": "No s'ha pogut accedir a la connexió de l'API. Revisa el servei de terminal.",
       "scope_not_allowed": "Accés no autoritzat en aquesta unit.",
       "install_failed": "No s'ha pogut instal·lar la connexió al terminal. La clau creada s'ha revocat.",
-      "not_configured": "Terminal no configurat en aquesta unit."
+      "not_configured": "Terminal no configurat en aquesta unit.",
+      "history_unavailable": "No s'ha pogut carregar l'historial del terminal."
+    },
+    "adminAccess": {
+      "title": "Terminal de la unit",
+      "description": "Sessions compartides de Claude Code / Codex d'aquesta unit, amb els inicis de sessió de CLI i l'espai de treball de la unit. Tot usuari necessita aquest permís, inclosos els administradors.",
+      "sharedWarning": "Tots els qui tenen accés comparteixen la mateixa sessió del terminal: veuen el seu historial en pantalla i tot el que s'hi enganxi, hi escriuen i fan servir els comptes de CLI connectats en aquesta unit. Concedeix-lo només a persones de confiança per a tot això.",
+      "grant": "Concedir accés al terminal",
+      "revoke": "Revocar l'accés al terminal"
+    },
+    "history": {
+      "title": "Historial del terminal",
+      "description": "Qui va iniciar, es va connectar o va acabar sessions i com van acabar. El que s'escriu i la sortida no es registren. Últims 90 dies.",
+      "refresh": "Actualitza",
+      "loading": "Carregant…",
+      "empty": "No hi ha sessions registrades.",
+      "system": "sistema",
+      "exitCode": "(codi {code})",
+      "session": "sessió {id}",
+      "events": {
+        "started": "Va iniciar la sessió",
+        "reconnected": "Es va connectar a la sessió",
+        "stopped": "Va acabar la sessió",
+        "exited": "CLI finalitzat",
+        "idle_timeout": "Acabada per inactivitat"
+      }
     }
   },
   "connections": {
