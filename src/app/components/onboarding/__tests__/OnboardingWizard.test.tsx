@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import OnboardingWizard from '../OnboardingWizard';
 import { saveUserSettings, saveSelectedModel } from '@/app/actions/user';
+import { validateApiKey } from '@/app/actions/api-keys';
 
 // Mock server actions
 jest.mock('@/app/actions/user', () => ({
@@ -9,6 +10,10 @@ jest.mock('@/app/actions/user', () => ({
   saveSelectedModel: jest.fn().mockResolvedValue(undefined),
   updateLanguage: jest.fn().mockResolvedValue(undefined),
   completeOnboarding: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/app/actions/api-keys', () => ({
+  validateApiKey: jest.fn().mockResolvedValue({ valid: true }),
 }));
 
 jest.mock('@/app/actions/chat', () => ({
@@ -27,6 +32,7 @@ describe('OnboardingWizard', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(validateApiKey).mockResolvedValue({ valid: true });
     Object.defineProperty(window, 'location', {
       value: { reload: jest.fn() },
       writable: true,
@@ -87,6 +93,11 @@ describe('OnboardingWizard', () => {
     const goToStep2 = () => {
       fireEvent.click(screen.getByRole('button', { name: /let's go|vamos|continue/i }));
     };
+    // Typing never saves; leaving the field (or Test connection) tests and saves.
+    const enterKey = (input: HTMLElement, value: string) => {
+      fireEvent.change(input, { target: { value } });
+      fireEvent.blur(input);
+    };
 
     it('should have step indicator showing step 1 initially', () => {
       render(<OnboardingWizard {...defaultProps} />);
@@ -108,11 +119,13 @@ describe('OnboardingWizard', () => {
       goToStep2();
 
       fireEvent.click(screen.getByRole('button', { name: /anthropic/i }));
-      fireEvent.change(screen.getByPlaceholderText(/sk-ant-/i), { target: { value: ANTHROPIC_KEY } });
+      enterKey(screen.getByPlaceholderText(/sk-ant-/i), ANTHROPIC_KEY);
 
       await waitFor(() => {
         expect(saveUserSettings).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, ANTHROPIC_KEY);
       });
+      expect(validateApiKey).toHaveBeenCalledWith('anthropic', ANTHROPIC_KEY);
+      expect(await screen.findByText('Saved')).toBeInTheDocument();
     });
 
     it('should save an OpenAI key as the openai setting', async () => {
@@ -120,7 +133,7 @@ describe('OnboardingWizard', () => {
       goToStep2();
 
       fireEvent.click(screen.getByRole('button', { name: /openai/i }));
-      fireEvent.change(screen.getByPlaceholderText(/^sk-\.\.\.$/), { target: { value: OPENAI_KEY } });
+      enterKey(screen.getByPlaceholderText(/^sk-\.\.\.$/), OPENAI_KEY);
 
       await waitFor(() => {
         expect(saveUserSettings).toHaveBeenCalledWith(
@@ -134,10 +147,76 @@ describe('OnboardingWizard', () => {
       goToStep2();
 
       fireEvent.click(screen.getByRole('button', { name: /openai/i }));
-      fireEvent.change(screen.getByPlaceholderText(/^sk-\.\.\.$/), { target: { value: ANTHROPIC_KEY } });
+      enterKey(screen.getByPlaceholderText(/^sk-\.\.\.$/), ANTHROPIC_KEY);
 
       await new Promise(r => setTimeout(r, 0));
+      expect(validateApiKey).not.toHaveBeenCalled();
       expect(saveUserSettings).not.toHaveBeenCalled();
+    });
+
+    it('should not save while typing', async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      goToStep2();
+
+      fireEvent.click(screen.getByRole('button', { name: /anthropic/i }));
+      const input = screen.getByPlaceholderText(/sk-ant-/i);
+      for (let i = 22; i <= ANTHROPIC_KEY.length; i++) {
+        fireEvent.change(input, { target: { value: ANTHROPIC_KEY.slice(0, i) } });
+      }
+
+      await new Promise(r => setTimeout(r, 0));
+      expect(validateApiKey).not.toHaveBeenCalled();
+      expect(saveUserSettings).not.toHaveBeenCalled();
+    });
+
+    it('should test the key with Test connection and save it once', async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      goToStep2();
+
+      fireEvent.click(screen.getByRole('button', { name: /openai/i }));
+      fireEvent.change(screen.getByPlaceholderText(/^sk-\.\.\.$/), { target: { value: OPENAI_KEY } });
+      fireEvent.blur(screen.getByPlaceholderText(/^sk-\.\.\.$/));
+      // The last Test button belongs to the provider field opened below the Gemini one.
+      fireEvent.click(screen.getAllByRole('button', { name: 'Test connection' }).at(-1)!);
+
+      expect(await screen.findByText('Saved')).toBeInTheDocument();
+      expect(validateApiKey).toHaveBeenCalledTimes(1);
+      expect(validateApiKey).toHaveBeenCalledWith('openai', OPENAI_KEY);
+      expect(saveUserSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not save a key the provider rejects, and allow a retry', async () => {
+      jest.mocked(validateApiKey).mockResolvedValueOnce({ valid: false, error: 'Invalid or unauthorized key' });
+      render(<OnboardingWizard {...defaultProps} />);
+      goToStep2();
+
+      fireEvent.click(screen.getByRole('button', { name: /anthropic/i }));
+      enterKey(screen.getByPlaceholderText(/sk-ant-/i), ANTHROPIC_KEY);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('The provider rejected this key.');
+      expect(saveUserSettings).not.toHaveBeenCalled();
+      expect(screen.queryByLabelText(/default chat model/i)).not.toBeInTheDocument();
+
+      // The last Test button belongs to the provider field opened below the Gemini one.
+      fireEvent.click(screen.getAllByRole('button', { name: 'Test connection' }).at(-1)!);
+      expect(await screen.findByText('Saved')).toBeInTheDocument();
+      expect(saveUserSettings).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, ANTHROPIC_KEY);
+    });
+
+    it('should mask keys by default with a show/hide toggle', () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      goToStep2();
+
+      const google = screen.getByPlaceholderText('AIza...');
+      expect(google).toHaveAttribute('type', 'password');
+      expect(google).toHaveAttribute('autocomplete', 'off');
+      fireEvent.click(screen.getByRole('button', { name: 'Show' }));
+      expect(google).toHaveAttribute('type', 'text');
+      fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+      expect(google).toHaveAttribute('type', 'password');
+
+      fireEvent.click(screen.getByRole('button', { name: /anthropic/i }));
+      expect(screen.getByPlaceholderText(/sk-ant-/i)).toHaveAttribute('type', 'password');
     });
 
     describe('default model dropdown', () => {
@@ -159,7 +238,7 @@ describe('OnboardingWizard', () => {
         goToStep2();
 
         fireEvent.click(screen.getByRole('button', { name: /anthropic/i }));
-        fireEvent.change(screen.getByPlaceholderText(/sk-ant-/i), { target: { value: ANTHROPIC_KEY } });
+        enterKey(screen.getByPlaceholderText(/sk-ant-/i), ANTHROPIC_KEY);
 
         const select = await screen.findByLabelText(/default chat model/i) as HTMLSelectElement;
         const values = Array.from(select.options).map(o => o.value);
@@ -183,7 +262,7 @@ describe('OnboardingWizard', () => {
         goToStep2();
 
         fireEvent.click(screen.getByRole('button', { name: /openai/i }));
-        fireEvent.change(screen.getByPlaceholderText(/^sk-\.\.\.$/), { target: { value: OPENAI_KEY } });
+        enterKey(screen.getByPlaceholderText(/^sk-\.\.\.$/), OPENAI_KEY);
         const select = await screen.findByLabelText(/default chat model/i);
         fireEvent.change(select, { target: { value: 'gpt-5.6-luna' } });
 

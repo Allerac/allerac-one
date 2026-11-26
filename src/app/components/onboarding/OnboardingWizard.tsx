@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { AlleracIcon } from '../ui/AlleracIcon';
 import * as userActions from '@/app/actions/user';
 import * as chatActions from '@/app/actions/chat';
+import { validateApiKey } from '@/app/actions/api-keys';
 import { MODELS } from '@/app/services/llm/models';
 import type { Model } from '@/app/types';
 
@@ -48,6 +49,33 @@ const isAnthropicKey = (value: string) => value.startsWith('sk-ant-') && value.l
 const isOpenaiKey = (value: string) =>
   value.startsWith('sk-') && !value.startsWith('sk-ant-') && value.length > MIN_KEY_LENGTH;
 
+type KeyProvider = 'google' | 'github' | 'anthropic' | 'openai';
+type KeyStatus = 'idle' | 'testing' | 'saved' | 'invalid' | 'failed';
+interface KeyState { value: string; status: KeyStatus; visible: boolean }
+
+const KEY_PROVIDERS: KeyProvider[] = ['google', 'github', 'anthropic', 'openai'];
+/** Cheap format check before a key is sent to its provider. */
+const KEY_FORMATS: Record<KeyProvider, (value: string) => boolean> = {
+  google: value => value.startsWith('AIza') && value.length > MIN_KEY_LENGTH,
+  github: value => (value.startsWith('ghp_') || value.startsWith('github_pat_')) && value.length > MIN_KEY_LENGTH,
+  anthropic: isAnthropicKey,
+  openai: isOpenaiKey,
+};
+
+/** Each key has its own positional argument in saveUserSettings. */
+function saveKey(provider: KeyProvider, key: string) {
+  switch (provider) {
+    case 'github': return userActions.saveUserSettings(key);
+    case 'google': return userActions.saveUserSettings(undefined, undefined, undefined, key);
+    case 'anthropic': return userActions.saveUserSettings(undefined, undefined, undefined, undefined, key);
+    case 'openai':
+      return userActions.saveUserSettings(undefined, undefined, undefined, undefined, undefined, undefined, undefined, key);
+  }
+}
+
+const emptyKeys = (): Record<KeyProvider, KeyState> =>
+  Object.fromEntries(KEY_PROVIDERS.map(p => [p, { value: '', status: 'idle', visible: false }])) as Record<KeyProvider, KeyState>;
+
 export default function OnboardingWizard({
   userId,
   userName,
@@ -64,14 +92,22 @@ export default function OnboardingWizard({
   const [isSaving, setIsSaving] = useState(false);
 
   // Step 2 state
-  const [googleKey, setGoogleKey] = useState('');
-  const [googleKeySaved, setGoogleKeySaved] = useState(false);
-  const [githubToken, setGithubToken] = useState('');
-  const [githubTokenSaved, setGithubTokenSaved] = useState(false);
-  const [anthropicKey, setAnthropicKey] = useState('');
-  const [anthropicKeySaved, setAnthropicKeySaved] = useState(false);
-  const [openaiKey, setOpenaiKey] = useState('');
-  const [openaiKeySaved, setOpenaiKeySaved] = useState(false);
+  // Keys are tested with their provider and saved only once valid, on blur or
+  // with the Test button; typing alone never saves anything.
+  const [keys, setKeys] = useState<Record<KeyProvider, KeyState>>(emptyKeys);
+  // Latest typed value and the value being (or already) verified, per provider:
+  // guards against a blur and a click testing the same key twice, and against
+  // a slow response for a value the user has since changed.
+  const latestKey = useRef<Record<KeyProvider, string>>({ google: '', github: '', anthropic: '', openai: '' });
+  const verifiedKey = useRef<Record<KeyProvider, string | null>>({ google: null, github: null, anthropic: null, openai: null });
+  const googleKey = keys.google.value;
+  const githubToken = keys.github.value;
+  const anthropicKey = keys.anthropic.value;
+  const openaiKey = keys.openai.value;
+  const googleKeySaved = keys.google.status === 'saved';
+  const githubTokenSaved = keys.github.status === 'saved';
+  const anthropicKeySaved = keys.anthropic.status === 'saved';
+  const openaiKeySaved = keys.openai.status === 'saved';
   const [altProvider, setAltProvider] = useState<AltProvider>(null);
   const [chosenModel, setChosenModel] = useState('');
 
@@ -85,59 +121,36 @@ export default function OnboardingWizard({
 
   const firstName = userName?.split(' ')[0] || userName || '';
 
-  const handleGoogleKeyChange = async (value: string) => {
-    setGoogleKey(value);
-    setGoogleKeySaved(false);
-    if (value.startsWith('AIza') && value.length > 20) {
-      setIsSaving(true);
-      await userActions.saveUserSettings(undefined, undefined, undefined, value);
-      setGoogleKeySaved(true);
-      setIsSaving(false);
-    }
+  const updateKey = (provider: KeyProvider, patch: Partial<KeyState>) =>
+    setKeys(prev => ({ ...prev, [provider]: { ...prev[provider], ...patch } }));
+
+  const handleKeyChange = (provider: KeyProvider, value: string) => {
+    latestKey.current[provider] = value.trim();
+    verifiedKey.current[provider] = null;
+    updateKey(provider, { value, status: 'idle' });
   };
 
-  const handleGithubTokenChange = async (value: string) => {
-    setGithubToken(value);
-    setGithubTokenSaved(false);
-    if ((value.startsWith('ghp_') || value.startsWith('github_pat_')) && value.length > 20) {
-      setIsSaving(true);
-      await userActions.saveUserSettings(value);
-      setGithubTokenSaved(true);
-      setIsSaving(false);
+  /** Tests the key with its provider and saves it only when it is valid. */
+  const verifyAndSaveKey = async (provider: KeyProvider) => {
+    const key = latestKey.current[provider];
+    if (!KEY_FORMATS[provider](key) || verifiedKey.current[provider] === key) return;
+    verifiedKey.current[provider] = key;
+    updateKey(provider, { status: 'testing' });
+    let status: KeyStatus;
+    try {
+      const result = await validateApiKey(provider, key);
+      if (result.valid) {
+        await saveKey(provider, key);
+        status = 'saved';
+      } else {
+        status = 'invalid';
+      }
+    } catch {
+      status = 'failed';
     }
-  };
-
-  const handleAnthropicKeyChange = async (value: string) => {
-    const trimmed = value.trim();
-    setAnthropicKey(value);
-    setAnthropicKeySaved(false);
-    if (isAnthropicKey(trimmed)) {
-      setIsSaving(true);
-      await userActions.saveUserSettings(undefined, undefined, undefined, undefined, trimmed);
-      setAnthropicKeySaved(true);
-      setIsSaving(false);
-    }
-  };
-
-  const handleOpenaiKeyChange = async (value: string) => {
-    const trimmed = value.trim();
-    setOpenaiKey(value);
-    setOpenaiKeySaved(false);
-    if (isOpenaiKey(trimmed)) {
-      setIsSaving(true);
-      await userActions.saveUserSettings(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        trimmed,
-      );
-      setOpenaiKeySaved(true);
-      setIsSaving(false);
-    }
+    if (latestKey.current[provider] !== key) return; // changed meanwhile
+    if (status !== 'saved') verifiedKey.current[provider] = null; // allow a retry
+    updateKey(provider, { status });
   };
 
   const handleSaveAboutMe = async () => {
@@ -191,8 +204,8 @@ export default function OnboardingWizard({
     await userActions.completeOnboarding();
     setIsSaving(false);
     onComplete({
-      googleApiKey: googleKeySaved ? googleKey : undefined,
-      githubToken: githubTokenSaved ? githubToken : undefined,
+      googleApiKey: googleKeySaved ? googleKey.trim() : undefined,
+      githubToken: githubTokenSaved ? githubToken.trim() : undefined,
       anthropicApiKey: anthropicKeySaved ? anthropicKey.trim() : undefined,
       openaiApiKey: openaiKeySaved ? openaiKey.trim() : undefined,
       systemMessage: aboutMeSaved ? aboutMe : undefined,
@@ -229,40 +242,65 @@ export default function OnboardingWizard({
     </button>
   );
 
-  const keyField = (opts: {
+  const keyField = (provider: KeyProvider, opts: {
     label: string;
     placeholder: string;
-    value: string;
-    saved: boolean;
-    onChange: (value: string) => void;
     link?: { href: string; text: string };
-  }) => (
-    <div className="mb-4">
-      <label className={labelCls}>{opts.label}</label>
-      <div className="relative">
-        <input
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          value={opts.value}
-          onChange={e => opts.onChange(e.target.value)}
-          placeholder={opts.placeholder}
-          className={inputCls + (opts.saved ? ' border-green-500' : '')}
-        />
-        {opts.saved && <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-500 text-xs font-medium">{checkIcon}{t('keySaved')}</div>}
+  }) => {
+    const state = keys[provider];
+    const inputId = `onboarding-key-${provider}`;
+    const canTest = KEY_FORMATS[provider](state.value.trim()) && state.status !== 'testing' && state.status !== 'saved';
+    return (
+      <div className="mb-4">
+        <label htmlFor={inputId} className={labelCls}>{opts.label}</label>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              id={inputId}
+              type={state.visible ? 'text' : 'password'}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={state.value}
+              onChange={e => handleKeyChange(provider, e.target.value)}
+              onBlur={() => void verifyAndSaveKey(provider)}
+              placeholder={opts.placeholder}
+              className={inputCls + ' pr-16' + (state.status === 'saved' ? ' border-green-500' : state.status === 'invalid' || state.status === 'failed' ? ' border-red-500' : '')}
+            />
+            <button
+              type="button"
+              onClick={() => updateKey(provider, { visible: !state.visible })}
+              aria-label={state.visible ? t('hideKey') : t('showKey')}
+              aria-pressed={state.visible}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 px-1.5 text-xs ${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {state.visible ? t('hideKey') : t('showKey')}
+            </button>
+          </div>
+          <button type="button" className={secondaryBtn + ' !px-3 text-xs whitespace-nowrap disabled:opacity-50'} disabled={!canTest} onClick={() => void verifyAndSaveKey(provider)}>
+            {t('testKey')}
+          </button>
+        </div>
+        <div aria-live="polite" className="mt-1.5 text-xs">
+          {state.status === 'testing' && <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}><span className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />{t('testingKey')}</span>}
+          {state.status === 'saved' && <span className="flex items-center gap-1 text-green-500 font-medium">{checkIcon}{t('keySaved')}</span>}
+          {state.status === 'invalid' && <span role="alert" className="text-red-500">{t('keyInvalid')}</span>}
+          {state.status === 'failed' && <span role="alert" className="text-red-500">{t('keyTestFailed')}</span>}
+        </div>
+        {opts.link && (
+          <a
+            href={opts.link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-block mt-1.5 text-xs underline-offset-2 hover:underline ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}
+          >
+            {opts.link.text} ↗
+          </a>
+        )}
       </div>
-      {opts.link && (
-        <a
-          href={opts.link.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`inline-block mt-1.5 text-xs underline-offset-2 hover:underline ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}
-        >
-          {opts.link.text} ↗
-        </a>
-      )}
-    </div>
-  );
+    );
+  };
 
   // Step dots — shared header
   const stepDots = (
@@ -348,14 +386,7 @@ export default function OnboardingWizard({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
             </a>
-            <div className="mb-4">
-              <label className={labelCls}>{t('pasteKeyLabel')}</label>
-              <div className="relative">
-                <input type="text" value={googleKey} onChange={e => handleGoogleKeyChange(e.target.value)} placeholder={t('keyPlaceholder')} className={inputCls + (googleKeySaved ? ' border-green-500' : '')} />
-                {isSaving && !googleKeySaved && <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />}
-                {googleKeySaved && <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-500 text-xs font-medium">{checkIcon}{t('keySaved')}</div>}
-              </div>
-            </div>
+            {keyField('google', { label: t('pasteKeyLabel'), placeholder: t('keyPlaceholder') })}
             <div className={`flex items-center gap-3 mb-4 text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
               <div className={`flex-1 h-px ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
               {t('orDivider')}
@@ -367,28 +398,19 @@ export default function OnboardingWizard({
               {providerBtn('github', t('haveGithubToken'))}
               {providerBtn('ollama', t('useOllama'))}
             </div>
-            {altProvider === 'anthropic' && keyField({
+            {altProvider === 'anthropic' && keyField('anthropic', {
               label: t('anthropicKeyLabel'),
               placeholder: t('anthropicKeyPlaceholder'),
-              value: anthropicKey,
-              saved: anthropicKeySaved,
-              onChange: handleAnthropicKeyChange,
               link: { href: 'https://console.anthropic.com/settings/keys', text: t('getAnthropicKey') },
             })}
-            {altProvider === 'openai' && keyField({
+            {altProvider === 'openai' && keyField('openai', {
               label: t('openaiKeyLabel'),
               placeholder: t('openaiKeyPlaceholder'),
-              value: openaiKey,
-              saved: openaiKeySaved,
-              onChange: handleOpenaiKeyChange,
               link: { href: 'https://platform.openai.com/api-keys', text: t('getOpenaiKey') },
             })}
-            {altProvider === 'github' && keyField({
+            {altProvider === 'github' && keyField('github', {
               label: t('githubTokenLabel'),
               placeholder: t('githubTokenPlaceholder'),
-              value: githubToken,
-              saved: githubTokenSaved,
-              onChange: handleGithubTokenChange,
             })}
             {availableModels.length > 0 && (
               <div className="mb-4">

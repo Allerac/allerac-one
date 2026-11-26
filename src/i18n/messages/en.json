@@ -633,7 +633,7 @@
     "openStudio": "Open Google AI Studio",
     "pasteKeyLabel": "Paste your key here:",
     "keyPlaceholder": "AIza...",
-    "keySaved": "Key saved!",
+    "keySaved": "Key verified and saved",
     "orDivider": "or",
     "haveGithubToken": "I have a GitHub token",
     "useOllama": "Use local Ollama",
@@ -674,7 +674,13 @@
     "step4Tip1": "Ask anything — weather, code, ideas",
     "step4Tip2": "Add documents to your knowledge base",
     "step4Tip3": "Create skills for recurring tasks",
-    "startChatting": "Start chatting"
+    "startChatting": "Start chatting",
+    "testKey": "Test connection",
+    "testingKey": "Testing the key with the provider…",
+    "keyInvalid": "The provider rejected this key. Check it and try again.",
+    "keyTestFailed": "Could not reach the provider to test the key. Try again.",
+    "showKey": "Show",
+    "hideKey": "Hide"
   },
   "hubTour": {
     "step1Title": "Welcome to Allerac",

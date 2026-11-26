@@ -426,7 +426,7 @@
     "openStudio": "Abrir Google AI Studio",
     "pasteKeyLabel": "Pega tu clave aquí:",
     "keyPlaceholder": "AIza...",
-    "keySaved": "¡Clave guardada!",
+    "keySaved": "Clave verificada y guardada",
     "orDivider": "o",
     "haveGithubToken": "Tengo un token de GitHub",
     "useOllama": "Usar Ollama local",
@@ -467,7 +467,13 @@
     "step4Tip1": "Pregunta cualquier cosa — clima, código, ideas",
     "step4Tip2": "Añade documentos a tu base de conocimiento",
     "step4Tip3": "Crea habilidades para tareas recurrentes",
-    "startChatting": "Empezar a chatear"
+    "startChatting": "Empezar a chatear",
+    "testKey": "Probar conexión",
+    "testingKey": "Probando la clave con el proveedor…",
+    "keyInvalid": "El proveedor rechazó esta clave. Revísala e inténtalo de nuevo.",
+    "keyTestFailed": "No se pudo contactar con el proveedor para probar la clave. Inténtalo de nuevo.",
+    "showKey": "Mostrar",
+    "hideKey": "Ocultar"
   },
   "hubTour": {
     "step1Title": "Bienvenido a Allerac",
