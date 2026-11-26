@@ -24,7 +24,7 @@ export async function ensureTerminalServiceAccount(): Promise<string> {
   if (existing) return existing;
   await pool.query(
     `INSERT INTO users (email, name, is_admin, is_active, is_service_account)
-     VALUES ($1, 'Terminal da unit', false, true, true)
+     VALUES ($1, 'Unit terminal', false, true, true)
      ON CONFLICT (email) DO NOTHING`,
     [TERMINAL_SERVICE_ACCOUNT_EMAIL],
   );

@@ -2,7 +2,7 @@
 export const TERMINAL_ERROR_CODES = [
   'reauth_required', 'invalid_password', 'signin_required', 'rate_limited', 'unlock_unavailable', 'invalid_request',
   'unknown_provider', 'unknown_operation', 'request_too_large', 'terminal_unavailable', 'connection_unavailable',
-  'scope_not_allowed', 'install_failed', 'not_configured',
+  'scope_not_allowed', 'install_failed', 'not_configured', 'history_unavailable',
 ] as const;
 export type TerminalErrorCode = typeof TERMINAL_ERROR_CODES[number];
 

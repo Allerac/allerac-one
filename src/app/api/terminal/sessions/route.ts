@@ -11,6 +11,7 @@ export async function GET() {
     if (!user.is_admin) throw new ForbiddenError('Only admins can see the terminal history');
     return Response.json({ events: await listTerminalSessionEvents(100) }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    return authenticationErrorResponse(error) || Response.json({ error: 'Não foi possível carregar o histórico do terminal.' }, { status: 503 });
+    // `code` is translated by the client (terminal.errors.history_unavailable).
+    return authenticationErrorResponse(error) || Response.json({ error: 'Unable to load the terminal history.', code: 'history_unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
 }
