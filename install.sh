@@ -764,6 +764,21 @@ start_services() {
         log_info "Compose profiles: ${COMPOSE_PROFILES:-none}"
     fi
 
+    # The Unit terminal is for private Units only (scripts/lib/unit-terminal-guard.sh).
+    if [ -f scripts/lib/unit-terminal-guard.sh ]; then
+        # shellcheck source=scripts/lib/unit-terminal-guard.sh
+        . scripts/lib/unit-terminal-guard.sh
+        _guard_env_value() { { grep -E "^$1=" .env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//'; }
+        local terminal_guard_error
+        if ! terminal_guard_error="$(allerac_terminal_profile_check \
+            "${COMPOSE_PROFILES-$(_guard_env_value COMPOSE_PROFILES)}" \
+            "${UNIT_PUBLIC:-$(_guard_env_value UNIT_PUBLIC)}" \
+            "${COMPOSE_FILE:-$(_guard_env_value COMPOSE_FILE)}")"; then
+            log_error "$terminal_guard_error"
+            exit 1
+        fi
+    fi
+
     log_info "Pulling base images..."
     # WSL2 can crash docker compose (SIGBUS) during large concurrent pulls due
     # to mmap issues.  Retry up to 3 times — Docker caches completed layers so

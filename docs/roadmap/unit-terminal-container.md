@@ -37,6 +37,7 @@ that Unit's terminal, its CLI logins and its workspace, and nothing outside it.
 | 6 | Audit | Record **session lifecycle history only** (who started, reconnected, stopped; how it ended). No input content, no per-keystroke events, no output. |
 | 7 | Providers | Claude Code **and** Codex. |
 | 8 | Idle timeout | 30 minutes without any attached tab (unchanged). |
+| 9 | Where it runs | **Private Units only.** The scripts refuse the `terminal` profile unless the Unit sets `UNIT_PUBLIC=false`; a lean Unit (`docker-compose.public.yml`) is always public (`scripts/lib/unit-terminal-guard.sh`). |
 
 ## Architecture
 
@@ -297,3 +298,7 @@ scheduled cleanup job).
   as the sandbox.
 - CLI update policy: pinned versions in the image (rebuild to upgrade) vs. allowing
   the CLIs' self-update into the home volume.
+- Egress: the terminal networks keep internet access (the CLIs need it), so host
+  ports published on all interfaces are reachable through the gateway. An egress
+  proxy with a provider allowlist would close that; until then see "Network reach"
+  in `infra/unit-terminal/README.md`.

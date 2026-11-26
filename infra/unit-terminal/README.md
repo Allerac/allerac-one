@@ -42,14 +42,16 @@ Design and decisions: [docs/roadmap/unit-terminal-container.md](../../docs/roadm
 
 ## Setup
 
-1. In the Unit's env file set `CLAUDE_TERMINAL_SECRET` and
+1. Make sure the Unit is private (see *Private Units only* below) and set
+   `UNIT_PUBLIC=false` in its env file. Then set `CLAUDE_TERMINAL_SECRET` and
    `CODEX_TERMINAL_SECRET` (each `openssl rand -hex 32`) and add `terminal` to
    `COMPOSE_PROFILES`. Leave `CLAUDE_TERMINAL_URL` / `CODEX_TERMINAL_URL` unset
    (they default to the compose services); remove any values left from the old
    host-bridge pilot (`host.docker.internal`, `*_TERMINAL_USER_ID`).
 2. `docker compose up -d --build` (or `./update.sh`). The migration adds the
    permission, the history table and the service-account flag.
-3. As an admin, grant *Unit terminal* to the users who should use it.
+3. As an admin, grant *Unit terminal* to the users who should use it,
+   yourself included (admins do not have it implicitly).
 4. Open `/terminal`, choose the provider and **Abrir / reconectar**.
 5. First login, once per Unit and provider:
    - **Claude Code** shows a login link in the session (or type `/login`). Open
@@ -69,6 +71,57 @@ cannot start inside the hardened container, set
 `CODEX_TERMINAL_SANDBOX=danger-full-access`: the container (non-root, no
 capabilities, read-only root, only the home and workspace volumes writable) is
 then the only sandbox.
+
+## Private Units only
+
+The terminal is a pilot for private Units. `install.sh`, `update.sh` and
+`allerac start|restart` refuse the `terminal` profile unless the Unit's env
+file says `UNIT_PUBLIC=false` (`scripts/lib/unit-terminal-guard.sh`):
+
+- `UNIT_PUBLIC` unset, empty or any other value: the Unit is treated as
+  public and the profile is refused. Failing closed means a Unit that is
+  reachable from the internet and never set the flag cannot get a terminal by
+  accident.
+- A lean Unit (`COMPOSE_FILE` includes `docker-compose.public.yml`) is always
+  public, whatever `UNIT_PUBLIC` says.
+
+Never set `UNIT_PUBLIC=false` on a Unit with a public hostname, a Cloudflare
+Tunnel route or open ports. A plain `docker compose up` does not run the
+guard; use the scripts.
+
+## Network reach
+
+Each provider container sits on its own bridge network shared only with the
+app, so it cannot resolve or reach `db`, `redis`, `ollama`, `executor` or the
+other provider by name. It does reach:
+
+- `app:8080` on purpose (the `allerac_unit` MCP), always through the API's own
+  authentication and scopes;
+- the internet, which Claude Code and Codex need for their APIs, logins and
+  updates of their own state;
+- the Docker host through the network gateway, and with it every port the
+  host publishes on all interfaces: by default `APP_PORT` (8080),
+  `OLLAMA_PORT` (11434), `GARMIN_WORKER_PORT` (8787), `DOCS_PORT`,
+  `WEBHOOK_PORT`, Caddy's 80/443, plus any service running directly on the
+  host, and the host's LAN.
+
+The terminal networks are not `internal: true` because that also removes
+internet access, which the CLIs need. A clean fix would be an egress proxy
+with an allowlist of provider domains (the CLIs' login and API hosts change
+over time), which is not done yet. Until then, on a Unit that runs the
+terminal:
+
+- bind the ports that only the host needs to loopback, e.g.
+  `OLLAMA_PORT=127.0.0.1:11434` and `GARMIN_WORKER_PORT=127.0.0.1:8787` in the
+  env file (Compose then publishes `127.0.0.1:<port>`, which containers
+  cannot reach through the gateway). Check first that nothing else uses them
+  from the LAN or through `host.docker.internal` (e.g. another Unit's
+  `OLLAMA_BASE_URL`);
+- optionally block the terminal bridges from the host and private ranges with
+  a host firewall rule (`DOCKER-USER` chain for published ports, `INPUT` for
+  services on the host), keeping DNS and outbound internet open.
+
+These are host changes; make them deliberately, Unit by Unit.
 
 ## Allerac API tools (allerac_unit MCP)
 

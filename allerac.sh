@@ -81,6 +81,20 @@ if [ -z "${COMPOSE_PROFILES+x}" ] && [ -f "$_compose_profiles_lib" ]; then
         "${ALLERAC_MODULES-$(unit_env_value ALLERAC_MODULES)}")"
     export COMPOSE_PROFILES
 fi
+# The Unit terminal is for private Units only (scripts/lib/unit-terminal-guard.sh).
+_terminal_guard_lib="$INSTALL_DIR/scripts/lib/unit-terminal-guard.sh"
+[ -f "$_terminal_guard_lib" ] || _terminal_guard_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/lib/unit-terminal-guard.sh"
+require_terminal_profile_allowed() {
+    [ -f "$_terminal_guard_lib" ] || return 0
+    # shellcheck source=scripts/lib/unit-terminal-guard.sh
+    . "$_terminal_guard_lib"
+    local reason
+    if ! reason="$(allerac_terminal_profile_check "${COMPOSE_PROFILES:-$(unit_env_value COMPOSE_PROFILES)}" \
+        "${UNIT_PUBLIC:-$(unit_env_value UNIT_PUBLIC)}" "$UNIT_COMPOSE_FILES")"; then
+        log_error "$reason" >&2
+        exit 1
+    fi
+}
 # Database backups: ./backups for the primary Unit (unchanged), ./backups/<unit> otherwise.
 if [ "$UNIT" = "allerac" ]; then
     UNIT_BACKUP_DIR="$INSTALL_DIR/backups"
@@ -412,6 +426,7 @@ verify_checksums() {
 # ============================================
 cmd_start() {
     require_install_dir
+    require_terminal_profile_allowed
     local flags
     flags=$(compose_flags)
 
@@ -435,6 +450,7 @@ cmd_stop() {
 
 cmd_restart() {
     require_install_dir
+    require_terminal_profile_allowed
     local flags
     flags=$(compose_flags)
 

@@ -18,7 +18,8 @@
 #                                 needs N8N_ENCRYPTION_KEY, checked by update.sh)
 #   COMPOSE_PROFILES=terminal   - shared Claude Code / Codex terminal containers
 #                                 (docs/roadmap/unit-terminal-container.md; needs
-#                                 CLAUDE_TERMINAL_SECRET and CODEX_TERMINAL_SECRET, checked by update.sh)
+#                                 CLAUDE_TERMINAL_SECRET and CODEX_TERMINAL_SECRET, checked by update.sh;
+#                                 private Units only: the scripts require UNIT_PUBLIC=false)
 #
 # Required environment variables:
 #   ENCRYPTION_KEY                   - AES key for token encryption
@@ -79,7 +80,10 @@ x-unit-terminal: &unit-terminal
     - /tmp:size=512m,mode=1777
   # No ports, and no seat on the Unit's default network: each provider sits on its
   # own network shared only with the app, so the CLI reaches app:8080 (the Allerac
-  # MCP) and the internet, never db/redis/ollama/portainer/webhook or the other bridge.
+  # MCP) and the internet, never db/redis/ollama/portainer/webhook or the other bridge
+  # by name. Host ports published on all interfaces stay reachable through the
+  # gateway (not internal: the CLIs need the internet); see "Network reach" in
+  # infra/unit-terminal/README.md.
   healthcheck:
     test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.UNIT_TERMINAL_PORT)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
     interval: 10s
