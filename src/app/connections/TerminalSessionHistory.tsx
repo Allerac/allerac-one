@@ -7,6 +7,11 @@ import { readTerminalResponse, terminalErrorMessage } from '@/app/terminal/termi
 
 type Event = { id: string; provider: TerminalProvider; sessionId: string; event: 'started' | 'reconnected' | 'stopped' | 'exited' | 'idle_timeout'; exitCode: number | null; userEmail: string | null; userName: string | null; createdAt: string };
 
+async function fetchEvents(signal?: AbortSignal): Promise<Event[]> {
+  const response = await fetch('/api/terminal/sessions', { cache: 'no-store', signal });
+  return (await readTerminalResponse<{ events: Event[] }>(response)).events;
+}
+
 /** Admin-only lifecycle history. Input and output are never recorded. */
 export default function TerminalSessionHistory({ className }: { className: string }) {
   const t = useTranslations('terminal.history');
@@ -14,12 +19,11 @@ export default function TerminalSessionHistory({ className }: { className: strin
   const locale = useLocale();
   const [events, setEvents] = useState<Event[] | null>(null);
   const [error, setError] = useState('');
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const data = await readTerminalResponse<{ events: Event[] }>(await fetch('/api/terminal/sessions', { cache: 'no-store', signal }));
-      if (!signal?.aborted) { setEvents(data.events); setError(''); }
-    } catch (e) { if (!signal?.aborted) setError(terminalErrorMessage(e, tErrors, 'history_unavailable')); }
-  }, [tErrors]);
+  // setState only runs in the promise callbacks, never synchronously in the effect.
+  const load = useCallback((signal?: AbortSignal) => fetchEvents(signal).then(
+    data => { if (!signal?.aborted) { setEvents(data); setError(''); } },
+    e => { if (!signal?.aborted) setError(terminalErrorMessage(e, tErrors, 'history_unavailable')); },
+  ), [tErrors]);
   useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); }, [load]);
 
   return <section className={className}>

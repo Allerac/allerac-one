@@ -37,7 +37,8 @@ describe('allerac.sh start', () => {
     fs.writeFileSync(dockerLog, '');
     return spawnSync('bash', [path.join(ROOT, 'allerac.sh'), 'start'], {
       encoding: 'utf8',
-      env: { PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, HOME: dir, INSTALL_DIR: dir, DOCKER_LOG: dockerLog },
+      // A minimal environment, so no COMPOSE_PROFILES / UNIT_PUBLIC leaks in from the caller.
+      env: { PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, HOME: dir, INSTALL_DIR: dir, DOCKER_LOG: dockerLog } as unknown as NodeJS.ProcessEnv,
     });
   };
   const composeUpCalled = () => fs.readFileSync(dockerLog, 'utf8').includes('up -d');
