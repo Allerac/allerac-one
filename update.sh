@@ -387,6 +387,18 @@ if [[ ",${EFFECTIVE_PROFILES}," == *",terminal,"* ]]; then
     if [ "${#TERMINAL_CLAUDE_SECRET}" -lt 32 ] || [ "${#TERMINAL_CODEX_SECRET}" -lt 32 ]; then
         fail_update "configuration check" "CLAUDE_TERMINAL_SECRET and CODEX_TERMINAL_SECRET (>= 32 chars) are required when the terminal profile is enabled (generate each with: openssl rand -hex 32)."
     fi
+    # Codex sandbox: workspace-write (default) | read-only | danger-full-access.
+    TERMINAL_CODEX_SANDBOX="${CODEX_TERMINAL_SANDBOX:-$(unit_env_value CODEX_TERMINAL_SANDBOX)}"
+    case "${TERMINAL_CODEX_SANDBOX:-workspace-write}" in
+        workspace-write|read-only) ;;
+        danger-full-access)
+            echo -e "${YELLOW}  Note: CODEX_TERMINAL_SANDBOX=danger-full-access turns off the Codex sandbox; the${NC}"
+            echo -e "${YELLOW}  terminal container is then the only boundary. Use it only if workspace-write${NC}"
+            echo -e "${YELLOW}  cannot start (see infra/unit-terminal/README.md).${NC}"
+            echo "" ;;
+        *)
+            fail_update "configuration check" "CODEX_TERMINAL_SANDBOX must be workspace-write, read-only or danger-full-access (got '${TERMINAL_CODEX_SANDBOX}')." ;;
+    esac
 fi
 
 # Step 5: Run database migrations
