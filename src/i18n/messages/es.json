@@ -822,7 +822,32 @@
       "connection_unavailable": "No se pudo acceder a la conexión de la API. Revisa el servicio de terminal.",
       "scope_not_allowed": "Acceso no autorizado en esta unit.",
       "install_failed": "No se pudo instalar la conexión en el terminal. La clave creada se revocó.",
-      "not_configured": "Terminal no configurado en esta unit."
+      "not_configured": "Terminal no configurado en esta unit.",
+      "history_unavailable": "No se pudo cargar el historial del terminal."
+    },
+    "adminAccess": {
+      "title": "Terminal de la unit",
+      "description": "Sesiones compartidas de Claude Code / Codex de esta unit, con los inicios de sesión de CLI y el espacio de trabajo de la unit. Todo usuario necesita este permiso, incluidos los administradores.",
+      "sharedWarning": "Todos los que tienen acceso comparten la misma sesión del terminal: ven su historial en pantalla y todo lo que se pegue en ella, escriben en ella y usan las cuentas de CLI conectadas en esta unit. Concédelo solo a personas de confianza para todo ello.",
+      "grant": "Conceder acceso al terminal",
+      "revoke": "Revocar acceso al terminal"
+    },
+    "history": {
+      "title": "Historial del terminal",
+      "description": "Quién inició, se conectó o terminó sesiones y cómo terminaron. Lo escrito y la salida no se registran. Últimos 90 días.",
+      "refresh": "Actualizar",
+      "loading": "Cargando…",
+      "empty": "No hay sesiones registradas.",
+      "system": "sistema",
+      "exitCode": "(código {code})",
+      "session": "sesión {id}",
+      "events": {
+        "started": "Inició la sesión",
+        "reconnected": "Se conectó a la sesión",
+        "stopped": "Terminó la sesión",
+        "exited": "CLI finalizado",
+        "idle_timeout": "Terminada por inactividad"
+      }
     }
   },
   "connections": {

@@ -19,6 +19,7 @@ import type {
   SecretSystemSettingKey,
 } from '@/app/services/system/system-settings.service';
 import ApiKeyField from '@/app/components/settings/ApiKeyField';
+import TerminalAccessControl from './TerminalAccessControl';
 import type { ApiKeyProvider } from '@/app/actions/api-keys';
 import type { AdminIntegration } from './integrations';
 
@@ -1623,26 +1624,13 @@ export default function AdminClient({
                 </div>
               )}
 
-              {/* Unit terminal */}
-              {!selectedUser.is_admin && (
-                <div>
-                  <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${textMuted}`}>Unit terminal</p>
-                  <p className={`text-xs mb-2 ${textMuted}`}>
-                    Shared Claude Code / Codex sessions of this Unit: the user sees and types in the same session as everyone with access, with the Unit&apos;s CLI logins and workspace.
-                  </p>
-                  <button
-                    onClick={() => handleTerminalAccess(selectedUser.id, !selectedUser.terminal_access)}
-                    disabled={terminalChangingId === selectedUser.id}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      selectedUser.terminal_access
-                        ? d ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        : d ? 'bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/60' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                    }`}
-                  >
-                    {terminalChangingId === selectedUser.id ? '...' : selectedUser.terminal_access ? 'Revoke terminal access' : 'Grant terminal access'}
-                  </button>
-                </div>
-              )}
+              {/* Unit terminal: an explicit grant for every user, admins included */}
+              <TerminalAccessControl
+                enabled={selectedUser.terminal_access}
+                busy={terminalChangingId === selectedUser.id}
+                isDark={d}
+                onToggle={() => handleTerminalAccess(selectedUser.id, !selectedUser.terminal_access)}
+              />
 
               {/* Credits */}
               <div className={`pt-5 border-t ${d ? 'border-gray-700' : 'border-gray-200'}`}>

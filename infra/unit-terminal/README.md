@@ -19,7 +19,8 @@ Design and decisions: [docs/roadmap/unit-terminal-container.md](../../docs/roadm
   Closing a tab does not end it. Without any attached tab it ends after 30
   minutes. Claude and Codex are independent processes.
 - **Access** is an admin-granted permission (`user_terminal_access`, Admin →
-  user → *Unit terminal*). Admins have it implicitly. It is checked by the app
+  user → *Unit terminal*). Admins need it too: being an admin does not open
+  the shared session by itself. It is checked by the app
   on every request, so revocation applies on the next poll or keystroke. The
   services trust only their bearer secret and reject browser (`Origin`)
   requests.
