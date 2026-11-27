@@ -3,6 +3,7 @@ import { requireAuthenticatedUser } from '@/app/lib/domain-access';
 import { SELF_AGENT_HREF } from '@/federation/configure-url';
 import pool from '@/app/clients/db';
 import AgentsIndexClient from './AgentsIndexClient';
+import { botsEnabled } from '@/app/services/agent/bot-runtime';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,5 +27,5 @@ export async function localLastActivity(userId: string): Promise<string | null> 
 export default async function AgentsIndexPage() {
   const user = await requireAuthenticatedUser();
   if (!user.is_admin) redirect(SELF_AGENT_HREF);
-  return <AgentsIndexClient localLastActivity={await localLastActivity(String(user.id))} />;
+  return <AgentsIndexClient localLastActivity={await localLastActivity(String(user.id))} botsEnabled={botsEnabled()} />;
 }

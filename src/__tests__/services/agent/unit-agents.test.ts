@@ -24,7 +24,7 @@ const unitTools = { modules: {}, tools: { save_note: false }, skills: {} };
 const row = (patch: Partial<UnitAgentRow> = {}): UnitAgentRow => ({
   id: 'id-1', slug: 'doctor', displayName: 'Doctor', emoji: '🩺', avatarUrl: null, role: 'health', description: null,
   instructions: 'Ask about symptoms.', isDefault: false, enabled: true, sortOrder: 0,
-  toolSettings: EMPTY_AGENT_TOOL_SETTINGS, memoryMode: 'isolated', canCall: [], modelId: null, modelProvider: null,
+  toolSettings: EMPTY_AGENT_TOOL_SETTINGS, memoryMode: 'isolated', shareMemoriesByDefault: false, canCall: [], modelId: null, modelProvider: null,
   cloudAllowed: true, defaultSkillId: null, federationExposed: false, template: null, archivedAt: null,
   createdAt: '2026-11-27T10:00:00.000Z', updatedAt: null, ...patch,
 });
@@ -73,7 +73,7 @@ describe('createUnitAgentSchema', () => {
   });
 
   it('only accepts known memory modes and no unknown keys', () => {
-    expect(createUnitAgentSchema.safeParse({ slug: 'doctor', displayName: 'D', memoryMode: 'all' }).success).toBe(false);
+    expect(createUnitAgentSchema.safeParse({ slug: 'doctor', displayName: 'D', memoryMode: 'everything' }).success).toBe(false);
     expect(createUnitAgentSchema.safeParse({ slug: 'doctor', displayName: 'D', isDefault: true }).success).toBe(false);
   });
 });
@@ -110,7 +110,7 @@ describe('resolveUnitAgent', () => {
 describe('defaultAgentFromProfile', () => {
   it('builds the default bot without a row', () => {
     expect(defaultAgentFromProfile(profile, unitTools)).toMatchObject({
-      slug: 'chat', isDefault: true, displayName: 'Napols', instructions: 'Be brief.', memoryMode: 'isolated', federationExposed: false,
+      slug: 'chat', isDefault: true, displayName: 'Napols', instructions: 'Be brief.', memoryMode: 'all', shareMemoriesByDefault: true, federationExposed: false,
     });
   });
 });

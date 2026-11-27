@@ -1,6 +1,6 @@
 import pool from '@/app/clients/db';
 import { Skill, skillsService } from '@/app/services/skills/skills.service';
-import { resolveAgentToolAccess } from '@/app/services/agent/agent-tool-settings';
+import { resolveAgentToolAccess, type AgentToolSettings } from '@/app/services/agent/agent-tool-settings';
 import { loadAgentToolSettings } from '@/app/services/agent/agent-tool-settings.repository';
 
 export interface ResolveChatSkillInput {
@@ -12,6 +12,8 @@ export interface ResolveChatSkillInput {
   preSelectedSkillId?: string;
   defaultSkillName?: string;
   publicDomain?: boolean;
+  /** Tool settings of a non-default bot (multi-bot PR 2): only its enabled skills are auto-activated. */
+  agentToolSettings?: AgentToolSettings;
   emit: (event: object) => void;
 }
 
@@ -112,9 +114,11 @@ export async function resolveActiveChatSkill(
   if (!manuallyLocked && (!input.preSelectedSkillId || !input.isNewConversation)) {
     const availableSkills = await skillsService.getAvailableSkills(input.userId);
     // The `chat` agent only switches to skills that are on in its tool settings.
-    const disabledSkills = input.domain === 'chat'
-      ? resolveAgentToolAccess(await loadAgentToolSettings()).disabledSkills
-      : new Set<string>();
+    const disabledSkills = input.agentToolSettings
+      ? resolveAgentToolAccess(input.agentToolSettings).disabledSkills
+      : input.domain === 'chat'
+        ? resolveAgentToolAccess(await loadAgentToolSettings()).disabledSkills
+        : new Set<string>();
     const candidates = availableSkills.filter((skill) => skill.id !== activeSkill?.id
       && !disabledSkills.has(skill.name));
     const detected = await skillsService.detectIntent(input.message, candidates);

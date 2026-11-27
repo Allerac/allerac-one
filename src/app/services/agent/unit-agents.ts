@@ -19,7 +19,12 @@ import {
 
 export const DEFAULT_AGENT_SLUG = 'chat';
 export const MAX_AGENT_INSTRUCTIONS_CHARS = 8_000;
-export const MEMORY_MODES = ['isolated', 'none'] as const;
+/**
+ * `isolated`: own rows + rows marked shared. `all`: every accessible row,
+ * other bots' private ones included (the default bot, by owner decision).
+ * `none`: no memories.
+ */
+export const MEMORY_MODES = ['isolated', 'all', 'none'] as const;
 export type MemoryMode = (typeof MEMORY_MODES)[number];
 
 export const AGENT_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -66,6 +71,8 @@ export interface UnitAgentRow {
   sortOrder: number;
   toolSettings: AgentToolSettings;
   memoryMode: MemoryMode;
+  /** New memories of this bot are `shared` unless marked private (migration 159). */
+  shareMemoriesByDefault: boolean;
   canCall: string[];
   modelId: string | null;
   modelProvider: string | null;
@@ -106,7 +113,8 @@ export function defaultAgentFromProfile(profile: UnitProfile, toolSettings: Agen
     enabled: true,
     sortOrder: 0,
     toolSettings,
-    memoryMode: 'isolated',
+    memoryMode: 'all',
+    shareMemoriesByDefault: true,
     canCall: [],
     modelId: null,
     modelProvider: null,
@@ -140,6 +148,8 @@ export function resolveUnitAgent(
       description: base.description,
       instructions: base.instructions,
       toolSettings: base.toolSettings,
+      memoryMode: 'all',
+      shareMemoriesByDefault: true,
       enabled: true,
       archivedAt: null,
     };
@@ -174,6 +184,7 @@ const editableFields = {
   sortOrder: z.number().int().min(-10_000).max(10_000).optional(),
   toolSettings: agentToolSettingsInputSchema.optional(),
   memoryMode: z.enum(MEMORY_MODES).optional(),
+  shareMemoriesByDefault: z.boolean().optional(),
   canCall: z.array(slugSchema).max(50).optional(),
   modelId: optionalText(200),
   modelProvider: optionalText(50),
@@ -206,6 +217,8 @@ export type UpdateUnitAgentInput = z.infer<typeof updateUnitAgentSchema>;
  */
 export const DEFAULT_AGENT_LOCKED_FIELDS = [
   'displayName', 'emoji', 'avatarUrl', 'role', 'description', 'instructions', 'toolSettings', 'enabled',
+  // The default bot reads every memory and shares what it writes (owner decision, 2026-11-27).
+  'memoryMode', 'shareMemoriesByDefault',
 ] as const satisfies readonly (keyof UpdateUnitAgentInput)[];
 
 /** Locked fields an update tries to change on the default bot (empty when the update is allowed). */

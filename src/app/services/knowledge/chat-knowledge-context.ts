@@ -24,6 +24,10 @@ export interface ChatKnowledgeContextInput {
   query: string;
   /** Conversation domain, already authorized by the chat route. Null searches accessible domains. */
   domainSlug: string | null;
+  /** Bot scope (multi-bot PR 3): shared rows, the notes vault, and whether memories are read at all. */
+  includeShared?: boolean;
+  includeNotes?: boolean;
+  memories?: boolean;
   publicDomain?: boolean;
 }
 
@@ -33,7 +37,14 @@ export async function loadChatKnowledgeContext(input: ChatKnowledgeContextInput)
       const result = await getKnowledgeSearchService().search(
         { id: input.userId, is_admin: input.isAdmin === true },
         input.query,
-        { domainSlug: input.domainSlug, limit: CHAT_RAG_LIMIT, minSimilarity: CHAT_RAG_MIN_SIMILARITY },
+        {
+          domainSlug: input.domainSlug,
+          includeShared: input.includeShared,
+          includeNotes: input.includeNotes,
+          ...(input.memories === false && { sourceTypes: ['note', 'document'] }),
+          limit: CHAT_RAG_LIMIT,
+          minSimilarity: CHAT_RAG_MIN_SIMILARITY,
+        },
       );
       if (result.semanticAvailable) {
         return result.hits.length > 0 ? formatKnowledgeContext(result.hits) : NO_CONTEXT;

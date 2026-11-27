@@ -4,6 +4,10 @@ import { TextEncoder, TextDecoder } from 'util';
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
+// next/jest loads the developer's .env: feature flags must not leak into the
+// suites. Tests that need bots (multi-bot) set ALLERAC_BOTS themselves.
+delete process.env.ALLERAC_BOTS;
+
 // Mock translations
 const translations = {
   onboarding: {

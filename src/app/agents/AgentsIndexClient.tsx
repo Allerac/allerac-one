@@ -15,10 +15,12 @@ export function isDesktop(): boolean {
 
 interface Props {
   localLastActivity: string | null;
+  /** Show the "My bots" sidebar section (multi-bot PR 4). */
+  botsEnabled?: boolean;
 }
 
 /** `/agents`: on desktop jump to the most recent agent; on mobile show the list. */
-export default function AgentsIndexClient({ localLastActivity }: Props) {
+export default function AgentsIndexClient({ localLastActivity, botsEnabled = false }: Props) {
   const router = useRouter();
 
   useEffect(() => {
@@ -30,5 +32,5 @@ export default function AgentsIndexClient({ localLastActivity }: Props) {
     return () => { cancelled = true; };
   }, [router, localLastActivity]);
 
-  return <AgentShell activeKey={null} isAdmin listOnly />;
+  return <AgentShell activeKey={null} isAdmin listOnly botsEnabled={botsEnabled} />;
 }

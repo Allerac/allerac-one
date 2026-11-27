@@ -14,7 +14,7 @@
 
 import { acquireConversationLock, getOrCreatePrimaryConversation, loadPrimaryPromptHistory, scheduleCompaction } from '@/app/services/chat/primary-conversation';
 import { makeSegmentSummarizer } from '@/app/services/chat/segment-summarizer';
-import { memoryReadDomain } from '@/app/services/memory/memory-scope';
+import { botMemoryScope, domainMemoryScope } from '@/app/services/memory/memory-scope';
 import { cookies } from 'next/headers';
 import {
   authenticationErrorResponse,
@@ -38,7 +38,7 @@ import {
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
 import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
 import { hasActivePeers, listActivePeerLabels } from '@/federation/peer-presence';
-import { loadChatSoulIdentity } from '@/federation/unit-profile.repository';
+import { loadChatSoulIdentity, loadUnitProfile } from '@/federation/unit-profile.repository';
 import { isShellAllowedFor } from '@/app/lib/shell-access';
 import { resolveActiveChatSkill } from '@/app/services/chat/chat-skill-resolver';
 import { runChatPipeline } from '@/app/services/chat/chat-pipeline';
@@ -52,6 +52,9 @@ import {
   operationLimitResponse,
 } from '@/app/lib/operation-limiter';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
+import { botRequestErrorResponse, resolveBotRequest } from '@/app/services/agent/bot-request';
+import { BotModelError, botSoulIdentity, explicitBotToolSettings, resolveBotModel } from '@/app/services/agent/bot-runtime';
+import { listUnitAgents } from '@/app/services/agent/unit-agents.repository';
 
 const chatService = new ChatService();
 export async function POST(request: Request): Promise<Response> {
@@ -87,12 +90,21 @@ export async function POST(request: Request): Promise<Response> {
   } = body;
   let inputConversationId = requestedConversationId;
 
-  try {
-    await assertDomainAccess(user, effectiveDomain);
-  } catch (error) {
-    const authError = authenticationErrorResponse(error);
-    if (authError) return authError;
-    return Response.json({ error: 'Failed to verify domain access' }, { status: 500 });
+  // Multi-bot PR 2: a slug that names a bot of this Unit runs as that bot
+  // (admin only for now). Everything else keeps the domain path below.
+  const botRequest = await resolveBotRequest(user, effectiveDomain);
+  const botError = botRequestErrorResponse(botRequest);
+  if (botError) return botError;
+  const bot = botRequest.kind === 'bot' ? botRequest.bot : null;
+
+  if (!bot) {
+    try {
+      await assertDomainAccess(user, effectiveDomain);
+    } catch (error) {
+      const authError = authenticationErrorResponse(error);
+      if (authError) return authError;
+      return Response.json({ error: 'Failed to verify domain access' }, { status: 500 });
+    }
   }
 
   let resolvedModel;
@@ -107,6 +119,23 @@ export async function POST(request: Request): Promise<Response> {
     console.error('[ChatRoute] Failed to resolve domain model:', error);
     return Response.json({ error: 'Failed to resolve domain model' }, { status: 500 });
   }
+
+  if (bot) {
+    try {
+      const choice = resolveBotModel(bot, resolvedModel);
+      resolvedModel = {
+        ...resolvedModel,
+        modelId: choice.modelId,
+        provider: choice.provider as typeof resolvedModel.provider,
+        // A per-domain fallback could be a cloud model: bots do not use one yet.
+        fallbackModelId: null,
+      };
+    } catch (error) {
+      if (error instanceof BotModelError) return Response.json({ error: error.message }, { status: 400 });
+      throw error;
+    }
+  }
+  const botToolSettings = bot ? explicitBotToolSettings(bot.toolSettings) : undefined;
 
   const userId = user.id;
 
@@ -207,6 +236,7 @@ export async function POST(request: Request): Promise<Response> {
           isNewConversation: !inputConversationId,
           preSelectedSkillId,
           defaultSkillName,
+          agentToolSettings: botToolSettings,
           emit: (event) => safeEnqueue(encode(event)),
         });
 
@@ -227,12 +257,15 @@ export async function POST(request: Request): Promise<Response> {
         // 8. Load RAG context (domain-scoped)
         let relevantContext = '';
         try {
+          // The chat agent has one memory: reads are not filtered by domain.
+          // A bot reads by its memory mode (multi-bot PR 3).
+          const scope = bot ? botMemoryScope(bot) : domainMemoryScope(effectiveDomain);
           relevantContext = await loadChatKnowledgeContext({
             userId,
             isAdmin: user.is_admin === true,
             query: message,
-            // The chat agent has one memory: reads are not filtered by domain.
-            domainSlug: memoryReadDomain(effectiveDomain),
+            domainSlug: scope.domainSlug,
+            ...(bot && { includeShared: scope.includeShared, includeNotes: scope.includeNotes, memories: scope.memories }),
             publicDomain: PUBLIC_DOMAINS.includes(effectiveDomain),
           });
         } catch (e) {
@@ -250,7 +283,8 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
-        const federationOffered = canUseFederationTools({
+        // Bots do not call paired Units yet (multi-bot PR 2).
+        const federationOffered = !bot && canUseFederationTools({
           isAdmin: user.is_admin === true,
           domain: effectiveDomain,
         }) && await hasActivePeers();
@@ -267,13 +301,15 @@ export async function POST(request: Request): Promise<Response> {
           activeSkill,
           skillContent,
           relevantContext,
-          unitIdentity: await loadChatSoulIdentity(effectiveDomain, federationOffered, listActivePeerLabels),
+          unitIdentity: bot
+            ? botSoulIdentity(bot, await loadUnitProfile(), await listUnitAgents())
+            : await loadChatSoulIdentity(effectiveDomain, federationOffered, listActivePeerLabels),
         });
 
-        const activeTools = await resolveChatTools(activeSkill?.id, effectiveDomain, {
-          allowShell: isShellAllowedFor(user),
-          allowFederation: federationOffered,
-        });
+        const activeTools = await resolveChatTools(activeSkill?.id, effectiveDomain, bot
+          // No shell for bots until a code capability exists for them.
+          ? { allowShell: false, allowFederation: false, bot: true, agentToolSettings: botToolSettings }
+          : { allowShell: isShellAllowedFor(user), allowFederation: federationOffered });
 
         // Load conversation history and build messages array. Primary
         // conversations use the bounded window (segments + recent messages);

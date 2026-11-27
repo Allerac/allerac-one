@@ -18,6 +18,8 @@ interface Props {
   unitName: string;
   agentSlug: string;
   threadId: string | null;
+  /** Show the "My bots" sidebar section (multi-bot PR 4). */
+  botsEnabled?: boolean;
 }
 
 interface Target {
@@ -64,7 +66,7 @@ function applyResult(messages: InboxMessageView[], result: SendResult): InboxMes
  * per agent; "New topic" restarts the agent's context, and older threads are
  * read-only in the Archive (opened with ?thread=).
  */
-export default function AgentChatClient({ unitName, agentSlug, threadId: requestedThread }: Props) {
+export default function AgentChatClient({ unitName, agentSlug, threadId: requestedThread, botsEnabled = false }: Props) {
   const { isDark: d } = useTheme();
   const router = useRouter();
   const [listing, setListing] = useState<InboxListing | null>(null);
@@ -200,7 +202,7 @@ export default function AgentChatClient({ unitName, agentSlug, threadId: request
   const archived = view?.archived === true;
 
   return (
-    <AgentShell activeKey={agentKey} isAdmin>
+    <AgentShell activeKey={agentKey} isAdmin botsEnabled={botsEnabled}>
       {openDrawer => (<>
         <header className={`flex items-center gap-3 border-b px-3 py-2.5 sm:px-4 ${d ? 'border-gray-800' : 'border-gray-200'}`}>
           <button type="button" aria-label="Open agents" className="rounded-lg p-1.5 lg:hidden" onClick={openDrawer}>☰</button>

@@ -8,6 +8,7 @@ import AgentList from '@/app/components/inbox/AgentList';
 import AgentsInboxSection from '@/app/components/inbox/AgentsInboxSection';
 import { fallbackSelfAgent, flattenAgents, pagesForActiveAgent } from '@/app/components/inbox/agents-format';
 import type { InboxListing } from '@/federation/inbox.service';
+import MyBotsSection from '@/app/components/bots/MyBotsSection';
 
 const DOMAIN = 'chat';
 
@@ -24,13 +25,15 @@ interface Props {
   pages?: { path: string; label: string; icon: string }[];
   /** Main area; receives a callback that opens the mobile agents drawer. */
   children?: (openDrawer: () => void) => ReactNode;
+  /** Show the "My bots" section (admins, ALLERAC_BOTS=true; multi-bot PR 4). */
+  botsEnabled?: boolean;
 }
 
 /**
  * Grok-Bot-like layout of the home screen: agent list on the left (a drawer
  * on mobile), the open chat on the right. Shared by remote and local chats.
  */
-export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit', listOnly = false, pages = [], children }: Props) {
+export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit', listOnly = false, pages = [], children, botsEnabled = false }: Props) {
   const { isDark: d } = useTheme();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -49,6 +52,7 @@ export default function AgentShell({ activeKey, isAdmin, localName = 'This Unit'
         {isAdmin && <Link href="/hub" className={`text-sm ${muted} hover:underline`}>Hub</Link>}
       </div>
       <div className="flex-1 overflow-y-auto">
+        {isAdmin && botsEnabled && <MyBotsSection isDark={d} activeKey={activeKey} onNavigate={close} />}
         {isAdmin ? (
           <AgentsInboxSection isDark={d} domainId={DOMAIN} activeKey={activeKey} onNavigate={close} onListing={setListing} />
         ) : (
