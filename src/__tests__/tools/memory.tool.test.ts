@@ -54,7 +54,7 @@ describe('memory tools', () => {
 
     expect(assertAccess).toHaveBeenCalledWith(user, 'write');
     expect(knowledgeSearch).toHaveBeenCalledWith(user, 'preferred editor', {
-      sourceTypes: ['memory'], domainSlug: 'write', limit: 5,
+      sourceTypes: ['memory'], domainSlug: 'write', includeShared: false, limit: 5,
     });
     expect(query).not.toHaveBeenCalled();
     expect(result.memories).toEqual([expect.objectContaining({
@@ -70,7 +70,7 @@ describe('memory tools', () => {
 
     const result = await tools.recall_memory({ query: 'answers' });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('ILIKE'), ['user-1', 'write', '%answers%', 5]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('ILIKE'), ['user-1', 'write', '%answers%', 5, false]);
     expect(result.memories).toHaveLength(1);
     warn.mockRestore();
   });
@@ -112,6 +112,7 @@ describe('memory tools', () => {
       'write',
       '%answers%',
       5,
+      false,
     ]);
     expect(result.memories).toHaveLength(1);
   });

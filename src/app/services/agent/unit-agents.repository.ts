@@ -59,6 +59,8 @@ function fromDb(row: Record<string, unknown>): UnitAgentRow {
     sortOrder: Number(row.sort_order ?? 0),
     toolSettings: toolSettingsFromDb(row.tool_settings),
     memoryMode: (MEMORY_MODES as readonly string[]).includes(memoryMode) ? memoryMode as MemoryMode : 'isolated',
+    // Missing before migration 159: a bot then keeps its memories private.
+    shareMemoriesByDefault: row.share_memories_by_default === true,
     canCall: (row.can_call as string[] | null) ?? [],
     modelId: (row.model_id as string | null) ?? null,
     modelProvider: (row.model_provider as string | null) ?? null,
@@ -148,8 +150,8 @@ export async function createUnitAgent(input: CreateUnitAgentInput, userId: strin
     await pool.query(
       `INSERT INTO unit_agents (slug, display_name, emoji, avatar_url, role, description, instructions,
          enabled, sort_order, tool_settings, memory_mode, can_call, model_id, model_provider,
-         cloud_allowed, default_skill_id, federation_exposed, template, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+         cloud_allowed, default_skill_id, federation_exposed, template, updated_by, share_memories_by_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
       [
         input.slug, input.displayName.trim(), nullable(input.emoji), nullable(input.avatarUrl),
         nullable(input.role), nullable(input.description), nullable(input.instructions),
@@ -158,6 +160,7 @@ export async function createUnitAgent(input: CreateUnitAgentInput, userId: strin
         input.memoryMode ?? 'isolated', [...new Set(input.canCall ?? [])],
         nullable(input.modelId), nullable(input.modelProvider), input.cloudAllowed ?? true,
         input.defaultSkillId ?? null, input.federationExposed ?? false, input.template ?? null, userId,
+        input.shareMemoriesByDefault ?? false,
       ],
     );
   } catch (error) {
@@ -184,6 +187,7 @@ function updateColumns(input: UpdateUnitAgentInput): Column[] {
   if (input.enabled !== undefined) set('enabled', input.enabled);
   if (input.sortOrder !== undefined) set('sort_order', input.sortOrder);
   if (input.memoryMode !== undefined) set('memory_mode', input.memoryMode);
+  if (input.shareMemoriesByDefault !== undefined) set('share_memories_by_default', input.shareMemoriesByDefault);
   if (input.canCall !== undefined) set('can_call', [...new Set(input.canCall)], 'text[]');
   if (input.modelId !== undefined) set('model_id', nullable(input.modelId));
   if (input.modelProvider !== undefined) set('model_provider', nullable(input.modelProvider));

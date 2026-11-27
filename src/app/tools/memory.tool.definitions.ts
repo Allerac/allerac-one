@@ -21,6 +21,29 @@ export const CREATE_MEMORY_TOOL_DEFINITION = {
   },
 };
 
+/**
+ * create_memory as offered to a non-default bot (multi-bot PR 3): no
+ * domain_slug (a bot always writes under its own slug), plus share_with_unit.
+ */
+const { domain_slug: _botIgnoredDomainSlug, ...botMemoryProperties } = CREATE_MEMORY_TOOL_DEFINITION.function.parameters.properties;
+void _botIgnoredDomainSlug;
+export const BOT_CREATE_MEMORY_TOOL_DEFINITION = {
+  ...CREATE_MEMORY_TOOL_DEFINITION,
+  function: {
+    ...CREATE_MEMORY_TOOL_DEFINITION.function,
+    parameters: {
+      ...CREATE_MEMORY_TOOL_DEFINITION.function.parameters,
+      properties: {
+        ...botMemoryProperties,
+        share_with_unit: {
+          type: 'boolean',
+          description: 'Share this memory with the other assistants of this Unit. Omit to use this assistant\'s default; set true only for facts the user wants every assistant to know.',
+        },
+      },
+    },
+  },
+};
+
 export const MEMORY_DOMAIN_TOOL_DEFINITIONS = [
   {
     type: 'function',

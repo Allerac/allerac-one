@@ -12,6 +12,7 @@
  */
 
 import { notFederatedSummarySql } from './federated-memory-filter';
+import { resolveMemoryScope } from './memory-scope';
 import pool from '@/app/clients/db';
 
 export interface ConversationSummary {
@@ -48,6 +49,8 @@ export interface ManualMemoryInput {
   keyTopics?: string[];
   importanceScore?: number;
   emotion?: -1 | 0 | 1 | null;
+  /** Visible to every bot of the Unit. Defaults to the writer's scope (multi-bot PR 3). */
+  shared?: boolean;
 }
 
 export class ConversationMemoryService {
@@ -179,11 +182,12 @@ ${conversationText}`;
         summaryData.emotion = options.emotion === null ? null : String(options.emotion);
       }
 
-      // Step 5: Save summary to database (upsert so re-saving a conversation updates it)
+      // Step 5: Save summary to database (upsert so re-saving a conversation updates it).
+      // `shared` is set on insert only: a later re-summary never changes it.
       const saveRes = await pool.query(
         `INSERT INTO conversation_summaries
-         (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion, domain_slug)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion, domain_slug, shared)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT (conversation_id) DO UPDATE SET
            summary = EXCLUDED.summary,
            key_topics = EXCLUDED.key_topics,
@@ -201,6 +205,7 @@ ${conversationText}`;
           messages.length,
           summaryData.emotion || null,
           this.domainSlug || null,
+          await this.writeShared(),
         ]
       );
 
@@ -284,8 +289,8 @@ ${conversationText}`;
   async createManualMemory(userId: string, input: ManualMemoryInput): Promise<ConversationSummary> {
     const res = await pool.query(
       `INSERT INTO conversation_summaries
-         (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion, domain_slug)
-       VALUES (NULL, $1, $2, $3, $4, 1, $5, $6)
+         (conversation_id, user_id, summary, key_topics, importance_score, message_count, emotion, domain_slug, shared)
+       VALUES (NULL, $1, $2, $3, $4, 1, $5, $6, $7)
        RETURNING *`,
       [
         userId,
@@ -294,9 +299,19 @@ ${conversationText}`;
         input.importanceScore ?? 7,
         input.emotion == null ? null : String(input.emotion),
         this.domainSlug,
+        input.shared ?? await this.writeShared(),
       ],
     );
     return res.rows[0] as ConversationSummary;
+  }
+
+  /**
+   * `shared` for rows this service writes: false for a bot that keeps its
+   * memories private, true for the default agent, legacy domains and
+   * Telegram (as before migration 159).
+   */
+  private async writeShared(): Promise<boolean> {
+    return (await resolveMemoryScope(this.domainSlug)).writeShared;
   }
 
   /**

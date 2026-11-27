@@ -1,4 +1,4 @@
-import { memoryReadDomain } from '@/app/services/memory/memory-scope';
+import { resolveMemoryScope, type MemoryScope } from '@/app/services/memory/memory-scope';
 import pool from '@/app/clients/db';
 import { assertDomainAccess } from '@/app/lib/domain-access-check';
 import type { User } from '@/app/services/auth/auth.service';
@@ -48,10 +48,16 @@ async function ensureDomainAccess(user: User, domainSlug: string | undefined): P
   if (domainSlug) await assertDomainAccess(user, domainSlug);
 }
 
+/** Read scope of one tool call: a domain (or all), plus shared rows for isolated bots. */
+interface ToolReadScope {
+  domainSlug: string | undefined;
+  includeShared: boolean;
+}
+
 async function searchMemories(
   user: User,
   query: string,
-  domainSlug: string | undefined,
+  { domainSlug, includeShared }: ToolReadScope,
   limit: number,
 ) {
   await ensureDomainAccess(user, domainSlug);
@@ -61,11 +67,11 @@ async function searchMemories(
         `SELECT id, summary, key_topics, importance_score, emotion, domain_slug, created_at
          FROM conversation_summaries
          WHERE user_id = $1
-           AND domain_slug = $2
+           AND (domain_slug = $2 OR ($5::boolean AND shared))
            AND (summary ILIKE $3 OR array_to_string(key_topics, ' ') ILIKE $3)
          ORDER BY importance_score DESC, created_at DESC
          LIMIT $4`,
-        [user.id, domainSlug, pattern, limit],
+        [user.id, domainSlug, pattern, limit, includeShared],
       )
     : user.is_admin
       ? await pool.query(
@@ -106,15 +112,16 @@ async function searchMemories(
 async function recallMemories(
   user: User,
   query: string,
-  domainSlug: string | undefined,
+  scope: ToolReadScope,
   limit: number,
 ) {
-  await ensureDomainAccess(user, domainSlug);
+  await ensureDomainAccess(user, scope.domainSlug);
   if (isUnifiedRecallEnabled()) {
     try {
       const result = await getKnowledgeSearchService().search(user, query, {
         sourceTypes: ['memory'],
-        domainSlug: domainSlug ?? null,
+        domainSlug: scope.domainSlug ?? null,
+        includeShared: scope.includeShared,
         limit,
       });
       return {
@@ -133,24 +140,45 @@ async function recallMemories(
       console.warn('[MemoryTool] Unified recall failed, using keyword search:', error instanceof Error ? error.message : error);
     }
   }
-  return searchMemories(user, query, domainSlug, limit);
+  return searchMemories(user, query, scope, limit);
 }
 
+const NO_MEMORIES = { memories: [] };
+
 export function buildMemoryTools({ user, callerDomain, federated }: MemoryToolContext) {
+  let scopePromise: Promise<MemoryScope> | null = null;
+  const callerScope = () => (scopePromise ??= resolveMemoryScope(callerDomain, { federated }));
+  /**
+   * A bot's scope is fixed (multi-bot PR 3): a `domain_slug` argument from the
+   * model can never widen it. Otherwise the argument wins, as before.
+   */
+  const readScope = async (argDomain: string | undefined, fallback: 'caller' | 'all'): Promise<ToolReadScope | null> => {
+    const scope = await callerScope();
+    if (scope.locked) {
+      if (!scope.memories) return null;
+      return { domainSlug: scope.domainSlug ?? undefined, includeShared: scope.includeShared };
+    }
+    const requested = argDomain?.trim() || undefined;
+    if (requested) return { domainSlug: requested, includeShared: false };
+    // The chat agent recalls across domains (domain_slug is only a tag); legacy domains stay scoped.
+    return { domainSlug: fallback === 'caller' ? scope.domainSlug ?? undefined : undefined, includeShared: false };
+  };
+
   return {
     recall_memory: async (args: { query: string; domain_slug?: string; limit?: number }) => {
-      // The chat agent recalls across domains (domain_slug is only a tag); legacy domains stay scoped.
-      const domainSlug = args.domain_slug?.trim() || memoryReadDomain(callerDomain, { federated }) || undefined;
-      return recallMemories(user, args.query, domainSlug, clampLimit(args.limit, 5, 20));
+      const scope = await readScope(args.domain_slug, 'caller');
+      if (!scope) return NO_MEMORIES;
+      return recallMemories(user, args.query, scope, clampLimit(args.limit, 5, 20));
     },
 
     search_memory: async (args: { query: string; domain_slug?: string; limit?: number }) => {
-      const domainSlug = args.domain_slug?.trim() || undefined;
+      const scope = await readScope(args.domain_slug, 'all');
+      if (!scope) return NO_MEMORIES;
       // The unified search caps results at 25; larger requests keep the keyword path.
       const limit = clampLimit(args.limit, 10, 50);
       return limit <= 25
-        ? recallMemories(user, args.query, domainSlug, limit)
-        : searchMemories(user, args.query, domainSlug, limit);
+        ? recallMemories(user, args.query, scope, limit)
+        : searchMemories(user, args.query, scope, limit);
     },
 
     search_knowledge: async (args: {
@@ -162,11 +190,18 @@ export function buildMemoryTools({ user, callerDomain, federated }: MemoryToolCo
     }) => {
       const query = typeof args.query === 'string' ? args.query.trim() : '';
       if (!query) return { success: false, error: 'Query is required' };
-      const domainSlug = args.domain_slug?.trim() || undefined;
+      const caller = await callerScope();
+      const scope = await readScope(args.domain_slug, 'all');
+      let sourceTypes = Array.isArray(args.source_types) ? args.source_types : undefined;
+      // A bot with memory mode `none` still searches its documents (and notes, when allowed).
+      if (!scope) sourceTypes = (sourceTypes ?? ['note', 'document', 'memory']).filter((type) => type !== 'memory');
+      const domainSlug = scope ? scope.domainSlug : caller.domainSlug ?? undefined;
       await ensureDomainAccess(user, domainSlug);
       const result = await getKnowledgeSearchService().search(user, query, {
-        sourceTypes: Array.isArray(args.source_types) ? args.source_types : undefined,
+        sourceTypes,
         domainSlug: domainSlug ?? null,
+        includeShared: scope?.includeShared ?? false,
+        includeNotes: caller.locked && caller.includeNotes,
         limit: clampKnowledgeLimit(args.limit),
         includeArchived: args.include_archived === true,
       });
@@ -192,8 +227,14 @@ export function buildMemoryTools({ user, callerDomain, federated }: MemoryToolCo
       emotion?: number;
       domain_slug?: string;
       topics?: string[];
+      share_with_unit?: boolean;
     }) => {
-      const domainSlug = args.domain_slug?.trim() || callerDomain;
+      const caller = await callerScope();
+      // A bot always writes under its own slug; `share_with_unit` overrides its default.
+      const domainSlug = caller.locked ? callerDomain : args.domain_slug?.trim() || callerDomain;
+      const shared = caller.locked
+        ? (typeof args.share_with_unit === 'boolean' ? args.share_with_unit : caller.writeShared)
+        : true;
       await ensureDomainAccess(user, domainSlug);
       const content = typeof args.content === 'string' ? args.content.trim() : '';
       if (!content) return { success: false, error: 'Memory content is required' };
@@ -209,18 +250,31 @@ export function buildMemoryTools({ user, callerDomain, federated }: MemoryToolCo
         keyTopics: normalizeTopics(args.topics),
         importanceScore: importance,
         emotion,
+        shared,
       });
       return {
         success: true,
-        memory: { id: memory.id, summary: memory.summary, domain_slug: memory.domain_slug ?? domainSlug },
+        memory: {
+          id: memory.id,
+          summary: memory.summary,
+          domain_slug: memory.domain_slug ?? domainSlug,
+          ...(caller.locked && { shared }),
+        },
       };
     },
 
     delete_memory: async (args: { memory_id: string }) => {
-      const deleted = await pool.query(
-        'DELETE FROM conversation_summaries WHERE id = $1 AND user_id = $2 RETURNING id',
-        [args.memory_id, user.id],
-      );
+      const caller = await callerScope();
+      // A bot deletes only its own memories, never another bot's or the Unit's shared ones.
+      const deleted = caller.locked
+        ? await pool.query(
+          'DELETE FROM conversation_summaries WHERE id = $1 AND user_id = $2 AND domain_slug = $3 RETURNING id',
+          [args.memory_id, user.id, callerDomain],
+        )
+        : await pool.query(
+          'DELETE FROM conversation_summaries WHERE id = $1 AND user_id = $2 RETURNING id',
+          [args.memory_id, user.id],
+        );
       return { success: deleted.rowCount === 1, memory_id: args.memory_id };
     },
   };

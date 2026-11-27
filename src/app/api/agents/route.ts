@@ -19,6 +19,7 @@ import { WorkerRunRepository } from '@/app/services/agents/worker-run.repository
 import pool from '@/app/clients/db';
 import { v4 as uuid } from 'uuid';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
+import { resolveBotRequest } from '@/app/services/agent/bot-request';
 
 const chatService = new ChatService();
 const repo = new WorkerRunRepository();
@@ -45,6 +46,11 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const userId = user.id;
+    // Background runs are not bot-aware yet (multi-bot PR 2): agent_runs.domain_slug
+    // references domains(slug), and the worker would ignore the bot's tools and soul.
+    if ((await resolveBotRequest(user, domain)).kind !== 'none') {
+      return Response.json({ error: 'Background runs are not available for bots yet' }, { status: 400 });
+    }
     await assertDomainAccess(user, domain);
     const resolvedModel = await domainModelSettingsService.resolve({
       userId,

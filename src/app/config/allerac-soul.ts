@@ -56,7 +56,21 @@ export interface SoulIdentity {
    * in public domains.
    */
   pairedUnits?: string[];
+  /**
+   * Set only for a non-default bot (multi-bot PR 2): the Unit's display name.
+   * The bot then introduces itself as one of the Unit's assistants.
+   */
+  unitDisplayName?: string;
+  /**
+   * Capability ids that are on for this bot. When set, tool guidance for an
+   * absent capability (e.g. health) is left out. Undefined keeps today's text.
+   */
+  capabilities?: string[];
+  /** Other bots of the Unit this bot may point the user to (its `canCall` list). */
+  siblings?: Array<{ name: string; role?: string | null }>;
 }
+
+const HEALTH_GUIDANCE_LINE = '- When asked about health or fitness: use the health tools.\n';
 
 const ALLERAC_OPENING = 'You are Allerac, a private AI assistant.';
 const PUBLIC_OPENING = 'You are Allerac, an AI assistant speaking with a visitor on a public website.';
@@ -78,6 +92,25 @@ function identityLines(identity: SoulIdentity): string {
   return lines.join(' ');
 }
 
+function siblingsLine(identity: SoulIdentity): string {
+  const siblings = (identity.siblings ?? []).slice(0, 20);
+  if (siblings.length === 0) return '';
+  const list = siblings.map((sibling) => (sibling.role ? `${sibling.name} (${sibling.role})` : sibling.name)).join(', ');
+  return ` Other assistants in this Unit: ${list}. When a request clearly belongs to one of them, tell the user they can continue with that assistant.`;
+}
+
+/** Opening and tool guidance for a non-default bot of the Unit. */
+function botSoul(identity: SoulIdentity & { unitDisplayName: string }): string {
+  let soul = ALLERAC_SOUL.replace(
+    ALLERAC_OPENING,
+    `You are ${identity.displayName}, one of the assistants of ${identity.unitDisplayName}, a private Allerac unit. ${identityLines(identity)}${siblingsLine(identity)}`,
+  );
+  if (identity.capabilities && !identity.capabilities.includes('health')) {
+    soul = soul.replace(HEALTH_GUIDANCE_LINE, '');
+  }
+  return soul + instructionsSection(identity);
+}
+
 /** Owner instructions come after the base guidance; the user's own learned rules are added later and win. */
 function instructionsSection(identity: SoulIdentity): string {
   const text = identity.instructions?.trim();
@@ -96,7 +129,9 @@ export function buildSoul(domain?: string | null, identity?: SoulIdentity | null
         + instructionsSection(identity)
       : PUBLIC_AGENT_SOUL;
   }
-  const base = identity
+  const base = identity?.unitDisplayName
+    ? botSoul(identity as SoulIdentity & { unitDisplayName: string })
+    : identity
     ? ALLERAC_SOUL.replace(ALLERAC_OPENING, `You are ${identity.displayName}, an Allerac unit: a private AI assistant. ${identityLines(identity)}${pairedUnitsLine(identity)}`)
       + instructionsSection(identity)
     : ALLERAC_SOUL;

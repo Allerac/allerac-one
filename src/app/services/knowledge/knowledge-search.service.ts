@@ -44,6 +44,13 @@ export interface KnowledgeSearchOptions {
   sourceTypes?: readonly string[];
   /** Restrict to one domain. The caller must have authorized it. */
   domainSlug?: string | null;
+  /**
+   * With a domainSlug: also return rows marked `shared` (an isolated bot
+   * reads its own rows plus what the Unit shares; multi-bot PR 3).
+   */
+  includeShared?: boolean;
+  /** With a domainSlug other than `notes`: also search the notes vault (bots with the notes capability). */
+  includeNotes?: boolean;
   limit?: number;
   includeArchived?: boolean;
   minSimilarity?: number;
@@ -124,6 +131,8 @@ export class KnowledgeSearchService {
       userId: user.id,
       isAdmin: user.is_admin === true,
       domainSlug: options.domainSlug?.trim() || null,
+      includeShared: options.includeShared === true,
+      includeNotes: options.includeNotes === true,
       includeArchived: options.includeArchived === true,
       minSimilarity: options.minSimilarity ?? DEFAULT_MIN_SIMILARITY,
       limit,
@@ -188,7 +197,9 @@ export class KnowledgeSearchService {
            AND dc.embedding IS NOT NULL
            AND d.source_type = ANY($3::text[])
            AND (d.source_type <> 'note' OR (n.id IS NOT NULL AND ($4::boolean OR n.archived_at IS NULL)))
-           AND ($5::text IS NULL OR d.domain_slug = $5)
+           AND ($5::text IS NULL OR d.domain_slug = $5
+                OR ($10::boolean AND d.shared AND d.source_type <> 'note')
+                OR ($11::boolean AND d.source_type = 'note'))
            AND ($5::text IS NOT NULL OR ${domainAccessSql('d.domain_slug', '$2', '$6')})
          ORDER BY dc.embedding <=> $1::vector
          LIMIT $7
@@ -207,7 +218,7 @@ export class KnowledgeSearchService {
        ORDER BY b.distance
        LIMIT $9`,
       [vector, ctx.userId, docSourceTypes, ctx.includeArchived, ctx.domainSlug, ctx.isAdmin,
-        candidateLimit, ctx.minSimilarity, ctx.limit],
+        candidateLimit, ctx.minSimilarity, ctx.limit, ctx.includeShared, ctx.includeNotes],
     );
     return result.rows.map(row => {
       const similarity = Number(row.similarity);
@@ -239,7 +250,7 @@ export class KnowledgeSearchService {
        WHERE k.user_id = $2
          AND k.source_type = 'memory'
          AND ${notFederatedSummarySql('cs')}
-         AND ($3::text IS NULL OR cs.domain_slug = $3)
+         AND ($3::text IS NULL OR cs.domain_slug = $3 OR ($8::boolean AND cs.shared))
          AND ($3::text IS NOT NULL OR ${domainAccessSql('cs.domain_slug', '$2', '$4')})
          AND ($7::text IS NULL OR k.embedding_version = $7)
          AND 1 - (k.embedding <=> $1::vector) >= $5
@@ -247,7 +258,7 @@ export class KnowledgeSearchService {
        LIMIT $6`,
       [vector, ctx.userId, ctx.domainSlug, ctx.isAdmin, ctx.minSimilarity, ctx.limit,
         // Never compare against vectors from another embedding space.
-        this.embeddings.getMetadata?.().version ?? null],
+        this.embeddings.getMetadata?.().version ?? null, ctx.includeShared],
     );
     return result.rows.map(row => memoryHit(row, Number(row.similarity), 'semantic'));
   }
@@ -260,17 +271,17 @@ export class KnowledgeSearchService {
        WHERE cs.user_id = $1
          AND ${notFederatedSummarySql('cs')}
          AND (cs.summary ILIKE $2 ESCAPE '\\' OR array_to_string(cs.key_topics, ' ') ILIKE $2 ESCAPE '\\')
-         AND ($3::text IS NULL OR cs.domain_slug = $3)
+         AND ($3::text IS NULL OR cs.domain_slug = $3 OR ($6::boolean AND cs.shared))
          AND ($3::text IS NOT NULL OR ${domainAccessSql('cs.domain_slug', '$1', '$4')})
        ORDER BY cs.importance_score DESC, cs.created_at DESC
        LIMIT $5`,
-      [ctx.userId, pattern, ctx.domainSlug, ctx.isAdmin, ctx.limit],
+      [ctx.userId, pattern, ctx.domainSlug, ctx.isAdmin, ctx.limit, ctx.includeShared],
     );
     return result.rows.map(row => memoryHit(row, null, 'lexical'));
   }
 
   private async searchNotesLexical(text: string, ctx: SearchContext): Promise<KnowledgeHit[]> {
-    if (ctx.domainSlug && ctx.domainSlug !== 'notes') return [];
+    if (ctx.domainSlug && ctx.domainSlug !== 'notes' && !ctx.includeNotes) return [];
     const pattern = `%${escapeLike(text)}%`;
     const result = await pool.query(
       `SELECT n.id, n.title, n.content, n.updated_at
@@ -307,6 +318,8 @@ interface SearchContext {
   userId: string;
   isAdmin: boolean;
   domainSlug: string | null;
+  includeShared: boolean;
+  includeNotes: boolean;
   includeArchived: boolean;
   minSimilarity: number;
   limit: number;

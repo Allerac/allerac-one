@@ -3,6 +3,7 @@ import { EMAIL_TOOL_DEFINITIONS } from '@/app/tools/email.tool';
 import { GITHUB_TOOL_NAMES } from '@/app/tools/github.tool.definitions';
 import { LOGS_TOOL_NAMES } from '@/app/tools/logs.tool.definitions';
 import {
+  BOT_CREATE_MEMORY_TOOL_DEFINITION,
   CREATE_MEMORY_TOOL_DEFINITION,
   MEMORY_DOMAIN_TOOL_DEFINITIONS,
   RECALL_MEMORY_TOOL_DEFINITION,
@@ -131,6 +132,12 @@ export interface ResolveChatToolsOptions {
    * Ignored by every other domain.
    */
   agentToolSettings?: AgentToolSettings;
+  /**
+   * The domain is a non-default bot (multi-bot PR 2). It is assembled like
+   * the `chat` agent, with `agentToolSettings` (the bot's explicit settings,
+   * required) and never with federation tools.
+   */
+  bot?: boolean;
 }
 
 export async function resolveChatTools(
@@ -165,6 +172,17 @@ export async function resolveChatTools(
   }
   if (PUBLIC_DOMAINS.includes(domain)) {
     tools = tools.filter((tool) => !isToolForbiddenInDomain(tool.function.name, domain));
+  }
+
+  if (options.bot === true) {
+    if (!options.agentToolSettings) throw new Error('Bot tool assembly needs the bot tool settings');
+    const resolved = filterEnabledTools(resolveAgentTools(tools, options.agentToolSettings, skillRestricted, {
+      ...options,
+      allowFederation: false,
+    }));
+    return options.toolPolicy === 'federated'
+      ? resolved.filter((tool) => !isToolForbiddenByPolicy(tool.function.name, 'federated'))
+      : resolved;
   }
 
   if (domain === AGENT_DOMAIN) {
@@ -236,7 +254,7 @@ function resolveAgentTools<T extends ToolDefinition>(
   const alwaysOn = [
     RECALL_MEMORY_TOOL_DEFINITION,
     SEARCH_KNOWLEDGE_TOOL_DEFINITION,
-    CREATE_MEMORY_TOOL_DEFINITION,
+    options.bot === true ? BOT_CREATE_MEMORY_TOOL_DEFINITION : CREATE_MEMORY_TOOL_DEFINITION,
     SCHEDULE_TASK_TOOL_DEFINITION,
     LEARN_INSTRUCTION_TOOL_DEFINITION,
   ];

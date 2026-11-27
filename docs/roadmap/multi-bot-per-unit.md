@@ -174,20 +174,34 @@ Today a memory row carries `domain_slug` as a tag only. Proposal:
 
   Also: "Duplicate bot", and JSON **export/import** of a bot definition (identity, instructions, capability toggles, never memories, tokens or keys). Importing instructions from existing personal bots would be done through this, by pasting.
 - **Edit** page per bot (reusing the Hub Settings "Agent" card from phase 1 of simplification): identity, instructions, capabilities, memory mode, `can_call`, model, federation exposure, archive.
-- Optional later: an admin-only `create_bot` tool so the Manager-style default bot can propose "I created Gian Dentist for you" (draft shown for confirmation, never auto-created).
+- Later (PR 7b): the default bot, as the Manager, can create, edit and archive bots by conversation, always as a draft the owner confirms (see 2.5).
 
-### 2.5 Hand-off between bots
+### 2.5 The default bot is the Manager (hand-off)
 
-Two mechanisms, both explicit and bounded:
+Decided 2026-11-27: **everything goes through the Manager. Bots never talk to each other.** The default bot (`chat`) is the Manager of the Unit's bots. The user can still open and talk to any bot directly, as today (`/agents/self/<slug>`, and later its Telegram bot); the Manager is an extra path, never a gate.
 
-1. **Consult (tool `ask_agent`)**, a synchronous question to another local bot.
-   - Offered only if `can_call` is not empty. The soul lists the allowed siblings (name + role) so the model can choose.
-   - Runs the target bot's normal chat turn (same runtime as `AgentsRuntime.runChat` in `src/federation/agents.service.ts`) in a hand-off conversation owned by the caller (like `tool-conversations.repository.ts` for peers), with the **restricted policy** used for federation (`ChatToolPolicy = 'federated'`): no shell, no send actions, no writes to memory.
-   - Returns only the answer text. The target's private memory is never exposed except through what it chooses to answer.
-   - Depth limit 1 (a consulted bot cannot consult), a per-turn call cap, and an audit row.
-2. **Transfer (UI)**: "Continue with Gian Doctor", which switches the UI to the target bot with an optional one-paragraph summary as the first message. No hidden data flows. The user sees what is carried.
+Topology is hub-and-spoke:
 
-Neither mechanism writes into the other bot's memory, and neither is available to public Units' bots (`PUBLIC_DOMAINS` guards stay).
+```
+          user ──────────────┬──────────────┬─────────────┐
+            │                │              │             │
+            ▼                ▼              ▼             ▼
+   chat (Manager) ──ask──▶ Doctor     Nutrition      Agenda   (each also reachable directly)
+            ├──────ask──────────────────▶ │
+            └──────ask─────────────────────────────────▶ │
+   Doctor ✗ Nutrition: bots never call each other, nor back to the Manager
+```
+
+1. **Consult (tool `ask_agent`)**, a synchronous question from the Manager to one bot.
+   - Offered **only to the default bot**. Bots never get `ask_agent`, so there are no loops and no injection path from one bot to another. `can_call` stays in the schema unused (kept for a possible future, owner-approved pair list); the Manager can consult every enabled, non-archived bot.
+   - The Manager's soul lists the bots (name, emoji, role) so the model can choose, and it can ask several bots in one turn and merge the answers ("ask Doctor and Nutrition, then give me one plan").
+   - Runs the target bot's normal chat turn (its soul, tools, memory scope and model; `cloudAllowed=false` is honoured) in a hand-off conversation owned by the Manager (like `tool-conversations.repository.ts` for peers), with the **restricted policy** used for federation (`ChatToolPolicy = 'federated'`): no shell, no send actions, no memory writes, no `ask_agent`.
+   - Returns only the answer text. The Manager already reads every memory (2.3), so this exposes nothing new; the consulted bot's answer is not indexed as memory of either bot.
+   - Depth 1 by construction, a per-turn cap (default 3 consults), a timeout per consult, and an audit row (caller, target, question, duration, status). The chat UI shows each consult as a collapsible tool step ("Asked Doctor: ..."), so the user sees what went where.
+2. **Transfer (UI)**: the Manager can suggest "Continue with Gian Doctor", a button that switches to the bot's page with an optional one-paragraph summary as the first message. No hidden data flows. The user sees what is carried.
+3. **Administration (PR 7b)**: tools for the Manager to list, propose, edit and archive bots. Every change is a **draft card the owner confirms** in the UI; the tool never writes `unit_agents` itself. Same validation as the API (slug rules, capability cap, `cloudAllowed`). Admin sessions only.
+
+None of these mechanisms writes into another bot's memory, and none is available to public Units' bots (`PUBLIC_DOMAINS` guards stay).
 
 ### 2.6 Channels (Telegram) and routines
 
@@ -258,12 +272,32 @@ Order matters: **memory scoping lands before the "create bot" UI**, so nobody st
 
 **Tests**: tool assembly per bot; soul output per bot; public domains unaffected; the default bot output is byte-identical to today.
 
+**As implemented** (`src/app/services/agent/bot-runtime.ts`, `bot-request.ts`):
+- Flag `ALLERAC_BOTS=true`. With it off, nothing is looked up and every path is unchanged. The write API answers `404 bots_disabled`.
+- A request slug runs as a bot only if a non-default row exists. Non-admins get 403. Archived or disabled bots get 409. Any other slug keeps the legacy domain path, including `assertDomainAccess`.
+- **Tools are explicit opt-in**: every capability not checked on the bot is off, even the ones on by default for the default bot (`explicitBotToolSettings`). The always-on core tools (`recall_memory`, `create_memory`, `search_knowledge`, `schedule_task`, `learn_instruction`) and the general tools (web search, date) stay. The pipeline already rejects calls to tools outside the offered list, which is the execution-time check.
+- No shell, no federation tools, and no paired-Unit soul lines for bots yet.
+- Model: the bot's `model_id` (must be a known model) overrides the per-domain or global choice. `cloud_allowed=false` fails the turn with 400 when the resolved model is not Ollama, instead of silently using the cloud. Bots get no fallback model.
+- Soul: "You are <bot>, one of the assistants of <Unit>". The health guidance appears only with the `health` capability. Siblings are listed only from `can_call` (enabled, non-archived bots), as a hint to continue with them, because `ask_agent` lands in PR 7. Bot instructions replace the Unit's instructions; the user's learned rules for that slug still apply.
+- **No migration.** `user_domain_model_settings` is not used for bot overrides; the model lives on the bot row. Background runs (`/api/agents`) return 400 for bots until the worker is bot-aware, so the `agent_runs` FK to `domains` is never hit.
+- **Memory until PR 3**: reads use the bot slug (`memoryReadDomain` returns it unchanged), so a bot sees only memories tagged with its own slug, not the shared pool. PR 3 adds the shared rows.
+- API: `POST /api/v1/unit/agents` and `PATCH /api/v1/unit/agents/[slug]` (`archived: true|false` archives or restores), plus `GET /api/v1/unit/agents/[slug]`. Admin session only.
+
 ### PR 3: Memory scope (private vs shared)
 
 **Scope**
 - Migration `159_memory_shared.sql`: `shared` on `conversation_summaries`, `knowledge_semantic_index` and `documents`, all backfilled `TRUE`; indexes. Migration `159` also adds `unit_agents.share_memories_by_default` (true for the default bot).
 - `memory-scope.ts` -> `resolveMemoryScope(bot)`; apply at all read sites listed in 2.3, memories and documents; `create_memory.share_with_unit`; "share" / "make private" actions in the memory UI (`src/app/memory`) that update the summary and its index row together.
 - Tickets regression tests (2.3).
+
+**As implemented** (migration `159_bot_memory_scope.sql`, `src/app/services/memory/memory-scope.ts`):
+- **Owner decision (2026-11-27): the default bot `chat` reads everything, other bots' private memories included.** Memory mode `all` is back (`isolated` / `all` / `none`), the default bot is locked to `all` and to sharing what it writes. This replaces the "no read-everything mode" proposal above.
+- `shared` exists only on `conversation_summaries` and `documents`, with **`DEFAULT TRUE`**. Existing rows and everything `chat`, legacy domains and Telegram write stay shared with no backfill and no re-run risk. Only a bot writes `shared = false`, unless `share_memories_by_default` or `create_memory.share_with_unit` says otherwise. The semantic index needs no flag: memory vector search joins `conversation_summaries`.
+- Read filter for an isolated bot: `domain_slug = <slug> OR shared`. Documents exclude shared notes; the notes vault is readable only with the `notes` capability.
+- **Tool arguments cannot widen a bot's scope.** `recall_memory`, `search_memory`, `search_knowledge` and `create_memory` ignore `domain_slug` for a bot. `delete_memory` deletes only the bot's own rows. Bots get a `create_memory` definition without `domain_slug` and with `share_with_unit`; the default agent's tool definitions are unchanged.
+- Conversation summaries written under a bot slug take the bot's `share_memories_by_default` on insert (never changed on re-summary).
+- Not changed: `ConversationMemoryService` reads with a bot slug (used by the memory page and Telegram/jobs) stay own-slug only, so they are stricter, never wider. Peers keep the domain-scoped reach.
+- `jest.setup.js` clears `ALLERAC_BOTS`, because `next/jest` loads the developer's `.env`.
 
 **Tests**: pg integration test with two bots and three memory rows each (private, shared, legacy), through SQL **and** semantic search. Assert reads per mode, and that the default bot does not see another bot's private row. The same for documents. A flag-consistency test (summary vs semantic index). A ticket-output test. A federation test showing peers keep the previous domain-scoped reach.
 **Risk**: highest of the series (56 non-test source files reference `domain_slug`). Keep the PR to read-filter changes only, and audit each site in the PR description.
@@ -275,6 +309,8 @@ Order matters: **memory scoping lands before the "create bot" UI**, so nobody st
 - `+ New bot`: template gallery (`bot-templates.ts` plus i18n), form, edit page, archive, duplicate, JSON export/import.
 - Per-bot data pages and per-bot settings in the Hub.
 - Remove the `ALLERAC_BOTS` flag on personal Units only. Public profiles keep it off.
+
+**As implemented (essential scope, owner choice 2026-11-27)**: `/agents/self/<slug>` (bot chat with a header bar: emoji, name, role, ⚙), `/agents/self/new` (template gallery plus form), `/agents/self/<slug>/settings` (edit, archive or restore), and a "My bots" sidebar section (admins, `ALLERAC_BOTS=true`). Templates: `src/app/services/agent/bot-templates.ts`. Components: `src/app/components/bots/`. Not in this round: Cmd-K picker, `@bot` routing, duplicate, JSON export/import. UI strings are English like the rest of the agents shell; i18n comes with the shell. The chat's model picker still shows the user's model, but a bot with its own model uses that one.
 
 **Tests**: component tests for the picker and form; template schema test (every template validates and uses only known capabilities); a Playwright smoke in `e2e/` (create bot from template, send a message with the fake LLM).
 
@@ -296,10 +332,15 @@ Order matters: **memory scoping lands before the "create bot" UI**, so nobody st
 **Scope**: job execution as the owner bot (soul, tools, memory, model); the job tools set `domain_slug` from the caller; delivery through the owner's Telegram token; per-bot routines list in the bot page. Backfill mapping of `jobs`/`chat` to the default bot (view or code-level, no data rewrite).
 **Tests**: job runs with the right soul and tool set; an unknown slug falls back to the default bot; delivery picks the bot token.
 
-### PR 7: Hand-off
+### PR 7: Manager hand-off (consult and transfer)
 
-**Scope**: `ask_agent` tool, `can_call` UI, per-turn caps and audit, "Continue with ..." transfer in the UI. Reuses the `federated` tool policy and the `tool-conversations` pattern for continuity.
-**Tests**: allowlist enforced; depth 1; restricted tools in the callee; no memory writes from the consult; the result is not indexed.
+**Scope** (see 2.5): `ask_agent` for the default bot only, the Manager soul listing the bots, per-turn cap, timeout and audit table, consult steps shown in the chat, and the "Continue with ..." transfer button. Reuses the `federated` tool policy and the `tool-conversations` pattern for continuity. Does not depend on PR 5 or PR 6, so it can ship before them.
+**Tests**: only the default bot gets `ask_agent` (a bot request never does, even with tool arguments); archived and disabled bots cannot be consulted; the callee runs with its own soul, tools, memory scope and model and the restricted policy; no memory writes and nothing indexed from the consult; the cap and timeout hold; an audit row per consult; direct chat with each bot is unchanged.
+
+### PR 7b: Manager administration (draft and confirm)
+
+**Scope**: Manager tools to list bots and to propose create, edit and archive. Each proposal renders as a draft card (fields, capabilities, model) with Confirm and Discard; only Confirm calls the existing `/api/v1/unit/agents` endpoints. Admin sessions only, behind `ALLERAC_BOTS`.
+**Tests**: the tool never writes `unit_agents`; the draft is validated with the same schemas as the API; the default bot's locked fields cannot be changed through a draft; non-admins never get the tools.
 
 ### PR 8: Federation exposure per bot
 
@@ -422,7 +463,7 @@ Still open:
 3. **Memory default.** Is "isolated by default, sharing is explicit" right? Or is a shared pool better by default, with isolation only for sensitive bots such as Doctor? (The proposal also removes any "read every bot" mode, so even the default bot does not see another bot's private memories. A shared-pool preference would be expressed as `share_memories_by_default = true` on those bots, not as a read override.)
 4. **Telegram.** One Telegram bot per persona (recommended, closest to the existing personal-bot experience), a single router bot, or one forum group with a topic per bot? One per persona means a BotFather token per bot, entered by the owner in the UI.
 5. **Sensitive bots and cloud models.** Should Doctor, Nutrition and Trainer be pinned to local models (`cloud_allowed=false`) once a local GPU server is available? Until then they would use a cloud model, or a small local model.
-6. **Hand-off.** Should bots consult each other automatically (`ask_agent`), only after the owner approves, or only through a manual "Continue with ..." transfer?
+6. **Hand-off.** Decided 2026-11-27: everything goes through the Manager (the default bot), bots never talk to each other, and the user can still talk to every bot directly. See 2.5, PR 7 and PR 7b.
 7. **Federation.** Should any personal bot ever be exposed to other Units? Default proposal: none, except the default bot as today.
 8. **Importing existing instructions.** Should the create/import flow support pasting instructions from existing personal bots? Memories and history from those bots would not be migrated by this plan (a separate, optional task).
 

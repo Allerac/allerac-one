@@ -69,7 +69,7 @@ describe('/agents', () => {
     mockAuthed.mockResolvedValueOnce({ id: 'u', is_admin: true });
     mockQuery.mockResolvedValueOnce({ rows: [{ last: new Date('2026-01-01T00:00:00Z') }] });
     const el = await AgentsIndexPage();
-    expect(el.props).toEqual({ localLastActivity: '2026-01-01T00:00:00.000Z' });
+    expect(el.props).toEqual({ localLastActivity: '2026-01-01T00:00:00.000Z', botsEnabled: false });
     expect(mockQuery.mock.calls[0][1]).toEqual(['u']);
   });
   it('survives a DB error', async () => {
