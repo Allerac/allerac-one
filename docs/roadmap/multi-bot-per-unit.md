@@ -208,7 +208,7 @@ None of these mechanisms writes into another bot's memory, and none is available
 **Telegram.** Recommended: **one Telegram bot token per bot** (BotFather), because it matches the existing personal-bot experience: separate chats, separate names and avatars, separate notifications.
 
 - `telegram_bot_configs.agent_id` selects the bot; `AlleracTelegramBot` receives `agentSlug` and `botConfigId` from `src/telegram-multi-bot.ts`.
-- **`telegram_chat_mapping` must be keyed by `(bot_config_id, telegram_chat_id)`** (see 1.3 item 4). The old primary key on `telegram_chat_id` alone **must be dropped in the same PR**: while it exists, the second bot's mapping row for the same human fails on insert, so multi-bot Telegram cannot work. Two migrations, both in PR 5: `160` (additive: column, backfill, new unique index) and `161` (drop the old PK). The code that reads and writes by the new key ships in the same PR. All mapping queries (`telegram-bot.service.ts` lines ~129, ~142, ~170, ~190 today) are keyed by `(bot_config_id, telegram_chat_id)`.
+- **`telegram_chat_mapping` must be keyed by `(bot_config_id, telegram_chat_id)`** (see 1.3 item 4). The old primary key on `telegram_chat_id` alone **must be dropped in the same PR**: while it exists, the second bot's mapping row for the same human fails on insert, so multi-bot Telegram cannot work. Two migrations, both in PR 5: `161` (additive: column, backfill, new unique index) and `162` (drop the old PK). The code that reads and writes by the new key ships in the same PR. All mapping queries (`telegram-bot.service.ts` lines ~129, ~142, ~170, ~190 today) are keyed by `(bot_config_id, telegram_chat_id)`.
 - **Rollback**: the old code reads and updates by `telegram_chat_id` only, so it is safe only while each chat id has one row. The rollback script first keeps the default bot's row per chat id (deletes the others), then re-adds the PK. It is written and tested in PR 5, and a DB backup is taken before deploying.
 - Remove the `LIMIT 1` config lookup. Use the config of the running bot instance.
 - Telegram turns use the same pipeline as the web route (shared `resolveChatTools`, bot soul, memory scope). This is the biggest refactor in the Telegram PR, because `handleChatTurn` and the web route currently diverge.
@@ -317,8 +317,8 @@ Order matters: **memory scoping lands before the "create bot" UI**, so nobody st
 ### PR 5: Telegram per bot
 
 **Scope**
-- Migration `160_telegram_agent_binding.sql`: `telegram_bot_configs.agent_id`, `telegram_chat_mapping.bot_config_id` (backfilled), plus the new unique index.
-- Migration `161_telegram_chat_mapping_drop_pk.sql`: drop the old PK on `telegram_chat_id` (required for two bots per human, see 2.6), with the tested rollback script.
+- Migration `161_telegram_agent_binding.sql`: `telegram_bot_configs.agent_id`, `telegram_chat_mapping.bot_config_id` (backfilled), plus the new unique index.
+- Migration `162_telegram_chat_mapping_drop_pk.sql`: drop the old PK on `telegram_chat_id` (required for two bots per human, see 2.6), with the tested rollback script.
 - `telegram-multi-bot.ts` and `telegram-bot.service.ts`: pass `agentSlug`/`botConfigId`; every `telegram_chat_mapping` query keyed by `(bot_config_id, telegram_chat_id)`; remove `LIMIT 1` lookups; primary conversation per bot.
 - **Route Telegram through the shared pipeline** (`resolveChatTools`, bot soul, memory scope) instead of the divergent `handleChatTurn` tool assembly. Do this as a separate refactor commit inside the PR, with before/after tests.
 - UI: in Channels, "connect Telegram" on the bot page (token entered by the owner in the UI, never in chat).
@@ -336,6 +336,16 @@ Order matters: **memory scoping lands before the "create bot" UI**, so nobody st
 
 **Scope** (see 2.5): `ask_agent` for the default bot only, the Manager soul listing the bots, per-turn cap, timeout and audit table, consult steps shown in the chat, and the "Continue with ..." transfer button. Reuses the `federated` tool policy and the `tool-conversations` pattern for continuity. Does not depend on PR 5 or PR 6, so it can ship before them.
 **Tests**: only the default bot gets `ask_agent` (a bot request never does, even with tool arguments); archived and disabled bots cannot be consulted; the callee runs with its own soul, tools, memory scope and model and the restricted policy; no memory writes and nothing indexed from the consult; the cap and timeout hold; an audit row per consult; direct chat with each bot is unchanged.
+
+**As implemented** (2026-11-27):
+
+- Migration `160_bot_consults.sql`: audit table `bot_consults` (caller, target, question, status `ok`/`error`/`timeout`, duration, hand-off conversation). Continuity: the next consult from the same Manager conversation to the same bot continues the hand-off conversation of the latest row. The Telegram migrations move to `161`/`162`.
+- Hand-off conversations are `chat_conversations` rows with `source = 'handoff'` in the bot's domain. `NON_MEMORY_SOURCES` (`federated-memory-filter.ts`) is `federation` + `handoff`: never summarized, indexed or searched, like federated conversations. Chat search already reads `source = 'local'` only.
+- Tool `ask_agent` (`manager.tool.definitions.ts`), offered only when `canUseManagerTools` (admin, domain `chat`, default policy), `ALLERAC_BOTS` and at least one runnable bot. Checked again in the tool runner, and listed in the federated forbidden tools.
+- New tool policy `consult`: an **allowlist** of read tools (`CONSULT_ALLOWED_TOOL_NAMES`), so a tool missing from it is never reachable. The bot keeps its own capabilities (an Emails bot can read mail) but cannot send, save, schedule, learn, consult or call peers. This replaces the `federated` policy proposed above, which would have cut the bot down to notes.
+- `executeChatMessage` takes `bot` and runs the bot's soul, explicit tools, skills and memory scope (the same logic as the web route). The bot's model rules apply on top of the Manager's model (`cloudAllowed=false` refuses a cloud Manager model with a clear error).
+- Caps: 3 consults per Manager reply, a 120 s timeout per consult (`ALLERAC_BOT_CONSULT_TIMEOUT_MS`), and 4,000 / 8,000 characters for question and answer. The consulted bot is told the Manager asks on behalf of the user and that its reply is read-only.
+- UI: each consult adds a "Continue with <bot>" link under the Manager's reply (the existing page-link action), which opens the bot's chat. Not in this PR: the collapsible consult step (the agent chat does not render tool calls today) and carrying a summary into the bot's chat.
 
 ### PR 7b: Manager administration (draft and confirm)
 
@@ -427,21 +437,21 @@ CREATE INDEX IF NOT EXISTS idx_documents_scope
 -- From here on the indexer copies `shared` from the source row, and share /
 -- make-private updates both rows in one transaction.
 
--- 160_telegram_agent_binding.sql (additive)
+-- 161_telegram_agent_binding.sql (additive)
 ALTER TABLE telegram_bot_configs ADD COLUMN IF NOT EXISTS agent_id UUID REFERENCES unit_agents(id) ON DELETE SET NULL;
 ALTER TABLE telegram_chat_mapping ADD COLUMN IF NOT EXISTS bot_config_id UUID REFERENCES telegram_bot_configs(id) ON DELETE CASCADE;
 -- backfill bot_config_id from the owner's single config, then:
 CREATE UNIQUE INDEX IF NOT EXISTS uq_telegram_chat_mapping_bot_chat
   ON telegram_chat_mapping (COALESCE(bot_config_id, '00000000-0000-0000-0000-000000000000'::uuid), telegram_chat_id);
 
--- 161_telegram_chat_mapping_drop_pk.sql (same PR as 160 and the code change)
+-- 162_telegram_chat_mapping_drop_pk.sql (same PR as 161 and the code change)
 -- Required: while this PK exists, a second bot cannot map the same human.
 ALTER TABLE telegram_chat_mapping DROP CONSTRAINT IF EXISTS telegram_chat_mapping_pkey;
 -- Rollback (tested in PR 5): keep the default bot's row per telegram_chat_id,
 -- delete the others, then ADD PRIMARY KEY (telegram_chat_id).
 ```
 
-Notes: migrations are idempotent (`IF NOT EXISTS`) and numbered after `157`. They never drop data, with one exception: the `161` rollback deletes extra Telegram mapping rows, which are routing rows only, not messages or memories. Existing rows keep their `domain_slug` values.
+Notes: migrations are idempotent (`IF NOT EXISTS`) and numbered after `157`. They never drop data, with one exception: the `162` rollback deletes extra Telegram mapping rows, which are routing rows only, not messages or memories. Existing rows keep their `domain_slug` values.
 
 ### First PR scope (the one to start with)
 
@@ -471,7 +481,7 @@ Still open:
 
 - **Memory isolation is the riskiest PR** (56 non-test source files reference `domain_slug`). One missed read site leaks a private memory. Mitigation: dedicated PR, an audit checklist in the description, a pg integration test per read site, and no "create bot" UI until it has merged and been deployed.
 - **Telegram refactor.** The Telegram path diverges from the web pipeline and ignores agent tool settings today. Unifying them is necessary, but it touches a live messaging channel. Mitigation: a separate commit, tests, and a staged rollout across Units.
-- **Primary key change on `telegram_chat_mapping`** (a live table). The old PK must go in the same PR, because multi-bot Telegram is impossible while it exists. Mitigation: additive migration `160` first, PK drop in `161`, code keyed by the new key in the same deploy, a tested rollback script, and a backup before deploying.
+- **Primary key change on `telegram_chat_mapping`** (a live table). The old PK must go in the same PR, because multi-bot Telegram is impossible while it exists. Mitigation: additive migration `161` first, PK drop in `162`, code keyed by the new key in the same deploy, a tested rollback script, and a backup before deploying.
 - **Tool overload** (prompt size and cost) if many bots enable many tools. Mitigation: capability toggles per bot, heavy modules (music, social) default off, templates with few tools.
 - **Slug collisions** with legacy domain slugs and routes. Mitigation: reserved list plus validation. Slugs are immutable.
 - **`domains` FKs** (`user_domain_model_settings`, `domain_rate_limit_settings`, `agent_runs`) block using bot slugs directly. Options: relax the FKs for bots (migration), or keep bot settings only in `unit_agents`. Recommendation: the second for model settings and the first for `agent_runs` only. To be confirmed in the implementation pull request.

@@ -37,8 +37,11 @@ import {
   isToolForbiddenByPolicy,
   canUseFederationTools,
   FEDERATION_TOOL_NAMES,
+  MANAGER_TOOL_NAMES,
+  canUseManagerTools,
   type ChatToolPolicy,
 } from './chat-tool-registry';
+import { botsEnabled } from '@/app/services/agent/bot-runtime';
 import { buildFederationTools } from '@/app/tools/federation.tool';
 import { federationClient } from '@/federation/federation-client.instance';
 
@@ -54,6 +57,11 @@ export interface ChatToolRunnerContext {
   toolPolicy?: ChatToolPolicy;
   /** IANA timezone for "today". Loaded from the user's settings when omitted. */
   timeZone?: string;
+  /** Model of the running turn (the Manager's model is the base for a consulted bot). */
+  modelId?: string;
+  provider?: string;
+  /** State shared by the tool calls of one turn (multi-bot PR 7 per-turn consult cap). */
+  turn?: { consults: number };
 }
 
 export async function executeChatTool(
@@ -76,7 +84,9 @@ export async function executeChatTool(
   }
   // Requests from a paired Unit run with the restricted federated policy.
   if (isToolForbiddenByPolicy(toolName, context.toolPolicy)) {
-    return { error: `Tool ${toolName} is not available for federated requests.` };
+    return context.toolPolicy === 'consult'
+      ? { error: `Tool ${toolName} is not available while answering a consult (read-only).` }
+      : { error: `Tool ${toolName} is not available for federated requests.` };
   }
 
   if (FEDERATION_TOOL_NAMES.includes(toolName)) {
@@ -90,6 +100,15 @@ export async function executeChatTool(
     return toolName === 'list_peer_agents'
       ? federation.listPeerAgents(toolArgs)
       : federation.askPeerAgent(toolArgs);
+  }
+
+  if (MANAGER_TOOL_NAMES.includes(toolName)) {
+    // Default agent of an admin only, never a bot, a federated or a consult turn.
+    if (!botsEnabled() || !canUseManagerTools({ isAdmin: user.is_admin === true, domain, policy: context.toolPolicy })) {
+      return { error: `Tool ${toolName} is not available.` };
+    }
+    if (!context.modelId || !context.provider) return { error: 'No model to consult with.' };
+    return runAskAgent(toolArgs, context);
   }
 
   if (toolName === 'update_social_form' || toolName === 'update_instagram_form') {
@@ -314,4 +333,44 @@ export async function executeChatTool(
   }
 
   return { error: `Tool ${toolName} not available` };
+}
+
+
+async function runAskAgent(toolArgs: Record<string, unknown>, context: ChatToolRunnerContext) {
+  const [{ askAgent }, { botConsultRepository }, { getUnitAgent, listUnitAgents }, { executeChatMessage }, { loadUnitProfile }] = await Promise.all([
+    import('@/app/services/agent/bot-consult'),
+    import('@/app/services/agent/bot-consult.repository'),
+    import('@/app/services/agent/unit-agents.repository'),
+    import('./chat-execution.service'),
+    import('@/federation/unit-profile.repository'),
+  ]);
+  const managerName = await loadUnitProfile().then((profile) => profile.displayName).catch(() => undefined);
+  return askAgent(toolArgs, {
+    user: context.user,
+    callerConversationId: context.conversationId ?? null,
+    model: { modelId: context.modelId!, provider: context.provider! },
+    locale: context.locale,
+    timeZone: context.timeZone,
+    turn: context.turn ?? { consults: 0 },
+    managerName,
+  }, {
+    getBot: getUnitAgent,
+    listBots: listUnitAgents,
+    store: botConsultRepository,
+    async run(input) {
+      const result = await executeChatMessage({
+        user: input.user,
+        conversationId: input.conversationId,
+        domain: input.bot.slug,
+        message: input.message,
+        modelId: input.modelId,
+        provider: input.provider as import('./chat-request-parser').ChatProvider,
+        locale: input.locale,
+        timeZone: input.timeZone,
+        toolPolicy: 'consult',
+        bot: input.bot,
+      });
+      return { content: result.content, empty: result.events.some((event) => event.type === 'empty_reply') };
+    },
+  });
 }

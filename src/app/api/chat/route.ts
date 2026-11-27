@@ -36,7 +36,7 @@ import {
   SseWriter,
 } from '@/app/services/chat/sse-writer';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
-import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
+import { PUBLIC_DOMAINS, canUseFederationTools, canUseManagerTools, resolveChatTools } from '@/app/services/chat/chat-tool-registry';
 import { hasActivePeers, listActivePeerLabels } from '@/federation/peer-presence';
 import { loadChatSoulIdentity, loadUnitProfile } from '@/federation/unit-profile.repository';
 import { isShellAllowedFor } from '@/app/lib/shell-access';
@@ -53,7 +53,8 @@ import {
 } from '@/app/lib/operation-limiter';
 import { domainModelSettingsService } from '@/app/services/domains/domain-model-settings.service';
 import { botRequestErrorResponse, resolveBotRequest } from '@/app/services/agent/bot-request';
-import { BotModelError, botSoulIdentity, explicitBotToolSettings, resolveBotModel } from '@/app/services/agent/bot-runtime';
+import { BotModelError, botSoulIdentity, botsEnabled, explicitBotToolSettings, resolveBotModel } from '@/app/services/agent/bot-runtime';
+import { consultableBots } from '@/app/services/agent/bot-consult';
 import { listUnitAgents } from '@/app/services/agent/unit-agents.repository';
 
 const chatService = new ChatService();
@@ -289,6 +290,12 @@ export async function POST(request: Request): Promise<Response> {
           domain: effectiveDomain,
         }) && await hasActivePeers();
 
+        // Multi-bot PR 7: the default agent of an admin is the Manager of the bots.
+        const managedBots = !bot && botsEnabled() && canUseManagerTools({ isAdmin: user.is_admin === true, domain: effectiveDomain })
+          ? consultableBots(await listUnitAgents().catch(() => []))
+          : [];
+        const chatIdentity = bot ? null : await loadChatSoulIdentity(effectiveDomain, federationOffered, listActivePeerLabels);
+
         const enrichedSystemMessage = buildChatSystemPrompt({
           user,
           locale,
@@ -303,13 +310,15 @@ export async function POST(request: Request): Promise<Response> {
           relevantContext,
           unitIdentity: bot
             ? botSoulIdentity(bot, await loadUnitProfile(), await listUnitAgents())
-            : await loadChatSoulIdentity(effectiveDomain, federationOffered, listActivePeerLabels),
+            : chatIdentity && managedBots.length > 0
+              ? { ...chatIdentity, managedBots: managedBots.map((b) => ({ id: b.slug, name: b.displayName, emoji: b.emoji, role: b.role })) }
+              : chatIdentity ?? undefined,
         });
 
         const activeTools = await resolveChatTools(activeSkill?.id, effectiveDomain, bot
           // No shell for bots until a code capability exists for them.
           ? { allowShell: false, allowFederation: false, bot: true, agentToolSettings: botToolSettings }
-          : { allowShell: isShellAllowedFor(user), allowFederation: federationOffered });
+          : { allowShell: isShellAllowedFor(user), allowFederation: federationOffered, allowManager: managedBots.length > 0 });
 
         // Load conversation history and build messages array. Primary
         // conversations use the bounded window (segments + recent messages);

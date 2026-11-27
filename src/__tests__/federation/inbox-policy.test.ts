@@ -33,7 +33,7 @@ describe('unified inbox guards', () => {
 
   it('peer conversations are excluded from memory extraction', () => {
     const memory = read('app/services/memory/conversation-memory.service.ts');
-    expect(memory.match(/cc\.source <> 'federation'/g)).toHaveLength(2);
+    expect(memory.match(/\$\{memorySourceSql\('cc'\)\}/g)).toHaveLength(2);
     expect(read('federation/agents.instance.ts')).toContain("VALUES ($1, $2, $3, 'federation')");
   });
 

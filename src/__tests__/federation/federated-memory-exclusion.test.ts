@@ -4,7 +4,7 @@ import path from 'path';
 import '../__mocks__/db';
 import pool from '@/app/clients/db';
 import { AskDedupeRepository } from '@/federation/ask-dedupe.repository';
-import { notFederatedSummarySql } from '@/app/services/memory/federated-memory-filter';
+import { memorySourceSql, notFederatedSummarySql } from '@/app/services/memory/federated-memory-filter';
 
 const SRC = path.join(__dirname, '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8');
@@ -12,12 +12,14 @@ const mockQuery = pool.query as unknown as jest.Mock;
 
 describe('federated conversations stay out of memory and RAG (P4 decision 1)', () => {
   it('builds a filter on the summary conversation', () => {
-    expect(notFederatedSummarySql('cs')).toContain("fed_cc.id = cs.conversation_id AND fed_cc.source = 'federation'");
+    expect(notFederatedSummarySql('cs')).toContain("fed_cc.id = cs.conversation_id AND fed_cc.source IN ('federation', 'handoff')");
+    // Multi-bot PR 7: Manager hand-off conversations follow the same rule.
+    expect(memorySourceSql('cc')).toBe("cc.source NOT IN ('federation', 'handoff')");
   });
 
   it('is applied to memory creation, recall, indexing and knowledge search', () => {
     const memory = read('app/services/memory/conversation-memory.service.ts');
-    expect(memory).toContain("cc.source <> 'federation'");
+    expect(memory.match(/\$\{memorySourceSql\('cc'\)\}/g)).toHaveLength(2);
     expect(memory.match(/notFederatedSummarySql\('conversation_summaries'\)/g)?.length).toBeGreaterThanOrEqual(4);
     expect(read('app/services/knowledge/memory-index.service.ts').match(/notFederatedSummarySql\('cs'\)/g)?.length).toBe(2);
     expect(read('app/services/knowledge/knowledge-search.service.ts').match(/notFederatedSummarySql\('cs'\)/g)?.length).toBe(2);

@@ -3,6 +3,15 @@ import type { User } from '@/app/services/auth/auth.service';
 import { LLMService } from '@/app/services/llm/llm.service';
 import type { Skill } from '@/app/services/skills/skills.service';
 import { executeChatTool } from './chat-tool-runner';
+import { ASK_AGENT_TOOL_NAME } from '@/app/tools/manager.tool.definitions';
+
+/** "Continue with <bot>" under the Manager's reply after a consult (multi-bot PR 7). */
+function continueLink(result: unknown): { href: string; label: string } | null {
+  const consult = result as { continueHref?: unknown; name?: unknown } | null;
+  return consult && typeof consult.continueHref === 'string' && typeof consult.name === 'string'
+    ? { href: consult.continueHref, label: `Continue with ${consult.name}` }
+    : null;
+}
 import type { ChatToolPolicy } from './chat-tool-registry';
 import type { ChatProvider } from './chat-request-parser';
 import { MODELS } from '@/app/services/llm/models';
@@ -183,6 +192,7 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
 
   let assistantMessage = data.choices[0].message;
   let toolRounds = 0;
+  const turnState = { consults: 0 };
   while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
     if (toolRounds >= MAX_TOOL_ROUNDS) {
       // Loop guard: stop calling tools and let the final step answer with what we have.
@@ -225,6 +235,9 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
           emit: input.emit,
           toolPolicy: input.toolPolicy,
           timeZone: input.timeZone,
+          modelId: activeModelId,
+          provider: input.provider,
+          turn: turnState,
         });
         const reportedError = toolResult && typeof toolResult === 'object' && 'error' in toolResult && toolResult.error;
         logChatEvent('tool_call', {
@@ -238,7 +251,9 @@ export async function runChatPipeline(input: RunChatPipelineInput): Promise<stri
         };
         if (toolName === 'search_web') resultEvent.data = toolResult;
         // Deep link to the module's data page (relative URL), rendered under the reply.
-        const pageLink = reportedError ? null : dataPageLinkForTool(toolName);
+        const pageLink = reportedError ? null : toolName === ASK_AGENT_TOOL_NAME
+          ? continueLink(toolResult)
+          : dataPageLinkForTool(toolName);
         if (pageLink) resultEvent.link = pageLink;
         input.emit(resultEvent);
         input.messages.push({
