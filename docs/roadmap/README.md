@@ -31,6 +31,7 @@ sequence of implementation.
 | [GitHub Models Chat Retirement](github-models-chat-retirement.md) | Proposed | Migrate the still-unmigrated chat-completions side of the GitHub Models retirement (`gpt-4o`, `ministral-3b`) — likely to an Azure AI Foundry project |
 | [Federation Protocol](federation-protocol.md) | Proposed | Phased plan for Unit-to-Unit pairing, federation client and tools, unified inbox, cross-unit agent runs, and published memory |
 | [Federation Unified Inbox](federation-unified-inbox.md) | In progress (P4a implemented) | Chat with remote agents of paired Units from the home Unit's sidebar |
+| [Multi-bot per Unit](multi-bot-per-unit.md) | Proposed | Several specialized bots (persona, tools, memory, channels, routines) inside one Unit, created by an admin |
 | [Unit Terminal Container](unit-terminal-container.md) | Proposed | Run the Claude Code and Codex terminals as Unit containers shared by users granted the `terminal` domain |
 | [n8n Workflow Integration](n8n-workflow-integration.md) | Completed | Run n8n self-hosted alongside Allerac as an optional automation layer for multi-step logic and external-service integration |
 
