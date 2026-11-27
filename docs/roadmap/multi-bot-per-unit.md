@@ -1,6 +1,6 @@
 # Multiple specialized bots inside one Allerac One Unit
 
-**Status:** Proposed
+**Status:** Accepted in part (see [Decisions from Gianclaudio](#decisions-from-gianclaudio-2026-11-27)); open questions in section 4
 
 **Base:** `development` at `3ed958a` (migrations up to `157`)
 
@@ -104,7 +104,8 @@ User-facing word: **bot**. Table name `unit_agents` (the code already says "agen
 | `is_default` | exactly one: slug `chat` |
 | `enabled`, `sort_order`, `archived_at` | list management. Archive instead of delete, so history is never lost |
 | `tool_settings` JSONB | same shape as `AgentToolSettings` (`modules`, `tools`, `skills` toggles), capped by `ALLERAC_MODULES` |
-| `memory_mode` | `isolated` (own rows + unit-shared rows), `all` (reads every bot, like today's `chat`), `none` |
+| `memory_mode` | `isolated` (own rows + unit-shared rows) or `none`. There is deliberately no mode that reads other bots' private rows (see 2.3) |
+| `share_memories_by_default` | when true, memories this bot writes are `shared = true` unless the model or the user marks them private. Default false; true for the default bot, so it keeps today's behaviour |
 | `can_call` TEXT[] | slugs of other local bots this bot may consult (handoff allowlist) |
 | `model_id`, `model_provider`, `cloud_allowed` | optional model override. `cloud_allowed=false` pins the bot to local Ollama (useful for a Doctor bot on a local GPU server) |
 | `default_skill_id` | optional default skill for new conversations |
@@ -123,13 +124,15 @@ Channels are not stored on the bot row. They point at it:
 
 Today a memory row carries `domain_slug` as a tag only. Proposal:
 
-- New column `conversation_summaries.shared BOOLEAN NOT NULL DEFAULT FALSE`. **Backfill `TRUE` for all existing rows**, because today the single agent already reads them all. Nothing changes for the default bot.
-- Write side: a bot writes memories tagged with **its own slug**, `shared = false`. The `create_memory` tool gets an optional `share_with_unit` flag. The UI can also promote one memory to shared ("share with all bots").
+- New column `shared BOOLEAN NOT NULL DEFAULT FALSE` on **every table that stores bot-scoped knowledge**: `conversation_summaries`, `knowledge_semantic_index` and `documents`. **Backfill `TRUE` for all existing rows in all three tables in the same migration**, because today the single agent already reads them all. If only one table is backfilled, an isolated bot finds a legacy memory through SQL but not through semantic search.
+- The semantic index copies `shared` from its source row on every (re)index, and the "share" / "make private" actions update both rows in one transaction. A consistency test asserts the two flags never differ.
+- Write side: a bot writes memories and documents tagged with **its own slug**. `shared` comes from the bot's `share_memories_by_default` (false for new bots, true for the default bot). The `create_memory` tool gets an optional `share_with_unit` flag that overrides it. The UI can promote one memory to shared ("share with all bots") or make it private.
 - Read side, one helper replacing `memoryReadDomain` (`src/app/services/memory/memory-scope.ts`):
   - `isolated`: `domain_slug = <own slug> OR shared`
-  - `all`: no filter (today's `chat` behaviour)
   - `none`: nothing
-- Same filter must be applied at every read site. There are about **191 `domain_slug` references in 49 files**. The important ones:
+- **No bot reads another bot's private rows, including the default bot.** The default bot keeps today's behaviour because every legacy row is `shared = true` and its new memories are shared by default. But it does not see what Doctor stores privately. Otherwise "private by default" would not hold. If the owner wants a bot that sees everything, the honest way is to share those memories, not a read-everything mode.
+- **Documents (RAG)** use the same filter: `domain_slug = <own slug> OR shared`, plus the notes vault (slug `notes`) for bots with the `notes` capability. Documents a bot uploads are private to it unless shared. `search_document_chunks(..., search_domain_slug)` gets the scope as a parameter instead of a single slug.
+- Same filter must be applied at every read site. On `development` @ `3ed958a` there are **211 `domain_slug` references in 56 non-test source files** (425 references in 110 files if tests and migrations are counted). The important ones:
   - `knowledge-search.service.ts` and `chat-knowledge-context.ts`;
   - `conversation-memory.service.ts`;
   - `memory.tool.ts` and `memory.tool.definitions.ts`;
@@ -160,7 +163,7 @@ Today a memory row carries `domain_slug` as a tag only. Proposal:
   | Template | Capabilities | Memory | Notes |
   |---|---|---|---|
   | Doctor | health, notes, memory | isolated | `cloud_allowed=false` suggested |
-  | Agenda | jobs, notes, (calendar later) | shared | routines for reminders |
+  | Agenda | jobs, notes, (calendar later) | isolated, shares by default | routines for reminders |
   | Compras | search, notes | isolated | read-only shopping |
   | Nutrition | health (read), notes | isolated | |
   | Trainer | health, notes | isolated | |
@@ -191,7 +194,8 @@ Neither mechanism writes into the other bot's memory, and neither is available t
 **Telegram.** Recommended: **one Telegram bot token per bot** (BotFather), because it matches the existing personal-bot experience: separate chats, separate names and avatars, separate notifications.
 
 - `telegram_bot_configs.agent_id` selects the bot; `AlleracTelegramBot` receives `agentSlug` and `botConfigId` from `src/telegram-multi-bot.ts`.
-- **`telegram_chat_mapping` must be keyed by `(bot_config_id, telegram_chat_id)`** (see 1.3 item 4). Migration adds `bot_config_id`, backfills it, and swaps the primary key for a unique index on `(COALESCE(bot_config_id, zero-uuid), telegram_chat_id)` in two steps, so it can be rolled back.
+- **`telegram_chat_mapping` must be keyed by `(bot_config_id, telegram_chat_id)`** (see 1.3 item 4). The old primary key on `telegram_chat_id` alone **must be dropped in the same PR**: while it exists, the second bot's mapping row for the same human fails on insert, so multi-bot Telegram cannot work. Two migrations, both in PR 5: `160` (additive: column, backfill, new unique index) and `161` (drop the old PK). The code that reads and writes by the new key ships in the same PR. All mapping queries (`telegram-bot.service.ts` lines ~129, ~142, ~170, ~190 today) are keyed by `(bot_config_id, telegram_chat_id)`.
+- **Rollback**: the old code reads and updates by `telegram_chat_id` only, so it is safe only while each chat id has one row. The rollback script first keeps the default bot's row per chat id (deletes the others), then re-adds the PK. It is written and tested in PR 5, and a DB backup is taken before deploying.
 - Remove the `LIMIT 1` config lookup. Use the config of the running bot instance.
 - Telegram turns use the same pipeline as the web route (shared `resolveChatTools`, bot soul, memory scope). This is the biggest refactor in the Telegram PR, because `handleChatTurn` and the web route currently diverge.
 - Primary conversation key is `(user, 'local', <bot slug>)`, so web and Telegram of the **same bot** continue one thread (as phase 4a already does for the default bot), and different bots never mix.
@@ -232,10 +236,10 @@ Order matters: **memory scoping lands before the "create bot" UI**, so nobody st
 ### PR 1: Bot registry, no behaviour change (first PR)
 
 **Scope**
-- Migration `158_unit_agents.sql` (below), seeding the default bot `chat` from `unit_profile`.
-- `src/app/services/agent/unit-agents.ts` (pure: zod schema, slug validation, reserved slug list, defaults) and `unit-agents.repository.ts` (list, get by slug, create, update, archive, 30 s cache like `unit-profile.repository.ts`).
-- `loadAgent(slug)` with fallback to `unit_profile` when the row is missing or the table is not migrated (never breaks chat, same pattern as `loadUnitProfileRow`).
-- Read-only API: `GET /api/v1/unit/agents` (scope `unit:read`), plus a capability entry.
+- Migration `158_unit_agents.sql`, seeding the default bot `chat`. **As implemented**, the default bot's row does not copy identity, instructions or tool settings: they stay on `unit_profile` and are resolved at read time, so the two can never drift. The existing Settings "Agent" card keeps editing them. The repository rejects edits of those fields on the default bot (`default_agent_locked`).
+- `src/app/services/agent/unit-agents.ts` (pure: zod schemas, slug validation, reserved slug list, resolution from the profile) and `unit-agents.repository.ts` (list, get by slug, create, update, archive/unarchive, 30 s cache like `unit-profile.repository.ts`). Creation also rejects any slug present in `domains`.
+- `loadAgent(slug)`: the slug's bot when enabled and not archived, otherwise the default bot built from `unit_profile` (also when the table is not migrated). Never breaks chat, same pattern as `loadUnitProfileRow`.
+- Read-only API: `GET /api/v1/unit/agents` (`?archived=true` for archived bots). **As implemented** it is admin-session only, like the other `/api/v1/unit/*` routes; no `unit:read` API-key scope exists yet, and no capability entry was added.
 - **No call-site changes** in chat, Telegram or UI.
 
 **Tests**: slug validation and reserved slugs; seeding from `unit_profile`; fallback when the table is absent; list ordering; the default bot is unique.
@@ -257,12 +261,12 @@ Order matters: **memory scoping lands before the "create bot" UI**, so nobody st
 ### PR 3: Memory scope (private vs shared)
 
 **Scope**
-- Migration `159_memory_shared.sql`: `conversation_summaries.shared`, backfilled `TRUE`; index.
-- `memory-scope.ts` -> `resolveMemoryScope(bot)`; apply at all read sites listed in 2.3; `create_memory.share_with_unit`; "share" action in the memory UI (`src/app/memory`).
+- Migration `159_memory_shared.sql`: `shared` on `conversation_summaries`, `knowledge_semantic_index` and `documents`, all backfilled `TRUE`; indexes. Migration `159` also adds `unit_agents.share_memories_by_default` (true for the default bot).
+- `memory-scope.ts` -> `resolveMemoryScope(bot)`; apply at all read sites listed in 2.3, memories and documents; `create_memory.share_with_unit`; "share" / "make private" actions in the memory UI (`src/app/memory`) that update the summary and its index row together.
 - Tickets regression tests (2.3).
 
-**Tests**: pg integration test with two bots and three memory rows each (private, shared, legacy). Assert reads per mode. A ticket-output test. A federation test showing peers keep the previous domain-scoped reach.
-**Risk**: highest of the series (about 49 files touched by `domain_slug`). Keep the PR to read-filter changes only, and audit each site in the PR description.
+**Tests**: pg integration test with two bots and three memory rows each (private, shared, legacy), through SQL **and** semantic search. Assert reads per mode, and that the default bot does not see another bot's private row. The same for documents. A flag-consistency test (summary vs semantic index). A ticket-output test. A federation test showing peers keep the previous domain-scoped reach.
+**Risk**: highest of the series (56 non-test source files reference `domain_slug`). Keep the PR to read-filter changes only, and audit each site in the PR description.
 
 ### PR 4: UI, switch, create from template, edit
 
@@ -277,13 +281,14 @@ Order matters: **memory scoping lands before the "create bot" UI**, so nobody st
 ### PR 5: Telegram per bot
 
 **Scope**
-- Migration `160_telegram_agent_binding.sql`: `telegram_bot_configs.agent_id`, `telegram_chat_mapping.bot_config_id` plus the new unique index (the old PK is dropped in a later migration).
-- `telegram-multi-bot.ts` and `telegram-bot.service.ts`: pass `agentSlug`/`botConfigId`; remove `LIMIT 1` lookups; primary conversation per bot.
+- Migration `160_telegram_agent_binding.sql`: `telegram_bot_configs.agent_id`, `telegram_chat_mapping.bot_config_id` (backfilled), plus the new unique index.
+- Migration `161_telegram_chat_mapping_drop_pk.sql`: drop the old PK on `telegram_chat_id` (required for two bots per human, see 2.6), with the tested rollback script.
+- `telegram-multi-bot.ts` and `telegram-bot.service.ts`: pass `agentSlug`/`botConfigId`; every `telegram_chat_mapping` query keyed by `(bot_config_id, telegram_chat_id)`; remove `LIMIT 1` lookups; primary conversation per bot.
 - **Route Telegram through the shared pipeline** (`resolveChatTools`, bot soul, memory scope) instead of the divergent `handleChatTurn` tool assembly. Do this as a separate refactor commit inside the PR, with before/after tests.
-- UI: in Channels, "connect Telegram" on the bot page (token entered by the owner himself, never in chat).
+- UI: in Channels, "connect Telegram" on the bot page (token entered by the owner in the UI, never in chat).
 - Migrate `telegram_bot_skills` -> optional `default_skill_id` (the old table keeps working in the meantime).
 
-**Tests**: two bots, one human, same `telegram_chat_id`: independent conversations and memories; the existing single-bot setup is unchanged after migration.
+**Tests**: two bots, one human, same `telegram_chat_id`: both mapping rows insert, independent conversations and memories; the existing single-bot setup is unchanged after migration; the rollback script restores the old PK.
 **Deploy note**: needs a restart of the `telegram` container on each Unit that is updated.
 
 ### PR 6: Routines per bot
@@ -327,7 +332,7 @@ CREATE TABLE IF NOT EXISTS unit_agents (
   sort_order    INTEGER NOT NULL DEFAULT 0,
   tool_settings JSONB   NOT NULL DEFAULT '{}'::jsonb,
   memory_mode   VARCHAR(12) NOT NULL DEFAULT 'isolated'
-                CHECK (memory_mode IN ('isolated','all','none')),
+                CHECK (memory_mode IN ('isolated','none')),
   can_call      TEXT[]  NOT NULL DEFAULT '{}',
   model_id      TEXT,
   model_provider TEXT,
@@ -342,34 +347,60 @@ CREATE TABLE IF NOT EXISTS unit_agents (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_unit_agents_default ON unit_agents (is_default) WHERE is_default;
 
--- Seed the default bot from the Unit profile (idempotent). The default bot
--- keeps `all` memory, exactly like today's single agent.
+-- Seed the default bot from the Unit profile (idempotent). It is `isolated`
+-- like every bot; it keeps today's reach because all legacy rows are backfilled
+-- `shared = true` in 159 and its own new memories are shared by default.
 INSERT INTO unit_agents (slug, display_name, emoji, role, description, instructions,
                          is_default, tool_settings, memory_mode, federation_exposed)
 SELECT 'chat', COALESCE(display_name, 'Allerac'), emoji, role, description, instructions,
-       TRUE, agent_tool_settings, 'all', FALSE
+       TRUE, agent_tool_settings, 'isolated', FALSE
 FROM unit_profile WHERE id = 1
 ON CONFLICT (slug) DO NOTHING;
 -- (a Unit with no unit_profile row gets the default bot lazily from code)
 
 -- 159_memory_shared.sql
-ALTER TABLE conversation_summaries ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE;
-UPDATE conversation_summaries SET shared = TRUE;   -- existing rows: visible to the unit, as today
-CREATE INDEX IF NOT EXISTS idx_conversation_summaries_scope
-  ON conversation_summaries (user_id, domain_slug) WHERE shared;
-ALTER TABLE knowledge_semantic_index ADD COLUMN IF NOT EXISTS shared BOOLEAN NOT NULL DEFAULT FALSE;
--- (the UPDATE above and the index sweep must keep the two flags in sync)
+ALTER TABLE unit_agents ADD COLUMN IF NOT EXISTS share_memories_by_default BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE unit_agents SET share_memories_by_default = TRUE WHERE is_default;
 
--- 160_telegram_agent_binding.sql
+-- Existing rows in all three tables: visible to the unit, as today. Backfilled
+-- together so SQL reads and semantic search agree.
+-- The backfill runs only when the column is first added. A re-run must never
+-- flip new private rows to shared, so a plain UPDATE is not safe here.
+DO $$
+DECLARE t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['conversation_summaries','knowledge_semantic_index','documents'] LOOP
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = t AND column_name = 'shared') THEN
+      EXECUTE format('ALTER TABLE %I ADD COLUMN shared BOOLEAN NOT NULL DEFAULT FALSE', t);
+      EXECUTE format('UPDATE %I SET shared = TRUE', t);
+    END IF;
+  END LOOP;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_conversation_summaries_scope
+  ON conversation_summaries (user_id, domain_slug, shared);
+CREATE INDEX IF NOT EXISTS idx_knowledge_semantic_index_scope
+  ON knowledge_semantic_index (domain_slug, shared);
+CREATE INDEX IF NOT EXISTS idx_documents_scope
+  ON documents (domain_slug, shared);
+-- From here on the indexer copies `shared` from the source row, and share /
+-- make-private updates both rows in one transaction.
+
+-- 160_telegram_agent_binding.sql (additive)
 ALTER TABLE telegram_bot_configs ADD COLUMN IF NOT EXISTS agent_id UUID REFERENCES unit_agents(id) ON DELETE SET NULL;
 ALTER TABLE telegram_chat_mapping ADD COLUMN IF NOT EXISTS bot_config_id UUID REFERENCES telegram_bot_configs(id) ON DELETE CASCADE;
 -- backfill bot_config_id from the owner's single config, then:
 CREATE UNIQUE INDEX IF NOT EXISTS uq_telegram_chat_mapping_bot_chat
   ON telegram_chat_mapping (COALESCE(bot_config_id, '00000000-0000-0000-0000-000000000000'::uuid), telegram_chat_id);
--- The old PRIMARY KEY (telegram_chat_id) is dropped in a later migration, once the code uses the new key.
+
+-- 161_telegram_chat_mapping_drop_pk.sql (same PR as 160 and the code change)
+-- Required: while this PK exists, a second bot cannot map the same human.
+ALTER TABLE telegram_chat_mapping DROP CONSTRAINT IF EXISTS telegram_chat_mapping_pkey;
+-- Rollback (tested in PR 5): keep the default bot's row per telegram_chat_id,
+-- delete the others, then ADD PRIMARY KEY (telegram_chat_id).
 ```
 
-Notes: migrations are idempotent (`IF NOT EXISTS`), numbered after `157`, and never drop data. Existing rows keep their `domain_slug` values.
+Notes: migrations are idempotent (`IF NOT EXISTS`) and numbered after `157`. They never drop data, with one exception: the `161` rollback deletes extra Telegram mapping rows, which are routing rows only, not messages or memories. Existing rows keep their `domain_slug` values.
 
 ### First PR scope (the one to start with)
 
@@ -388,7 +419,7 @@ Taken (see [Decisions from Gianclaudio](#decisions-from-gianclaudio-2026-11-27) 
 
 Still open:
 
-3. **Memory default.** Is "isolated by default, sharing is explicit" right? Or is a shared pool better by default, with isolation only for sensitive bots such as Doctor?
+3. **Memory default.** Is "isolated by default, sharing is explicit" right? Or is a shared pool better by default, with isolation only for sensitive bots such as Doctor? (The proposal also removes any "read every bot" mode, so even the default bot does not see another bot's private memories. A shared-pool preference would be expressed as `share_memories_by_default = true` on those bots, not as a read override.)
 4. **Telegram.** One Telegram bot per persona (recommended, closest to the existing personal-bot experience), a single router bot, or one forum group with a topic per bot? One per persona means a BotFather token per bot, entered by the owner in the UI.
 5. **Sensitive bots and cloud models.** Should Doctor, Nutrition and Trainer be pinned to local models (`cloud_allowed=false`) once a local GPU server is available? Until then they would use a cloud model, or a small local model.
 6. **Hand-off.** Should bots consult each other automatically (`ask_agent`), only after the owner approves, or only through a manual "Continue with ..." transfer?
@@ -397,9 +428,9 @@ Still open:
 
 ### Technical risks
 
-- **Memory isolation is the riskiest PR** (49 files reference `domain_slug`). One missed read site leaks a private memory. Mitigation: dedicated PR, an audit checklist in the description, a pg integration test per read site, and no "create bot" UI until it has merged and been deployed.
+- **Memory isolation is the riskiest PR** (56 non-test source files reference `domain_slug`). One missed read site leaks a private memory. Mitigation: dedicated PR, an audit checklist in the description, a pg integration test per read site, and no "create bot" UI until it has merged and been deployed.
 - **Telegram refactor.** The Telegram path diverges from the web pipeline and ignores agent tool settings today. Unifying them is necessary, but it touches a live messaging channel. Mitigation: a separate commit, tests, and a staged rollout across Units.
-- **Primary key change on `telegram_chat_mapping`** (a live table). Mitigation: add the new unique index first and drop the old PK in a later migration. Always back up before it.
+- **Primary key change on `telegram_chat_mapping`** (a live table). The old PK must go in the same PR, because multi-bot Telegram is impossible while it exists. Mitigation: additive migration `160` first, PK drop in `161`, code keyed by the new key in the same deploy, a tested rollback script, and a backup before deploying.
 - **Tool overload** (prompt size and cost) if many bots enable many tools. Mitigation: capability toggles per bot, heavy modules (music, social) default off, templates with few tools.
 - **Slug collisions** with legacy domain slugs and routes. Mitigation: reserved list plus validation. Slugs are immutable.
 - **`domains` FKs** (`user_domain_model_settings`, `domain_rate_limit_settings`, `agent_runs`) block using bot slugs directly. Options: relax the FKs for bots (migration), or keep bot settings only in `unit_agents`. Recommendation: the second for model settings and the first for `agent_runs` only. To be confirmed in the implementation pull request.
