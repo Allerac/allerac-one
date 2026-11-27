@@ -11,7 +11,7 @@
  * - Efficient retrieval of recent/important memories
  */
 
-import { notFederatedSummarySql } from './federated-memory-filter';
+import { memorySourceSql, notFederatedSummarySql } from './federated-memory-filter';
 import { resolveMemoryScope } from './memory-scope';
 import pool from '@/app/clients/db';
 
@@ -91,7 +91,7 @@ export class ConversationMemoryService {
          FROM chat_messages cm
          INNER JOIN chat_conversations cc ON cc.id = cm.conversation_id
          WHERE cm.conversation_id = $1 AND cc.user_id = $2
-           AND cc.source <> 'federation'
+           AND ${memorySourceSql('cc')}
          ORDER BY cm.created_at ASC`,
         [conversationId, userId]
       );
@@ -371,7 +371,7 @@ ${memoryItems.join('\n\n')}
          FROM chat_messages cm
          INNER JOIN chat_conversations cc ON cc.id = cm.conversation_id
          WHERE cm.conversation_id = $1 AND cc.user_id = $2
-           AND cc.source <> 'federation'`,
+           AND ${memorySourceSql('cc')}`,
         [conversationId, userId]
       );
 

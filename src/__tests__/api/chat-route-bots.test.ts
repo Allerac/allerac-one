@@ -42,6 +42,7 @@ const mockCanUseFederation = jest.fn();
 jest.mock('@/app/services/chat/chat-tool-registry', () => ({
   PUBLIC_DOMAINS: ['alleracweb', 'openworld'],
   canUseFederationTools: (...args: unknown[]) => mockCanUseFederation(...args),
+  canUseManagerTools: (...args: unknown[]) => mockCanUseFederation(...args),
   resolveChatTools: (...args: unknown[]) => mockResolveTools(...args),
 }));
 jest.mock('@/app/services/skills/skills.service', () => ({ skillsService: {} }));
@@ -63,9 +64,10 @@ jest.mock('@/app/services/chat/chat-runtime-context', () => ({
 }));
 jest.mock('@/app/lib/shell-access', () => ({ isShellAllowedFor: jest.fn(() => true) }));
 const mockGetUnitAgent = jest.fn();
+const mockListUnitAgents = jest.fn();
 jest.mock('@/app/services/agent/unit-agents.repository', () => ({
   getUnitAgent: (slug: string) => mockGetUnitAgent(slug),
-  listUnitAgents: jest.fn(async () => []),
+  listUnitAgents: () => mockListUnitAgents(),
 }));
 
 import { POST } from '@/app/api/chat/route';
@@ -92,6 +94,7 @@ describe('/api/chat with bots', () => {
     mockUser.mockResolvedValue({ id: 'admin-1', is_admin: true, name: 'Gian' });
     mockAssertDomainAccess.mockReset().mockResolvedValue(undefined);
     mockGetUnitAgent.mockReset().mockResolvedValue(null);
+    mockListUnitAgents.mockReset().mockResolvedValue([]);
     mockResolveTools.mockReset().mockResolvedValue([]);
     mockCanUseFederation.mockReset().mockReturnValue(true);
     mockResolveSkill.mockReset().mockResolvedValue(null);
@@ -145,14 +148,34 @@ describe('/api/chat with bots', () => {
     await drain(await post('chat'));
     expect(mockGetUnitAgent).not.toHaveBeenCalled();
     expect(mockAssertDomainAccess).toHaveBeenCalledWith(expect.anything(), 'chat');
-    expect(mockResolveTools.mock.calls[0][2]).toEqual({ allowShell: true, allowFederation: true });
+    expect(mockResolveTools.mock.calls[0][2]).toEqual({ allowShell: true, allowFederation: true, allowManager: false });
     expect(mockLoadChatSoulIdentity).toHaveBeenCalled();
 
     delete process.env.ALLERAC_BOTS;
     mockGetUnitAgent.mockResolvedValue(doctor());
     await drain(await post('doctor'));
     expect(mockGetUnitAgent).not.toHaveBeenCalled();
-    expect(mockResolveTools.mock.calls[1][2]).toEqual({ allowShell: true, allowFederation: true });
+    expect(mockResolveTools.mock.calls[1][2]).toEqual({ allowShell: true, allowFederation: true, allowManager: false });
+  });
+
+  it('makes the default agent the Manager of the runnable bots (PR 7)', async () => {
+    mockLoadChatSoulIdentity.mockResolvedValue({ displayName: 'Napols' });
+    mockListUnitAgents.mockResolvedValue([
+      doctor({ slug: 'chat', displayName: 'Napols', isDefault: true }),
+      doctor({ emoji: '🩺' }),
+      doctor({ slug: 'old', displayName: 'Old', archivedAt: '2026-11-27T00:00:00.000Z' }),
+    ]);
+    await drain(await post('chat'));
+    expect(mockResolveTools.mock.calls[0][2]).toEqual({ allowShell: true, allowFederation: true, allowManager: true });
+    const soul = mockPipeline.mock.calls[0][0].messages[0].content as string;
+    expect(soul).toContain(`manager of this Unit's assistants: 🩺 Gian Doctor (id "doctor", takes care of your health)`);
+    expect(soul).not.toContain('Old');
+
+    // A bot is never a Manager, and neither is a non-admin.
+    mockGetUnitAgent.mockResolvedValue(doctor());
+    await drain(await post('doctor'));
+    expect(mockResolveTools.mock.calls[1][2]).not.toHaveProperty('allowManager');
+    expect(mockPipeline.mock.calls[1][0].messages[0].content).not.toContain('ask_agent');
   });
 
   it('treats a slug without a bot as the legacy domain path', async () => {

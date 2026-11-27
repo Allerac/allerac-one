@@ -1,11 +1,14 @@
 import { resolveTimeZone } from '@/app/lib/timezone';
 import { acquireConversationLock, loadPrimaryPromptHistory, scheduleCompaction, type Summarize } from './primary-conversation';
 import { makeSegmentSummarizer } from './segment-summarizer';
-import { memoryReadDomain } from '@/app/services/memory/memory-scope';
+import { botMemoryScope, memoryReadDomain } from '@/app/services/memory/memory-scope';
 import type { User } from '@/app/services/auth/auth.service';
 import { ChatService } from '@/app/services/database/chat.service';
 import { loadChatKnowledgeContext } from '@/app/services/knowledge/chat-knowledge-context';
-import { loadChatSoulIdentity } from '@/federation/unit-profile.repository';
+import { loadChatSoulIdentity, loadUnitProfile } from '@/federation/unit-profile.repository';
+import type { UnitAgent } from '@/app/services/agent/unit-agents';
+import { botSoulIdentity, explicitBotToolSettings } from '@/app/services/agent/bot-runtime';
+import { listUnitAgents } from '@/app/services/agent/unit-agents.repository';
 import { skillsService } from '@/app/services/skills/skills.service';
 import { buildChatSystemPrompt } from '@/app/services/chat/prompt-builder';
 import { PUBLIC_DOMAINS, canUseFederationTools, resolveChatTools, type ChatToolPolicy } from '@/app/services/chat/chat-tool-registry';
@@ -33,8 +36,14 @@ export interface ChatExecutionInput {
   postContext?: string;
   emit?: (event: Record<string, any>) => void;
   keepalive?: () => void;
-  /** 'federated' when answering a paired Unit (federation P3). */
+  /** 'federated' when answering a paired Unit (federation P3); 'consult' when the Manager consults a bot (multi-bot PR 7). */
   toolPolicy?: ChatToolPolicy;
+  /**
+   * Run the turn as this non-default bot (multi-bot PR 7): its soul, explicit
+   * tools, memory scope and skills. `domain` must be the bot's slug and the
+   * caller already resolved the bot's model. Never shell, federation or Manager tools.
+   */
+  bot?: UnitAgent;
   /**
    * IANA timezone for dates in the prompt and tools. Overrides the user's
    * setting, e.g. when a home Unit forwards its user's timezone.
@@ -87,6 +96,9 @@ async function executeChatTurn(
   onSummarizer?: (summarize: Summarize) => void,
 ): Promise<ChatExecutionResult> {
   const events: Array<Record<string, any>> = [];
+  const bot = input.bot ?? null;
+  if (bot && bot.slug !== input.domain) throw new Error('A bot turn runs in the domain of that bot');
+  const botToolSettings = bot ? explicitBotToolSettings(bot.toolSettings) : undefined;
   const emit = (event: Record<string, any>) => {
     events.push(event);
     input.emit?.(event);
@@ -127,6 +139,7 @@ async function executeChatTurn(
     preSelectedSkillId: input.preSelectedSkillId,
     defaultSkillName: input.defaultSkillName,
     publicDomain: isPublicDomain,
+    agentToolSettings: botToolSettings,
     emit,
   });
 
@@ -147,12 +160,15 @@ async function executeChatTurn(
   let relevantContext = '';
   if (!isPublicDomain) {
     try {
+      // A bot reads by its memory mode (multi-bot PR 3).
+      const scope = bot ? botMemoryScope(bot) : null;
       relevantContext = await loadChatKnowledgeContext({
         userId: input.user.id,
         isAdmin: input.user.is_admin === true,
         query: input.message,
         // One memory for the chat agent; paired Units keep the domain-scoped reach.
-        domainSlug: memoryReadDomain(input.domain, { federated: input.toolPolicy === 'federated' }),
+        domainSlug: scope ? scope.domainSlug : memoryReadDomain(input.domain, { federated: input.toolPolicy === 'federated' }),
+        ...(scope && { includeShared: scope.includeShared, includeNotes: scope.includeNotes, memories: scope.memories }),
       });
     } catch (error) {
       console.log('[ChatExecution] RAG search failed:', error);
@@ -172,7 +188,7 @@ async function executeChatTurn(
     }
   }
 
-  const federationOffered = canUseFederationTools({
+  const federationOffered = !bot && canUseFederationTools({
     isAdmin: input.user.is_admin === true,
     domain: input.domain,
     policy: input.toolPolicy,
@@ -190,14 +206,14 @@ async function executeChatTurn(
     activeSkill,
     skillContent,
     relevantContext,
-    unitIdentity: await loadChatSoulIdentity(input.domain, federationOffered, listActivePeerLabels),
+    unitIdentity: bot
+      ? botSoulIdentity(bot, await loadUnitProfile(), await listUnitAgents())
+      : await loadChatSoulIdentity(input.domain, federationOffered, listActivePeerLabels),
   });
 
-  const activeTools = await resolveChatTools(activeSkill?.id, input.domain, {
-    allowShell: isShellAllowedFor(input.user),
-    toolPolicy: input.toolPolicy,
-    allowFederation: federationOffered,
-  });
+  const activeTools = await resolveChatTools(activeSkill?.id, input.domain, bot
+    ? { allowShell: false, allowFederation: false, bot: true, agentToolSettings: botToolSettings, toolPolicy: input.toolPolicy }
+    : { allowShell: isShellAllowedFor(input.user), toolPolicy: input.toolPolicy, allowFederation: federationOffered });
   const conversationMessages: Array<{
     role: string;
     content: string | any[];

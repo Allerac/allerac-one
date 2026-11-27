@@ -17,6 +17,7 @@ import { filterEnabledTools } from '@/modules/registry';
 import { LEARN_INSTRUCTION_TOOL_DEFINITION } from '@/app/tools/instructions.tool.definitions';
 import { SHELL_TOOL_NAMES, withoutShellTools } from '@/app/lib/shell-policy';
 import { FEDERATION_TOOL_DEFINITIONS, FEDERATION_TOOL_NAMES } from '@/app/tools/federation.tool.definitions';
+import { ASK_AGENT_TOOL_DEFINITION, MANAGER_TOOL_NAMES } from '@/app/tools/manager.tool.definitions';
 import { resolveAgentToolAccess, type AgentToolSettings } from '@/app/services/agent/agent-tool-settings';
 import { loadAgentToolSettings } from '@/app/services/agent/agent-tool-settings.repository';
 
@@ -76,16 +77,21 @@ export const PUBLIC_DOMAIN_FORBIDDEN_TOOL_NAMES = [
   ...GITHUB_TOOL_NAMES,
   ...LOGS_TOOL_NAMES,
   ...FEDERATION_TOOL_NAMES,
+  ...MANAGER_TOOL_NAMES,
 ];
 
-export { FEDERATION_TOOL_NAMES };
+export { FEDERATION_TOOL_NAMES, MANAGER_TOOL_NAMES };
 
 /**
  * 'federated': the request comes from a paired Unit (federation P3). The peer
  * must not get shell/GitHub/logs, must not durably change this Unit (memory,
  * instructions, schedules), and must not call other Units through us.
+ *
+ * 'consult': the Manager (default agent) consults a bot (multi-bot PR 7). The
+ * bot keeps its own capabilities but only the read tools below: it answers,
+ * and never saves, sends, schedules or calls anyone.
  */
-export type ChatToolPolicy = 'default' | 'federated';
+export type ChatToolPolicy = 'default' | 'federated' | 'consult';
 
 export const FEDERATED_FORBIDDEN_TOOL_NAMES = [
   ...PUBLIC_DOMAIN_FORBIDDEN_TOOL_NAMES,
@@ -95,8 +101,39 @@ export const FEDERATED_FORBIDDEN_TOOL_NAMES = [
   'learn_instruction',
 ];
 
+/** Allowlist (fails closed): a tool missing here is not offered to a consulted bot. */
+export const CONSULT_ALLOWED_TOOL_NAMES = [
+  'get_today_info', 'search_web', 'read_url',
+  'recall_memory', 'search_memory', 'search_knowledge',
+  'query_vault', 'list_notes', 'get_note', 'list_children',
+  'list_emails', 'read_email',
+  'list_jobs', 'list_tickets', 'get_ticket',
+  'get_health_summary', 'get_health_metrics', 'get_daily_snapshot', 'get_recent_activities',
+  'get_activity_detail', 'get_garmin_status',
+  'get_spotify_status', 'get_top_tracks', 'get_listening_stats', 'get_playlists', 'get_playlist_tracks',
+  'get_music_recommendations',
+  'instagram_get_profile', 'instagram_get_recent_posts',
+];
+
 export function isToolForbiddenByPolicy(toolName: string, policy: ChatToolPolicy | undefined): boolean {
-  return policy === 'federated' && FEDERATED_FORBIDDEN_TOOL_NAMES.includes(toolName);
+  if (policy === 'consult') return !CONSULT_ALLOWED_TOOL_NAMES.includes(toolName);
+  return policy === 'federated'
+    && (FEDERATED_FORBIDDEN_TOOL_NAMES.includes(toolName) || MANAGER_TOOL_NAMES.includes(toolName));
+}
+
+/**
+ * The Manager tools (`ask_agent`) go to the default agent of an admin only:
+ * never to a bot, a legacy domain, a public domain or a federated/consult turn.
+ * The caller also checks ALLERAC_BOTS and that runnable bots exist.
+ */
+export function canUseManagerTools(params: {
+  isAdmin: boolean;
+  domain: string | null | undefined;
+  policy?: ChatToolPolicy;
+}): boolean {
+  return params.isAdmin
+    && (params.domain ?? AGENT_DOMAIN) === AGENT_DOMAIN
+    && (params.policy === undefined || params.policy === 'default');
 }
 
 /** Federation tools are admin-only and never offered to public domains or federated requests. */
@@ -107,7 +144,7 @@ export function canUseFederationTools(params: {
 }): boolean {
   const domain = params.domain ?? 'chat';
   return params.isAdmin
-    && params.policy !== 'federated'
+    && (params.policy === undefined || params.policy === 'default')
     && !PUBLIC_DOMAINS.includes(domain)
     && !NO_TOOL_DOMAINS.includes(domain);
 }
@@ -138,6 +175,18 @@ export interface ResolveChatToolsOptions {
    * required) and never with federation tools.
    */
   bot?: boolean;
+  /**
+   * Offer the Manager tools (`ask_agent`, multi-bot PR 7) to the default
+   * agent. The caller checked `canUseManagerTools`, ALLERAC_BOTS and that
+   * bots exist. Fails closed; ignored for bots and every other domain.
+   */
+  allowManager?: boolean;
+}
+
+function applyPolicy<T extends { function: { name: string } }>(tools: T[], policy: ChatToolPolicy | undefined): T[] {
+  return policy === 'federated' || policy === 'consult'
+    ? tools.filter((tool) => !isToolForbiddenByPolicy(tool.function.name, policy))
+    : tools;
 }
 
 export async function resolveChatTools(
@@ -180,17 +229,16 @@ export async function resolveChatTools(
       ...options,
       allowFederation: false,
     }));
-    return options.toolPolicy === 'federated'
-      ? resolved.filter((tool) => !isToolForbiddenByPolicy(tool.function.name, 'federated'))
-      : resolved;
+    return applyPolicy(resolved, options.toolPolicy);
   }
 
   if (domain === AGENT_DOMAIN) {
     const settings = options.agentToolSettings ?? await loadAgentToolSettings();
     const resolved = filterEnabledTools(resolveAgentTools(tools, settings, skillRestricted, options));
-    return options.toolPolicy === 'federated'
-      ? resolved.filter((tool) => !isToolForbiddenByPolicy(tool.function.name, 'federated'))
-      : resolved;
+    const manager = options.allowManager === true && canUseManagerTools({ isAdmin: true, domain, policy: options.toolPolicy })
+      ? [ASK_AGENT_TOOL_DEFINITION]
+      : [];
+    return applyPolicy([...resolved, ...manager], options.toolPolicy);
   }
 
   const resolved = filterEnabledTools([
@@ -216,9 +264,7 @@ export async function resolveChatTools(
       : []),
   ]);
 
-  return options.toolPolicy === 'federated'
-    ? resolved.filter((tool) => !isToolForbiddenByPolicy(tool.function.name, 'federated'))
-    : resolved;
+  return applyPolicy(resolved, options.toolPolicy);
 }
 
 type ToolDefinition = { function: { name: string } };

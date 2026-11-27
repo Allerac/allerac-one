@@ -68,6 +68,11 @@ export interface SoulIdentity {
   capabilities?: string[];
   /** Other bots of the Unit this bot may point the user to (its `canCall` list). */
   siblings?: Array<{ name: string; role?: string | null }>;
+  /**
+   * Set only for the default agent when it is the Manager (multi-bot PR 7,
+   * ask_agent offered): the bots it can consult.
+   */
+  managedBots?: Array<{ id: string; name: string; emoji?: string | null; role?: string | null }>;
 }
 
 const HEALTH_GUIDANCE_LINE = '- When asked about health or fitness: use the health tools.\n';
@@ -79,6 +84,16 @@ function pairedUnitsLine(identity: SoulIdentity): string {
   const units = (identity.pairedUnits ?? []).filter(Boolean).slice(0, 10);
   if (units.length === 0) return '';
   return ` Paired Allerac Units you can contact: ${units.join(', ')}. When the user mentions one of them by name, it means that Unit: use list_peer_agents to see its role and agents, and ask_peer_agent to consult it.`;
+}
+
+function managerLine(identity: SoulIdentity): string {
+  const bots = (identity.managedBots ?? []).slice(0, 20);
+  if (bots.length === 0) return '';
+  const list = bots.map((bot) => {
+    const name = bot.emoji ? `${bot.emoji} ${bot.name}` : bot.name;
+    return `${name} (id "${bot.id}"${bot.role ? `, takes care of ${bot.role}` : ''})`;
+  }).join('; ');
+  return ` You are also the manager of this Unit's assistants: ${list}. When a question falls in one of their roles, consult it with ask_agent (one call per assistant, combine their answers when several apply) and say which assistant answered. The assistants never talk to each other; everything goes through you. The user can also talk to any of them directly.`;
 }
 
 function identityLines(identity: SoulIdentity): string {
@@ -132,7 +147,7 @@ export function buildSoul(domain?: string | null, identity?: SoulIdentity | null
   const base = identity?.unitDisplayName
     ? botSoul(identity as SoulIdentity & { unitDisplayName: string })
     : identity
-    ? ALLERAC_SOUL.replace(ALLERAC_OPENING, `You are ${identity.displayName}, an Allerac unit: a private AI assistant. ${identityLines(identity)}${pairedUnitsLine(identity)}`)
+    ? ALLERAC_SOUL.replace(ALLERAC_OPENING, `You are ${identity.displayName}, an Allerac unit: a private AI assistant. ${identityLines(identity)}${pairedUnitsLine(identity)}${managerLine(identity)}`)
       + instructionsSection(identity)
     : ALLERAC_SOUL;
   if (domain === 'code') return `${base}\n\n${ALLERAC_CODE_ADDENDUM}`;

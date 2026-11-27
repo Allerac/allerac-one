@@ -92,8 +92,8 @@ describe('MemoryIndexService', () => {
     const embeddings = fakeEmbeddings();
     expect(await new MemoryIndexService(embeddings as never).indexMemory('user-1', 'mem-1')).toBe('missing');
     expect(embeddings.generateEmbedding).not.toHaveBeenCalled();
-    expect(String(query.mock.calls[0][0])).toContain("fed_cc.source = 'federation'");
+    expect(String(query.mock.calls[0][0])).toContain("fed_cc.source IN ('federation', 'handoff')");
     expect(String(query.mock.calls[1][0])).toContain('DELETE FROM knowledge_semantic_index');
-    expect(STALE_MEMORY_CANDIDATES_SQL).toContain("fed_cc.source = 'federation'");
+    expect(STALE_MEMORY_CANDIDATES_SQL).toContain("fed_cc.source IN ('federation', 'handoff')");
   });
 });
